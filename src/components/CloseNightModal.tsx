@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { formatHm } from "@/lib/utils";
 import type { EventSummary, EventTotals } from "@/types/domain";
 
 type Props = {
@@ -60,28 +61,28 @@ export default function CloseNightModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#0f172a] border border-[#1e293b] w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-[22px] p-6 shadow-2xl animate-in slide-in-from-bottom-10">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
             <div
               className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
                 isSummary
-                  ? "bg-emerald-500/15 border-emerald-500/30"
-                  : "bg-amber-500/15 border-amber-500/30"
+                  ? "bg-green-soft border-green-line"
+                  : "bg-amber-soft border-amber-line"
               }`}
             >
               {isSummary ? (
-                <CheckCircle2 size={20} className="text-emerald-400" />
+                <CheckCircle2 size={20} className="text-green" />
               ) : (
-                <AlertTriangle size={20} className="text-amber-400" />
+                <AlertTriangle size={20} className="text-amber" />
               )}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight leading-none">
+              <h2 className="font-serif-italic text-[22px] text-ink-50 leading-none">
                 {isSummary ? "Noche cerrada" : "Cerrar noche"}
               </h2>
-              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-1">
+              <p className="text-[10px] text-ink-400 uppercase tracking-[0.18em] font-medium mt-1.5">
                 {isSummary ? "Resumen archivado" : "Acción irreversible"}
               </p>
             </div>
@@ -90,7 +91,7 @@ export default function CloseNightModal({
             type="button"
             onClick={() => !submitting && onClose()}
             disabled={submitting}
-            className="p-2 bg-[#1e293b] rounded-full text-slate-400 hover:text-white disabled:opacity-40"
+            className="p-2 bg-ink-800 rounded-full text-ink-300 hover:text-ink-50 disabled:opacity-40"
             aria-label="Cerrar"
           >
             <X size={18} />
@@ -136,13 +137,10 @@ function ConfirmView({
 }) {
   return (
     <>
-      <p className="text-sm text-slate-400 mb-4">
+      <p className="text-sm text-ink-300 mb-4 leading-relaxed">
         Vas a archivar el evento iniciado a las{" "}
-        <span className="text-white font-mono">
-          {new Date(startedAt).toLocaleTimeString("es-AR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+        <span className="text-ink-50 font-mono tabular">
+          {formatHm(startedAt)}
         </span>
         . Esta acción es definitiva.
       </p>
@@ -150,7 +148,7 @@ function ConfirmView({
       <TotalsBlock totals={totals} />
 
       {pendingDeliveries > 0 && (
-        <div className="mt-4 flex items-start gap-2 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
+        <div className="mt-4 flex items-start gap-2 text-sm text-amber bg-amber-soft border border-amber-line rounded-xl px-3 py-2.5">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <span>
             Tenés <strong>{pendingDeliveries}</strong> pedido
@@ -161,7 +159,7 @@ function ConfirmView({
       )}
 
       {error && (
-        <div className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+        <div className="mt-4 text-sm text-danger bg-danger-soft border border-danger-line rounded-xl px-3 py-2.5">
           {error}
         </div>
       )}
@@ -171,7 +169,7 @@ function ConfirmView({
           type="button"
           onClick={onCancel}
           disabled={submitting}
-          className="flex-1 h-12 rounded-xl bg-[#1e293b] text-slate-200 font-bold text-sm uppercase tracking-wider hover:bg-[#334155] active:scale-95 transition-all disabled:opacity-50"
+          className="flex-1 h-12 rounded-xl bg-ink-800 text-ink-100 font-medium text-sm uppercase tracking-[0.14em] hover:bg-ink-750 active:scale-95 transition-all disabled:opacity-50"
         >
           Cancelar
         </button>
@@ -179,7 +177,7 @@ function ConfirmView({
           type="button"
           onClick={onConfirm}
           disabled={submitting}
-          className="flex-1 h-12 rounded-xl bg-red-500 text-red-50 font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-red-400 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 h-12 rounded-xl bg-danger text-ink-50 font-semibold text-sm uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting ? (
             <>
@@ -216,7 +214,7 @@ function SummaryView({
 
   return (
     <>
-      <p className="text-sm text-slate-400 mb-4">
+      <p className="text-sm text-ink-300 mb-4 leading-relaxed">
         El evento se archivó. Estos son los números finales.
       </p>
 
@@ -224,27 +222,21 @@ function SummaryView({
 
       <div className="mt-4 grid grid-cols-3 gap-2">
         <Stat label="Tragos" value={totalDrinks.toString()} />
-        <Stat
-          label="Pedidos"
-          value={summary.orders.length.toString()}
-        />
-        <Stat
-          label="Ventas $"
-          value={summary.cashSales.length.toString()}
-        />
+        <Stat label="Pedidos" value={summary.orders.length.toString()} />
+        <Stat label="Ventas $" value={summary.cashSales.length.toString()} />
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-xs text-slate-500 bg-[#020617]/50 border border-[#1e293b] rounded-xl px-4 py-2.5">
-        <span className="uppercase tracking-widest font-bold">Duración</span>
-        <span className="font-mono text-white">{duration}</span>
+      <div className="mt-4 flex items-center justify-between text-xs text-ink-400 bg-ink-850 border border-ink-800 rounded-xl px-4 py-2.5">
+        <span className="uppercase tracking-[0.18em] font-medium">Duración</span>
+        <span className="font-mono text-ink-50 tabular">{duration}</span>
       </div>
 
       <button
         type="button"
         onClick={onClose}
-        className="mt-6 w-full h-12 rounded-xl bg-[#38bdf8] text-[#020617] font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-[#7dd3fc] active:scale-95 transition-all"
+        className="mt-6 w-full h-12 rounded-xl bg-blue text-ink-950 font-semibold text-sm uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
       >
-        <Sparkles size={16} strokeWidth={3} />
+        <Sparkles size={16} strokeWidth={2.5} />
         Empezar nueva noche
       </button>
     </>
@@ -255,24 +247,24 @@ function SummaryView({
 
 function TotalsBlock({ totals }: { totals: EventTotals }) {
   return (
-    <div className="bg-[#020617]/50 border border-[#1e293b] rounded-2xl divide-y divide-[#1e293b]/60">
+    <div className="bg-ink-850 border border-ink-800 rounded-2xl divide-y divide-ink-800">
       <Row
-        icon={<CreditCard size={14} className="text-[#38bdf8]" />}
+        icon={<CreditCard size={14} className="text-blue" />}
         label="Transferencia"
         count={totals.transferenciaCount}
         value={totals.transferenciaTotal}
       />
       <Row
-        icon={<Banknote size={14} className="text-emerald-400" />}
+        icon={<Banknote size={14} className="text-green" />}
         label="Efectivo"
         count={totals.efectivoCount}
         value={totals.efectivoTotal}
       />
-      <div className="flex items-center justify-between px-4 py-3 bg-[#38bdf8]/5">
-        <span className="text-xs font-black uppercase tracking-widest text-[#38bdf8]">
+      <div className="flex items-center justify-between px-4 py-3 bg-blue-soft">
+        <span className="text-xs font-medium uppercase tracking-[0.18em] text-blue">
           Total noche
         </span>
-        <span className="font-mono text-xl font-black text-white">
+        <span className="font-mono text-xl text-ink-50 tabular">
           ${totals.total.toLocaleString("es-AR")}
         </span>
       </div>
@@ -293,14 +285,14 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      <div className="flex items-center gap-2 text-slate-300">
+      <div className="flex items-center gap-2 text-ink-200">
         {icon}
-        <span className="text-xs font-bold uppercase tracking-widest">
+        <span className="text-xs font-medium uppercase tracking-[0.18em]">
           {label}
         </span>
-        <span className="text-[10px] text-slate-500">({count})</span>
+        <span className="text-[10px] text-ink-400">({count})</span>
       </div>
-      <span className="font-mono text-sm font-bold text-white">
+      <span className="font-mono text-sm text-ink-50 tabular">
         ${value.toLocaleString("es-AR")}
       </span>
     </div>
@@ -309,11 +301,13 @@ function Row({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-[#020617]/50 border border-[#1e293b] rounded-xl px-3 py-2.5 text-center">
-      <div className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">
+    <div className="bg-ink-850 border border-ink-800 rounded-xl px-3 py-2.5 text-center">
+      <div className="text-[9px] text-ink-400 uppercase tracking-[0.18em] font-medium mb-1">
         {label}
       </div>
-      <div className="text-lg font-black text-white">{value}</div>
+      <div className="font-serif-italic text-[22px] text-ink-50 tabular">
+        {value}
+      </div>
     </div>
   );
 }

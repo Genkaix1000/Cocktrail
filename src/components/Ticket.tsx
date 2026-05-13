@@ -1,18 +1,18 @@
 "use client";
 
-import {
-  CheckCircle2,
-  Clock,
-  CreditCard,
-  Hourglass,
-  Sparkles,
-} from "lucide-react";
+import { ChevronLeft, Plus } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { STATUS_META } from "@/lib/orderStatus";
-import type { Order } from "@/types/domain";
+import { formatHm } from "@/lib/utils";
+import type { Order, OrderStatus } from "@/types/domain";
 
 type Props = { order: Order };
 
+/**
+ * Ticket V1 (Pedido editorial) — handoff design.
+ * Tres pasos: pagado → preparando → listo. Glow verde cuando está listo.
+ * Mantiene CTA "Hacer otro pedido" cuando llega a estado terminal.
+ */
 export default function Ticket({ order }: Props) {
   // Inicializa con la hora actual; la diferencia de SSR/CSR se suprime con
   // suppressHydrationWarning más abajo (es un reloj — la siguiente tick reconcilia).
@@ -25,150 +25,279 @@ export default function Ticket({ order }: Props) {
 
   const isReady = order.status === "listo";
   const isDone = order.status === "entregado" || order.status === "cancelado";
-  const isPreparing = order.status === "preparando";
+  const isCancelled = order.status === "cancelado";
+
+  // Steps del progreso (orden visual = orden de la máquina de estados).
+  const STEPS: { id: OrderStatus; label: string; sub: string }[] = [
+    { id: "pagado", label: "Pago verificado", sub: "Listo para entrar a cola" },
+    { id: "preparando", label: "En preparación", sub: "El barman lo está armando" },
+    { id: "listo", label: "Listo para retirar", sub: "Acercate a la barra" },
+  ];
+
+  const stepIdx = STEPS.findIndex((s) => s.id === order.status);
+  // Si está entregado, todos los pasos quedan "done"; si está cancelado, marcamos hasta donde llegó.
+  const effectiveIdx =
+    order.status === "entregado"
+      ? STEPS.length
+      : isCancelled
+        ? Math.max(0, stepIdx)
+        : stepIdx;
+
+  // ETA mock: a 3 min cuando está en preparando. Cuando está listo, "ahora".
+  const eta =
+    order.status === "preparando"
+      ? "~3 min restantes"
+      : order.status === "listo"
+        ? "¡Ahora!"
+        : order.status === "pagado"
+          ? "En cola"
+          : "—";
+
+  const hashColor = isReady
+    ? "text-green"
+    : isCancelled
+      ? "text-danger"
+      : "text-blue";
 
   return (
-    <main className="min-h-screen bg-[#020617] text-white p-5 flex flex-col">
-      <div
-        className={`flex-1 max-w-md w-full mx-auto flex flex-col gap-8 pb-10 transition-opacity ${isDone ? "opacity-60" : ""}`}
-      >
-        <div className="flex items-center gap-3 pl-2 pt-4">
-          <Sparkles size={22} className="text-[#38bdf8]" />
-          <h1 className="text-2xl font-black tracking-tight leading-none mt-1">
-            Tu pedido
-          </h1>
+    <main
+      className={`min-h-screen flex flex-col relative ${
+        isReady
+          ? "bg-ink-950 shadow-[inset_0_0_120px_oklch(0.78_0.16_155_/_0.25)]"
+          : "bg-ink-950"
+      }`}
+    >
+      <div className="w-full max-w-md mx-auto flex-1 flex flex-col pb-10">
+        {/* Top bar · back + verification chip */}
+        <div className="px-[22px] pt-[18px] flex justify-between items-center">
+          <Link
+            href="/carta"
+            className="w-9 h-9 rounded-[10px] bg-ink-850 border border-ink-700 text-ink-200 flex items-center justify-center hover:text-ink-50 hover:border-ink-600 transition-colors"
+            aria-label="Volver a la carta"
+          >
+            <ChevronLeft size={16} strokeWidth={2} />
+          </Link>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-green">
+            <span className="w-1.5 h-1.5 rounded-full bg-green" />
+            Pago verificado · Mercado Pago
+          </span>
+          <span className="w-9" aria-hidden />
         </div>
 
-        <div
-          className={`relative overflow-hidden rounded-3xl p-8 shadow-2xl border transition-all ${
-            isReady
-              ? "bg-[#022c22] border-[#10b981]/40 shadow-[0_0_40px_rgba(16,185,129,0.25)]"
-              : "bg-[#0f172a] border-[#1e293b]"
-          } ${isDone ? "grayscale" : ""}`}
-        >
+        {/* Eyebrow + title */}
+        <div className="pt-[26px] px-[22px] text-[11px] font-medium uppercase tracking-[0.22em] text-ink-400">
+          Tu pedido · #{order.displayNumber}
+        </div>
+        <h1 className="font-serif-italic text-[38px] leading-none px-[22px] text-ink-50">
+          {isReady
+            ? "Está listo."
+            : order.status === "preparando"
+              ? "Casi listo."
+              : order.status === "entregado"
+                ? "Entregado."
+                : isCancelled
+                  ? "Cancelado."
+                  : "En camino."}
+        </h1>
+
+        {/* Big number frame */}
+        <div className="pt-6 px-[22px]">
           <div
-            className={`mx-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full mb-6 w-fit border ${
+            className={`relative overflow-hidden rounded-[22px] border bg-gradient-to-b from-ink-850 to-ink-900 px-5 pt-7 pb-6 ${
               isReady
-                ? "bg-[#10b981]/20 border-[#10b981]/30 text-[#10b981]"
-                : "bg-[#10b981]/10 border-[#10b981]/20 text-[#10b981]"
+                ? "border-green-line shadow-[0_0_40px_oklch(0.78_0.16_155_/_0.25)]"
+                : "border-ink-700"
             }`}
           >
-            <CheckCircle2 size={14} />
-            <span className="text-[9px] font-black uppercase tracking-wider">
-              Pago verificado por Mercado Pago
-            </span>
-          </div>
+            {/* Top glow gradient */}
+            <div
+              aria-hidden
+              className={`absolute inset-x-0 top-0 h-[55%] pointer-events-none ${
+                isReady
+                  ? "bg-[radial-gradient(60%_60%_at_50%_0%,var(--green-soft),transparent_70%)]"
+                  : "bg-[radial-gradient(60%_60%_at_50%_0%,var(--blue-soft),transparent_70%)]"
+              }`}
+            />
 
-          <div className="flex flex-col items-center justify-center mb-6 bg-[#020617]/50 py-3 rounded-2xl border border-white/5">
-            <div className="flex items-center gap-2 text-slate-400 mb-1">
-              <Clock size={12} className="text-[#38bdf8]" />
-              <span className="text-[9px] uppercase tracking-widest font-bold">
-                Reloj de seguridad
+            <div className="relative">
+              <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400 text-center mb-3">
+                Tu número de retiro
+              </div>
+              <div
+                className={`font-serif-italic font-normal text-center tabular leading-[0.85] text-[140px] ${hashColor}`}
+                style={{ letterSpacing: "-0.04em" }}
+              >
+                <span className={isReady ? "text-green/60" : "text-blue/70"}>
+                  #
+                </span>
+                {order.displayNumber}
+              </div>
+
+              {/* meta row */}
+              <div className="mt-[18px] pt-4 border-t border-ink-800 grid grid-cols-3 items-center">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-ink-400">
+                    Hora
+                  </span>
+                  <span className="font-serif-italic text-[18px] text-ink-50 tabular">
+                    {formatHm(order.createdAt)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 items-center">
+                  <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-ink-400">
+                    Reloj
+                  </span>
+                  <span
+                    className="font-mono text-[16px] text-ink-50 tabular"
+                    suppressHydrationWarning
+                  >
+                    {time.toLocaleTimeString("es-AR", {
+                      hour12: false,
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 items-end">
+                  <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-ink-400">
+                    Total
+                  </span>
+                  <span className="font-serif-italic text-[18px] text-ink-50 tabular">
+                    ${order.total.toLocaleString("es-AR")}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress · 3 steps */}
+        {!isCancelled && (
+          <div className="px-[22px] pt-[22px]">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
+                Seguimiento
+              </span>
+              <span
+                className={`font-serif-italic text-sm ${isReady ? "text-green" : "text-blue"}`}
+              >
+                {eta}
               </span>
             </div>
-            <div
-              className="font-mono text-3xl font-medium text-white tracking-widest leading-none"
-              suppressHydrationWarning
-            >
-              {time.toLocaleTimeString("es-AR", {
-                hour12: false,
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
+
+            <div className="flex flex-col">
+              {STEPS.map((s, i) => {
+                const isLast = i === STEPS.length - 1;
+                const isDoneStep = i < effectiveIdx;
+                const isActive = i === effectiveIdx && !isDone;
+
+                return (
+                  <div key={s.id} className="flex items-start gap-3.5">
+                    <div className="w-[22px] flex flex-col items-center shrink-0">
+                      <div
+                        className={`relative w-3.5 h-3.5 rounded-full border-[1.5px] z-10 ${
+                          isDoneStep
+                            ? "bg-blue border-blue"
+                            : isActive
+                              ? "bg-blue border-blue ring-4 ring-blue-soft"
+                              : "bg-ink-900 border-ink-600"
+                        }`}
+                      >
+                        {isActive && (
+                          <span
+                            aria-hidden
+                            className="absolute inset-[-7px] rounded-full border border-blue"
+                            style={{
+                              animation:
+                                "ct-pulse 1.8s ease-in-out infinite",
+                            }}
+                          />
+                        )}
+                      </div>
+                      {!isLast && (
+                        <div
+                          className={`flex-1 w-0.5 min-h-8 mt-1 ${
+                            isDoneStep ? "bg-blue" : "bg-ink-700"
+                          }`}
+                        />
+                      )}
+                    </div>
+                    <div className="flex-1 pb-[18px]">
+                      <div
+                        className={`font-serif text-base leading-tight ${
+                          isDoneStep || isActive
+                            ? "text-ink-50"
+                            : "text-ink-200"
+                        } ${isActive ? "italic" : ""}`}
+                        style={{ fontFamily: "var(--font-serif)" }}
+                      >
+                        {s.label}
+                      </div>
+                      <div className="text-[11px] text-ink-400 mt-1 leading-tight">
+                        {isActive ? "En curso…" : s.sub}
+                      </div>
+                    </div>
+                  </div>
+                );
               })}
             </div>
           </div>
+        )}
 
-          <div
-            className={`relative flex flex-col items-center justify-center rounded-2xl py-6 mb-6 border shadow-inner ${
-              isReady
-                ? "bg-[#022c22] border-[#10b981]/30"
-                : "bg-[#020617] border-[#1e293b]"
-            }`}
-          >
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-2">
-              Tu número de retiro
+        {/* Detalle items */}
+        <div className="mx-[22px] mt-3 mb-4 p-[18px] bg-ink-900 border border-ink-800 rounded-[14px]">
+          <div className="flex justify-between items-baseline mb-3.5">
+            <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
+              Detalle
             </span>
-            <span
-              className={`text-7xl font-black leading-none tracking-tighter ${isReady ? "text-[#10b981]" : "text-[#38bdf8]"}`}
-            >
-              #{order.displayNumber}
+            <span className="font-serif-italic text-base text-ink-50 tabular">
+              ${order.total.toLocaleString("es-AR")}
             </span>
-
-            {order.status === "entregado" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-[#020617]/80 backdrop-blur-sm z-10">
-                <div className="border-4 border-red-500 text-red-500 transform -rotate-12 px-6 py-2 rounded-xl text-3xl font-black tracking-widest shadow-2xl">
-                  ENTREGADO
-                </div>
-              </div>
-            )}
-            {order.status === "cancelado" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-[#020617]/80 backdrop-blur-sm z-10">
-                <div className="border-4 border-red-500 text-red-500 transform -rotate-12 px-6 py-2 rounded-xl text-3xl font-black tracking-widest shadow-2xl">
-                  CANCELADO
-                </div>
-              </div>
-            )}
           </div>
-
-          <div
-            className={`mb-6 rounded-xl px-4 py-3 text-center text-sm font-bold border ${
-              isReady
-                ? "bg-[#10b981]/15 border-[#10b981]/30 text-[#34d399]"
-                : isPreparing
-                  ? "bg-[#38bdf8]/10 border-[#38bdf8]/30 text-[#38bdf8]"
-                  : "bg-[#1e293b]/50 border-[#1e293b] text-slate-300"
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              {isReady ? <CheckCircle2 size={16} /> : <Hourglass size={14} />}
-              <span>{STATUS_META[order.status].long}</span>
-            </div>
-          </div>
-
-          <div className="space-y-4 mb-2">
-            <div className="flex items-center justify-between text-sm pb-4 border-b border-[#1e293b]/50">
-              <div className="flex items-center gap-2 text-slate-400">
-                <span className="font-mono text-xs">
-                  {new Date(order.createdAt).toLocaleTimeString("es-AR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-400">
-                <CreditCard size={16} className="text-[#38bdf8]/70" />
-                <span className="font-mono font-bold text-white">
-                  ${order.total.toLocaleString("es-AR")}
-                </span>
-              </div>
-            </div>
-
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-              Detalle de los tragos
-            </h3>
-            {order.items.map((item, i) => (
-              <div
-                key={`${item.drinkId}-${i}`}
-                className="flex justify-between items-center text-sm"
+          <ul className="flex flex-col">
+            {order.items.map((it, i) => (
+              <li
+                key={`${it.drinkId}-${i}`}
+                className="flex justify-between items-baseline py-1.5 text-[13px] text-ink-100"
               >
-                <span className="text-slate-300 font-medium line-clamp-1 pr-2">
-                  <span className="text-[#38bdf8] font-mono font-bold mr-2">
-                    {item.qty}x
+                <span>
+                  <span className="text-blue font-medium font-mono mr-2 tabular">
+                    {it.qty}×
                   </span>
-                  {item.name}
+                  {it.name}
                 </span>
-                <span className="font-mono text-slate-400 shrink-0">
-                  ${item.subtotal.toLocaleString("es-AR")}
+                <span className="font-mono text-ink-300 tabular">
+                  ${it.subtotal.toLocaleString("es-AR")}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
 
-        <p className="text-center text-xs text-slate-500 mt-2">
-          Mostrá esta pantalla al barman cuando tu número se ponga verde.
-        </p>
+        {/* Hint */}
+        {!isDone && (
+          <p className="px-[22px] pb-4 text-center text-[12px] text-ink-400 leading-relaxed">
+            Mostrá esta pantalla al barman cuando
+            <br />
+            tu número aparezca en{" "}
+            <span className="font-serif-italic text-green text-[14px]">
+              verde
+            </span>
+            .
+          </p>
+        )}
+
+        {/* CTA "Hacer otro pedido" cuando termina */}
+        {isDone && (
+          <Link
+            href="/carta"
+            className="mt-2 mx-auto flex items-center justify-center gap-2 w-full max-w-xs px-6 py-3 rounded-2xl bg-blue text-ink-950 font-semibold text-sm uppercase tracking-[0.14em] hover:brightness-110 active:scale-95 transition-all"
+          >
+            <Plus size={18} strokeWidth={3} />
+            Hacer otro pedido
+          </Link>
+        )}
       </div>
     </main>
   );

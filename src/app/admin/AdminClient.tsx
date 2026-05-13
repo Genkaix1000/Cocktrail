@@ -1,28 +1,21 @@
 "use client";
 
-import {
-  Banknote,
-  CreditCard,
-  Inbox,
-  LogOut,
-  Martini,
-  Power,
-  QrCode,
-  Sparkles,
-  TrendingUp,
-} from "lucide-react";
+import { Banknote, LogOut, Power, QrCode } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
+import CashSaleModal from "@/components/CashSaleModal";
 import CloseNightModal from "@/components/CloseNightModal";
 import { byCreatedAtDesc, STATUS_META } from "@/lib/orderStatus";
 import { computeTotals } from "@/lib/totals";
 import { useSSE } from "@/lib/useSSE";
+import { formatHm } from "@/lib/utils";
 import type {
   CashSale,
   EventSummary,
   NightEvent,
   Order,
+  OrderStatus,
 } from "@/types/domain";
 
 type Props = {
@@ -31,6 +24,14 @@ type Props = {
   initialCashSales: CashSale[];
 };
 
+/**
+ * Admin V2 — dashboard denso (handoff design).
+ * Sin sparkline "ventas por hora" (descartado por el usuario).
+ * Layout grid 4 columnas:
+ *  - Row 1: 4 KPIs (Total, Transferencia, Efectivo, Tragos).
+ *  - Row 2-3: Top tragos (col 1-2) + Pedidos digitales (col 3-4, alto x2).
+ *  - Row 3 cont: Efectivo en barra (col 1-2).
+ */
 export default function AdminClient({
   initialEvent,
   initialOrders,
@@ -41,6 +42,7 @@ export default function AdminClient({
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [cashSales, setCashSales] = useState<CashSale[]>(initialCashSales);
   const [modalOpen, setModalOpen] = useState(false);
+  const [cashOpen, setCashOpen] = useState(false);
   const [summary, setSummary] = useState<EventSummary | null>(null);
 
   const totals = useMemo(
@@ -50,9 +52,8 @@ export default function AdminClient({
 
   const pendingDeliveries = useMemo(
     () =>
-      orders.filter(
-        (o) => o.status === "preparando" || o.status === "listo",
-      ).length,
+      orders.filter((o) => o.status === "preparando" || o.status === "listo")
+        .length,
     [orders],
   );
 
@@ -128,7 +129,6 @@ export default function AdminClient({
     // Si veníamos del summary, limpiar para el próximo cierre.
     if (summary) {
       setSummary(null);
-      // Re-fetch del estado del nuevo evento que abrió el server.
       router.refresh();
     }
   }
@@ -140,10 +140,21 @@ export default function AdminClient({
   }
 
   const maxDrinkQty = totals.drinksSold[0]?.qty ?? 0;
-  const hasMovements = sortedOrders.length > 0 || sortedCashSales.length > 0;
+  const totalDrinkUnits = totals.drinksSold.reduce((s, d) => s + d.qty, 0);
+  const totalOps = totals.transferenciaCount + totals.efectivoCount;
+  const avgTicket = totalOps > 0 ? Math.round(totals.total / totalOps) : 0;
+  const transferPct =
+    totals.total > 0
+      ? Math.round((totals.transferenciaTotal / totals.total) * 100)
+      : 0;
+  const cashPct =
+    totals.total > 0 ? Math.max(0, 100 - transferPct) : 0;
+
+  const startedAtStr = formatHm(event.startedAt);
 
   return (
-    <main className="min-h-screen bg-[#020617] text-white">
+    <main className="min-h-screen bg-ink-950 text-ink-50 flex flex-col">
+      <CashSaleModal open={cashOpen} onClose={() => setCashOpen(false)} />
       <CloseNightModal
         open={modalOpen}
         totals={totals}
@@ -154,114 +165,144 @@ export default function AdminClient({
         onClose={handleModalClose}
       />
 
-      <header className="sticky top-0 z-30 bg-[#020617]/90 backdrop-blur-xl border-b border-white/5 px-6 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#38bdf8] to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-[#38bdf8]/20">
-            <Martini size={20} className="text-[#020617] fill-[#020617]" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-lg font-black tracking-tight text-white leading-none truncate">
-              Cocktrail · Admin
-            </h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-1 truncate">
-              Sesión: Admin · Noche iniciada{" "}
-              <span className="font-mono text-slate-300">
-                {new Date(event.startedAt).toLocaleTimeString("es-AR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>{" "}
-              · #{event.orderCounter} pedidos
-            </p>
-          </div>
+      {/* Top bar */}
+      <header className="h-[60px] px-6 flex justify-between items-center border-b border-ink-800 bg-ink-925 shrink-0">
+        <div className="flex items-baseline gap-3.5 min-w-0">
+          <span className="font-serif-italic text-[22px] leading-none text-ink-50 shrink-0">
+            Cocktrail
+          </span>
+          <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400 truncate">
+            Admin · {startedAtStr} hs · #{event.orderCounter} pedidos
+          </span>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setCashOpen(true)}
+            className="h-9 px-3.5 rounded-lg bg-green-soft border border-green-line text-green flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] hover:brightness-110 transition-all"
+          >
+            <Banknote size={13} />
+            <span className="hidden sm:inline">Venta efectivo</span>
+          </button>
           <Link
             href="/admin/qr"
-            className="w-10 h-10 rounded-xl bg-[#0f172a] border border-[#1e293b] flex items-center justify-center text-slate-400 hover:text-[#38bdf8] hover:border-[#38bdf8]/30 transition-all active:scale-95"
+            className="w-9 h-9 rounded-lg bg-ink-850 border border-ink-700 text-ink-100 flex items-center justify-center hover:text-blue hover:border-blue-line transition-all"
             aria-label="Ver QR para imprimir"
             title="QR para imprimir"
           >
-            <QrCode size={16} />
+            <QrCode size={14} />
           </Link>
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 h-10 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 active:scale-95 transition-all text-xs font-bold uppercase tracking-wider"
+            className="h-9 px-3.5 rounded-lg bg-danger-soft border border-danger-line text-danger flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] hover:brightness-110 transition-all"
           >
-            <Power size={16} />
+            <Power size={13} />
             <span className="hidden sm:inline">Cerrar noche</span>
             <span className="inline sm:hidden">Cerrar</span>
           </button>
           <button
             type="button"
             onClick={logout}
-            className="w-10 h-10 rounded-xl bg-[#0f172a] border border-[#1e293b] flex items-center justify-center text-slate-400 hover:text-red-300 hover:border-red-500/30 transition-all active:scale-95"
+            className="w-9 h-9 rounded-lg bg-ink-850 border border-ink-700 text-ink-300 flex items-center justify-center hover:text-danger hover:border-danger-line transition-all"
             aria-label="Cerrar sesión"
           >
-            <LogOut size={16} />
+            <LogOut size={14} />
           </button>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto p-6 flex flex-col gap-6">
-        {/* Cards de totales */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <TotalCard
-            label="Transferencia"
-            icon={<CreditCard size={16} />}
-            count={totals.transferenciaCount}
-            value={totals.transferenciaTotal}
-            tone="blue"
-          />
-          <TotalCard
-            label="Efectivo"
-            icon={<Banknote size={16} />}
-            count={totals.efectivoCount}
-            value={totals.efectivoTotal}
-            tone="emerald"
-          />
-          <TotalCard
-            label="Total noche"
-            icon={<TrendingUp size={16} />}
-            count={totals.transferenciaCount + totals.efectivoCount}
-            value={totals.total}
-            tone="white"
-            big
-          />
-        </section>
+      {/* Body grid */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-3.5 p-5 auto-rows-min lg:auto-rows-auto">
+        {/* Row 1: 4 KPIs */}
+        <Kpi
+          label="Total noche"
+          value={totals.total}
+          isCurrency
+          sub={
+            totalOps > 0
+              ? `${totalOps} operaciones · ticket $${avgTicket.toLocaleString("es-AR")}`
+              : "Sin movimientos"
+          }
+          deltaTone="up"
+          deltaText="EN VIVO"
+        />
+        <Kpi
+          label="Transferencia"
+          value={totals.transferenciaTotal}
+          isCurrency
+          sub={`${totals.transferenciaCount} ${totals.transferenciaCount === 1 ? "pedido" : "pedidos"} · Mercado Pago`}
+          deltaTone="neutral"
+          deltaText={`${transferPct}%`}
+        />
+        <Kpi
+          label="Efectivo"
+          value={totals.efectivoTotal}
+          isCurrency
+          sub={`${totals.efectivoCount} ${totals.efectivoCount === 1 ? "venta en barra" : "ventas en barra"}`}
+          deltaTone="neutral"
+          deltaText={`${cashPct}%`}
+        />
+        <Kpi
+          label="Tragos servidos"
+          value={totalDrinkUnits}
+          sub={`${totals.drinksSold.length} ${totals.drinksSold.length === 1 ? "variedad" : "variedades"} distintas`}
+          deltaTone="up"
+          deltaText={totalDrinkUnits > 0 ? `+${totalDrinkUnits}` : "0"}
+        />
 
-        {/* Drinks vendidos */}
-        <section>
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">
-            Tragos vendidos
-          </h2>
+        {/* Row 2: Top tragos (span 2) + Pedidos digitales (span 2, row span 2) */}
+        <section className="lg:col-span-2 bg-ink-900 border border-ink-800 rounded-xl p-4 flex flex-col gap-3 min-w-0 min-h-0">
+          <div className="flex justify-between items-baseline">
+            <span className="flex items-center gap-2.5 text-[10px] font-medium uppercase tracking-[0.22em] text-ink-100">
+              Tragos más vendidos
+              <span className="text-[10px] font-mono text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
+                {totals.drinksSold.length}
+              </span>
+            </span>
+            <span className="text-[10px] font-medium text-ink-400 uppercase tracking-[0.06em]">
+              {totalDrinkUnits} unidades
+            </span>
+          </div>
           {totals.drinksSold.length === 0 ? (
-            <EmptyState text="Aún no se vendieron tragos esta noche" />
+            <EmptyCard text="Aún no se vendieron tragos esta noche" />
           ) : (
-            <div className="bg-[#0f172a] border border-[#1e293b] rounded-2xl divide-y divide-[#1e293b]/60">
-              {totals.drinksSold.map((d) => {
+            <div className="flex flex-col gap-2 flex-1 overflow-y-auto no-scrollbar min-h-0">
+              {totals.drinksSold.slice(0, 8).map((d, i) => {
                 const widthPct = maxDrinkQty
                   ? Math.max(8, (d.qty / maxDrinkQty) * 100)
                   : 0;
+                const pct =
+                  totalDrinkUnits > 0
+                    ? Math.round((d.qty / totalDrinkUnits) * 100)
+                    : 0;
                 return (
                   <div
                     key={d.drinkId}
-                    className="relative flex items-center justify-between px-4 py-3 overflow-hidden"
+                    className="grid grid-cols-[22px_1fr_60px_60px_80px] items-center gap-3 py-2 border-t border-ink-850 first:border-t-0"
                   >
-                    <div
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 bg-[#38bdf8]/10 pointer-events-none"
-                      style={{ width: `${widthPct}%` }}
-                    />
-                    <div className="relative flex items-center gap-3 text-sm">
-                      <span className="font-mono font-bold text-[#38bdf8] w-10">
-                        ×{d.qty}
+                    <span className="font-mono text-[11px] text-ink-500 tabular">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                      <span className="text-[14px] font-medium text-ink-50 leading-tight truncate">
+                        {d.name}
                       </span>
-                      <span className="text-white font-medium">{d.name}</span>
+                      <div className="h-1 rounded bg-ink-800 overflow-hidden">
+                        <div
+                          className="h-full bg-blue"
+                          style={{ width: `${widthPct}%` }}
+                        />
+                      </div>
                     </div>
-                    <span className="relative font-mono text-sm text-slate-300">
+                    <span className="font-mono text-[12px] text-ink-300 text-left tabular">
+                      × {d.qty}
+                    </span>
+                    <span className="font-mono text-[12px] text-ink-300 text-center tabular">
+                      {pct}%
+                    </span>
+                    <span className="font-mono text-[13px] text-ink-100 text-right tabular">
                       ${d.subtotal.toLocaleString("es-AR")}
                     </span>
                   </div>
@@ -271,154 +312,179 @@ export default function AdminClient({
           )}
         </section>
 
-        {/* 2 columnas: orders y cash sales */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2">
-              <CreditCard size={12} />
+        <section className="lg:col-span-2 lg:row-span-2 bg-ink-900 border border-ink-800 rounded-xl p-4 flex flex-col gap-3 min-w-0 min-h-0">
+          <div className="flex justify-between items-baseline">
+            <span className="flex items-center gap-2.5 text-[10px] font-medium uppercase tracking-[0.22em] text-ink-100">
               Pedidos digitales
-              <span className="text-slate-600">({sortedOrders.length})</span>
-            </h2>
-            {sortedOrders.length === 0 ? (
-              <EmptyState text="Sin pedidos digitales" />
-            ) : (
-              <ul className="bg-[#0f172a] border border-[#1e293b] rounded-2xl divide-y divide-[#1e293b]/60 max-h-80 overflow-y-auto">
-                {sortedOrders.map((o) => (
-                  <li
-                    key={o.id}
-                    className="flex items-center justify-between px-4 py-3 text-sm"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="font-mono font-black text-[#38bdf8]">
-                        #{o.displayNumber}
-                      </span>
-                      <div className="flex flex-col min-w-0">
-                        <span
-                          className={`text-[10px] uppercase tracking-widest font-bold ${STATUS_META[o.status].tone}`}
-                        >
-                          {STATUS_META[o.status].short}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {new Date(o.createdAt).toLocaleTimeString("es-AR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}{" "}
-                          · {o.items.length} item
-                          {o.items.length === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="font-mono text-sm font-bold text-white">
-                      ${o.total.toLocaleString("es-AR")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+              <span className="text-[10px] font-mono text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
+                {sortedOrders.length}
+              </span>
+            </span>
+            <span className="text-[10px] font-medium text-ink-400 uppercase tracking-[0.06em]">
+              Más reciente arriba
+            </span>
           </div>
-
-          <div>
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2">
-              <Banknote size={12} />
-              Efectivo en barra
-              <span className="text-slate-600">({sortedCashSales.length})</span>
-            </h2>
-            {sortedCashSales.length === 0 ? (
-              <EmptyState text="Sin ventas en efectivo" />
-            ) : (
-              <ul className="bg-[#0f172a] border border-[#1e293b] rounded-2xl divide-y divide-[#1e293b]/60 max-h-80 overflow-y-auto">
-                {sortedCashSales.map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between px-4 py-3 text-sm"
-                  >
-                    <div className="flex flex-col min-w-0 mr-2">
-                      <span className="text-white truncate">
-                        {s.description}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {new Date(s.createdAt).toLocaleTimeString("es-AR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        · {s.addedBy}
-                      </span>
-                    </div>
-                    <span className="font-mono text-sm font-bold text-emerald-300">
-                      ${s.amount.toLocaleString("es-AR")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {sortedOrders.length === 0 ? (
+            <EmptyCard text="Sin pedidos digitales" />
+          ) : (
+            <div className="flex flex-col gap-0.5 flex-1 overflow-y-auto no-scrollbar min-h-0">
+              {sortedOrders.map((o) => (
+                <OrderRow key={o.id} order={o} />
+              ))}
+            </div>
+          )}
         </section>
 
-        {!hasMovements && (
-          <div className="text-center text-slate-500 text-sm flex items-center justify-center gap-2 py-4">
-            <Sparkles size={14} />
-            Aún no hay movimientos esta noche. Cuando alguien escanee el QR,
-            aparecerá acá en vivo.
+        {/* Row 3: Efectivo span 2 */}
+        <section className="lg:col-span-2 bg-ink-900 border border-ink-800 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <div className="flex justify-between items-baseline">
+            <span className="flex items-center gap-2.5 text-[10px] font-medium uppercase tracking-[0.22em] text-ink-100">
+              Efectivo en barra
+              <span className="text-[10px] font-mono text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
+                {sortedCashSales.length}
+              </span>
+            </span>
+            <span className="text-[10px] font-medium text-ink-400 uppercase tracking-[0.06em]">
+              cargado por admin
+            </span>
           </div>
-        )}
+          {sortedCashSales.length === 0 ? (
+            <div className="text-center py-4 font-serif-italic text-[13px] text-ink-500">
+              — Sin ventas en efectivo —
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {sortedCashSales.map((s) => (
+                <div
+                  key={s.id}
+                  className="grid grid-cols-[1fr_auto] gap-3 items-center py-2.5 border-b border-ink-850 last:border-b-0"
+                >
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <span className="text-[12px] font-medium text-ink-50 truncate">
+                      {s.description}
+                    </span>
+                    <span className="text-[10px] text-ink-400 font-mono tabular">
+                      {formatHm(s.createdAt)} hs · {s.addedBy}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[13px] text-green tabular">
+                    +${s.amount.toLocaleString("es-AR")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Footer live indicator */}
+      <div className="px-5 pb-3 flex justify-between items-center text-[11px] text-ink-500">
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green shadow-[0_0_0_3px_var(--green-soft)]" />
+            En vivo
+          </span>
+          <span>Sesión iniciada {startedAtStr} hs</span>
+        </div>
+        <span>Última actualización · ahora</span>
       </div>
     </main>
   );
 }
 
-// ─────────────────────────── helpers ───────────────────────────
+// ───────────────────────────── helpers ─────────────────────────────
 
-function TotalCard({
+function Kpi({
   label,
-  icon,
-  count,
   value,
-  tone,
-  big = false,
+  sub,
+  isCurrency,
+  deltaTone,
+  deltaText,
 }: {
   label: string;
-  icon: React.ReactNode;
-  count: number;
   value: number;
-  tone: "blue" | "emerald" | "white";
-  big?: boolean;
+  sub: string;
+  isCurrency?: boolean;
+  deltaTone: "up" | "neutral";
+  deltaText: string;
 }) {
-  const ring =
-    tone === "blue"
-      ? "border-[#38bdf8]/30 bg-gradient-to-br from-[#38bdf8]/10 to-transparent"
-      : tone === "emerald"
-        ? "border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent"
-        : "border-white/15 bg-gradient-to-br from-white/[0.04] to-transparent";
-  const iconColor =
-    tone === "blue"
-      ? "text-[#38bdf8]"
-      : tone === "emerald"
-        ? "text-emerald-400"
-        : "text-white";
   return (
-    <div className={`rounded-2xl border p-5 ${ring}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className={iconColor}>{icon}</span>
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+    <div className="bg-ink-900 border border-ink-800 rounded-xl p-4 flex flex-col gap-2 min-w-0">
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-400">
           {label}
+        </span>
+        <span
+          className={`font-mono text-[10px] px-1.5 py-0.5 rounded tabular ${
+            deltaTone === "up"
+              ? "bg-green-soft text-green"
+              : "bg-ink-800 text-ink-300"
+          }`}
+        >
+          {deltaText}
         </span>
       </div>
       <div
-        className={`font-black tracking-tight text-white ${big ? "text-4xl" : "text-3xl"}`}
+        className="text-[28px] font-medium text-ink-50 leading-none tabular"
+        style={{ letterSpacing: "-0.02em" }}
       >
-        ${value.toLocaleString("es-AR")}
+        {isCurrency && (
+          <span className="text-ink-400 text-[0.7em] mr-0.5">$</span>
+        )}
+        {value.toLocaleString("es-AR")}
       </div>
-      <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-2">
-        {count} {count === 1 ? "operación" : "operaciones"}
-      </div>
+      <span className="text-[11px] text-ink-400">{sub}</span>
     </div>
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function OrderRow({ order }: { order: Order }) {
+  const stateClass = statusToBadge(order.status);
+  const itemsCount = order.items.length;
   return (
-    <div className="bg-[#0f172a]/40 border border-dashed border-[#1e293b] rounded-2xl p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-      <Inbox size={14} />
+    <div className="grid grid-cols-[44px_80px_1fr_60px_80px] gap-3 items-center px-2.5 py-2.5 rounded-lg hover:bg-ink-850 transition-colors">
+      <span className="font-mono text-[14px] text-ink-50 tabular">
+        #{order.displayNumber}
+      </span>
+      <span
+        className={`text-[9px] font-medium uppercase tracking-[0.14em] px-1.5 py-1 rounded text-center ${stateClass}`}
+      >
+        {STATUS_META[order.status].short}
+      </span>
+      <span className="font-mono text-[11px] text-ink-300 tabular">
+        {formatHm(order.createdAt)} hs
+      </span>
+      <span className="text-[11px] text-ink-400 text-right">
+        {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
+      </span>
+      <span className="font-mono text-[13px] text-ink-50 text-right tabular">
+        ${order.total.toLocaleString("es-AR")}
+      </span>
+    </div>
+  );
+}
+
+function statusToBadge(status: OrderStatus): string {
+  switch (status) {
+    case "pagado":
+      return "bg-blue-soft text-blue";
+    case "preparando":
+      return "bg-amber-soft text-amber";
+    case "listo":
+      return "bg-green-soft text-green";
+    case "entregado":
+      return "bg-green-soft text-green";
+    case "cancelado":
+      return "bg-danger-soft text-danger";
+    default:
+      return "bg-ink-800 text-ink-300";
+  }
+}
+
+function EmptyCard({ text }: { text: string }) {
+  return (
+    <div className="bg-ink-925/50 border border-dashed border-ink-800 rounded-lg p-6 text-center text-xs text-ink-400">
       {text}
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, LogIn, Martini } from "lucide-react";
+import { Lock, LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -41,25 +41,20 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-5">
-      <div className="w-full max-w-sm bg-[#0f172a] border border-[#1e293b] rounded-3xl p-8 shadow-2xl">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#38bdf8] to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-[#38bdf8]/20">
-            <Martini size={20} className="text-[#020617] fill-[#020617]" />
-          </div>
-          <div>
-            <h1 className="text-xl font-black tracking-tight leading-none">
-              Cocktrail
-            </h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-1">
-              Panel staff
-            </p>
-          </div>
+    <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center p-5">
+      <div className="w-full max-w-sm bg-ink-900 border border-ink-800 rounded-[22px] p-8 shadow-2xl">
+        <div className="flex items-baseline gap-3 mb-8">
+          <span className="font-serif-italic text-[28px] leading-none text-ink-50">
+            Cocktrail
+          </span>
+          <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
+            Panel staff
+          </span>
         </div>
 
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-400">
               Usuario
             </span>
             <input
@@ -69,12 +64,12 @@ export default function LoginPage() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="bg-[#020617] border border-[#1e293b] rounded-xl px-4 py-3 text-white outline-none focus:border-[#38bdf8]/60 transition-colors"
+              className="bg-ink-850 border border-ink-750 rounded-xl px-4 py-3 text-ink-50 outline-none focus:border-blue-line transition-colors"
             />
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-400">
               Contraseña
             </span>
             <input
@@ -83,12 +78,12 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="bg-[#020617] border border-[#1e293b] rounded-xl px-4 py-3 text-white outline-none focus:border-[#38bdf8]/60 transition-colors"
+              className="bg-ink-850 border border-ink-750 rounded-xl px-4 py-3 text-ink-50 outline-none focus:border-blue-line transition-colors"
             />
           </label>
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+            <div className="flex items-center gap-2 text-sm text-danger bg-danger-soft border border-danger-line rounded-xl px-3 py-2.5">
               <Lock size={14} />
               <span>{error}</span>
             </div>
@@ -97,14 +92,14 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting || !username || !password}
-            className="mt-2 h-12 bg-[#38bdf8] text-[#020617] font-black rounded-xl text-sm uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-[#7dd3fc] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="mt-2 h-12 bg-blue text-ink-950 font-semibold rounded-xl text-sm uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <LogIn size={16} strokeWidth={3} />
+            <LogIn size={16} strokeWidth={2.5} />
             {submitting ? "Iniciando…" : "Iniciar sesión"}
           </button>
         </form>
 
-        <p className="mt-6 text-[11px] text-slate-500 text-center">
+        <p className="mt-6 text-[11px] text-ink-400 text-center">
           ¿Sos cliente? Escaneá el QR del boliche para pedir.
         </p>
       </div>
