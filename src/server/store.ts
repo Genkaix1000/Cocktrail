@@ -21,7 +21,12 @@ type State = {
   orders: Map<string, Order>;
   cashSales: Map<string, CashSale>;
   event: NightEvent;
+  // Historial in-memory de noches cerradas. Capped a HISTORY_CAP. Sobrevive
+  // entre cierres de noche pero NO entre restarts del proceso (MVP sin DB).
+  closedEvents: EventSummary[];
 };
+
+const HISTORY_CAP = 60;
 
 type GlobalWithStore = typeof globalThis & {
   __cocktrailStore?: State;
@@ -45,11 +50,16 @@ function buildSeedState(): State {
     orders: new Map(),
     cashSales: new Map(),
     event,
+    closedEvents: [],
   };
 }
 
 function getState(): State {
-  return (g.__cocktrailStore ??= buildSeedState());
+  const state = (g.__cocktrailStore ??= buildSeedState());
+  // HMR / migración: si el cached state no tiene `closedEvents` (porque se
+  // construyó antes de que existiera el campo), agregarlo en runtime.
+  if (!state.closedEvents) state.closedEvents = [];
+  return state;
 }
 
 /** Idempotent. Called from instrumentation.ts on server boot. */
@@ -225,6 +235,12 @@ export function closeEvent(): EventSummary {
     cashSales: listCashSales(),
   };
 
+  // Snapshot al historial (más nuevo primero, capped).
+  state.closedEvents.unshift(summary);
+  if (state.closedEvents.length > HISTORY_CAP) {
+    state.closedEvents.length = HISTORY_CAP;
+  }
+
   emit({ type: "event.closed", summary });
 
   // Reset: nuevo evento activo, drinks se mantienen, orders/cashSales se vacían.
@@ -238,6 +254,28 @@ export function closeEvent(): EventSummary {
   state.cashSales.clear();
 
   return summary;
+}
+
+// ─────────────────────────── Historial ──────────────────────────
+
+export function listClosedEvents(): EventSummary[] {
+  // Devuelve una copia ya ordenada (más reciente primero — se mantiene así
+  // por la inserción con unshift en closeEvent).
+  return [...getState().closedEvents];
+}
+
+/**
+ * Seed para el demo: agrega un EventSummary fabricado al historial. Solo se
+ * usa desde `instrumentation.ts` al boot, NUNCA desde una request handler.
+ */
+export function seedClosedEvent(summary: EventSummary): void {
+  const state = getState();
+  state.closedEvents.push(summary);
+  // Mantener orden desc por closedAt.
+  state.closedEvents.sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0));
+  if (state.closedEvents.length > HISTORY_CAP) {
+    state.closedEvents.length = HISTORY_CAP;
+  }
 }
 
 // ──────────────────────── Debug snapshot ─────────────────────────
