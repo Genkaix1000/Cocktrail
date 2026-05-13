@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpDown, Check, Loader2, Minus, Plus, ShoppingBag, X } from "lucide-react";
+import { Check, Loader2, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import ActiveOrderPill from "../../components/ActiveOrderPill";
@@ -23,7 +23,6 @@ const FILTER_CHIPS = [
 
 export default function CartaPage() {
   const router = useRouter();
-  const [sortBy, setSortBy] = useState<"alpha" | "price">("alpha");
   const [isLoading, setIsLoading] = useState(true);
   const [cart, setCart] = useState<Record<number, number>>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -36,12 +35,10 @@ export default function CartaPage() {
     return () => clearTimeout(t);
   }, []);
 
-  const sortedDrinks = useMemo(() => {
-    return [...DRINKS].sort((a, b) => {
-      if (sortBy === "alpha") return a.name.localeCompare(b.name);
-      return a.price - b.price;
-    });
-  }, [sortBy]);
+  const sortedDrinks = useMemo(
+    () => [...DRINKS].sort((a, b) => a.name.localeCompare(b.name)),
+    [],
+  );
 
   const trendingDrinks = useMemo(
     () => sortedDrinks.filter((d) => d.trending),
@@ -257,19 +254,6 @@ export default function CartaPage() {
               Carta
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() =>
-              setSortBy((prev) => (prev === "alpha" ? "price" : "alpha"))
-            }
-            className="w-9 h-9 rounded-[10px] bg-ink-800 border border-ink-700 text-ink-200 flex items-center justify-center hover:text-ink-50 hover:border-ink-600 transition-colors"
-            aria-label={`Cambiar orden a ${sortBy === "alpha" ? "precio" : "alfabético"}`}
-            title={
-              sortBy === "alpha" ? "Orden: A → Z" : "Orden: precio menor a mayor"
-            }
-          >
-            <ArrowUpDown size={16} />
-          </button>
         </div>
 
         {/* Chips de categoría — visuales (Tendencia se mantiene como hero arriba) */}
