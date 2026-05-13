@@ -16,7 +16,5 @@ export default async function BarraPage() {
   // alguna razón llegamos sin sesión, mandamos a login.
   if (!session) redirect("/login");
 
-  return (
-    <BarraClient initialOrders={getActiveOrders()} role={session.role} />
-  );
+  return <BarraClient initialOrders={getActiveOrders()} />;
 }

@@ -1,32 +1,32 @@
 "use client";
 
-import {
-  Banknote,
-  CheckCircle2,
-  ChefHat,
-  Inbox,
-  LogOut,
-  Martini,
-  PackageCheck,
-  X,
-} from "lucide-react";
+import { LogOut, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import CashSaleModal from "@/components/CashSaleModal";
 import { byCreatedAtAsc } from "@/lib/orderStatus";
 import { useSSE } from "@/lib/useSSE";
-import type { Order, OrderStatus, Role } from "@/types/domain";
+import { formatHm } from "@/lib/utils";
+import type { Order, OrderStatus } from "@/types/domain";
 
 type Props = {
   initialOrders: Order[];
-  role: Role;
 };
 
-export default function BarraClient({ initialOrders, role }: Props) {
+type ColTone = "nuevo" | "preparando" | "listo";
+
+/**
+ * Barra V2 — tablero kanban 3 columnas (handoff design v2).
+ * Cols: Tomar pedido (azul) · Preparando (ámbar) · Entregar (verde).
+ * Cada card tiene un solo CTA que avanza al estado siguiente.
+ */
+export default function BarraClient({ initialOrders }: Props) {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [cashOpen, setCashOpen] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  // Contador local de entregados durante esta sesión del barman. Se incrementa
+  // por SSE cuando llega `order.updated` con status `entregado`. No persiste
+  // entre refreshes — es solo un feedback visual del flujo del turno.
+  const [deliveredCount, setDeliveredCount] = useState<number>(0);
 
   const refetch = useCallback(async () => {
     try {
@@ -50,10 +50,13 @@ export default function BarraClient({ initialOrders, role }: Props) {
         );
       },
       "order.updated": ({ order }) => {
+        if (order.status === "entregado") {
+          setDeliveredCount((n) => n + 1);
+        }
         setOrders((prev) => {
-          const isDone =
+          const isTerminal =
             order.status === "entregado" || order.status === "cancelado";
-          if (isDone) return prev.filter((o) => o.id !== order.id);
+          if (isTerminal) return prev.filter((o) => o.id !== order.id);
           const idx = prev.findIndex((o) => o.id === order.id);
           if (idx === -1) return [...prev, order].sort(byCreatedAtAsc);
           const next = [...prev];
@@ -61,7 +64,10 @@ export default function BarraClient({ initialOrders, role }: Props) {
           return next;
         });
       },
-      "event.closed": () => setOrders([]),
+      "event.closed": () => {
+        setOrders([]);
+        setDeliveredCount(0);
+      },
     },
     { onOpen: refetch },
   );
@@ -114,38 +120,29 @@ export default function BarraClient({ initialOrders, role }: Props) {
   const listos = orders.filter((o) => o.status === "listo");
 
   return (
-    <main className="min-h-screen bg-[#020617] text-white flex flex-col">
-      <CashSaleModal open={cashOpen} onClose={() => setCashOpen(false)} />
-
-      <header className="sticky top-0 z-30 bg-[#020617]/90 backdrop-blur-xl border-b border-white/5 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#38bdf8] to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-[#38bdf8]/20">
-            <Martini size={20} className="text-[#020617] fill-[#020617]" />
-          </div>
-          <div>
-            <h1 className="text-lg font-black tracking-tight text-white leading-none">
-              Cocktrail · Barra
-            </h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-1">
-              Sesión: {role === "admin" ? "Admin" : "Barman"}
-            </p>
-          </div>
+    <main className="min-h-screen bg-ink-950 text-ink-50 flex flex-col">
+      {/* Header */}
+      <header className="h-[60px] px-6 flex justify-between items-center border-b border-ink-800 bg-ink-925 shrink-0">
+        <div className="flex items-baseline gap-3.5">
+          <span className="font-serif-italic text-[22px] leading-none text-ink-50">
+            Cocktrail
+          </span>
+          <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
+            Barra · Tablero
+          </span>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCashOpen(true)}
-            className="flex items-center gap-2 px-4 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 active:scale-95 transition-all text-xs font-bold uppercase tracking-wider"
-          >
-            <Banknote size={16} />
-            <span className="hidden sm:inline">Venta efectivo</span>
-            <span className="inline sm:hidden">$</span>
-          </button>
+        <div className="flex items-center gap-4">
+          <Stat label="Nuevos" value={pagados.length} tone="blue" />
+          <Sep />
+          <Stat label="Preparando" value={preparando.length} tone="amber" />
+          <Sep />
+          <Stat label="Listos" value={listos.length} tone="green" />
+          <Sep />
+          <Stat label="Entregados" value={deliveredCount} tone="ink" />
           <button
             type="button"
             onClick={logout}
-            className="w-10 h-10 rounded-xl bg-[#0f172a] border border-[#1e293b] flex items-center justify-center text-slate-400 hover:text-red-300 hover:border-red-500/30 transition-all active:scale-95"
+            className="ml-2 w-10 h-10 flex items-center justify-center text-ink-400 hover:text-danger transition-colors active:scale-95"
             aria-label="Cerrar sesión"
           >
             <LogOut size={16} />
@@ -153,58 +150,44 @@ export default function BarraClient({ initialOrders, role }: Props) {
         </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-6">
+      {/* Body — 3-column kanban */}
+      <div className="grid grid-cols-1 md:grid-cols-3 flex-1 min-h-0">
         <Column
-          title="Nuevos"
-          subtitle="Recién pagados"
-          tone="blue"
-          icon={<Inbox size={16} />}
+          tone="nuevo"
+          title="Tomar pedido"
+          sub="Pagos verificados · listos para aceptar"
+          count={pagados.length}
+          emptyText="— Sin pedidos nuevos —"
           orders={pagados}
-          renderAction={(o) => (
-            <ActionButton
-              tone="blue"
-              label="Tomar"
-              disabled={pendingIds.has(o.id)}
-              onClick={() => advance(o, "preparando")}
-            />
-          )}
-          onCancel={cancelOrder}
+          buttonLabel="Aceptar"
           pendingIds={pendingIds}
+          onAdvance={(o) => advance(o, "preparando")}
+          onCancel={cancelOrder}
         />
         <Column
+          tone="preparando"
           title="Preparando"
-          subtitle="En proceso"
-          tone="amber"
-          icon={<ChefHat size={16} />}
+          sub="En barra · marcá listo al terminar"
+          count={preparando.length}
+          emptyText="— Nada en barra —"
           orders={preparando}
-          renderAction={(o) => (
-            <ActionButton
-              tone="amber"
-              label="Marcar listo"
-              disabled={pendingIds.has(o.id)}
-              onClick={() => advance(o, "listo")}
-            />
-          )}
-          onCancel={cancelOrder}
+          buttonLabel="Marcar listo"
           pendingIds={pendingIds}
+          onAdvance={(o) => advance(o, "listo")}
+          onCancel={cancelOrder}
         />
         <Column
-          title="Listos"
-          subtitle="Para entregar"
-          tone="emerald"
-          icon={<PackageCheck size={16} />}
+          tone="listo"
+          title="Entregar"
+          sub="Esperando retiro del cliente"
+          count={listos.length}
+          emptyText="— Nada listo todavía —"
           orders={listos}
-          renderAction={(o) => (
-            <ActionButton
-              tone="emerald"
-              label="Entregar"
-              icon={<CheckCircle2 size={14} strokeWidth={3} />}
-              disabled={pendingIds.has(o.id)}
-              onClick={() => advance(o, "entregado")}
-            />
-          )}
-          onCancel={cancelOrder}
+          buttonLabel="Entregar"
           pendingIds={pendingIds}
+          onAdvance={(o) => advance(o, "entregado")}
+          onCancel={cancelOrder}
+          lastCol
         />
       </div>
     </main>
@@ -213,70 +196,104 @@ export default function BarraClient({ initialOrders, role }: Props) {
 
 // ───────────────────────────── Column ─────────────────────────────
 
-type Tone = "blue" | "amber" | "emerald";
+const TONE_DOT: Record<ColTone, string> = {
+  nuevo: "bg-blue shadow-[0_0_0_3px_var(--blue-soft)]",
+  preparando: "bg-amber shadow-[0_0_0_3px_var(--amber-soft)] ct-soft-pulse",
+  listo: "bg-green shadow-[0_0_0_3px_var(--green-soft)]",
+};
 
-const TONE_STYLES: Record<
-  Tone,
-  { border: string; chip: string; subtle: string }
-> = {
-  blue: {
-    border: "border-[#38bdf8]/30",
-    chip: "bg-[#38bdf8]/10 text-[#38bdf8] border-[#38bdf8]/30",
-    subtle: "text-[#38bdf8]",
-  },
-  amber: {
-    border: "border-amber-500/30",
-    chip: "bg-amber-500/10 text-amber-300 border-amber-500/30",
-    subtle: "text-amber-300",
-  },
-  emerald: {
-    border: "border-emerald-500/30",
-    chip: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
-    subtle: "text-emerald-300",
-  },
+const TONE_EYEBROW: Record<ColTone, string> = {
+  nuevo: "text-blue",
+  preparando: "text-amber",
+  listo: "text-green",
+};
+
+const TONE_TOP_ACCENT: Record<ColTone, string> = {
+  nuevo: "bg-blue",
+  preparando: "bg-amber",
+  listo: "bg-green",
+};
+
+const TONE_CARD_BORDER: Record<ColTone, string> = {
+  nuevo: "border-blue-line bg-gradient-to-b from-ink-850 to-ink-900",
+  preparando: "border-amber-line bg-ink-900",
+  listo: "border-green-line bg-ink-900",
+};
+
+const TONE_NUM_SYM: Record<ColTone, string> = {
+  nuevo: "text-blue/50",
+  preparando: "text-amber/50",
+  listo: "text-green/55",
+};
+
+const TONE_NUM_BODY: Record<ColTone, string> = {
+  nuevo: "text-ink-50",
+  preparando: "text-ink-50",
+  listo: "text-green",
+};
+
+const TONE_CTA: Record<ColTone, string> = {
+  nuevo: "bg-blue text-ink-950",
+  preparando: "bg-amber text-ink-950",
+  listo: "bg-green text-ink-950",
 };
 
 function Column({
-  title,
-  subtitle,
   tone,
-  icon,
+  title,
+  sub,
+  count,
+  emptyText,
   orders,
-  renderAction,
-  onCancel,
+  buttonLabel,
   pendingIds,
+  onAdvance,
+  onCancel,
+  lastCol,
 }: {
+  tone: ColTone;
   title: string;
-  subtitle: string;
-  tone: Tone;
-  icon: React.ReactNode;
+  sub: string;
+  count: number;
+  emptyText: string;
   orders: Order[];
-  renderAction: (o: Order) => React.ReactNode;
-  onCancel: (o: Order) => void;
+  buttonLabel: string;
   pendingIds: Set<string>;
+  onAdvance: (o: Order) => void;
+  onCancel: (o: Order) => void;
+  lastCol?: boolean;
 }) {
-  const styles = TONE_STYLES[tone];
   return (
-    <section className="flex flex-col gap-3 min-w-0">
-      <div
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${styles.chip}`}
-      >
-        {icon}
-        <span className="text-[11px] font-black uppercase tracking-widest">
-          {title}
+    <section
+      className={`flex flex-col min-w-0 bg-ink-950 ${lastCol ? "" : "md:border-r border-ink-800"}`}
+    >
+      {/* Column head */}
+      <header className="relative px-5 pt-4 pb-3.5 border-b border-ink-800 bg-ink-925 flex flex-col gap-1.5">
+        <span
+          aria-hidden
+          className={`absolute top-0 inset-x-0 h-[2px] ${TONE_TOP_ACCENT[tone]}`}
+        />
+        <div className="flex justify-between items-center">
+          <span
+            className={`flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.22em] ${TONE_EYEBROW[tone]}`}
+          >
+            <span className={`w-[7px] h-[7px] rounded-full ${TONE_DOT[tone]}`} />
+            {title}
+          </span>
+          <span className="font-mono text-[11px] text-ink-300 px-2 py-[3px] bg-ink-800 rounded-md tabular">
+            {count}
+          </span>
+        </div>
+        <span className="font-serif-italic text-[18px] leading-tight text-ink-100">
+          {sub}
         </span>
-        <span className="ml-auto text-[10px] font-mono font-bold">
-          {orders.length}
-        </span>
-      </div>
-      <p className="text-[10px] text-slate-500 uppercase tracking-widest px-2">
-        {subtitle}
-      </p>
+      </header>
 
-      <div className="flex flex-col gap-3">
+      {/* Column list */}
+      <div className="flex-1 overflow-y-auto no-scrollbar p-3.5 flex flex-col gap-2.5">
         {orders.length === 0 ? (
-          <div className="bg-[#0f172a]/40 border border-dashed border-[#1e293b] rounded-2xl p-6 text-center text-xs text-slate-500">
-            Sin pedidos
+          <div className="text-center py-10 px-3 font-serif-italic text-sm text-ink-500">
+            {emptyText}
           </div>
         ) : (
           orders.map((o) => (
@@ -284,9 +301,10 @@ function Column({
               key={o.id}
               order={o}
               tone={tone}
-              action={renderAction(o)}
-              onCancel={() => onCancel(o)}
+              buttonLabel={buttonLabel}
               isPending={pendingIds.has(o.id)}
+              onAdvance={() => onAdvance(o)}
+              onCancel={() => onCancel(o)}
             />
           ))
         )}
@@ -300,108 +318,131 @@ function Column({
 function OrderCard({
   order,
   tone,
-  action,
-  onCancel,
+  buttonLabel,
   isPending,
+  onAdvance,
+  onCancel,
 }: {
   order: Order;
-  tone: Tone;
-  action: React.ReactNode;
-  onCancel: () => void;
+  tone: ColTone;
+  buttonLabel: string;
   isPending: boolean;
+  onAdvance: () => void;
+  onCancel: () => void;
 }) {
-  const styles = TONE_STYLES[tone];
+  const qtyTotal = order.items.reduce((s, it) => s + it.qty, 0);
   return (
     <article
-      className={`relative bg-[#0f172a] border rounded-2xl p-5 shadow-lg transition-all ${styles.border} ${isPending ? "opacity-60" : ""}`}
+      className={`relative rounded-xl border p-3.5 pt-3 pb-3 flex flex-col gap-2.5 transition-colors ${TONE_CARD_BORDER[tone]} ${isPending ? "opacity-60" : ""}`}
     >
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={isPending}
-        className="absolute top-3 right-3 w-7 h-7 rounded-full bg-[#020617]/80 border border-[#1e293b] flex items-center justify-center text-slate-500 hover:text-red-400 hover:border-red-500/30 active:scale-95 transition-all disabled:opacity-40"
-        aria-label="Cancelar pedido"
-      >
-        <X size={14} />
-      </button>
-
-      <div className="flex items-baseline gap-2 mb-4">
-        <span
-          className={`text-4xl font-black tracking-tighter ${styles.subtle}`}
+      {/* Top: #N + time + small cancel */}
+      <div className="flex items-baseline justify-between gap-2.5">
+        <div
+          className="font-serif tabular leading-[0.85] text-[38px]"
+          style={{ letterSpacing: "-0.03em" }}
         >
-          #{order.displayNumber}
-        </span>
-        <span className="text-[10px] text-slate-500 font-mono">
-          {new Date(order.createdAt).toLocaleTimeString("es-AR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </span>
+          <span className={TONE_NUM_SYM[tone]}>#</span>
+          <span className={TONE_NUM_BODY[tone]}>{order.displayNumber}</span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <div className="flex flex-col items-end gap-[3px]">
+            <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-ink-400">
+              {tone === "listo" ? "Listo" : "Pedido"}
+            </span>
+            <span
+              className={`font-mono text-[12px] tabular ${tone === "preparando" ? "text-amber" : "text-ink-100"}`}
+            >
+              {formatHm(order.createdAt)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isPending}
+            className="w-6 h-6 rounded-md border border-ink-700 text-ink-500 hover:text-danger hover:border-danger-line transition-colors disabled:opacity-40 flex items-center justify-center"
+            aria-label="Cancelar pedido"
+            title="Cancelar pedido"
+          >
+            <X size={11} />
+          </button>
+        </div>
       </div>
 
-      <ul className="flex flex-col gap-1.5 mb-4">
+      {/* Items */}
+      <ul className="flex flex-col gap-1 py-2 border-y border-ink-800">
         {order.items.map((it, i) => (
           <li
             key={`${it.drinkId}-${i}`}
-            className="flex justify-between items-center text-sm"
+            className="grid grid-cols-[28px_1fr] gap-2 items-center text-[13px] font-medium text-ink-100"
           >
-            <span className="text-slate-200">
-              <span className="text-[#38bdf8] font-mono font-bold mr-2">
-                {it.qty}×
-              </span>
-              {it.name}
+            <span className="font-mono font-semibold text-[13px] text-ink-50 tabular">
+              {it.qty}×
             </span>
-            <span className="font-mono text-xs text-slate-500">
-              ${it.subtotal.toLocaleString("es-AR")}
-            </span>
+            <span className="truncate">{it.name}</span>
           </li>
         ))}
       </ul>
 
-      <div className="flex items-center justify-between pt-3 border-t border-[#1e293b]/60 mb-4">
-        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
-          Total
+      {/* Meta row */}
+      <div className="flex justify-between items-center font-mono text-[11px] text-ink-300 tabular">
+        <span>
+          {qtyTotal} {qtyTotal === 1 ? "trago" : "tragos"} · {order.items.length}{" "}
+          {order.items.length === 1 ? "ítem" : "ítems"}
         </span>
-        <span className="text-lg font-black text-white">
+        <span className="text-ink-50 font-semibold">
           ${order.total.toLocaleString("es-AR")}
         </span>
       </div>
 
-      {action}
+      {/* CTA */}
+      <button
+        type="button"
+        onClick={onAdvance}
+        disabled={isPending}
+        className={`h-[42px] rounded-[10px] font-semibold text-[12px] uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 ${TONE_CTA[tone]}`}
+      >
+        {buttonLabel} <span className="text-[16px]">→</span>
+      </button>
     </article>
   );
 }
 
-// ───────────────────────────── ActionButton ─────────────────────────────
+// ───────────────────────────── header helpers ─────────────────────────────
 
-function ActionButton({
-  tone,
+function Stat({
   label,
-  icon,
-  disabled,
-  onClick,
+  value,
+  tone,
+  mono = true,
 }: {
-  tone: Tone;
   label: string;
-  icon?: React.ReactNode;
-  disabled?: boolean;
-  onClick: () => void;
+  value: number | string;
+  tone: "blue" | "amber" | "green" | "ink";
+  mono?: boolean;
 }) {
-  const bg =
+  const color =
     tone === "blue"
-      ? "bg-[#38bdf8] text-[#020617] hover:bg-[#7dd3fc]"
+      ? "text-blue"
       : tone === "amber"
-        ? "bg-amber-400 text-amber-950 hover:bg-amber-300"
-        : "bg-emerald-500 text-emerald-950 hover:bg-emerald-400";
+        ? "text-amber"
+        : tone === "green"
+          ? "text-green"
+          : "text-ink-50";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full h-11 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${bg}`}
-    >
-      {icon}
-      {label}
-    </button>
+    <div className="flex flex-col gap-1">
+      <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-ink-400">
+        {label}
+      </span>
+      <span
+        className={`text-[16px] tabular ${color} ${mono ? "font-mono" : "font-medium"}`}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
+
+function Sep() {
+  return <span className="w-px h-6 bg-ink-800" />;
+}
+
