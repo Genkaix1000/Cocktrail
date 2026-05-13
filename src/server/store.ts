@@ -187,7 +187,7 @@ export function addCashSale(input: NewCashSaleInput): CashSale {
     id: randomUUID(),
     amount: input.amount,
     description: input.description,
-    addedBy: "barman",
+    addedBy: "admin",
     createdAt: Date.now(),
   };
   state.cashSales.set(cashSale.id, cashSale);

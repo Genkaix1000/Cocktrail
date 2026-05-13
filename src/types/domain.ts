@@ -46,7 +46,7 @@ export type CashSale = {
   id: string;
   amount: number;
   description: string;
-  addedBy: "barman";
+  addedBy: "admin";
   createdAt: number;
 };
 

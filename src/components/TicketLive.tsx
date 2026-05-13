@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { clearActiveOrder } from "@/lib/activeOrder";
 import { useSSE } from "@/lib/useSSE";
 import type { Order } from "@/types/domain";
 import Ticket from "./Ticket";
@@ -36,7 +37,18 @@ export default function TicketLive({ initialOrder }: Props) {
     { onOpen: refetch },
   );
 
-  // Vibración + title flash solo en la TRANSICIÓN a listo
+  // Pedir permiso de notificación al montar. Si el cliente lo deniega o el
+  // browser no soporta la API, fallback a vibración + title flash sigue vivo.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {
+        // Algunos browsers tiran si no hay user gesture — ignorar.
+      });
+    }
+  }, []);
+
+  // Vibración + title flash + notificación solo en la TRANSICIÓN a listo
   // (no al renderear si ya viene listo desde el server).
   useEffect(() => {
     if (order.status === "listo" && prevStatus.current !== "listo") {
@@ -44,8 +56,31 @@ export default function TicketLive({ initialOrder }: Props) {
         navigator.vibrate([200, 100, 200]);
       }
       document.title = "🟢 Tu trago está listo — Cocktrail";
+
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        try {
+          new Notification(`🟢 Tu trago #${order.displayNumber} está listo`, {
+            body: "Retiralo en la barra mostrando esta pantalla.",
+            tag: `cocktrail-${order.token}`,
+          });
+        } catch {
+          // Algunos browsers (Safari iOS sin PWA) tiran — el flash + vibración cubren.
+        }
+      }
     }
     prevStatus.current = order.status;
+  }, [order.status, order.displayNumber, order.token]);
+
+  // Al entrar a estado terminal, soltar el localStorage para que /carta
+  // no muestre más el pill de pedido en curso.
+  useEffect(() => {
+    if (order.status === "entregado" || order.status === "cancelado") {
+      clearActiveOrder();
+    }
   }, [order.status]);
 
   // Restaurar título al desmontar (cerrar pestaña no llega acá, pero

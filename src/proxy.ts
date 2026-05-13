@@ -2,9 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { COOKIE_NAME, verifySession } from "@/server/auth";
 
 // APIs que sólo el admin puede invocar.
-const ADMIN_POST = new Set(["/api/event/close"]);
-// APIs que cualquier usuario logueado (admin o barman) puede invocar.
-const STAFF_POST = new Set(["/api/cash-sales"]);
+const ADMIN_POST = new Set(["/api/event/close", "/api/cash-sales"]);
 
 const ORDER_PATCH_PATTERN = /^\/api\/orders\/[^/]+$/;
 
@@ -47,10 +45,6 @@ export default function proxy(request: NextRequest) {
   if (request.method === "POST" && ADMIN_POST.has(pathname)) {
     if (!session) return unauthorized();
     if (session.role !== "admin") return forbidden();
-    return NextResponse.next();
-  }
-  if (request.method === "POST" && STAFF_POST.has(pathname)) {
-    if (!session) return unauthorized();
     return NextResponse.next();
   }
   if (request.method === "PATCH" && ORDER_PATCH_PATTERN.test(pathname)) {
