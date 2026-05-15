@@ -9,6 +9,7 @@ export type Drink = {
   flavors: string[];
   iconName: string;
   trending: boolean;
+  promo?: boolean;
   available: boolean;
 };
 
