@@ -3,3 +3,16 @@ node_modules/
 out/
 .env*.local
 .DS_Store
+
+# tooling local
+.claude/
+.playwright-mcp/
+tsconfig.tsbuildinfo
+*.log
+
+# capturas y artefactos de tests manuales
+paso*-summary.png
+
+# notas locales del proyecto
+CLAUDE.md
+AGENTS.md
