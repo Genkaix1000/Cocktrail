@@ -3,7 +3,7 @@
 
 /* ──────────────────────────────────────────────────────────
    COCKTRAIL · Design tokens — dark "fiestero elegante".
-   Paleta + tipografía del handoff bundle (Claude Design).
+   Paleta + tipografía Inter (refactor V3).
    ────────────────────────────────────────────────────────── */
 :root {
   /* Surface · azul medianoche cálido */
@@ -22,7 +22,7 @@
   --ink-100: #d8dde8;
   --ink-50:  #f1ede2;
 
-  /* Acentos · azul (nuevo) + ámbar (preparando) + verde (listo) + rojo (peligro) */
+  /* Acentos · azul (nuevo) + ámbar (promos) + púrpura (tendencia) + verde (listo) + rojo (peligro) */
   --blue:        oklch(0.81 0.14 230);
   --blue-bright: oklch(0.86 0.16 225);
   --blue-soft:   oklch(0.81 0.14 230 / 0.14);
@@ -31,6 +31,11 @@
   --amber:       oklch(0.80 0.13 75);
   --amber-soft:  oklch(0.80 0.13 75 / 0.14);
   --amber-line:  oklch(0.80 0.13 75 / 0.30);
+  --amber-border: oklch(0.80 0.13 75 / 0.50);
+
+  --purple:       oklch(0.70 0.15 300);
+  --purple-soft:  oklch(0.70 0.15 300 / 0.14);
+  --purple-border: oklch(0.70 0.15 300 / 0.50);
 
   --green:       oklch(0.78 0.16 155);
   --green-soft:  oklch(0.78 0.16 155 / 0.14);
@@ -51,9 +56,7 @@
    Tailwind v4 · expose tokens como utilities
    ────────────────────────────────────────────────────────── */
 @theme inline {
-  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono), "JetBrains Mono", ui-monospace, monospace;
-  --font-serif: var(--font-instrument-serif), "Cormorant Garamond", Georgia, serif;
+  --font-sans: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   /* Surfaces */
   --color-ink-950: #07090f;
@@ -80,6 +83,11 @@
   --color-amber: oklch(0.80 0.13 75);
   --color-amber-soft: oklch(0.80 0.13 75 / 0.14);
   --color-amber-line: oklch(0.80 0.13 75 / 0.30);
+  --color-amber-border: oklch(0.80 0.13 75 / 0.50);
+
+  --color-purple: oklch(0.70 0.15 300);
+  --color-purple-soft: oklch(0.70 0.15 300 / 0.14);
+  --color-purple-border: oklch(0.70 0.15 300 / 0.50);
 
   --color-green: oklch(0.78 0.16 155);
   --color-green-soft: oklch(0.78 0.16 155 / 0.14);
@@ -95,7 +103,6 @@
    ────────────────────────────────────────────────────────── */
 html {
   font-family: var(--font-sans);
-  font-feature-settings: "ss01", "cv11";
   letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
 }
@@ -111,15 +118,15 @@ body {
   box-sizing: border-box;
 }
 
-/* Helper para títulos serif italic — usado por toda la app. */
-.font-serif-italic {
-  font-family: var(--font-serif);
-  font-style: italic;
-  letter-spacing: -0.01em;
-}
-
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Helper para títulos serif italic — usado por otras páginas (admin, barra, ticket). */
+.font-serif-italic {
+  font-family: "Inter", var(--font-inter), sans-serif;
+  font-style: italic;
+  letter-spacing: -0.01em;
 }
 
 /* ──────────────────────────────────────────────────────────
