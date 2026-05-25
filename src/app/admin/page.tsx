@@ -5,10 +5,8 @@ import {
   getCurrentEvent,
   listCashSales,
   listOrders,
-  listDrinks,
 } from "@/server/store";
 import AdminClient from "./AdminClient";
-import CajaClient from "./CajaClient";
 
 // Sin cache: snapshot fresco en cada visita; el client se mantiene
 // sincronizado vía SSE.
@@ -18,14 +16,10 @@ export default async function AdminPage() {
   const c = await cookies();
   const session = verifySession(c.get(COOKIE_NAME)?.value);
 
-  // Defensa en profundidad: el proxy ya garantizó admin/caja, pero si por
+  // Defensa en profundidad: el proxy ya garantizó admin, pero si por
   // alguna razón llegamos sin sesión o con rol incorrecto, redirect.
   if (!session) redirect("/login");
-  if (session.role === "barman") redirect("/barra");
-
-  if (session.role === "caja") {
-    return <CajaClient drinks={listDrinks()} />;
-  }
+  if (session.role !== "admin") redirect("/barra");
 
   return (
     <AdminClient

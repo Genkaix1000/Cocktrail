@@ -1,4 +1,4 @@
-export type Role = "admin" | "barman" | "caja";
+export type Role = "admin" | "barman";
 export type Theme = "normal" | "bosko";
 
 export type Drink = {

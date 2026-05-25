@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
 
-type LoginResponse = { username: string; role: "admin" | "barman" | "caja" };
+type LoginResponse = { username: string; role: "admin" | "barman" };
 
 export default function LoginPage() {
   const router = useRouter();

@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, History, LogOut, Power, QrCode } from "lucide-react";
+import { History, LogOut, Power, QrCode, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
@@ -63,11 +63,6 @@ export default function AdminClient({
     () =>
       orders.filter((o) => o.status !== "cancelado").sort(byCreatedAtDesc),
     [orders],
-  );
-
-  const sortedCashSales = useMemo(
-    () => [...cashSales].sort(byCreatedAtDesc),
-    [cashSales],
   );
 
   const refetch = useCallback(async () => {
@@ -179,6 +174,15 @@ export default function AdminClient({
         <div className="flex items-center gap-2 shrink-0">
           <ThemeSwitcher />
           <Link
+            href="/admin/caja"
+            className="h-9 px-3.5 rounded-lg bg-green-soft border border-green-line text-green flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] hover:brightness-110 transition-all"
+            aria-label="Abrir Caja (POS)"
+            title="Caja"
+          >
+            <Receipt size={13} />
+            <span className="hidden sm:inline">Caja</span>
+          </Link>
+          <Link
             href="/admin/historial"
             className="w-9 h-9 rounded-lg bg-ink-850 border border-ink-700 text-ink-100 flex items-center justify-center hover:text-blue hover:border-blue-line transition-all"
             aria-label="Ver historial de noches"
@@ -253,8 +257,8 @@ export default function AdminClient({
           deltaText={totalDrinkUnits > 0 ? `+${totalDrinkUnits}` : "0"}
         />
 
-        {/* Row 2: Top tragos (span 2) + Pedidos digitales (span 2, row span 2) */}
-        <section className="lg:col-span-2 bg-ink-900 border border-ink-800 rounded-xl p-4 flex flex-col gap-3 min-w-0 min-h-0">
+        {/* Row 2: Top tragos (span 2, row span 2) + Pedidos digitales (span 2, row span 2) */}
+        <section className="lg:col-span-2 lg:row-span-2 bg-ink-900 border border-ink-800 rounded-xl p-4 flex flex-col gap-3 min-w-0 min-h-0">
           <div className="flex justify-between items-baseline">
             <span className="flex items-center gap-2.5 text-[10px] font-medium uppercase tracking-[0.22em] text-ink-100">
               Tragos más vendidos
@@ -336,46 +340,6 @@ export default function AdminClient({
           )}
         </section>
 
-        {/* Row 3: Efectivo span 2 */}
-        <section className="lg:col-span-2 bg-ink-900 border border-ink-800 rounded-xl p-4 flex flex-col gap-3 min-w-0">
-          <div className="flex justify-between items-baseline">
-            <span className="flex items-center gap-2.5 text-[10px] font-medium uppercase tracking-[0.22em] text-ink-100">
-              Efectivo en barra
-              <span className="text-[10px] font-mono text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
-                {sortedCashSales.length}
-              </span>
-            </span>
-            <span className="text-[10px] font-medium text-ink-400 uppercase tracking-[0.06em]">
-              cargado por admin
-            </span>
-          </div>
-          {sortedCashSales.length === 0 ? (
-            <div className="text-center py-4 font-serif-italic text-[13px] text-ink-500">
-              — Sin ventas en efectivo —
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {sortedCashSales.map((s) => (
-                <div
-                  key={s.id}
-                  className="grid grid-cols-[1fr_auto] gap-3 items-center py-2.5 border-b border-ink-850 last:border-b-0"
-                >
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <span className="text-[12px] font-medium text-ink-50 truncate">
-                      {s.description}
-                    </span>
-                    <span className="text-[10px] text-ink-400 font-mono tabular">
-                      {formatHm(s.createdAt)} hs · {s.addedBy}
-                    </span>
-                  </div>
-                  <span className="font-mono text-[13px] text-green tabular">
-                    +${s.amount.toLocaleString("es-AR")}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
 
       {/* Footer live indicator */}

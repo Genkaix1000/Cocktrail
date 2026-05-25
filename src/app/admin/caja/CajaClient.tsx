@@ -523,8 +523,19 @@ export default function CajaClient({ drinks }: Props) {
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-ink-950/75 backdrop-blur-xl border-b border-ink-900/60 px-5 py-2">
         <div className="flex items-center justify-between">
-          <BrandLogo size="lg" />
-          
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.push("/admin")}
+              className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-ink-300 hover:text-white flex items-center justify-center active:scale-95 transition-all"
+              aria-label="Volver al dashboard"
+              title="Volver a Admin"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <BrandLogo size="lg" />
+          </div>
+
           <div className="flex items-center gap-2">
             {/* Label Terminal Caja */}
             <div className="flex items-center gap-1.5 px-1 py-1">

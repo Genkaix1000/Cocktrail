@@ -18,12 +18,12 @@ export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = verifySession(request.cookies.get(COOKIE_NAME)?.value);
 
-  // Páginas: /admin → admin, /barra → cualquier logueado
+  // Páginas: /admin (y subrutas) → admin; /barra → cualquier logueado
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     if (!session) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-    if (session.role !== "admin" && session.role !== "caja") {
+    if (session.role !== "admin") {
       return NextResponse.redirect(new URL("/barra", request.url));
     }
     return NextResponse.next();
