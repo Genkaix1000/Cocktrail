@@ -1,31 +1,37 @@
 "use client";
 
-import { 
-  Check, 
-  Loader2, 
-  Minus, 
-  Plus, 
-  ShoppingBag, 
-  X, 
-  Banknote, 
-  QrCode, 
-  CreditCard, 
-  ArrowLeft, 
-  History, 
-  LogOut, 
+import {
+  Check,
+  Loader2,
+  Minus,
+  Plus,
+  ShoppingBag,
+  X,
+  Banknote,
+  QrCode,
+  CreditCard,
+  ArrowLeft,
+  History,
+  LogOut,
   ArrowRight,
-  Receipt
+  Receipt,
+  Trash2,
+  Flame,
+  Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import DrinkCard from "@/components/DrinkCard";
 import { BrandLogo } from "@/components/BrandLogo";
+import { drinkIcon } from "@/lib/icons";
 import { useSSE } from "@/lib/useSSE";
 import type { Drink, Order, PaymentMethod } from "@/types/domain";
 
 type Props = {
   drinks: Drink[];
 };
+
+type Category = "all" | "promo" | "trending" | "regular";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -34,6 +40,95 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
         {children}
       </h2>
       <span className="flex-1 h-px bg-white/5" />
+    </div>
+  );
+}
+
+function CompactDrinkCard({
+  drink,
+  qty,
+  onAdd,
+  onRemove,
+}: {
+  drink: Drink;
+  qty: number;
+  onAdd: () => void;
+  onRemove: () => void;
+}) {
+  const Icon = drinkIcon(drink.iconName);
+  const [imageBroken, setImageBroken] = useState(false);
+  const isFeatured = drink.promo || drink.trending;
+  const showImage = isFeatured && Boolean(drink.image) && !imageBroken;
+  const active = qty > 0;
+  return (
+    <div
+      className={`group relative bg-ink-900 border rounded-xl p-3 flex flex-col gap-2.5 transition-all ${
+        active
+          ? "border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+          : "border-ink-800 hover:border-ink-700"
+      }`}
+    >
+      {drink.promo && (
+        <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
+          <Sparkles size={10} /> Promo
+        </span>
+      )}
+      {drink.trending && !drink.promo && (
+        <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-rose-500/15 text-rose-400 border border-rose-500/30 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
+          <Flame size={10} /> Trend
+        </span>
+      )}
+
+      <div className="aspect-square rounded-lg bg-ink-950 border border-ink-850 overflow-hidden flex items-center justify-center relative">
+        {showImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={drink.image}
+            alt={drink.name}
+            className="w-full h-full object-cover"
+            onError={() => setImageBroken(true)}
+          />
+        ) : (
+          <Icon size={40} className="text-ink-600" strokeWidth={1.5} />
+        )}
+      </div>
+
+      <div className="flex flex-col gap-0.5 min-h-[44px]">
+        <span className="text-[13px] font-bold text-white leading-tight line-clamp-2">
+          {drink.name}
+        </span>
+        <span className="font-mono text-emerald-400 font-black text-sm tabular">
+          ${drink.price.toLocaleString("es-AR")}
+        </span>
+      </div>
+
+      {qty === 0 ? (
+        <button
+          onClick={onAdd}
+          className="h-9 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 hover:text-emerald-200 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all"
+        >
+          <Plus size={14} strokeWidth={3} />
+          Agregar
+        </button>
+      ) : (
+        <div className="h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-between px-1 gap-1">
+          <button
+            onClick={onRemove}
+            className="w-8 h-8 rounded-md hover:bg-emerald-500/20 text-emerald-300 flex items-center justify-center active:scale-90 transition-all"
+            aria-label="Restar"
+          >
+            <Minus size={14} strokeWidth={3} />
+          </button>
+          <span className="text-emerald-200 font-black tabular text-sm">{qty}</span>
+          <button
+            onClick={onAdd}
+            className="w-8 h-8 rounded-md hover:bg-emerald-500/20 text-emerald-300 flex items-center justify-center active:scale-90 transition-all"
+            aria-label="Sumar"
+          >
+            <Plus size={14} strokeWidth={3} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -88,6 +183,9 @@ export default function CajaClient({ drinks }: Props) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<Order | null>(null);
 
+  // Filtro de categoría (desktop)
+  const [selectedCategory, setSelectedCategory] = useState<Category>("all");
+
   // Cargar órdenes iniciales
   const refetchOrders = useCallback(async () => {
     try {
@@ -127,6 +225,25 @@ export default function CajaClient({ drinks }: Props) {
   const promoDrinks = useMemo(() => sortedDrinks.filter((d) => d.promo), [sortedDrinks]);
   const trendingDrinks = useMemo(() => sortedDrinks.filter((d) => d.trending && !d.promo), [sortedDrinks]);
   const regularDrinks = useMemo(() => sortedDrinks.filter((d) => !d.trending && !d.promo), [sortedDrinks]);
+
+  const filteredDrinks = useMemo(() => {
+    switch (selectedCategory) {
+      case "promo": return promoDrinks;
+      case "trending": return trendingDrinks;
+      case "regular": return regularDrinks;
+      default: return sortedDrinks;
+    }
+  }, [selectedCategory, sortedDrinks, promoDrinks, trendingDrinks, regularDrinks]);
+
+  const cartEntries = useMemo(
+    () => Object.entries(cart).map(([idStr, qty]) => {
+      const d = drinks.find((x) => x.id === Number(idStr));
+      return d ? { drink: d, qty } : null;
+    }).filter((x): x is { drink: Drink; qty: number } => x !== null),
+    [cart, drinks],
+  );
+
+  const clearCart = () => setCart({});
 
   const addToCart = (id: number) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
   const removeFromCart = (id: number) => setCart((prev) => {
@@ -192,12 +309,19 @@ export default function CajaClient({ drinks }: Props) {
     router.refresh();
   }
 
+  const categoryTabs: { id: Category; label: string; count: number }[] = [
+    { id: "all", label: "Todo", count: sortedDrinks.length },
+    { id: "promo", label: "Promos", count: promoDrinks.length },
+    { id: "trending", label: "Tendencia", count: trendingDrinks.length },
+    { id: "regular", label: "Resto", count: regularDrinks.length },
+  ];
+
   return (
-    <main className="min-h-screen pb-40 bg-ink-950 text-ink-50">
-      
-      {/* ── Modal 1: Carrito de Caja (Mismo diseño de la carta) ── */}
+    <main className="h-screen flex flex-col bg-ink-950 text-ink-50 overflow-hidden">
+
+      {/* ── Modal 1: Carrito de Caja (sólo mobile - en desktop el carrito vive en el sidebar) ── */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md p-4">
+        <div className="lg:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md p-4">
           <div className="bg-ink-900 border border-white/10 w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-10">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-black">Pedido Actual</h2>
@@ -569,36 +693,176 @@ export default function CajaClient({ drinks }: Props) {
         </div>
       </header>
 
-      <div className="px-5 mt-6 space-y-10">
-        {promoDrinks.length > 0 && (
-          <section>
-            <SectionTitle>Promos Especiales</SectionTitle>
-            <div className="flex flex-col gap-4">
-              {promoDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="promo" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
-            </div>
-          </section>
-        )}
+      {/* ── Body: productos (izq) + carrito sidebar (der, sólo desktop) ── */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
 
-        {trendingDrinks.length > 0 && (
-          <section>
-            <SectionTitle>Tendencia de la noche</SectionTitle>
-            <div className="flex flex-col gap-4">
-              {trendingDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="trending" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
-            </div>
-          </section>
-        )}
+        {/* ── Columna productos ── */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        <section>
-          <SectionTitle>Catálogo Completo</SectionTitle>
-          <div className="flex flex-col gap-3">
-            {regularDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="regular" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
+          {/* Tabs de categoría */}
+          <div className="px-5 py-3 border-b border-ink-900/60 bg-ink-950/40 backdrop-blur-md shrink-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {categoryTabs.map((tab) => {
+                const active = tab.id === selectedCategory;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedCategory(tab.id)}
+                    className={`shrink-0 px-3 h-8 rounded-lg flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-all ${
+                      active
+                        ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-300"
+                        : "bg-white/5 border border-white/5 text-ink-400 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {tab.label}
+                    <span className={`font-mono text-[9px] px-1 py-0.5 rounded ${active ? "bg-emerald-500/20 text-emerald-200" : "bg-ink-800 text-ink-400"}`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </section>
+
+          {/* Grid scrollable */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {filteredDrinks.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-ink-500 font-serif-italic">
+                — No hay productos en esta categoría —
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 lg:hidden">
+                {/* Mobile/tablet fallback: cards full-width usando DrinkCard (mantiene UX previa hasta lg) */}
+                {filteredDrinks.map((d) => (
+                  <DrinkCard
+                    key={d.id}
+                    {...d}
+                    icon={d.iconName}
+                    variant={d.promo ? "promo" : d.trending ? "trending" : "regular"}
+                    quantity={cart[d.id] || 0}
+                    onAdd={() => addToCart(d.id)}
+                    onRemove={() => removeFromCart(d.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {/* Desktop (lg+): grid denso con cards compactas */}
+            <div className="hidden lg:grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+              {filteredDrinks.map((d) => (
+                <CompactDrinkCard
+                  key={d.id}
+                  drink={d}
+                  qty={cart[d.id] || 0}
+                  onAdd={() => addToCart(d.id)}
+                  onRemove={() => removeFromCart(d.id)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Sidebar carrito (sólo desktop lg+) ── */}
+        <aside className="hidden lg:flex w-[380px] xl:w-[420px] flex-col border-l border-ink-800 bg-ink-925 shrink-0">
+          <div className="px-5 py-4 border-b border-ink-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShoppingBag size={16} className="text-emerald-400" />
+              <span className="text-[11px] font-black uppercase tracking-[0.22em] text-white">
+                Pedido actual
+              </span>
+              <span className="font-mono text-[10px] text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
+                {totalItems}
+              </span>
+            </div>
+            {totalItems > 0 && (
+              <button
+                onClick={clearCart}
+                className="text-ink-400 hover:text-danger p-1.5 rounded-md hover:bg-danger/10 transition-all"
+                title="Vaciar carrito"
+                aria-label="Vaciar carrito"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2 min-h-0">
+            {cartEntries.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center gap-3 px-6 py-12">
+                <div className="w-14 h-14 rounded-2xl bg-ink-800 flex items-center justify-center">
+                  <ShoppingBag size={24} className="text-ink-500" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-bold text-ink-300">Sin items</span>
+                  <span className="text-xs text-ink-500 font-serif-italic">
+                    Agregá productos desde el grid
+                  </span>
+                </div>
+              </div>
+            ) : (
+              cartEntries.map(({ drink, qty }) => (
+                <div
+                  key={drink.id}
+                  className="bg-ink-900 border border-ink-800 rounded-xl p-3 flex flex-col gap-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[13px] font-bold text-white leading-tight line-clamp-2 flex-1">
+                      {drink.name}
+                    </span>
+                    <span className="font-mono text-sm font-black text-emerald-400 tabular shrink-0">
+                      ${(drink.price * qty).toLocaleString("es-AR")}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-ink-400 font-mono">
+                      ${drink.price.toLocaleString("es-AR")} c/u
+                    </span>
+                    <div className="flex items-center gap-1 bg-ink-950 border border-ink-800 rounded-md">
+                      <button
+                        onClick={() => removeFromCart(drink.id)}
+                        className="w-7 h-7 flex items-center justify-center text-ink-300 hover:text-white hover:bg-white/5 rounded-l-md active:scale-90 transition-all"
+                        aria-label="Restar"
+                      >
+                        <Minus size={12} strokeWidth={3} />
+                      </button>
+                      <span className="text-xs font-black text-white tabular w-5 text-center">{qty}</span>
+                      <button
+                        onClick={() => addToCart(drink.id)}
+                        className="w-7 h-7 flex items-center justify-center text-ink-300 hover:text-white hover:bg-white/5 rounded-r-md active:scale-90 transition-all"
+                        aria-label="Sumar"
+                      >
+                        <Plus size={12} strokeWidth={3} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="px-5 py-4 border-t border-ink-800 bg-ink-925 flex flex-col gap-3 shrink-0">
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400">
+                Total
+              </span>
+              <span className="font-serif-italic text-3xl font-black tabular text-emerald-400">
+                ${totalPrice.toLocaleString("es-AR")}
+              </span>
+            </div>
+            <button
+              onClick={handleOpenCheckout}
+              disabled={totalItems === 0}
+              className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 disabled:bg-ink-800 disabled:text-ink-500 disabled:cursor-not-allowed text-ink-950 font-black rounded-xl active:scale-[0.98] transition-all text-xs uppercase tracking-[0.18em] flex items-center justify-center gap-2"
+            >
+              <Receipt size={16} strokeWidth={2.5} />
+              Cobrar
+            </button>
+          </div>
+        </aside>
       </div>
 
-      {/* ── Floating Cart Button (Mismo diseño de la carta original) ── */}
+      {/* ── Floating Cart Button (sólo mobile/tablet) ── */}
       {!isCartOpen && !isCheckoutOpen && totalItems > 0 && (
-        <button onClick={() => setIsCartOpen(true)} className="fixed bottom-6 inset-x-6 h-16 bg-blue text-ink-950 rounded-2xl flex items-center justify-between px-6 shadow-2xl active:scale-95 transition-all z-40 border-t border-white/10">
+        <button onClick={() => setIsCartOpen(true)} className="lg:hidden fixed bottom-6 inset-x-6 h-16 bg-blue text-ink-950 rounded-2xl flex items-center justify-between px-6 shadow-2xl active:scale-95 transition-all z-40 border-t border-white/10">
           <div className="flex flex-col items-start">
             <span className="text-[9px] font-bold uppercase opacity-70">Tu pedido</span>
             <span className="text-lg font-black">${totalPrice.toLocaleString("es-AR")}</span>

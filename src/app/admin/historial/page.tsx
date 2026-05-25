@@ -7,6 +7,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
+import { BrandLogo } from "@/components/BrandLogo";
 import { seedHistoryDemo } from "@/server/seed-history";
 import { listClosedEvents } from "@/server/store";
 import { formatHm } from "@/lib/utils";
@@ -100,10 +101,8 @@ export default async function HistorialPage() {
     <main className="min-h-screen bg-ink-950 text-ink-50">
       {/* Top bar */}
       <header className="h-[60px] px-6 flex justify-between items-center border-b border-ink-800 bg-ink-925 shrink-0">
-        <div className="flex items-baseline gap-3.5 min-w-0">
-          <span className="font-serif-italic text-[22px] leading-none text-ink-50 shrink-0">
-            Cocktrail
-          </span>
+        <div className="flex items-center gap-3.5 min-w-0">
+          <BrandLogo size="md" />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400 truncate">
             Historial · {events.length}{" "}
             {events.length === 1 ? "noche archivada" : "noches archivadas"}
