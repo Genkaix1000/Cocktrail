@@ -6,10 +6,22 @@ import { useEffect, useMemo, useState } from "react";
 import ActiveOrderPill from "../../components/ActiveOrderPill";
 import DrinkCard from "../../components/DrinkCard";
 import DrinkSkeleton from "../../components/DrinkSkeleton";
+import { BrandLogo } from "@/components/BrandLogo";
 import { SEED_DRINKS } from "@/data/drinks";
 import { saveActiveOrder } from "@/lib/activeOrder";
 
 const DRINKS = SEED_DRINKS;
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-ink-400 whitespace-nowrap">
+        {children}
+      </h2>
+      <span className="flex-1 h-px bg-white/5" />
+    </div>
+  );
+}
 
 export default function CartaPage() {
   const router = useRouter();
@@ -65,13 +77,6 @@ export default function CartaPage() {
     }
   }
 
-  const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-    <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-ink-400 mb-4 flex items-center gap-3">
-      <span>{children}</span>
-      <span className="flex-1 h-px bg-white/5" />
-    </h2>
-  );
-
   return (
     <main className="min-h-screen pb-40 bg-ink-950 text-ink-50">
       {/* ── Modal Carrito ── */}
@@ -118,9 +123,9 @@ export default function CartaPage() {
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-ink-950/80 backdrop-blur-md px-5 pt-6 pb-4">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xl font-black">Cocktrail</span>
-          <span className="text-[9px] font-bold uppercase tracking-widest text-ink-500">Carta 3.4</span>
+        <div className="flex items-center h-[36px]">
+          {/* Usamos scale y un origen izquierdo para aumentar el logo visualmente sin empujar el layout de la cabecera */}
+          <BrandLogo className="text-xl font-black [&_.brand-text]:text-3xl [&_.brand-text]:font-black [&_.brand-text]:not-italic [&_.brand-image]:scale-[2.5] [&_.brand-image]:origin-left" />
         </div>
       </header>
 
@@ -175,6 +180,10 @@ export default function CartaPage() {
           </div>
         </button>
       )}
+      <footer className="pt-12 pb-24 text-center opacity-40">
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-1">Cocktrail Nightclub System</p>
+        <p className="text-[9px]">Powered by Cocktrail</p>
+      </footer>
     </main>
   );
 }

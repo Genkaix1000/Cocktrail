@@ -2,9 +2,12 @@
 @import "tw-animate-css";
 
 /* ──────────────────────────────────────────────────────────
-   COCKTRAIL · Design tokens — dark "fiestero elegante".
-   Paleta + tipografía Inter (refactor V3).
+   COCKTRAIL · Multi-Skin System
+   Design tokens — dark "fiestero elegante" + skin Bosko.
+   Tipografía Inter (refactor V3).
    ────────────────────────────────────────────────────────── */
+
+/* TEMA: NORMAL (Por defecto - Fiestero, moderno, nocturno) */
 :root {
   /* Surface · azul medianoche cálido */
   --ink-950: #07090f;
@@ -22,30 +25,61 @@
   --ink-100: #d8dde8;
   --ink-50:  #f1ede2;
 
-  /* Acentos · azul (nuevo) + ámbar (promos) + púrpura (tendencia) + verde (listo) + rojo (peligro) */
-  --blue:        oklch(0.81 0.14 230);
-  --blue-bright: oklch(0.86 0.16 225);
-  --blue-soft:   oklch(0.81 0.14 230 / 0.14);
-  --blue-line:   oklch(0.81 0.14 230 / 0.28);
+  /* Colores de Acento (Normal) */
+  --primary-base: oklch(0.81 0.14 230); /* Azul */
+  --primary-soft: oklch(0.81 0.14 230 / 0.14);
+  --primary-line: oklch(0.81 0.14 230 / 0.28);
 
-  --amber:       oklch(0.80 0.13 75);
-  --amber-soft:  oklch(0.80 0.13 75 / 0.14);
-  --amber-line:  oklch(0.80 0.13 75 / 0.30);
-  --amber-border: oklch(0.80 0.13 75 / 0.50);
+  --accent-base: oklch(0.80 0.13 75); /* Ambar */
+  --accent-soft: oklch(0.80 0.13 75 / 0.14);
+  --accent-line: oklch(0.80 0.13 75 / 0.30);
+  --accent-border: oklch(0.80 0.13 75 / 0.50);
 
-  --purple:       oklch(0.70 0.15 300);
-  --purple-soft:  oklch(0.70 0.15 300 / 0.14);
-  --purple-border: oklch(0.70 0.15 300 / 0.50);
-
-  --green:       oklch(0.78 0.16 155);
-  --green-soft:  oklch(0.78 0.16 155 / 0.14);
-  --green-line:  oklch(0.78 0.16 155 / 0.30);
-
-  --danger:      oklch(0.70 0.18 25);
+  /* Otros acentos (se mantienen para compatibilidad o uso secundario) */
+  --danger-base: oklch(0.70 0.18 25);
   --danger-soft: oklch(0.70 0.18 25 / 0.14);
   --danger-line: oklch(0.70 0.18 25 / 0.30);
 
-  /* Radios */
+  --success-base: oklch(0.78 0.16 155);
+  --success-soft: oklch(0.78 0.16 155 / 0.14);
+  --success-line: oklch(0.78 0.16 155 / 0.30);
+
+  --purple-base: oklch(0.70 0.15 300);
+  --purple-soft: oklch(0.70 0.15 300 / 0.14);
+  --purple-border: oklch(0.70 0.15 300 / 0.50);
+}
+
+/* TEMA: BOSKO (Social Garden - Orgánico, verde bosque, elegante) */
+[data-theme="bosko"] {
+  /* Surface · Dark Tropical Botanical */
+  --ink-950: #050d07; /* Fondo principal muy oscuro */
+  --ink-925: #07130a;
+  --ink-900: #0a1a10; /* Fondo de tarjetas */
+  --ink-850: #0d2215;
+  --ink-800: #122d1c;
+  --ink-750: #183a24;
+  --ink-700: #1f472c;
+  --ink-600: #2b613c;
+  --ink-500: #397e4e;
+  --ink-400: #499d62;
+  --ink-300: #5db777;
+  --ink-200: #85c999;
+  --ink-100: #bde0ca;
+  --ink-50:  #f0e8d5; /* Texto principal hueso/crema */
+
+  /* Colores de Acento (Bosko) */
+  --primary-base: #4ade80; /* Verde menta brillante (para precios y resalte) */
+  --primary-soft: rgba(74, 222, 128, 0.1);
+  --primary-line: rgba(74, 222, 128, 0.2);
+
+  --accent-base: #c98a6c; /* Cobre / Rose-Gold */
+  --accent-soft: rgba(201, 138, 108, 0.1);
+  --accent-line: rgba(201, 138, 108, 0.2);
+  --accent-border: rgba(201, 138, 108, 0.4);
+}
+
+/* Base de Radios */
+:root {
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
@@ -53,49 +87,50 @@
 }
 
 /* ──────────────────────────────────────────────────────────
-   Tailwind v4 · expose tokens como utilities
+   Tailwind v4 · Expose tokens como utilities
    ────────────────────────────────────────────────────────── */
 @theme inline {
   --font-sans: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   /* Surfaces */
-  --color-ink-950: #07090f;
-  --color-ink-925: #0a0d15;
-  --color-ink-900: #0d1119;
-  --color-ink-850: #11151f;
-  --color-ink-800: #161b27;
-  --color-ink-750: #1c2231;
-  --color-ink-700: #232a3c;
-  --color-ink-600: #2f3850;
-  --color-ink-500: #404a66;
-  --color-ink-400: #5a6480;
-  --color-ink-300: #8590ad;
-  --color-ink-200: #b4bdd2;
-  --color-ink-100: #d8dde8;
-  --color-ink-50: #f1ede2;
+  --color-ink-950: var(--ink-950);
+  --color-ink-925: var(--ink-925);
+  --color-ink-900: var(--ink-900);
+  --color-ink-850: var(--ink-850);
+  --color-ink-800: var(--ink-800);
+  --color-ink-750: var(--ink-750);
+  --color-ink-700: var(--ink-700);
+  --color-ink-600: var(--ink-600);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+  --color-ink-300: var(--ink-300);
+  --color-ink-200: var(--ink-200);
+  --color-ink-100: var(--ink-100);
+  --color-ink-50: var(--ink-50);
 
-  /* Accents */
-  --color-blue: oklch(0.81 0.14 230);
-  --color-blue-bright: oklch(0.86 0.16 225);
-  --color-blue-soft: oklch(0.81 0.14 230 / 0.14);
-  --color-blue-line: oklch(0.81 0.14 230 / 0.28);
+  /* Mapeo dinámico: Clases de color antiguas apuntan a las variables del tema actual */
+  --color-blue: var(--primary-base);
+  --color-blue-bright: var(--primary-base); /* simplificamos al base */
+  --color-blue-soft: var(--primary-soft);
+  --color-blue-line: var(--primary-line);
 
-  --color-amber: oklch(0.80 0.13 75);
-  --color-amber-soft: oklch(0.80 0.13 75 / 0.14);
-  --color-amber-line: oklch(0.80 0.13 75 / 0.30);
-  --color-amber-border: oklch(0.80 0.13 75 / 0.50);
+  --color-amber: var(--accent-base);
+  --color-amber-soft: var(--accent-soft);
+  --color-amber-line: var(--accent-line);
+  --color-amber-border: var(--accent-border);
 
-  --color-purple: oklch(0.70 0.15 300);
-  --color-purple-soft: oklch(0.70 0.15 300 / 0.14);
-  --color-purple-border: oklch(0.70 0.15 300 / 0.50);
+  /* Mantener utilidades por si se usan directas, aunque mapeadas a danger/success */
+  --color-purple: var(--purple-base);
+  --color-purple-soft: var(--purple-soft);
+  --color-purple-border: var(--purple-border);
 
-  --color-green: oklch(0.78 0.16 155);
-  --color-green-soft: oklch(0.78 0.16 155 / 0.14);
-  --color-green-line: oklch(0.78 0.16 155 / 0.30);
+  --color-green: var(--success-base);
+  --color-green-soft: var(--success-soft);
+  --color-green-line: var(--success-line);
 
-  --color-danger: oklch(0.70 0.18 25);
-  --color-danger-soft: oklch(0.70 0.18 25 / 0.14);
-  --color-danger-line: oklch(0.70 0.18 25 / 0.30);
+  --color-danger: var(--danger-base);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -129,6 +164,17 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* Lógica de Logo Dinámico multi-skin */
+[data-theme="bosko"] .brand-text {
+  display: none !important;
+}
+[data-theme="bosko"] .brand-image {
+  display: block !important;
+}
+.brand-image {
+  display: none; /* Oculto por defecto en skin Normal */
+}
+
 /* ──────────────────────────────────────────────────────────
    Animaciones reutilizables (extraídas del handoff)
    ────────────────────────────────────────────────────────── */
@@ -158,3 +204,101 @@ body {
 /* Hide scrollbars on horizontal chip rows / scroll containers */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
+
+/* ──────────────────────────────────────────────────────────
+   Bosko Specific Decorations (Dark Tropical / Copper)
+   ────────────────────────────────────────────────────────── */
+
+/* 1. Fondo general de palmeras */
+body[data-theme="bosko"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  /* SVG in-line muy sutil de hojas de palmera, color verde muy claro, opacidad bajísima */
+  background-image: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10,90 C10,90 20,40 50,20 C50,20 60,60 10,90 Z' fill='%23122d1c' fill-opacity='0.4'/%3E%3Cpath d='M90,10 C90,10 80,60 50,80 C50,80 40,40 90,10 Z' fill='%23122d1c' fill-opacity='0.3'/%3E%3Cpath d='M10,10 C10,10 40,20 60,50 C60,50 20,60 10,10 Z' fill='%23122d1c' fill-opacity='0.5'/%3E%3C/svg%3E");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* 1.5 Enredadera lateral derecha (opcional, solo decorativa en desktop/tablet) */
+body[data-theme="bosko"]::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='200' viewBox='0 0 20 200' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 0Q5 50 15 100T10 200' stroke='%23c98a6c' stroke-width='1.5'/%3E%3Cpath d='M10 30C15 25 18 35 10 40M12 70C17 65 20 75 12 80M8 120C3 115 0 125 8 130M10 170C5 165 2 175 10 180' stroke='%23c98a6c' stroke-width='1'/%3E%3C/svg%3E");
+  background-repeat: repeat-y;
+  background-position: right center;
+  pointer-events: none;
+  z-index: 50; /* Por encima del contenido, pero es muy fina */
+  opacity: 0.7;
+}
+
+/* 2. Marcos ornamentales de cobre para tarjetas */
+[data-theme="bosko"] .ct-promo-card {
+  position: relative;
+  border: 1px solid var(--accent-border) !important;
+  background: var(--ink-900) !important;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(201, 138, 108, 0.05);
+}
+
+
+
+/* Variante regular: borde fino cobre */
+[data-theme="bosko"] .ct-regular-card {
+  border: 1px solid var(--accent-line) !important;
+  background: rgba(10, 26, 16, 0.8) !important;
+}
+
+/* 3. Botones metálicos de cobre */
+[data-theme="bosko"] .ct-action-btn {
+  background: linear-gradient(135deg, #e6b999 0%, #c98a6c 50%, #a86c50 100%) !important;
+  border: 1px solid #f2cfbb !important;
+  color: #050d07 !important; /* Ícono negro/verde súper oscuro */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.3) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Textura interna del botón (hojas sutiles) */
+[data-theme="bosko"] .ct-action-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 21C12 21 21 16 21 9C21 5.5 18 3 15 3C13.5 3 12.2 3.6 11.4 4.5C10.7 3.6 9.4 3 7.8 3C4.8 3 1.8 5.5 1.8 9C1.8 16 10.8 21 10.8 21' fill='%23000' fill-opacity='0.1'/%3E%3C/svg%3E");
+  background-size: 140%;
+  background-position: center;
+  pointer-events: none;
+}
+
+/* Botón secundario (minus o empty) en Bosko */
+[data-theme="bosko"] .ct-action-btn-ghost {
+  background: rgba(201, 138, 108, 0.1) !important;
+  border: 1px solid var(--accent-line) !important;
+  color: var(--accent-base) !important;
+}
+
+/* Colores específicos de etiquetas en Bosko */
+[data-theme="bosko"] .ct-tag-promo {
+  color: var(--ink-950) !important;
+  background: var(--accent-base) !important;
+}
+[data-theme="bosko"] .ct-tag-trend {
+  color: var(--primary-base) !important;
+  background: var(--primary-soft) !important;
+  border: 1px solid var(--primary-line) !important;
+}
+
+[data-theme="bosko"] .ct-price-promo {
+  color: var(--accent-base) !important;
+}
+[data-theme="bosko"] .ct-price-trend {
+  color: var(--primary-base) !important;
+}

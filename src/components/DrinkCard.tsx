@@ -1,26 +1,22 @@
 "use client";
 
-import {
-  Beer,
-  Droplet,
-  GlassWater,
-  Minus,
-  Plus,
-  Wine,
-  Zap,
-} from "lucide-react";
+import { Minus, Plus, GlassWater, Beer, Zap, Droplet, Wine, Martini, Citrus, CupSoda, BottleWine } from "lucide-react";
+import Image from "next/image";
 import type { ComponentType } from "react";
 
-/* ── Icon map ─────────────────────────────────────────── */
-const ICON_MAP: Record<string, ComponentType<{ size?: number; className?: string }>> = {
+/* ── Icon map (fallback if no image) ──────────────────── */
+const ICON_MAP: Record<string, ComponentType<{ size?: number; className?: string; strokeWidth?: number }>> = {
   "glass-water": GlassWater,
   beer: Beer,
   zap: Zap,
   droplet: Droplet,
   wine: Wine,
+  martini: Martini,
+  citrus: Citrus,
+  "cup-soda": CupSoda,
+  "bottle-wine": BottleWine,
 };
 
-/* ── Types ────────────────────────────────────────────── */
 type CardVariant = "promo" | "trending" | "regular";
 
 interface DrinkCardProps {
@@ -28,24 +24,55 @@ interface DrinkCardProps {
   price: number;
   vibe?: string;
   icon?: string;
+  image?: string;
   variant?: CardVariant;
   quantity?: number;
   onAdd?: () => void;
   onRemove?: () => void;
 }
 
-/* ── Border color per variant ─────────────────────────── */
-const BORDER_CLASS: Record<CardVariant, string> = {
-  promo: "border-amber-border/60 ring-1 ring-amber-500/10",
-  trending: "border-purple-border/60 ring-1 ring-purple-500/10",
-  regular: "border-white/10",
-};
+interface ActionButtonsProps {
+  quantity: number;
+  onAdd?: () => void;
+  onRemove?: () => void;
+}
+
+function ActionButtons({ quantity, onAdd, onRemove }: ActionButtonsProps) {
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="flex items-center gap-2 bg-black/30 backdrop-blur-md p-1.5 rounded-[16px] border border-white/10"
+    >
+      {quantity > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+            className="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <Minus size={18} strokeWidth={3} />
+          </button>
+          <span className="text-[15px] font-black text-white w-6 text-center tabular">
+            {quantity}
+          </span>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
+        className="w-10 h-10 rounded-xl bg-emerald-500 text-black flex items-center justify-center active:scale-95 transition-transform hover:bg-emerald-400"
+      >
+        <Plus size={20} strokeWidth={3} className="font-bold" />
+      </button>
+    </div>
+  );
+}
 
 export default function DrinkCard({
   name,
   price,
-  vibe,
   icon,
+  image,
   variant = "regular",
   quantity = 0,
   onAdd,
@@ -58,102 +85,84 @@ export default function DrinkCard({
     if (onAdd) onAdd();
   };
 
-  /* ── Vertical Action Buttons ────────────────────────── */
-  const ActionButtons = () => (
-    <div
-      onClick={(e) => e.stopPropagation()}
-      className="flex flex-col items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5"
-    >
-      {quantity > 0 ? (
-        <>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
-            className="w-10 h-10 rounded-lg bg-blue text-ink-950 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <Plus size={18} strokeWidth={3} />
-          </button>
-          <span className="text-[14px] font-black text-ink-50 w-full text-center tabular py-0.5">
-            {quantity}
-          </span>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
-            className="w-10 h-10 rounded-lg bg-white/10 text-ink-50 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <Minus size={18} strokeWidth={3} />
-          </button>
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
-          className="w-10 h-10 rounded-lg bg-white/10 text-ink-100 flex items-center justify-center active:scale-90 transition-transform"
-        >
-          <Plus size={20} strokeWidth={3} />
-        </button>
-      )}
-    </div>
-  );
-
-  /* ── Layout Horizontal (Carta Regular) ───────────────────── */
+  /* ── VARIANTE A: "Nuestra Carta" (Lista) ─────────────── */
   if (isRegular) {
     return (
       <div
         onClick={handleActivate}
-        className={`flex items-center justify-between p-3 pl-4 rounded-[22px] border bg-white/5 backdrop-blur-md transition-all active:bg-white/5 ${BORDER_CLASS.regular}`}
+        className="flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-all active:bg-white/10 cursor-pointer"
       >
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-            {IconComponent && <IconComponent size={20} className="text-ink-400" />}
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-white/[0.03] border border-white/10 text-white/50 shadow-inner">
+            {IconComponent ? (
+              <IconComponent size={26} strokeWidth={1.5} />
+            ) : (
+              <GlassWater size={26} strokeWidth={1.5} />
+            )}
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-bold text-[16px] text-ink-50 leading-tight truncate">
+            <span className="font-bold text-[16px] text-white leading-tight truncate">
               {name}
             </span>
-            <span className="text-[14px] font-black text-blue tabular mt-0.5">
+            <span className="text-[15px] font-black text-emerald-400 tabular mt-1">
               ${price.toLocaleString("es-AR")}
             </span>
           </div>
         </div>
-        <ActionButtons />
+        <ActionButtons quantity={quantity} onAdd={onAdd} onRemove={onRemove} />
       </div>
     );
   }
 
-  /* ── Layout Vertical (Promo / Trending) ─────────────── */
+  /* ── VARIANTE B: "Tendencias / Promos" (Banner) ──────── */
   return (
     <div
       onClick={handleActivate}
-      className={`relative flex flex-row gap-4 p-4 pr-3 rounded-[24px] border cursor-pointer bg-white/5 backdrop-blur-md transition-all min-h-[140px] ${BORDER_CLASS[variant]}`}
+      className="relative flex flex-col rounded-2xl border border-white/10 bg-white/5 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform min-h-[180px]"
     >
-      <div className="flex flex-col flex-1">
-        <div className="mb-2">
-          <span className={`text-[9px] font-black tracking-[0.2em] uppercase px-2 py-0.5 rounded-full ${
-            variant === "promo" ? "text-amber bg-amber-500/10" : "text-purple bg-purple-500/10"
+      {/* Background Image */}
+      {image ? (
+        <Image
+          src={image}
+          alt={name}
+          fill
+          className="object-cover z-0"
+          sizes="(max-width: 768px) 100vw, 33vw"
+          priority={false}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-ink-800 z-0 flex items-center justify-center opacity-20">
+          {IconComponent && <IconComponent size={64} className="text-white" />}
+        </div>
+      )}
+
+      {/* Gradient Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10 pointer-events-none" />
+
+      {/* Content */}
+      <div className="relative z-20 flex flex-col flex-1 p-4">
+        <div className="mb-auto">
+          <span className={`inline-block text-[9px] font-black tracking-[0.2em] uppercase px-2.5 py-1 rounded-full backdrop-blur-md ${
+            variant === "promo" ? "text-amber-300 bg-amber-500/20 border border-amber-500/30" : "text-emerald-300 bg-emerald-500/20 border border-emerald-500/30"
           }`}>
             {variant === "promo" ? "⚡ PROMO" : "▲ TREND"}
           </span>
         </div>
-        
-        <div className="flex items-start gap-2.5 flex-1">
-          {IconComponent && <IconComponent size={20} className="text-ink-400 mt-1 shrink-0" />}
-          <span className="font-bold text-[18px] leading-[1.2] text-ink-50">
-            {name}
-          </span>
-        </div>
 
-        <div className="mt-auto">
-          <span className={`text-[17px] font-black tabular ${
-            variant === "promo" ? "text-amber" : "text-purple"
-          }`}>
-            ${price.toLocaleString("es-AR")}
-          </span>
-        </div>
-      </div>
+        <div className="flex items-end justify-between mt-auto">
+          <div className="flex flex-col min-w-0 pr-4">
+            <span className="font-bold text-[20px] leading-tight text-white mb-1 drop-shadow-md">
+              {name}
+            </span>
+            <span className="text-[18px] font-black tabular text-emerald-400 drop-shadow-md">
+              ${price.toLocaleString("es-AR")}
+            </span>
+          </div>
 
-      <div className="flex items-center">
-        <ActionButtons />
+          <div className="shrink-0">
+            <ActionButtons quantity={quantity} onAdd={onAdd} onRemove={onRemove} />
+          </div>
+        </div>
       </div>
     </div>
   );

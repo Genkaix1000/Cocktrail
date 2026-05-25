@@ -65,15 +65,22 @@ export default function ActiveOrderPill() {
   if (!order) return null;
 
   const meta = STATUS_META[order.status];
+  
+  // Mapear colores dinámicos para el ícono según el estado
+  const iconColorClass = 
+    order.status === "pagado" ? "text-[#38bdf8] bg-[#38bdf8]/10" :
+    order.status === "preparando" ? "text-amber-300 bg-amber-300/10" :
+    order.status === "listo" || order.status === "entregado" ? "text-emerald-400 bg-emerald-400/10" :
+    "text-red-400 bg-red-400/10";
 
   return (
     <Link
       href={`/pedido/${order.token}`}
-      className="block bg-ink-850 border border-blue-line rounded-[14px] mx-[18px] mt-3 px-4 py-3 hover:border-blue/60 hover:bg-ink-800 active:scale-[0.98] transition-all"
+      className="block bg-ink-850 border border-white/5 rounded-[14px] mx-[18px] mt-3 px-4 py-3 hover:border-white/20 hover:bg-ink-800 active:scale-[0.98] transition-all"
       aria-label={`Volver al pedido #${order.displayNumber}, estado: ${meta.short}`}
     >
       <div className="flex items-center gap-3">
-        <div className="bg-blue-soft text-blue rounded-xl w-10 h-10 flex items-center justify-center shrink-0">
+        <div className={`rounded-xl w-10 h-10 flex items-center justify-center shrink-0 ${iconColorClass}`}>
           <Hourglass size={18} />
         </div>
         <div className="flex-1 min-w-0">

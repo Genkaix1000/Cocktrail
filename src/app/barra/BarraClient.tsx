@@ -3,6 +3,8 @@
 import { LogOut, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { byCreatedAtAsc } from "@/lib/orderStatus";
 import { useSSE } from "@/lib/useSSE";
 import { formatHm } from "@/lib/utils";
@@ -124,9 +126,7 @@ export default function BarraClient({ initialOrders }: Props) {
       {/* Header */}
       <header className="h-[60px] px-6 flex justify-between items-center border-b border-ink-800 bg-ink-925 shrink-0">
         <div className="flex items-baseline gap-3.5">
-          <span className="font-serif-italic text-[22px] leading-none text-ink-50">
-            Cocktrail
-          </span>
+          <BrandLogo />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
             Barra · Tablero
           </span>
@@ -139,6 +139,8 @@ export default function BarraClient({ initialOrders }: Props) {
           <Stat label="Listos" value={listos.length} tone="green" />
           <Sep />
           <Stat label="Entregados" value={deliveredCount} tone="ink" />
+          <Sep />
+          <ThemeSwitcher />
           <button
             type="button"
             onClick={logout}
@@ -197,45 +199,45 @@ export default function BarraClient({ initialOrders }: Props) {
 // ───────────────────────────── Column ─────────────────────────────
 
 const TONE_DOT: Record<ColTone, string> = {
-  nuevo: "bg-blue shadow-[0_0_0_3px_var(--blue-soft)]",
-  preparando: "bg-amber shadow-[0_0_0_3px_var(--amber-soft)] ct-soft-pulse",
-  listo: "bg-green shadow-[0_0_0_3px_var(--green-soft)]",
+  nuevo: "bg-sky-500 shadow-[0_0_0_3px_rgba(14,165,233,0.2)]",
+  preparando: "bg-orange-500 shadow-[0_0_0_3px_rgba(249,115,22,0.2)] ct-soft-pulse",
+  listo: "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]",
 };
 
 const TONE_EYEBROW: Record<ColTone, string> = {
-  nuevo: "text-blue",
-  preparando: "text-amber",
-  listo: "text-green",
+  nuevo: "text-sky-500",
+  preparando: "text-orange-500",
+  listo: "text-emerald-500",
 };
 
 const TONE_TOP_ACCENT: Record<ColTone, string> = {
-  nuevo: "bg-blue",
-  preparando: "bg-amber",
-  listo: "bg-green",
+  nuevo: "bg-sky-500",
+  preparando: "bg-orange-500",
+  listo: "bg-emerald-500",
 };
 
 const TONE_CARD_BORDER: Record<ColTone, string> = {
-  nuevo: "border-blue-line bg-gradient-to-b from-ink-850 to-ink-900",
-  preparando: "border-amber-line bg-ink-900",
-  listo: "border-green-line bg-ink-900",
+  nuevo: "border-sky-500/20 bg-gradient-to-b from-ink-850 to-ink-900",
+  preparando: "border-orange-500/20 bg-ink-900",
+  listo: "border-emerald-500/20 bg-ink-900",
 };
 
 const TONE_NUM_SYM: Record<ColTone, string> = {
-  nuevo: "text-blue/50",
-  preparando: "text-amber/50",
-  listo: "text-green/55",
+  nuevo: "text-sky-500/50",
+  preparando: "text-orange-500/50",
+  listo: "text-emerald-500/55",
 };
 
 const TONE_NUM_BODY: Record<ColTone, string> = {
   nuevo: "text-ink-50",
   preparando: "text-ink-50",
-  listo: "text-green",
+  listo: "text-emerald-500",
 };
 
 const TONE_CTA: Record<ColTone, string> = {
-  nuevo: "bg-blue text-ink-950",
-  preparando: "bg-amber text-ink-950",
-  listo: "bg-green text-ink-950",
+  nuevo: "bg-sky-500 text-ink-950",
+  preparando: "bg-orange-500 text-ink-950",
+  listo: "bg-emerald-500 text-ink-950",
 };
 
 function Column({
@@ -350,7 +352,7 @@ function OrderCard({
               {tone === "listo" ? "Listo" : "Pedido"}
             </span>
             <span
-              className={`font-mono text-[12px] tabular ${tone === "preparando" ? "text-amber" : "text-ink-100"}`}
+              className={`font-mono text-[12px] tabular ${tone === "preparando" ? "text-orange-500" : "text-ink-100"}`}
             >
               {formatHm(order.createdAt)}
             </span>
@@ -422,11 +424,11 @@ function Stat({
 }) {
   const color =
     tone === "blue"
-      ? "text-blue"
+      ? "text-sky-500"
       : tone === "amber"
-        ? "text-amber"
+        ? "text-orange-500"
         : tone === "green"
-          ? "text-green"
+          ? "text-emerald-500"
           : "text-ink-50";
   return (
     <div className="flex flex-col gap-1">

@@ -4,6 +4,7 @@ import { ArrowLeft, Printer, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 // NEXT_PUBLIC_* se inlinea al bundle. Es la forma idiomática Next.js de pasar
 // config "pública" al cliente. Una IP LAN no es secreto.
@@ -50,9 +51,7 @@ export default function QrPage() {
 
       <div className="max-w-2xl mx-auto p-6 sm:p-10 flex flex-col items-center gap-8">
         <div className="flex items-baseline gap-3 print:hidden">
-          <span className="font-serif-italic text-[28px] leading-none text-ink-50">
-            Cocktrail
-          </span>
+          <BrandLogo />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
             QR para imprimir
           </span>

@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
     "192.168.43.*",  // Android WiFi hotspot
     "172.20.10.*",   // iPhone hotspot (USB o WiFi)
   ],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;
