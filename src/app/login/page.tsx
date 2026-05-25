@@ -32,7 +32,7 @@ export default function LoginPage() {
         return;
       }
       const data = (await res.json()) as LoginResponse;
-      router.push(data.role === "admin" ? "/admin" : "/barra");
+      router.push(data.role === "barman" ? "/barra" : "/admin");
       router.refresh();
     } catch {
       setError("Error de red");

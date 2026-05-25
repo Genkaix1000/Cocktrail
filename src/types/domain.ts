@@ -30,7 +30,7 @@ export type OrderStatus =
   | "entregado"
   | "cancelado";
 
-export type PaymentMethod = "transferencia" | "efectivo";
+export type PaymentMethod = "transferencia" | "efectivo" | "qr" | "debito";
 
 export type Order = {
   id: string;
@@ -75,6 +75,10 @@ export type EventTotals = {
   transferenciaCount: number;
   efectivoTotal: number;
   efectivoCount: number;
+  qrTotal: number;
+  qrCount: number;
+  debitoTotal: number;
+  debitoCount: number;
   drinksSold: DrinkSold[];
   total: number;
 };

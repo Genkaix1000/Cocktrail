@@ -18,7 +18,7 @@ export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = verifySession(request.cookies.get(COOKIE_NAME)?.value);
 
-  // Páginas: /admin → admin, /barra → cualquier logueado
+  // Páginas: /admin (y subrutas) → admin; /barra → cualquier logueado
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     if (!session) {
       return NextResponse.redirect(new URL("/login", request.url));
@@ -37,7 +37,7 @@ export default function proxy(request: NextRequest) {
 
   // Si ya estás logueado, /login te redirige a tu home.
   if (pathname === "/login" && session) {
-    const home = session.role === "admin" ? "/admin" : "/barra";
+    const home = session.role === "barman" ? "/barra" : "/admin";
     return NextResponse.redirect(new URL(home, request.url));
   }
 

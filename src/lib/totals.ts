@@ -21,6 +21,10 @@ export function computeTotals(
   let transferenciaCount = 0;
   let efectivoTotal = 0;
   let efectivoCount = 0;
+  let qrTotal = 0;
+  let qrCount = 0;
+  let debitoTotal = 0;
+  let debitoCount = 0;
   const drinksByDrinkId = new Map<number, DrinkSold>();
 
   for (const order of orders) {
@@ -29,9 +33,15 @@ export function computeTotals(
     if (order.paymentMethod === "transferencia") {
       transferenciaTotal += order.total;
       transferenciaCount += 1;
-    } else {
+    } else if (order.paymentMethod === "efectivo") {
       efectivoTotal += order.total;
       efectivoCount += 1;
+    } else if (order.paymentMethod === "qr") {
+      qrTotal += order.total;
+      qrCount += 1;
+    } else if (order.paymentMethod === "debito") {
+      debitoTotal += order.total;
+      debitoCount += 1;
     }
 
     for (const item of order.items) {
@@ -60,9 +70,13 @@ export function computeTotals(
     transferenciaCount,
     efectivoTotal,
     efectivoCount,
+    qrTotal,
+    qrCount,
+    debitoTotal,
+    debitoCount,
     drinksSold: Array.from(drinksByDrinkId.values()).sort(
       (a, b) => b.qty - a.qty,
     ),
-    total: transferenciaTotal + efectivoTotal,
+    total: transferenciaTotal + efectivoTotal + qrTotal + debitoTotal,
   };
 }

@@ -90,7 +90,11 @@ export default function DrinkCard({
     return (
       <div
         onClick={handleActivate}
-        className="flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-all active:bg-white/10 cursor-pointer"
+        className={`flex items-center justify-between p-3 rounded-2xl border backdrop-blur-md transition-all active:scale-[0.98] cursor-pointer ${
+          quantity > 0
+            ? "border-[var(--primary-base)] shadow-[0_0_15px_var(--primary-soft)] bg-[var(--primary-soft)]"
+            : "border-white/10 bg-white/5"
+        }`}
       >
         <div className="flex items-center gap-4 min-w-0">
           <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-white/[0.03] border border-white/10 text-white/50 shadow-inner">
@@ -118,7 +122,11 @@ export default function DrinkCard({
   return (
     <div
       onClick={handleActivate}
-      className="relative flex flex-col rounded-2xl border border-white/10 bg-white/5 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform min-h-[180px]"
+      className={`relative flex flex-col rounded-2xl border bg-white/5 overflow-hidden cursor-pointer active:scale-[0.98] transition-all min-h-[180px] ${
+        quantity > 0
+          ? "border-[var(--primary-base)] shadow-[0_0_20px_var(--primary-soft)]"
+          : "border-white/10"
+      }`}
     >
       {/* Background Image */}
       {image ? (
