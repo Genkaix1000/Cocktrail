@@ -122,10 +122,18 @@ export default function CartaPage() {
       )}
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-ink-950/80 backdrop-blur-md px-5 pt-6 pb-4">
-        <div className="flex items-center h-[36px]">
-          {/* Usamos scale y un origen izquierdo para aumentar el logo visualmente sin empujar el layout de la cabecera */}
-          <BrandLogo className="text-xl font-black [&_.brand-text]:text-3xl [&_.brand-text]:font-black [&_.brand-text]:not-italic [&_.brand-image]:scale-[2.5] [&_.brand-image]:origin-left" />
+      <header className="sticky top-0 z-40 bg-ink-950/75 backdrop-blur-xl border-b border-ink-900/60 px-5 py-3">
+        <div className="flex items-center justify-between">
+          <BrandLogo size="md" />
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-ink-300">
+              Carta Online
+            </span>
+          </div>
         </div>
       </header>
 
