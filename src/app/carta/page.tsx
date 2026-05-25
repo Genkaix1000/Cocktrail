@@ -122,9 +122,9 @@ export default function CartaPage() {
       )}
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-ink-950/75 backdrop-blur-xl border-b border-ink-900/60 px-5 py-3">
+      <header className="sticky top-0 z-40 bg-ink-950/75 backdrop-blur-xl border-b border-ink-900/60 px-5 py-1.5">
         <div className="flex items-center justify-between">
-          <BrandLogo size="md" />
+          <BrandLogo size="lg" />
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />

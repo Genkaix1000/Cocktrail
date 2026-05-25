@@ -3,10 +3,10 @@ import Image from "next/image";
 export type BrandSize = "sm" | "md" | "lg" | "xl" | "hero";
 
 const SIZES: Record<BrandSize, { text: number; image: number }> = {
-  sm:   { text: 20, image: 40 },
-  md:   { text: 26, image: 56 },
-  lg:   { text: 32, image: 72 },
-  xl:   { text: 40, image: 96 },
+  sm: { text: 20, image: 40 },
+  md: { text: 26, image: 56 },
+  lg: { text: 32, image: 72 },
+  xl: { text: 40, image: 96 },
   hero: { text: 48, image: 140 },
 };
 
@@ -26,7 +26,7 @@ export function BrandLogo({ size = "md", className = "" }: Props) {
         Cocktrail
       </span>
       <Image
-        src="/bosko.png"
+        src="/bosko.webp"
         alt="Bosko"
         width={s.image}
         height={s.image}

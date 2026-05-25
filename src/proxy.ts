@@ -23,7 +23,7 @@ export default function proxy(request: NextRequest) {
     if (!session) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-    if (session.role !== "admin") {
+    if (session.role !== "admin" && session.role !== "caja") {
       return NextResponse.redirect(new URL("/barra", request.url));
     }
     return NextResponse.next();
@@ -37,7 +37,7 @@ export default function proxy(request: NextRequest) {
 
   // Si ya estás logueado, /login te redirige a tu home.
   if (pathname === "/login" && session) {
-    const home = session.role === "admin" ? "/admin" : "/barra";
+    const home = session.role === "barman" ? "/barra" : "/admin";
     return NextResponse.redirect(new URL(home, request.url));
   }
 

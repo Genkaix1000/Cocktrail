@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
 
-type LoginResponse = { username: string; role: "admin" | "barman" };
+type LoginResponse = { username: string; role: "admin" | "barman" | "caja" };
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,7 +32,7 @@ export default function LoginPage() {
         return;
       }
       const data = (await res.json()) as LoginResponse;
-      router.push(data.role === "admin" ? "/admin" : "/barra");
+      router.push(data.role === "barman" ? "/barra" : "/admin");
       router.refresh();
     } catch {
       setError("Error de red");

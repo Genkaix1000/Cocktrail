@@ -18,10 +18,13 @@ const ADMIN_USER = process.env.COCKTRAIL_ADMIN_USER ?? "admin";
 const ADMIN_PASS = process.env.COCKTRAIL_ADMIN_PASS ?? "admin";
 const BARMAN_USER = process.env.COCKTRAIL_BARMAN_USER ?? "barman";
 const BARMAN_PASS = process.env.COCKTRAIL_BARMAN_PASS ?? "barman";
+const CAJA_USER = process.env.COCKTRAIL_CAJA_USER ?? "caja";
+const CAJA_PASS = process.env.COCKTRAIL_CAJA_PASS ?? "caja";
 
 const USERS: Record<string, { password: string; role: Role }> = {
   [ADMIN_USER]: { password: ADMIN_PASS, role: "admin" },
   [BARMAN_USER]: { password: BARMAN_PASS, role: "barman" },
+  [CAJA_USER]: { password: CAJA_PASS, role: "caja" },
 };
 
 export type AuthenticatedUser = {
@@ -58,7 +61,7 @@ export type Session = {
   expiresAt: number;
 };
 
-const ROLES = new Set<Role>(["admin", "barman"]);
+const ROLES = new Set<Role>(["admin", "barman", "caja"]);
 
 export function verifySession(raw: string | undefined): Session | null {
   if (!raw) return null;

@@ -178,14 +178,6 @@ export default function AdminClient({
 
         <div className="flex items-center gap-2 shrink-0">
           <ThemeSwitcher />
-          <button
-            type="button"
-            onClick={() => setCashOpen(true)}
-            className="h-9 px-3.5 rounded-lg bg-green-soft border border-green-line text-green flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] hover:brightness-110 transition-all cursor-pointer"
-          >
-            <Banknote size={13} />
-            <span className="hidden sm:inline">Venta efectivo</span>
-          </button>
           <Link
             href="/admin/historial"
             className="w-9 h-9 rounded-lg bg-ink-850 border border-ink-700 text-ink-100 flex items-center justify-center hover:text-blue hover:border-blue-line transition-all"

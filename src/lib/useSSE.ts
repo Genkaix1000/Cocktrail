@@ -5,6 +5,7 @@ import type {
   CashSale,
   EventSummary,
   Order,
+  Theme,
 } from "@/types/domain";
 
 /**
@@ -16,6 +17,7 @@ export type DomainEventHandlers = Partial<{
   "order.updated": (data: { order: Order }) => void;
   "cash_sale.added": (data: { cashSale: CashSale }) => void;
   "event.closed": (data: { summary: EventSummary }) => void;
+  "theme.changed": (data: { theme: Theme }) => void;
 }>;
 
 type Options = {

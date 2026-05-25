@@ -7,7 +7,7 @@ import {
   asPositiveInt,
 } from "@/server/validation";
 
-const PAYMENT_METHODS = ["transferencia", "efectivo"] as const;
+const PAYMENT_METHODS = ["transferencia", "efectivo", "qr", "debito"] as const;
 
 export const dynamic = "force-dynamic";
 

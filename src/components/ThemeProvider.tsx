@@ -18,10 +18,10 @@ export function useTheme() {
   return context;
 }
 
-export function ThemeProvider({ 
+export function ThemeProvider({
   children,
   initialTheme
-}: { 
+}: {
   children: React.ReactNode;
   initialTheme: Theme;
 }) {
