@@ -50,8 +50,8 @@ export default function QrPage() {
       </header>
 
       <div className="max-w-2xl mx-auto p-6 sm:p-10 flex flex-col items-center gap-8">
-        <div className="flex items-baseline gap-3 print:hidden">
-          <BrandLogo />
+        <div className="flex items-center gap-3 print:hidden">
+          <BrandLogo size="md" />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
             QR para imprimir
           </span>

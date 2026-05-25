@@ -44,8 +44,8 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center p-5">
       <div className="w-full max-w-sm bg-ink-900 border border-ink-800 rounded-[22px] p-8 shadow-2xl">
-        <div className="flex items-baseline gap-3 mb-8">
-          <BrandLogo />
+        <div className="flex items-center gap-3 mb-8">
+          <BrandLogo size="md" />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
             Panel staff
           </span>

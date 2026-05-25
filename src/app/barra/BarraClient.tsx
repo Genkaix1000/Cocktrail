@@ -125,8 +125,8 @@ export default function BarraClient({ initialOrders }: Props) {
     <main className="min-h-screen bg-ink-950 text-ink-50 flex flex-col">
       {/* Header */}
       <header className="h-[60px] px-6 flex justify-between items-center border-b border-ink-800 bg-ink-925 shrink-0">
-        <div className="flex items-baseline gap-3.5">
-          <BrandLogo />
+        <div className="flex items-center gap-3.5">
+          <BrandLogo size="md" />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
             Barra · Tablero
           </span>
