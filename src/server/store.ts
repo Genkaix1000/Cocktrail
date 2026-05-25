@@ -12,6 +12,7 @@ import type {
   NightEvent,
   Order,
   OrderStatus,
+  Theme,
 } from "@/types/domain";
 import { BadRequest, Conflict, NotFound } from "./errors";
 import { emit } from "./events";
@@ -24,6 +25,7 @@ type State = {
   // Historial in-memory de noches cerradas. Capped a HISTORY_CAP. Sobrevive
   // entre cierres de noche pero NO entre restarts del proceso (MVP sin DB).
   closedEvents: EventSummary[];
+  activeTheme: Theme;
 };
 
 const HISTORY_CAP = 60;
@@ -51,6 +53,7 @@ function buildSeedState(): State {
     cashSales: new Map(),
     event,
     closedEvents: [],
+    activeTheme: "normal",
   };
 }
 
@@ -59,6 +62,7 @@ function getState(): State {
   // HMR / migración: si el cached state no tiene `closedEvents` (porque se
   // construyó antes de que existiera el campo), agregarlo en runtime.
   if (!state.closedEvents) state.closedEvents = [];
+  if (!state.activeTheme) state.activeTheme = "normal";
   return state;
 }
 
@@ -264,6 +268,13 @@ export function listClosedEvents(): EventSummary[] {
   return [...getState().closedEvents];
 }
 
+export function setTheme(theme: Theme): void {
+  const state = getState();
+  if (state.activeTheme === theme) return;
+  state.activeTheme = theme;
+  emit({ type: "theme.changed", theme });
+}
+
 /**
  * Seed para el demo: agrega un EventSummary fabricado al historial. Solo se
  * usa desde `instrumentation.ts` al boot, NUNCA desde una request handler.
@@ -287,5 +298,6 @@ export function snapshot() {
     orders: listOrders(),
     cashSales: listCashSales(),
     totals: getEventTotals(),
+    activeTheme: getState().activeTheme,
   };
 }

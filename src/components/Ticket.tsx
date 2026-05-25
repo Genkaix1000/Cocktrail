@@ -1,300 +1,247 @@
 "use client";
 
-import { ChevronLeft, Plus } from "lucide-react";
+import { ChevronLeft, Plus, Activity } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatHm } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/types/domain";
+import { BrandLogo } from "./BrandLogo";
 
 type Props = { order: Order };
 
-/**
- * Ticket V1 (Pedido editorial) — handoff design.
- * Tres pasos: pagado → preparando → listo. Glow verde cuando está listo.
- * Mantiene CTA "Hacer otro pedido" cuando llega a estado terminal.
- */
 export default function Ticket({ order }: Props) {
-  // Inicializa con la hora actual; la diferencia de SSR/CSR se suprime con
-  // suppressHydrationWarning más abajo (es un reloj — la siguiente tick reconcilia).
   const [time, setTime] = useState<Date>(() => new Date());
 
+  const isReady = order.status === "listo";
+  const isDelivered = order.status === "entregado";
+  const isCancelled = order.status === "cancelado";
+  const isDone = isDelivered || isCancelled;
+
   useEffect(() => {
+    if (isDone) return;
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [isDone]);
 
-  const isReady = order.status === "listo";
-  const isDone = order.status === "entregado" || order.status === "cancelado";
-  const isCancelled = order.status === "cancelado";
+  const displayTime: Date = order.deliveredAt ? new Date(order.deliveredAt) : time;
 
-  // Steps del progreso (orden visual = orden de la máquina de estados).
   const STEPS: { id: OrderStatus; label: string; sub: string }[] = [
-    { id: "pagado", label: "Pago verificado", sub: "Listo para entrar a cola" },
-    { id: "preparando", label: "En preparación", sub: "El barman lo está armando" },
-    { id: "listo", label: "Listo para retirar", sub: "Acercate a la barra" },
+    { id: "pagado", label: "Pago Verificado", sub: "Mercado Pago" },
+    { id: "preparando", label: "En Preparación", sub: "Barman" },
+    { id: "listo", label: "Listo para Retirar", sub: "Barra" },
   ];
 
   const stepIdx = STEPS.findIndex((s) => s.id === order.status);
-  // Si está entregado, todos los pasos quedan "done"; si está cancelado, marcamos hasta donde llegó.
-  const effectiveIdx =
-    order.status === "entregado"
-      ? STEPS.length
-      : isCancelled
-        ? Math.max(0, stepIdx)
-        : stepIdx;
+  const effectiveIdx = order.status === "entregado" ? STEPS.length : isCancelled ? Math.max(0, stepIdx) : stepIdx;
 
-  // ETA mock: a 3 min cuando está en preparando. Cuando está listo, "ahora".
-  const eta =
-    order.status === "preparando"
-      ? "~3 min restantes"
-      : order.status === "listo"
-        ? "¡Ahora!"
-        : order.status === "pagado"
-          ? "En cola"
-          : "—";
+  const getTicketTheme = () => {
+    if (isDone) {
+      return {
+        topBg: "bg-zinc-900",
+        bottomBg: "bg-zinc-200",
+        borderColor: "border-zinc-800",
+        textColor: "text-zinc-500",
+        accentText: "text-zinc-700",
+        dotBg: "bg-zinc-500",
+        cutoutBg: "bg-ink-950",
+      };
+    }
+    if (order.status === "listo") {
+      return {
+        topBg: "bg-emerald-950",
+        bottomBg: "bg-emerald-50",
+        borderColor: "border-emerald-900/50",
+        textColor: "text-emerald-500",
+        accentText: "text-emerald-700",
+        dotBg: "bg-emerald-500",
+        cutoutBg: "bg-ink-950",
+      };
+    }
+    if (order.status === "preparando") {
+      return {
+        topBg: "bg-orange-950",
+        bottomBg: "bg-orange-50",
+        borderColor: "border-orange-900/50",
+        textColor: "text-orange-500",
+        accentText: "text-orange-700",
+        dotBg: "bg-orange-500",
+        cutoutBg: "bg-ink-950",
+      };
+    }
+    return {
+      topBg: "bg-sky-950",
+      bottomBg: "bg-sky-50",
+      borderColor: "border-sky-900/50",
+      textColor: "text-sky-500",
+      accentText: "text-sky-700",
+      dotBg: "bg-sky-500",
+      cutoutBg: "bg-ink-950",
+    };
+  };
 
-  const hashColor = isReady
-    ? "text-green"
-    : isCancelled
-      ? "text-danger"
-      : "text-blue";
+  const theme = getTicketTheme();
 
   return (
-    <main
-      className={`min-h-screen flex flex-col relative ${
-        isReady
-          ? "bg-ink-950 shadow-[inset_0_0_120px_oklch(0.78_0.16_155_/_0.25)]"
-          : "bg-ink-950"
-      }`}
-    >
-      <div className="w-full max-w-md mx-auto flex-1 flex flex-col pb-10">
-        {/* Top bar · back + verification chip */}
-        <div className="px-[22px] pt-[18px] flex justify-between items-center">
+    <main className="min-h-screen bg-transparent flex flex-col relative font-sans text-ink-50 selection:bg-ink-800">
+      <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-6 pb-12 px-4 drop-shadow-2xl">
+        
+        {/* Top Back Button */}
+        <div className="mb-4">
           <Link
             href="/carta"
-            className="w-9 h-9 rounded-[10px] bg-ink-850 border border-ink-700 text-ink-200 flex items-center justify-center hover:text-ink-50 hover:border-ink-600 transition-colors"
-            aria-label="Volver a la carta"
+            className="w-10 h-10 rounded-full bg-ink-900 border border-ink-800 flex items-center justify-center text-ink-400 hover:text-white transition-colors"
           >
-            <ChevronLeft size={16} strokeWidth={2} />
+            <ChevronLeft size={20} />
           </Link>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-green">
-            <span className="w-1.5 h-1.5 rounded-full bg-green" />
-            Pago verificado · Mercado Pago
-          </span>
-          <span className="w-9" aria-hidden />
         </div>
 
-        {/* Eyebrow + title */}
-        <div className="pt-[26px] px-[22px] text-[11px] font-medium uppercase tracking-[0.22em] text-ink-400">
-          Tu pedido · #{order.displayNumber}
-        </div>
-        <h1 className="font-serif-italic text-[38px] leading-none px-[22px] text-ink-50">
-          {isReady
-            ? "Está listo."
-            : order.status === "preparando"
-              ? "Casi listo."
-              : order.status === "entregado"
-                ? "Entregado."
-                : isCancelled
-                  ? "Cancelado."
-                  : "En camino."}
-        </h1>
-
-        {/* Big number frame */}
-        <div className="pt-6 px-[22px]">
-          <div
-            className={`relative overflow-hidden rounded-[22px] border bg-gradient-to-b from-ink-850 to-ink-900 px-5 pt-7 pb-6 ${
-              isReady
-                ? "border-green-line shadow-[0_0_40px_oklch(0.78_0.16_155_/_0.25)]"
-                : "border-ink-700"
-            }`}
-          >
-            {/* Top glow gradient */}
-            <div
-              aria-hidden
-              className={`absolute inset-x-0 top-0 h-[55%] pointer-events-none ${
-                isReady
-                  ? "bg-[radial-gradient(60%_60%_at_50%_0%,var(--green-soft),transparent_70%)]"
-                  : "bg-[radial-gradient(60%_60%_at_50%_0%,var(--blue-soft),transparent_70%)]"
-              }`}
-            />
-
-            <div className="relative">
-              <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400 text-center mb-3">
-                Tu número de retiro
-              </div>
+        {/* --- TICKET CONTAINER --- */}
+        <div className={`relative w-full flex flex-col transition-all duration-1000 ease-in-out origin-top ${
+          isCancelled ? "scale-95 grayscale opacity-75 rotate-1" :
+          isDelivered ? "scale-[0.97] rotate-1" :
+          ""
+        }`}>
+          {/* Sello ENTREGADO */}
+          {isDelivered && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-30 select-none px-6">
               <div
-                className={`font-serif-italic font-normal text-center tabular leading-[0.85] text-[140px] ${hashColor}`}
-                style={{ letterSpacing: "-0.04em" }}
+                className="-rotate-[14deg] border-[4px] border-red-600/90 text-red-600/90 font-black uppercase text-[clamp(1.75rem,9vw,2.5rem)] tracking-[0.12em] px-5 py-1.5 rounded-sm bg-red-600/5 whitespace-nowrap"
+                style={{
+                  textShadow: "1px 1px 0 rgba(0,0,0,0.15)",
+                  boxShadow: "inset 0 0 8px rgba(220,38,38,0.25), 0 2px 6px rgba(0,0,0,0.25)",
+                }}
               >
-                <span className={isReady ? "text-green/60" : "text-blue/70"}>
-                  #
+                Entregado
+              </div>
+            </div>
+          )}
+
+          {/* Top Wrapper */}
+          <div className={`${theme.topBg} rounded-t-3xl border ${theme.borderColor} border-b-0 pb-4 transition-colors duration-1000`}>
+            {/* Header */}
+            <div className="pt-4 pb-2 flex flex-col items-center gap-0.5">
+              <BrandLogo size="lg" />
+              <h2 className="text-[10px] font-black tracking-[0.3em] uppercase text-white/40">Ticket de Pedido</h2>
+            </div>
+
+            {/* Big Number Section with Security Pattern */}
+            <div className={`relative px-6 py-4 flex flex-col items-center justify-center overflow-hidden border-y ${theme.borderColor} transition-colors duration-1000`}>
+              <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: "repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 1px, transparent 8px)" }} />
+
+              <div className={`font-serif-italic text-[88px] leading-none tracking-tighter drop-shadow-2xl transition-colors duration-1000 ${theme.textColor}`}>
+                #{order.displayNumber}
+              </div>
+
+              {/* Real-time Clock Badge */}
+              <div className={`mt-3 inline-flex items-center gap-2 bg-black/40 rounded-full px-3 py-1.5 border ${theme.borderColor} shadow-inner z-10 transition-colors duration-1000`}>
+                <Activity size={12} className={`transition-colors duration-1000 ${theme.textColor}`} style={isDone ? undefined : { animation: "ct-pulse 1.5s ease-in-out infinite" }} />
+                <span className={`font-mono text-xs tracking-widest transition-colors duration-1000 ${theme.textColor}`} suppressHydrationWarning>
+                  {displayTime.toLocaleTimeString("es-AR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                 </span>
-                {order.displayNumber}
-              </div>
-
-              {/* meta row */}
-              <div className="mt-[18px] pt-4 border-t border-ink-800 grid grid-cols-3 items-center">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-ink-400">
-                    Hora
-                  </span>
-                  <span className="font-serif-italic text-[18px] text-ink-50 tabular">
-                    {formatHm(order.createdAt)}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1 items-center">
-                  <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-ink-400">
-                    Reloj
-                  </span>
-                  <span
-                    className="font-mono text-[16px] text-ink-50 tabular"
-                    suppressHydrationWarning
-                  >
-                    {time.toLocaleTimeString("es-AR", {
-                      hour12: false,
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1 items-end">
-                  <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-ink-400">
-                    Total
-                  </span>
-                  <span className="font-serif-italic text-[18px] text-ink-50 tabular">
-                    ${order.total.toLocaleString("es-AR")}
-                  </span>
-                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Progress · 3 steps */}
-        {!isCancelled && (
-          <div className="px-[22px] pt-[22px]">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
-                Seguimiento
-              </span>
-              <span
-                className={`font-serif-italic text-sm ${isReady ? "text-green" : "text-blue"}`}
-              >
-                {eta}
-              </span>
-            </div>
-
-            <div className="flex flex-col">
-              {STEPS.map((s, i) => {
-                const isLast = i === STEPS.length - 1;
-                const isDoneStep = i < effectiveIdx;
-                const isActive = i === effectiveIdx && !isDone;
-
-                return (
-                  <div key={s.id} className="flex items-start gap-3.5">
-                    <div className="w-[22px] flex flex-col items-center shrink-0">
-                      <div
-                        className={`relative w-3.5 h-3.5 rounded-full border-[1.5px] z-10 ${
-                          isDoneStep
-                            ? "bg-blue border-blue"
-                            : isActive
-                              ? "bg-blue border-blue ring-4 ring-blue-soft"
-                              : "bg-ink-900 border-ink-600"
-                        }`}
-                      >
+            {/* Tracker Horizontal */}
+            <div className="px-6 pt-5 pb-1">
+              <div className="flex justify-between relative">
+                {/* Background Line */}
+                <div className="absolute top-2.5 left-[16.66%] right-[16.66%] h-[2px] bg-black/20 -z-10" />
+                
+                {/* Pathing Line (Animated Fill) */}
+                <div 
+                  className={`absolute top-2.5 left-[16.66%] h-[2px] transition-all duration-1000 ease-in-out -z-10 ${theme.dotBg}`}
+                  style={{ width: `${(Math.min(effectiveIdx, STEPS.length - 1) / (STEPS.length - 1)) * 66.66}%` }} 
+                />
+                
+                {STEPS.map((s, i) => {
+                  const isDoneStep = i <= effectiveIdx && !isCancelled;
+                  const isActive = i === effectiveIdx && !isDone && !isCancelled;
+                  
+                  return (
+                    <div key={s.id} className="flex flex-col items-center gap-2 flex-1 text-center z-10">
+                      <div className={`relative w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-1000 ${isDoneStep ? `border-transparent ${theme.dotBg}` : `bg-black/20 border-white/10`}`}>
                         {isActive && (
-                          <span
-                            aria-hidden
-                            className="absolute inset-[-7px] rounded-full border border-blue"
-                            style={{
-                              animation:
-                                "ct-pulse 1.8s ease-in-out infinite",
-                            }}
-                          />
+                          <span className={`absolute inset-0 rounded-full animate-ping opacity-75 transition-colors duration-1000 ${theme.dotBg}`} />
                         )}
+                        {isDoneStep && <div className={`w-2 h-2 rounded-full relative z-10 bg-white`} />}
                       </div>
-                      {!isLast && (
-                        <div
-                          className={`flex-1 w-0.5 min-h-8 mt-1 ${
-                            isDoneStep ? "bg-blue" : "bg-ink-700"
-                          }`}
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1 pb-[18px]">
-                      <div
-                        className={`font-serif text-base leading-tight ${
-                          isDoneStep || isActive
-                            ? "text-ink-50"
-                            : "text-ink-200"
-                        } ${isActive ? "italic" : ""}`}
-                        style={{ fontFamily: "var(--font-serif)" }}
-                      >
-                        {s.label}
-                      </div>
-                      <div className="text-[11px] text-ink-400 mt-1 leading-tight">
-                        {isActive ? "En curso…" : s.sub}
+                      <div className="flex flex-col">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider mt-1 transition-colors duration-1000 ${isDoneStep ? "text-white" : "text-white/30"}`}>{s.label}</span>
+                        <span className="text-[9px] text-white/20 uppercase tracking-widest">({s.sub})</span>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Detalle items */}
-        <div className="mx-[22px] mt-3 mb-4 p-[18px] bg-ink-900 border border-ink-800 rounded-[14px]">
-          <div className="flex justify-between items-baseline mb-3.5">
-            <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
-              Detalle
-            </span>
-            <span className="font-serif-italic text-base text-ink-50 tabular">
-              ${order.total.toLocaleString("es-AR")}
-            </span>
+          {/* Middle Row with Cutouts */}
+          <div className="relative h-8 flex items-center justify-between w-full">
+            {/* Background Layer */}
+            <div className={`absolute inset-0 flex flex-col border-x transition-colors duration-1000 ${theme.borderColor}`}>
+              <div className={`flex-1 transition-colors duration-1000 ${theme.topBg}`} />
+              <div className={`flex-1 transition-colors duration-1000 ${theme.bottomBg}`} />
+            </div>
+
+            {/* Foreground Content */}
+            <div className="absolute inset-0 flex items-center justify-between z-10">
+              {/* Left Cutout */}
+              <div className={`w-4 h-8 border border-l-0 rounded-r-full -ml-px transition-colors duration-1000 ${theme.cutoutBg} ${theme.borderColor}`} />
+              
+              {/* Dashed Line */}
+              <div className={`flex-1 border-t-2 border-dashed mx-4 transition-colors duration-1000 ${theme.borderColor}`} />
+              
+              {/* Right Cutout */}
+              <div className={`w-4 h-8 border border-r-0 rounded-l-full -mr-px transition-colors duration-1000 ${theme.cutoutBg} ${theme.borderColor}`} />
+            </div>
           </div>
-          <ul className="flex flex-col">
-            {order.items.map((it, i) => (
-              <li
-                key={`${it.drinkId}-${i}`}
-                className="flex justify-between items-baseline py-1.5 text-[13px] text-ink-100"
-              >
-                <span>
-                  <span className="text-blue font-medium font-mono mr-2 tabular">
-                    {it.qty}×
-                  </span>
-                  {it.name}
-                </span>
-                <span className="font-mono text-ink-300 tabular">
-                  ${it.subtotal.toLocaleString("es-AR")}
-                </span>
-              </li>
-            ))}
-          </ul>
+
+          {/* Bottom Wrapper */}
+          <div className={`${theme.bottomBg} rounded-b-3xl border ${theme.borderColor} border-t-0 pt-2 transition-colors duration-1000`}>
+            
+            {/* Detalle Tabulado */}
+            <div className="px-7 py-4">
+              <div className={`flex justify-between items-end mb-3 border-b pb-1.5 transition-colors duration-1000 ${theme.borderColor}`}>
+                <span className={`text-[10px] uppercase tracking-widest font-bold transition-colors duration-1000 ${theme.accentText}`}>CANT / DESC</span>
+                <span className={`text-[10px] uppercase tracking-widest font-bold transition-colors duration-1000 ${theme.accentText}`}>IMPORTE</span>
+              </div>
+
+              <ul className="flex flex-col gap-2 mb-4">
+                {order.items.map((it, i) => (
+                  <li key={`${it.drinkId}-${i}`} className="flex justify-between items-start text-sm">
+                    <div className="flex gap-3">
+                      <span className={`font-mono font-bold transition-colors duration-1000 ${theme.textColor}`}>{it.qty}</span>
+                      <span className={`font-bold transition-colors duration-1000 ${theme.textColor}`}>{it.name}</span>
+                    </div>
+                    <span className={`font-mono tabular font-semibold transition-colors duration-1000 ${theme.textColor}`}>${it.subtotal.toLocaleString("es-AR")}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className={`flex justify-between items-center pt-3 border-t border-dashed transition-colors duration-1000 ${theme.borderColor}`}>
+                <span className={`text-xs uppercase tracking-widest font-bold transition-colors duration-1000 ${theme.accentText}`}>Total Pagado</span>
+                <span className="font-serif-italic text-2xl font-black tabular text-black/80">${order.total.toLocaleString("es-AR")}</span>
+              </div>
+            </div>
+
+            {/* Footer Note */}
+            <div className="px-7 pb-5">
+              <p className={`text-center text-[11px] font-black uppercase tracking-wider transition-colors duration-1000 ${theme.accentText}`}>
+                Mostrá esta pantalla al barman cuando tu número aparezca en verde.
+              </p>
+            </div>
+          </div>
+
         </div>
 
-        {/* Hint */}
-        {!isDone && (
-          <p className="px-[22px] pb-4 text-center text-[12px] text-ink-400 leading-relaxed">
-            Mostrá esta pantalla al barman cuando
-            <br />
-            tu número aparezca en{" "}
-            <span className="font-serif-italic text-green text-[14px]">
-              verde
-            </span>
-            .
-          </p>
-        )}
-
-        {/* CTA "Hacer otro pedido" cuando termina */}
+        {/* CTA */}
         {isDone && (
           <Link
             href="/carta"
-            className="mt-2 mx-auto flex items-center justify-center gap-2 w-full max-w-xs px-6 py-3 rounded-2xl bg-blue text-ink-950 font-semibold text-sm uppercase tracking-[0.14em] hover:brightness-110 active:scale-95 transition-all"
+            className="mt-8 mx-auto flex items-center justify-center gap-2 w-full max-w-xs px-6 py-4 rounded-full bg-ink-800 text-ink-50 font-bold text-xs uppercase tracking-[0.2em] hover:bg-ink-700 active:scale-95 transition-all shadow-xl"
           >
-            <Plus size={18} strokeWidth={3} />
+            <Plus size={16} strokeWidth={3} />
             Hacer otro pedido
           </Link>
         )}
