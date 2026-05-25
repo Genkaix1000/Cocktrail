@@ -1,133 +1,161 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, GlassWater, Beer, Zap, Droplet, Wine, Martini, Citrus, CupSoda, BottleWine } from "lucide-react";
+import Image from "next/image";
+import type { ComponentType } from "react";
+
+/* ── Icon map (fallback if no image) ──────────────────── */
+const ICON_MAP: Record<string, ComponentType<{ size?: number; className?: string; strokeWidth?: number }>> = {
+  "glass-water": GlassWater,
+  beer: Beer,
+  zap: Zap,
+  droplet: Droplet,
+  wine: Wine,
+  martini: Martini,
+  citrus: Citrus,
+  "cup-soda": CupSoda,
+  "bottle-wine": BottleWine,
+};
+
+type CardVariant = "promo" | "trending" | "regular";
 
 interface DrinkCardProps {
   name: string;
   price: number;
   vibe?: string;
-  /** Si es trending, se renderiza con marco más prominente (hero). */
-  isTrending?: boolean;
+  icon?: string;
+  image?: string;
+  variant?: CardVariant;
   quantity?: number;
   onAdd?: () => void;
   onRemove?: () => void;
 }
 
-/**
- * Card de trago para la /carta — Carta V2 (handoff).
- * - Si `isTrending`, es la card grande del hero grid (ink-800 + más respiro).
- * - Si no, es la card del grid normal (ink-900 + más compacta).
- * - Nombre en serif italic, precio en sans tabular.
- */
 export default function DrinkCard({
   name,
   price,
-  vibe,
-  isTrending,
+  icon,
+  image,
+  variant = "regular",
   quantity = 0,
   onAdd,
   onRemove,
 }: DrinkCardProps) {
+  const isRegular = variant === "regular";
+  const IconComponent = icon ? ICON_MAP[icon] ?? GlassWater : null;
+
   const handleActivate = () => {
     if (onAdd) onAdd();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handleActivate();
-    }
-  };
-
-  // Hero card: más alta, fondo ink-800, name serif 18px.
-  // Regular card: ink-900, name serif 17px.
-  const baseClass = isTrending
-    ? "bg-ink-800 border-ink-700 min-h-[132px]"
-    : "bg-ink-900 border-ink-800 min-h-[148px] hover:border-ink-600";
-
-  return (
+  /* ── Action Buttons (Horizontal layout) ─────────────── */
+  const ActionButtons = () => (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={`Agregar ${name} al pedido`}
-      onClick={handleActivate}
-      onKeyDown={handleKeyDown}
-      className={`relative flex flex-col gap-2 p-3 rounded-[14px] border cursor-pointer transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue/50 ${baseClass}`}
+      onClick={(e) => e.stopPropagation()}
+      className="flex items-center gap-2 bg-black/30 backdrop-blur-md p-1.5 rounded-[16px] border border-white/10"
     >
-      {isTrending && (
-        <span className="absolute top-2.5 right-2.5 text-[9px] font-medium tracking-[0.18em] uppercase text-amber">
-          ▲ Hot
-        </span>
-      )}
-
-      {vibe && (
-        <span className="text-[9px] font-medium tracking-[0.2em] uppercase text-ink-400">
-          {vibe}
-        </span>
-      )}
-
-      <div className="font-serif-italic text-[17px] leading-[1.1] text-ink-50 flex-1 pr-1">
-        {name}
-      </div>
-
-      <div className="flex items-center justify-between mt-auto">
-        <span className="text-[15px] font-medium text-ink-50 tabular">
-          ${price.toLocaleString("es-AR")}
-        </span>
-
-        {quantity > 0 ? (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
-            className="flex items-center gap-1.5"
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onRemove) onRemove();
-              }}
-              className="w-6 h-[26px] rounded-md bg-ink-750 border border-ink-600 text-ink-50 flex items-center justify-center text-sm font-medium hover:bg-ink-700 transition-colors"
-              aria-label={`Quitar uno de ${name}`}
-            >
-              <Minus size={12} strokeWidth={2.5} />
-            </button>
-            <span className="text-[13px] font-medium text-ink-50 w-4 text-center tabular">
-              {quantity}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onAdd) onAdd();
-              }}
-              className="w-6 h-[26px] rounded-md bg-ink-750 border border-ink-600 text-ink-50 flex items-center justify-center text-sm font-medium hover:bg-blue hover:text-ink-950 hover:border-blue transition-colors"
-              aria-label={`Agregar uno de ${name}`}
-            >
-              <Plus size={12} strokeWidth={2.5} />
-            </button>
-          </div>
-        ) : (
+      {quantity > 0 && (
+        <>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onAdd) onAdd();
-            }}
-            className={
-              isTrending
-                ? "w-[30px] h-[30px] rounded-lg bg-blue text-ink-950 flex items-center justify-center text-lg font-semibold hover:brightness-110 transition-all active:scale-95"
-                : "w-[26px] h-[26px] rounded-lg bg-ink-750 border border-ink-600 text-ink-100 flex items-center justify-center text-base font-medium hover:bg-blue hover:text-ink-950 hover:border-blue transition-all active:scale-95"
-            }
-            aria-label={`Agregar ${name} al pedido`}
+            onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+            className="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
           >
-            <Plus
-              size={isTrending ? 16 : 14}
-              strokeWidth={2.5}
-            />
+            <Minus size={18} strokeWidth={3} />
           </button>
-        )}
+          <span className="text-[15px] font-black text-white w-6 text-center tabular">
+            {quantity}
+          </span>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
+        className="w-10 h-10 rounded-xl bg-emerald-500 text-black flex items-center justify-center active:scale-95 transition-transform hover:bg-emerald-400"
+      >
+        <Plus size={20} strokeWidth={3} className="font-bold" />
+      </button>
+    </div>
+  );
+
+  /* ── VARIANTE A: "Nuestra Carta" (Lista) ─────────────── */
+  if (isRegular) {
+    return (
+      <div
+        onClick={handleActivate}
+        className="flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-all active:bg-white/10 cursor-pointer"
+      >
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-white/[0.03] border border-white/10 text-white/50 shadow-inner">
+            {IconComponent ? (
+              <IconComponent size={26} strokeWidth={1.5} />
+            ) : (
+              <GlassWater size={26} strokeWidth={1.5} />
+            )}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-[16px] text-white leading-tight truncate">
+              {name}
+            </span>
+            <span className="text-[15px] font-black text-emerald-400 tabular mt-1">
+              ${price.toLocaleString("es-AR")}
+            </span>
+          </div>
+        </div>
+        <ActionButtons />
+      </div>
+    );
+  }
+
+  /* ── VARIANTE B: "Tendencias / Promos" (Banner) ──────── */
+  return (
+    <div
+      onClick={handleActivate}
+      className="relative flex flex-col rounded-2xl border border-white/10 bg-white/5 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform min-h-[180px]"
+    >
+      {/* Background Image */}
+      {image ? (
+        <Image 
+          src={image} 
+          alt={name} 
+          fill 
+          className="object-cover z-0" 
+          sizes="(max-width: 768px) 100vw, 33vw" 
+          priority={false} 
+        />
+      ) : (
+        <div className="absolute inset-0 bg-ink-800 z-0 flex items-center justify-center opacity-20">
+          {IconComponent && <IconComponent size={64} className="text-white" />}
+        </div>
+      )}
+
+      {/* Gradient Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10 pointer-events-none" />
+
+      {/* Content */}
+      <div className="relative z-20 flex flex-col flex-1 p-4">
+        <div className="mb-auto">
+          <span className={`inline-block text-[9px] font-black tracking-[0.2em] uppercase px-2.5 py-1 rounded-full backdrop-blur-md ${
+            variant === "promo" ? "text-amber-300 bg-amber-500/20 border border-amber-500/30" : "text-emerald-300 bg-emerald-500/20 border border-emerald-500/30"
+          }`}>
+            {variant === "promo" ? "⚡ PROMO" : "▲ TREND"}
+          </span>
+        </div>
+        
+        <div className="flex items-end justify-between mt-auto">
+          <div className="flex flex-col min-w-0 pr-4">
+            <span className="font-bold text-[20px] leading-tight text-white mb-1 drop-shadow-md">
+              {name}
+            </span>
+            <span className="text-[18px] font-black tabular text-emerald-400 drop-shadow-md">
+              ${price.toLocaleString("es-AR")}
+            </span>
+          </div>
+
+          <div className="shrink-0">
+            <ActionButtons />
+          </div>
+        </div>
       </div>
     </div>
   );

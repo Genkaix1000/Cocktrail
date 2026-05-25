@@ -1,4 +1,5 @@
 export type Role = "admin" | "barman";
+export type Theme = "normal" | "bosko";
 
 export type Drink = {
   id: number;
@@ -8,7 +9,9 @@ export type Drink = {
   vibe: string;
   flavors: string[];
   iconName: string;
+  image?: string;
   trending: boolean;
+  promo?: boolean;
   available: boolean;
 };
 

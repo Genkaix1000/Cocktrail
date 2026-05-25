@@ -3,6 +3,7 @@
 import { Lock, LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type LoginResponse = { username: string; role: "admin" | "barman" };
 
@@ -44,9 +45,7 @@ export default function LoginPage() {
     <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center p-5">
       <div className="w-full max-w-sm bg-ink-900 border border-ink-800 rounded-[22px] p-8 shadow-2xl">
         <div className="flex items-baseline gap-3 mb-8">
-          <span className="font-serif-italic text-[28px] leading-none text-ink-50">
-            Cocktrail
-          </span>
+          <BrandLogo />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
             Panel staff
           </span>

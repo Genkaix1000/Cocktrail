@@ -10,7 +10,8 @@ export type DomainEvent =
   | { type: "order.created"; order: Order }
   | { type: "order.updated"; order: Order }
   | { type: "cash_sale.added"; cashSale: CashSale }
-  | { type: "event.closed"; summary: EventSummary };
+  | { type: "event.closed"; summary: EventSummary }
+  | { type: "theme.changed"; theme: import("@/types/domain").Theme };
 
 const CHANNEL = "domain";
 

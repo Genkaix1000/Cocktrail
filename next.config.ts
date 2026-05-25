@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
     "10.0.0.*",
     "172.16.0.*",
   ],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

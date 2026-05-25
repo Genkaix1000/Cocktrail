@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import CashSaleModal from "@/components/CashSaleModal";
 import CloseNightModal from "@/components/CloseNightModal";
+import { BrandLogo } from "@/components/BrandLogo";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { byCreatedAtDesc, STATUS_META } from "@/lib/orderStatus";
 import { computeTotals } from "@/lib/totals";
 import { useSSE } from "@/lib/useSSE";
@@ -168,15 +170,14 @@ export default function AdminClient({
       {/* Top bar */}
       <header className="h-[60px] px-6 flex justify-between items-center border-b border-ink-800 bg-ink-925 shrink-0">
         <div className="flex items-baseline gap-3.5 min-w-0">
-          <span className="font-serif-italic text-[22px] leading-none text-ink-50 shrink-0">
-            Cocktrail
-          </span>
+          <BrandLogo />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400 truncate">
             Admin · {startedAtStr} hs · #{event.orderCounter} pedidos
           </span>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <ThemeSwitcher />
           <button
             type="button"
             onClick={() => setCashOpen(true)}
