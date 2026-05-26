@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Minus, Plus, ShoppingBag, X } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import ActiveOrderPill from "../../components/ActiveOrderPill";
@@ -29,7 +29,6 @@ export default function CartaPage() {
   const [cart, setCart] = useState<Record<number, number>>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setIsLoading(false), 600);
@@ -72,7 +71,7 @@ export default function CartaPage() {
       setCart({});
       setIsCartOpen(false);
       router.push(`/pedido/${order.token}`);
-    } catch (err) {
+    } catch {
       setSubmitting(false);
     }
   }

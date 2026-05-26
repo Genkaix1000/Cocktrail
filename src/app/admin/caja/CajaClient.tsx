@@ -20,7 +20,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { createElement, useMemo, useState, useCallback } from "react";
 import DrinkCard from "@/components/DrinkCard";
 import { BrandLogo } from "@/components/BrandLogo";
 import { drinkIcon } from "@/lib/icons";
@@ -33,17 +33,6 @@ type Props = {
 
 type Category = "all" | "promo" | "trending" | "regular";
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 mb-4">
-      <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-ink-400 whitespace-nowrap">
-        {children}
-      </h2>
-      <span className="flex-1 h-px bg-white/5" />
-    </div>
-  );
-}
-
 function CompactDrinkCard({
   drink,
   qty,
@@ -55,7 +44,6 @@ function CompactDrinkCard({
   onAdd: () => void;
   onRemove: () => void;
 }) {
-  const Icon = drinkIcon(drink.iconName);
   const [imageBroken, setImageBroken] = useState(false);
   const isFeatured = drink.promo || drink.trending;
   const showImage = isFeatured && Boolean(drink.image) && !imageBroken;
@@ -89,7 +77,11 @@ function CompactDrinkCard({
             onError={() => setImageBroken(true)}
           />
         ) : (
-          <Icon size={40} className="text-ink-600" strokeWidth={1.5} />
+          createElement(drinkIcon(drink.iconName), {
+            size: 40,
+            className: "text-ink-600",
+            strokeWidth: 1.5,
+          })
         )}
       </div>
 
@@ -186,7 +178,7 @@ export default function CajaClient({ drinks }: Props) {
   // Filtro de categoría (desktop)
   const [selectedCategory, setSelectedCategory] = useState<Category>("all");
 
-  // Cargar órdenes iniciales
+  // Cargar órdenes iniciales: useSSE dispara refetchOrders en onOpen al mount.
   const refetchOrders = useCallback(async () => {
     try {
       const res = await fetch("/api/state", { cache: "no-store" });
@@ -195,10 +187,6 @@ export default function CajaClient({ drinks }: Props) {
       setOrders(state.orders ?? []);
     } catch {}
   }, []);
-
-  useEffect(() => {
-    refetchOrders();
-  }, [refetchOrders]);
 
   // Hook SSE para actualizar en tiempo real
   useSSE(
