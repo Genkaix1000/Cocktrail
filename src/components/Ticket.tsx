@@ -3,7 +3,6 @@
 import { ChevronLeft, Plus, Activity } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatHm } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/types/domain";
 import { BrandLogo } from "./BrandLogo";
 
@@ -12,7 +11,6 @@ type Props = { order: Order };
 export default function Ticket({ order }: Props) {
   const [time, setTime] = useState<Date>(() => new Date());
 
-  const isReady = order.status === "listo";
   const isDelivered = order.status === "entregado";
   const isCancelled = order.status === "cancelado";
   const isDone = isDelivered || isCancelled;

@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
     setTheme(theme);
     return Response.json({ success: true, theme });
-  } catch (error) {
+  } catch {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 }
