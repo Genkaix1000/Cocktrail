@@ -1,4 +1,10 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+  - "apps/docs"
+
 allowBuilds:
+  esbuild: true
   msw: false
   sharp: false
   unrs-resolver: false

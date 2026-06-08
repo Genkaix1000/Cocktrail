@@ -1,0 +1,22 @@
+[
+  {
+    "id": "0d573aaa-f491-4f0e-8fe1-02b6e301b1a0",
+    "username": "ola",
+    "passwordHash": "f88fa5ec367813bccb28321b56d55e05e1a2572d44c1f2c11354708309e5da9c",
+    "role": "barman",
+    "permissions": {
+      "closeNight": false,
+      "modifyCarta": false,
+      "manageUsers": false,
+      "monitoreo": false,
+      "metricas": false,
+      "historial": false,
+      "general": false,
+      "carta": false,
+      "pagos": false,
+      "staff": false,
+      "cancelarTickets": true
+    },
+    "createdAt": 1780603477839
+  }
+]

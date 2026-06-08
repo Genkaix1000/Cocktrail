@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+/* Ensure Fumadocs components are included in your build */
+@source "../../../node_modules/fumadocs-ui/dist/**/*.js";
+
+@theme {
+  /* Mapeo de colores principales a la estética oscura elegante de Cocktrail */
+  --color-fd-background: #07090f;
+  --color-fd-foreground: #f1ede2;
+  
+  --color-fd-card: #0d1119;
+  --color-fd-card-foreground: #f1ede2;
+  
+  --color-fd-popover: #0d1119;
+  --color-fd-popover-foreground: #f1ede2;
+  
+  --color-fd-primary: oklch(0.81 0.14 230);
+  --color-fd-primary-foreground: #07090f;
+  
+  --color-fd-secondary: #161b27;
+  --color-fd-secondary-foreground: #f1ede2;
+  
+  --color-fd-muted: #11151f;
+  --color-fd-muted-foreground: #8590ad;
+  
+  --color-fd-accent: #1c2231;
+  --color-fd-accent-foreground: #f1ede2;
+  
+  --color-fd-border: #232a3c;
+  --color-fd-ring: oklch(0.81 0.14 230 / 0.5);
+
+  /* Cocktrail Specific Colors */
+  --color-ink-950: #07090f;
+  --color-ink-925: #0a0d15;
+  --color-ink-900: #0d1119;
+  --color-ink-850: #11151f;
+  --color-ink-800: #161b27;
+  --color-ink-750: #1c2231;
+  --color-ink-700: #232a3c;
+  --color-ink-600: #2f3850;
+  --color-ink-500: #404a66;
+  --color-ink-400: #5a6480;
+  --color-ink-300: #8590ad;
+  --color-ink-200: #b4bdd2;
+  --color-ink-100: #d8dde8;
+  --color-ink-50:  #f1ede2;
+
+  --color-primary-base: oklch(0.81 0.14 230);
+  --color-accent-base: oklch(0.80 0.13 75);
+}
+
+/* Ajustes globales de scrollbar y tema */
+body {
+  background-color: var(--color-fd-background);
+  color: var(--color-fd-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Efectos visuales de glow para el KDS e interfaces premium */
+.glow-primary {
+  box-shadow: 0 0 25px oklch(0.81 0.14 230 / 0.15);
+}
+.glow-accent {
+  box-shadow: 0 0 25px oklch(0.80 0.13 75 / 0.15);
+}
