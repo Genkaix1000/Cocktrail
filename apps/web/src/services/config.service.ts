@@ -11,6 +11,9 @@ export type SafeConfig = {
     cardBg: string;
     accent: string;
     borders: string;
+    textColor: string;
+    success: string;
+    danger: string;
   } | null;
   mercadoPago: {
     publicKey: string;
@@ -35,6 +38,9 @@ export type ConfigUpdate = {
     cardBg: string;
     accent: string;
     borders: string;
+    textColor: string;
+    success: string;
+    danger: string;
   } | null;
   mercadoPago?: {
     publicKey: string;

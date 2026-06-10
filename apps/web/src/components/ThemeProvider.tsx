@@ -23,47 +23,95 @@ export function useTheme() {
   return context;
 }
 
+/** Parse a hex color to [r,g,b] */
+const hexToRgb = (hex: string): [number, number, number] => {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.substring(0, 2), 16),
+    parseInt(h.substring(2, 4), 16),
+    parseInt(h.substring(4, 6), 16),
+  ];
+};
+
+/** Interpolate between two [r,g,b] at t (0→1) and return hex */
+const lerpColor = (a: [number, number, number], b: [number, number, number], t: number): string => {
+  const r = Math.round(a[0] + (b[0] - a[0]) * t);
+  const g = Math.round(a[1] + (b[1] - a[1]) * t);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
+};
+
+/** All CSS custom properties that we manage */
+const MANAGED_VARS = [
+  "--ink-950", "--ink-925", "--ink-900", "--ink-850", "--ink-800", "--ink-750",
+  "--ink-700", "--ink-600", "--ink-500", "--ink-400", "--ink-300", "--ink-200", "--ink-100", "--ink-50",
+  "--primary-base", "--primary-soft", "--primary-line",
+  "--accent-base", "--accent-soft", "--accent-line", "--accent-border",
+  "--success-base", "--success-soft", "--success-line",
+  "--danger-base", "--danger-soft", "--danger-line",
+] as const;
+
+const clearCustomVars = () => {
+  for (const v of MANAGED_VARS) {
+    document.documentElement.style.removeProperty(v);
+  }
+};
+
 const applyThemeColors = (theme: Theme, customTheme: CustomTheme | null) => {
   if (theme === "bosko") {
     document.documentElement.setAttribute("data-theme", "bosko");
-    // Clear custom colors
-    document.documentElement.style.removeProperty("--ink-950");
-    document.documentElement.style.removeProperty("--ink-900");
-    document.documentElement.style.removeProperty("--ink-700");
-    document.documentElement.style.removeProperty("--primary-base");
-    document.documentElement.style.removeProperty("--primary-soft");
-    document.documentElement.style.removeProperty("--primary-line");
-    document.documentElement.style.removeProperty("--accent-base");
-    document.documentElement.style.removeProperty("--accent-soft");
-    document.documentElement.style.removeProperty("--accent-line");
-    document.documentElement.style.removeProperty("--accent-border");
+    clearCustomVars();
   } else if (theme === "custom" && customTheme) {
     document.documentElement.setAttribute("data-theme", "custom");
-    document.documentElement.style.setProperty("--ink-950", customTheme.background);
-    document.documentElement.style.setProperty("--ink-900", customTheme.cardBg);
-    document.documentElement.style.setProperty("--ink-700", customTheme.borders);
-    document.documentElement.style.setProperty("--primary-base", customTheme.primary);
-    document.documentElement.style.setProperty("--accent-base", customTheme.accent);
 
-    // Calculate secondary transparent overlays
-    document.documentElement.style.setProperty("--primary-soft", `${customTheme.primary}24`);
-    document.documentElement.style.setProperty("--primary-line", `${customTheme.primary}48`);
-    document.documentElement.style.setProperty("--accent-soft", `${customTheme.accent}24`);
-    document.documentElement.style.setProperty("--accent-line", `${customTheme.accent}48`);
-    document.documentElement.style.setProperty("--accent-border", `${customTheme.accent}80`);
+    const bg = hexToRgb(customTheme.background);
+    const text = hexToRgb(customTheme.textColor || "#f1ede2");
+    const card = hexToRgb(customTheme.cardBg);
+    const border = hexToRgb(customTheme.borders);
+
+    // Derive the full ink scale via interpolation: bg → borders → text
+    // 950=bg, 900=card, 700=borders, 50=text. Interpolate the rest.
+    const el = document.documentElement.style;
+    el.setProperty("--ink-950", customTheme.background);
+    el.setProperty("--ink-925", lerpColor(bg, card, 0.33));
+    el.setProperty("--ink-900", customTheme.cardBg);
+    el.setProperty("--ink-850", lerpColor(card, border, 0.25));
+    el.setProperty("--ink-800", lerpColor(card, border, 0.5));
+    el.setProperty("--ink-750", lerpColor(card, border, 0.75));
+    el.setProperty("--ink-700", customTheme.borders);
+    el.setProperty("--ink-600", lerpColor(border, text, 0.15));
+    el.setProperty("--ink-500", lerpColor(border, text, 0.28));
+    el.setProperty("--ink-400", lerpColor(border, text, 0.42));
+    el.setProperty("--ink-300", lerpColor(border, text, 0.58));
+    el.setProperty("--ink-200", lerpColor(border, text, 0.72));
+    el.setProperty("--ink-100", lerpColor(border, text, 0.86));
+    el.setProperty("--ink-50", customTheme.textColor || "#f1ede2");
+
+    // Primary
+    el.setProperty("--primary-base", customTheme.primary);
+    el.setProperty("--primary-soft", `${customTheme.primary}24`);
+    el.setProperty("--primary-line", `${customTheme.primary}48`);
+
+    // Accent
+    el.setProperty("--accent-base", customTheme.accent);
+    el.setProperty("--accent-soft", `${customTheme.accent}24`);
+    el.setProperty("--accent-line", `${customTheme.accent}48`);
+    el.setProperty("--accent-border", `${customTheme.accent}80`);
+
+    // Success
+    const success = customTheme.success || "#34d399";
+    el.setProperty("--success-base", success);
+    el.setProperty("--success-soft", `${success}24`);
+    el.setProperty("--success-line", `${success}48`);
+
+    // Danger
+    const danger = customTheme.danger || "#ef4444";
+    el.setProperty("--danger-base", danger);
+    el.setProperty("--danger-soft", `${danger}24`);
+    el.setProperty("--danger-line", `${danger}48`);
   } else {
     document.documentElement.removeAttribute("data-theme");
-    // Clear custom colors
-    document.documentElement.style.removeProperty("--ink-950");
-    document.documentElement.style.removeProperty("--ink-900");
-    document.documentElement.style.removeProperty("--ink-700");
-    document.documentElement.style.removeProperty("--primary-base");
-    document.documentElement.style.removeProperty("--primary-soft");
-    document.documentElement.style.removeProperty("--primary-line");
-    document.documentElement.style.removeProperty("--accent-base");
-    document.documentElement.style.removeProperty("--accent-soft");
-    document.documentElement.style.removeProperty("--accent-line");
-    document.documentElement.style.removeProperty("--accent-border");
+    clearCustomVars();
   }
 };
 

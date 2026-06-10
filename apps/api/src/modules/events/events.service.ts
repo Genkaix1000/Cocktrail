@@ -114,10 +114,7 @@ export class EventsService {
   }
 
   getPublicConfig() {
-    if (this.configRepo) {
-      return toSafeConfig(this.configRepo.get());
-    }
-    return {
+    const config = this.configRepo ? toSafeConfig(this.configRepo.get()) : {
       theme: this.activeTheme,
       brandName: "Cocktrail",
       logoUrl: "",
@@ -128,6 +125,10 @@ export class EventsService {
       logoSize: 40,
       textLogoValue: "Cocktrail",
       textLogoSize: 26,
+    };
+    return {
+      ...config,
+      eventStartedAt: this.event.startedAt,
     };
   }
 

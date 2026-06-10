@@ -1,15 +1,17 @@
 "use client";
 
-import { Minus, Plus, X } from "lucide-react";
+import { Minus, Plus, X, Clock, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ActiveOrderPill from "../../components/ActiveOrderPill";
 import DrinkCard from "../../components/DrinkCard";
 import DrinkSkeleton from "../../components/DrinkSkeleton";
 import { BrandLogo } from "@/components/BrandLogo";
 import { saveActiveOrder } from "@/lib/activeOrder";
 import { drinksService } from "@/services/drinks.service";
 import { ordersService } from "@/services/orders.service";
+import { eventsService } from "@/services/events.service";
+import { useSSE } from "@/lib/useSSE";
+import { STATUS_META } from "@/lib/orderStatus";
 import type { Drink, OrderStatus } from "@cocktrail/shared";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -29,6 +31,7 @@ interface SavedOrder {
   createdAt: number;
   status: OrderStatus;
   total: number;
+  items?: { name: string; qty: number }[];
 }
 
 export default function CartaPage() {
@@ -39,6 +42,45 @@ export default function CartaPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [myOrders, setMyOrders] = useState<SavedOrder[]>([]);
+  const [activeTab, setActiveTab] = useState<"pending" | "redeemed">("pending");
+  const [eventStartedAt, setEventStartedAt] = useState<number>(0);
+
+  useSSE({
+    "order.updated": ({ order: updated }) => {
+      setMyOrders(prev => {
+        let changed = false;
+        const next = prev.map(o => {
+          if (o.token === updated.token) {
+            const itemsMapped = updated.items.map(it => ({ name: it.name, qty: it.qty }));
+            const hasItemsChanged = !o.items || JSON.stringify(o.items) !== JSON.stringify(itemsMapped);
+            if (o.status !== updated.status || o.total !== updated.total || hasItemsChanged) {
+              changed = true;
+              return {
+                ...o,
+                status: updated.status,
+                total: updated.total,
+                items: itemsMapped
+              };
+            }
+          }
+          return o;
+        });
+        if (changed) {
+          localStorage.setItem("cocktrail_my_orders", JSON.stringify(next));
+          return next;
+        }
+        return prev;
+      });
+    },
+    "event.closed": () => {
+      setMyOrders(prev => {
+        const next = prev.filter(o => o.status !== "entregado" && o.status !== "cancelado");
+        localStorage.setItem("cocktrail_my_orders", JSON.stringify(next));
+        return next;
+      });
+      setEventStartedAt(Date.now());
+    }
+  });
 
   useEffect(() => {
     drinksService.list().then((data) => {
@@ -50,13 +92,31 @@ export default function CartaPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const raw = localStorage.getItem("cocktrail_my_orders");
+      let initialOrders: SavedOrder[] = [];
       if (raw) {
         try {
-          const parsed = JSON.parse(raw) as SavedOrder[];
-          setMyOrders(parsed);
+          initialOrders = JSON.parse(raw) as SavedOrder[];
+          setMyOrders(initialOrders);
+        } catch (e) {
+          console.error("Error restoring my orders:", e);
+        }
+      }
 
-          // Sync pending orders from backend in the background
-          const pending = parsed.filter(o => o.status !== "entregado" && o.status !== "cancelado");
+      // Sync status, items and filter by night startedAt using public configuration
+      eventsService.getPublicConfig()
+        .then((config) => {
+          const start = config.eventStartedAt;
+          setEventStartedAt(start);
+
+          // Keep orders from this night, OR unredeemed/pending orders from previous nights
+          const currentNightOrders = initialOrders.filter(o => {
+            const isFromPreviousNight = o.createdAt < start;
+            const isRedeemed = o.status === "entregado" || o.status === "cancelado";
+            return !(isFromPreviousNight && isRedeemed);
+          });
+
+          // Sync pending orders from backend in the background using their public token
+          const pending = currentNightOrders.filter(o => o.status !== "entregado" && o.status !== "cancelado");
           if (pending.length > 0) {
             Promise.all(
               pending.map(async (o) => {
@@ -69,26 +129,50 @@ export default function CartaPage() {
               })
             ).then((results) => {
               let changed = false;
-              const updated = parsed.map(o => {
+              const updated = currentNightOrders.map(o => {
                 const latest = results.find(r => r && r.token === o.token);
-                if (latest && latest.status !== o.status) {
-                  changed = true;
-                  return { ...o, status: latest.status };
+                if (latest) {
+                  const itemsMapped = latest.items.map(it => ({ name: it.name, qty: it.qty }));
+                  const hasItemsChanged = !o.items || JSON.stringify(o.items) !== JSON.stringify(itemsMapped);
+                  if (latest.status !== o.status || latest.total !== o.total || hasItemsChanged) {
+                    changed = true;
+                    return {
+                      ...o,
+                      status: latest.status,
+                      total: latest.total,
+                      items: itemsMapped
+                    };
+                  }
                 }
                 return o;
               });
-              if (changed) {
+
+              if (changed || currentNightOrders.length !== initialOrders.length) {
                 setMyOrders(updated);
                 localStorage.setItem("cocktrail_my_orders", JSON.stringify(updated));
               }
             });
+          } else if (currentNightOrders.length !== initialOrders.length) {
+            setMyOrders(currentNightOrders);
+            localStorage.setItem("cocktrail_my_orders", JSON.stringify(currentNightOrders));
           }
-        } catch (e) {
-          console.error("Error restoring my orders:", e);
-        }
-      }
+        })
+        .catch((err) => {
+          console.error("Error fetching public config in mount:", err);
+        });
     }
   }, []);
+
+  useEffect(() => {
+    const pendingCount = myOrders.filter(o => o.status !== "entregado" && o.status !== "cancelado").length;
+    const redeemedCount = myOrders.filter(o => o.status === "entregado" || o.status === "cancelado").length;
+
+    if (pendingCount === 0 && redeemedCount > 0 && activeTab === "pending") {
+      setActiveTab("redeemed");
+    } else if (redeemedCount === 0 && pendingCount > 0 && activeTab === "redeemed") {
+      setActiveTab("pending");
+    }
+  }, [myOrders, activeTab]);
 
   const sortedDrinks = useMemo(() => {
     return [...drinks]
@@ -98,6 +182,13 @@ export default function CartaPage() {
   const promoDrinks = useMemo(() => sortedDrinks.filter((d) => d.promo), [sortedDrinks]);
   const trendingDrinks = useMemo(() => sortedDrinks.filter((d) => d.trending && !d.promo), [sortedDrinks]);
   const regularDrinks = useMemo(() => sortedDrinks.filter((d) => !d.trending && !d.promo), [sortedDrinks]);
+
+  const filteredOrders = useMemo(() => {
+    return myOrders.filter((o) => {
+      const isRedeemed = o.status === "entregado" || o.status === "cancelado";
+      return activeTab === "pending" ? !isRedeemed : isRedeemed;
+    });
+  }, [myOrders, activeTab]);
 
   const addToCart = (id: number) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
   const removeFromCart = (id: number) => setCart((prev) => {
@@ -136,13 +227,22 @@ export default function CartaPage() {
           displayNumber: order.displayNumber,
           createdAt: new Date(order.createdAt).getTime(),
           status: order.status,
-          total: order.total
+          total: order.total,
+          items: order.items.map(it => ({ name: it.name, qty: it.qty }))
         };
         // Avoid duplicates
         if (!list.some(o => o.token === order.token)) {
+          if (eventStartedAt > 0) {
+            list = list.filter(o => {
+              const isFromPreviousNight = o.createdAt < eventStartedAt;
+              const isRedeemed = o.status === "entregado" || o.status === "cancelado";
+              return !(isFromPreviousNight && isRedeemed);
+            });
+          }
           list = [newOrder, ...list];
           localStorage.setItem("cocktrail_my_orders", JSON.stringify(list));
         }
+        setMyOrders(list);
       }
 
       setCart({});
@@ -151,10 +251,19 @@ export default function CartaPage() {
     } catch {
       setSubmitting(false);
     }
-  }, [submitting, totalItems, cart, router]);
+  }, [submitting, totalItems, cart, router, eventStartedAt]);
 
   return (
     <main className="min-h-screen pb-40 bg-ink-950 text-ink-50">
+      <style>{`
+        @keyframes ticketMarqueeContinuous {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee-continuous {
+          animation: ticketMarqueeContinuous 12s linear infinite;
+        }
+      `}</style>
       {/* ── Modal Carrito ── */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md p-4">
@@ -203,8 +312,8 @@ export default function CartaPage() {
           <BrandLogo size="lg" />
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span className="absolute inline-flex h-full w-full rounded-full bg-green opacity-75 animate-ping" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green" />
             </span>
             <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-ink-300">
               Carta Online
@@ -212,8 +321,6 @@ export default function CartaPage() {
           </div>
         </div>
       </header>
-
-      <ActiveOrderPill />
 
       <div className="px-5 mt-4 space-y-10">
         {isLoading ? (
@@ -226,52 +333,156 @@ export default function CartaPage() {
             {myOrders.length > 0 && (
               <section className="animate-in fade-in slide-in-from-top-4 duration-300">
                 <SectionTitle>Mis Pedidos de la Noche</SectionTitle>
-                <div className="grid grid-cols-1 gap-3">
-                  {myOrders.map((o) => {
+                
+                {/* Switch Tabs with Icons */}
+                {(() => {
+                  const pendingCount = myOrders.filter(o => o.status !== "entregado" && o.status !== "cancelado").length;
+                  const redeemedCount = myOrders.filter(o => o.status === "entregado" || o.status === "cancelado").length;
+
+                  return (
+                    <div className="flex bg-ink-900 border border-ink-850 p-1 rounded-2xl w-fit gap-1 mb-4 select-none">
+                      <button
+                        onClick={() => setActiveTab("pending")}
+                        disabled={pendingCount === 0}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                          activeTab === "pending"
+                            ? "bg-blue text-ink-950 shadow-md scale-[1.02]"
+                            : "text-ink-400 hover:text-ink-200"
+                        } ${pendingCount === 0 ? "opacity-35 cursor-not-allowed pointer-events-none" : ""}`}
+                      >
+                        <Clock size={14} strokeWidth={2.5} />
+                        Por entregar
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("redeemed")}
+                        disabled={redeemedCount === 0}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                          activeTab === "redeemed"
+                            ? "bg-blue text-ink-950 shadow-md scale-[1.02]"
+                            : "text-ink-400 hover:text-ink-200"
+                        } ${redeemedCount === 0 ? "opacity-35 cursor-not-allowed pointer-events-none" : ""}`}
+                      >
+                        <CheckCircle2 size={14} strokeWidth={2.5} />
+                        Canjeados
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* Ticket Cards Grid */}
+                <div className="grid grid-cols-1 gap-3.5">
+                  {filteredOrders.map((o) => {
                     const timeStr = new Date(o.createdAt).toLocaleTimeString("es-AR", {
                       hour: "2-digit",
                       minute: "2-digit",
+                      hour12: false
                     });
-                    const isDelivered = o.status === "entregado";
-                    const isCancelled = o.status === "cancelado";
-                    const isPending = !isDelivered && !isCancelled;
+                    const itemsText = o.items ? o.items.map(it => `${it.qty}x ${it.name}`).join(" · ") : "Detalle del pedido";
+                    const isLong = itemsText.length > 20 || (o.items && o.items.length > 1);
+                    const isRedeemed = o.status === "entregado" || o.status === "cancelado";
 
                     return (
                       <div
                         key={o.token}
                         onClick={() => router.push(`/pedido/${o.token}`)}
-                        className="group relative flex items-center justify-between p-4 rounded-2xl bg-ink-900/60 border border-ink-850 hover:border-ink-700/80 active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
+                        className={`group relative flex rounded-2xl overflow-hidden h-24 transition-all cursor-pointer select-none ${
+                          isRedeemed
+                            ? "bg-ink-950/45 border border-ink-900/60 opacity-40 hover:opacity-50 grayscale"
+                            : "bg-ink-900 border border-ink-850 hover:border-ink-700/80 active:scale-[0.98]"
+                        }`}
                       >
                         {/* Background hover light effect */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {!isRedeemed && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
                         
-                        <div className="flex flex-col gap-1 z-10">
-                          <div className="flex items-center gap-2">
-                            <span className="font-serif-italic text-lg font-black text-white">
-                              #{o.displayNumber}
+                        {/* Left Body */}
+                        <div className="flex-1 flex flex-col justify-between p-3.5 pr-2 min-w-0 z-10">
+                          {/* Top row */}
+                          <div className="flex justify-between items-center">
+                            <span className={`text-[10px] font-black tracking-[0.25em] uppercase ${isRedeemed ? "text-ink-500" : "text-ink-400"}`}>
+                              TICKET
                             </span>
-                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                              isPending
-                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                : isDelivered
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                : "bg-red-500/10 text-red-400 border border-red-500/20"
-                            }`}>
-                              {o.status}
+                            <span className={`font-mono text-[13px] font-black ${isRedeemed ? "text-ink-400 font-medium" : "text-blue"}`}>
+                              ${o.total.toLocaleString("es-AR")}
                             </span>
                           </div>
-                          <span className="text-[10px] font-mono text-ink-400">
-                            Realizado a las {timeStr} hs
-                          </span>
+
+                          {/* Middle row: Drink description carousel */}
+                          <div className="relative w-full overflow-hidden whitespace-nowrap my-1">
+                            <div className={`flex gap-4 ${isLong ? "animate-marquee-continuous" : ""}`}>
+                              <span className={`uppercase tracking-tight whitespace-nowrap ${isRedeemed ? "text-ink-400 font-medium text-[14px]" : "text-white font-extrabold text-[15px]"}`}>
+                                {itemsText}
+                              </span>
+                              {isLong && (
+                                <span className={`uppercase tracking-tight whitespace-nowrap ${isRedeemed ? "text-ink-400 font-medium text-[14px]" : "text-white font-extrabold text-[15px]"}`} aria-hidden="true">
+                                  {itemsText}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Bottom row: Clock and Time */}
+                          <div className="flex items-center gap-1 text-ink-400 font-mono text-[10px] leading-none">
+                            <Clock size={11} className="shrink-0 translate-y-[0.5px]" />
+                            <span className="leading-none">{timeStr}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1 z-10">
-                          <span className="font-mono text-sm font-bold text-white">
-                            ${o.total.toLocaleString("es-AR")}
-                          </span>
-                          <span className="text-[9px] uppercase tracking-wider font-black text-blue group-hover:translate-x-1 transition-transform">
-                            Ver Ticket →
-                          </span>
+
+                        {/* Perforated Separator Line */}
+                        <div className="w-px h-full relative flex items-center justify-center">
+                          <svg className="absolute inset-y-2 w-px h-[calc(100%-16px)] text-ink-800/60" viewBox="0 0 1 100" preserveAspectRatio="none">
+                            <line x1="0" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="2.5" strokeDasharray="6, 6" />
+                          </svg>
                         </div>
+
+                        {/* Right Stub */}
+                        <div className="w-[85px] shrink-0 flex flex-col items-center justify-between py-3 px-1 text-center bg-white/[0.02] z-10 border-l border-white/5">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[8px] font-black tracking-[0.2em] text-ink-500 uppercase leading-none mb-1">
+                              N°
+                            </span>
+                            <span className="font-serif-italic text-lg font-black text-white leading-none">
+                              #{o.displayNumber}
+                            </span>
+                          </div>
+                          
+                          <div className="flex flex-col items-center gap-1.5">
+                            <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                              o.status === "listo" ? "bg-green-soft text-green border border-green-line animate-pulse" :
+                              o.status === "preparando" ? "bg-amber-soft text-amber border border-amber-line" :
+                              o.status === "pagado" ? "bg-blue/15 text-blue border border-blue-line" :
+                              o.status === "entregado" ? "bg-ink-950 text-ink-500 border border-ink-850" :
+                              "bg-danger-soft/20 text-danger/60 border border-danger-line/20"
+                            }`}>
+                              {STATUS_META[o.status]?.short || o.status}
+                            </span>
+                            <svg className="w-12 h-3 opacity-25 text-ink-300" viewBox="0 0 50 15">
+                              <rect x="0" width="2" height="15" fill="currentColor" />
+                              <rect x="3" width="1" height="15" fill="currentColor" />
+                              <rect x="5" width="3" height="15" fill="currentColor" />
+                              <rect x="9" width="1" height="15" fill="currentColor" />
+                              <rect x="11" width="2" height="15" fill="currentColor" />
+                              <rect x="14" width="1" height="15" fill="currentColor" />
+                              <rect x="16" width="3" height="15" fill="currentColor" />
+                              <rect x="20" width="1" height="15" fill="currentColor" />
+                              <rect x="22" width="2" height="15" fill="currentColor" />
+                              <rect x="25" width="4" height="15" fill="currentColor" />
+                              <rect x="30" width="1" height="15" fill="currentColor" />
+                              <rect x="32" width="2" height="15" fill="currentColor" />
+                              <rect x="35" width="1" height="15" fill="currentColor" />
+                              <rect x="37" width="3" height="15" fill="currentColor" />
+                              <rect x="41" width="1" height="15" fill="currentColor" />
+                              <rect x="43" width="2" height="15" fill="currentColor" />
+                              <rect x="46" width="1" height="15" fill="currentColor" />
+                              <rect x="48" width="2" height="15" fill="currentColor" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Semicircular Punch Cuts (Mask Notches) */}
+                        <div className="absolute top-0 right-[85px] w-4 h-4 bg-ink-950 rounded-full -translate-y-1/2 translate-x-1/2 z-20" />
+                        <div className="absolute bottom-0 right-[85px] w-4 h-4 bg-ink-950 rounded-full translate-y-1/2 translate-x-1/2 z-20" />
                       </div>
                     );
                   })}

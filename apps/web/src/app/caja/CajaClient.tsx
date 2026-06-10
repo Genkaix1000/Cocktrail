@@ -80,17 +80,17 @@ function CompactDrinkCard({
       onClick={onAdd}
       className={`group relative bg-ink-900 border rounded-xl p-3 flex flex-col gap-2.5 transition-all cursor-pointer ${
         active
-          ? "border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+          ? "border-green/60 shadow-[0_0_0_1px_var(--success-soft)]"
           : "border-ink-800 hover:border-ink-700"
       }`}
     >
       {drink.promo && (
-        <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
+        <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-amber-soft text-amber border border-amber-line rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
           <Sparkles size={10} /> Promo
         </span>
       )}
       {drink.trending && !drink.promo && (
-        <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-rose-500/15 text-rose-400 border border-rose-500/30 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
+        <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-purple-soft text-purple border border-purple-border rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
           <Flame size={10} /> Trend
         </span>
       )}
@@ -117,7 +117,7 @@ function CompactDrinkCard({
         <span className="text-[13px] font-bold text-white leading-tight line-clamp-2">
           {drink.name}
         </span>
-        <span className="font-mono text-emerald-400 font-black text-sm tabular">
+        <span className="font-mono text-blue font-black text-sm tabular">
           ${drink.price.toLocaleString("es-AR")}
         </span>
       </div>
@@ -125,7 +125,7 @@ function CompactDrinkCard({
       {qty === 0 ? (
         <button
           onClick={(e) => { e.stopPropagation(); onAdd(); }}
-          className="h-9 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 hover:text-emerald-200 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
+          className="h-9 rounded-lg bg-green-soft hover:brightness-125 border border-green-line text-green flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
         >
           <Plus size={14} strokeWidth={3} />
           Agregar
@@ -133,19 +133,19 @@ function CompactDrinkCard({
       ) : (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-between px-1 gap-1"
+          className="h-9 rounded-lg bg-green-soft border border-green-line flex items-center justify-between px-1 gap-1"
         >
           <button
             onClick={onRemove}
-            className="w-8 h-8 rounded-md hover:bg-emerald-500/20 text-emerald-300 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
+            className="w-8 h-8 rounded-md hover:bg-green-soft text-green flex items-center justify-center active:scale-90 transition-all cursor-pointer"
             aria-label="Restar"
           >
             <Minus size={14} strokeWidth={3} />
           </button>
-          <span className="text-emerald-200 font-black tabular text-sm">{qty}</span>
+          <span className="text-green font-black tabular text-sm">{qty}</span>
           <button
             onClick={onAdd}
-            className="w-8 h-8 rounded-md hover:bg-emerald-500/20 text-emerald-300 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
+            className="w-8 h-8 rounded-md hover:bg-green-soft text-green flex items-center justify-center active:scale-90 transition-all cursor-pointer"
             aria-label="Sumar"
           >
             <Plus size={14} strokeWidth={3} />
@@ -228,6 +228,30 @@ export default function CajaClient({ drinks }: Props) {
   // Close night modal states
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [summary, setSummary] = useState<EventSummary | null>(null);
+
+  // History filtering states
+  const [historyFilter, setHistoryFilter] = useState<"pendientes" | "entregados" | "cancelados">("pendientes");
+  const [originFilter, setOriginFilter] = useState<"todos" | "caja" | "web">("todos");
+
+  const filteredHistoryOrders = useMemo(() => {
+    return orders.filter((o) => {
+      // 1. Status Filter
+      if (historyFilter === "pendientes") {
+        if (o.status === "entregado" || o.status === "cancelado") return false;
+      } else if (historyFilter === "entregados") {
+        if (o.status !== "entregado") return false;
+      } else if (historyFilter === "cancelados") {
+        if (o.status !== "cancelado") return false;
+      }
+
+      // 2. Origin Filter
+      const isWeb = o.paymentMethod === "transferencia";
+      if (originFilter === "caja" && isWeb) return false;
+      if (originFilter === "web" && !isWeb) return false;
+
+      return true;
+    });
+  }, [orders, historyFilter, originFilter]);
 
 
 
@@ -751,7 +775,7 @@ export default function CajaClient({ drinks }: Props) {
               <aside className="hidden lg:flex w-[380px] xl:w-[420px] flex-col border-l border-ink-800 bg-ink-925 shrink-0 h-full">
                 <div className="px-5 py-4 border-b border-ink-800 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShoppingBag size={16} className="text-emerald-400" />
+                    <ShoppingBag size={16} className="text-green" />
                     <span className="text-[11px] font-black uppercase tracking-[0.22em] text-white">
                       Pedido actual
                     </span>
@@ -794,7 +818,7 @@ export default function CajaClient({ drinks }: Props) {
                           <span className="text-[13px] font-bold text-white leading-tight line-clamp-2 flex-1">
                             {drink.name}
                           </span>
-                          <span className="font-mono text-sm font-black text-emerald-400 tabular shrink-0">
+                          <span className="font-mono text-sm font-black text-blue tabular shrink-0">
                             ${(drink.price * qty).toLocaleString("es-AR")}
                           </span>
                         </div>
@@ -830,14 +854,14 @@ export default function CajaClient({ drinks }: Props) {
                     <span className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400">
                       Total
                     </span>
-                    <span className="font-serif-italic text-3xl font-black tabular text-emerald-400">
+                    <span className="font-serif-italic text-3xl font-black tabular text-green">
                       ${totalPrice.toLocaleString("es-AR")}
                     </span>
                   </div>
                   <button
                     onClick={handleOpenCheckout}
                     disabled={totalItems === 0}
-                    className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 disabled:bg-ink-800 disabled:text-ink-500 disabled:cursor-not-allowed text-ink-950 font-black rounded-xl active:scale-[0.98] transition-all text-xs uppercase tracking-[0.18em] flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full h-12 bg-green hover:brightness-110 disabled:bg-ink-800 disabled:text-ink-500 disabled:cursor-not-allowed text-ink-950 font-black rounded-xl active:scale-[0.98] transition-all text-xs uppercase tracking-[0.18em] flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Receipt size={16} strokeWidth={2.5} />
                     Cobrar
@@ -851,20 +875,99 @@ export default function CajaClient({ drinks }: Props) {
           {activeTab === "historial" && (
             <div className="flex-1 overflow-y-auto p-5 md:p-6 bg-ink-950 min-h-0 w-full">
               <div className="max-w-4xl mx-auto w-full space-y-6">
-                <div>
-                  <h1 className="text-xl font-bold text-ink-50">Historial de Ventas</h1>
-                  <p className="text-[12px] text-ink-400 mt-1">
-                    Listado de todas las órdenes procesadas en el turno actual.
-                  </p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-xl font-bold text-ink-50">Historial de Ventas</h1>
+                    <p className="text-[12px] text-ink-400 mt-1">
+                      Listado de todas las órdenes procesadas en el turno actual.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Filtros de Historial */}
+                <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center bg-ink-900/60 p-4 border border-ink-800 rounded-2xl">
+                  {/* Status Filter */}
+                  <div className="flex p-1 bg-ink-950 border border-ink-800/80 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryFilter("pendientes")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        historyFilter === "pendientes"
+                          ? isBosko ? "bg-[#4ade80] text-ink-955 font-bold" : "bg-blue text-ink-955 font-bold"
+                          : "text-ink-400 hover:text-ink-200"
+                      }`}
+                    >
+                      Pendientes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryFilter("entregados")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        historyFilter === "entregados"
+                          ? isBosko ? "bg-[#4ade80] text-ink-955 font-bold" : "bg-blue text-ink-955 font-bold"
+                          : "text-ink-400 hover:text-ink-200"
+                      }`}
+                    >
+                      Pedidos ya Hechos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryFilter("cancelados")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        historyFilter === "cancelados"
+                          ? isBosko ? "bg-[#4ade80] text-ink-955 font-bold" : "bg-blue text-ink-955 font-bold"
+                          : "text-ink-400 hover:text-ink-200"
+                      }`}
+                    >
+                      Cancelados
+                    </button>
+                  </div>
+
+                  {/* Origin Filter */}
+                  <div className="flex p-1 bg-ink-950 border border-ink-800/80 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setOriginFilter("todos")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        originFilter === "todos"
+                          ? "bg-ink-800 text-white font-bold"
+                          : "text-ink-400 hover:text-ink-200"
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOriginFilter("caja")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        originFilter === "caja"
+                          ? "bg-ink-800 text-white font-bold"
+                          : "text-ink-400 hover:text-ink-200"
+                      }`}
+                    >
+                      Caja
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOriginFilter("web")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        originFilter === "web"
+                          ? "bg-ink-800 text-white font-bold"
+                          : "text-ink-400 hover:text-ink-200"
+                      }`}
+                    >
+                      Web
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2.5">
-                  {orders.length === 0 ? (
+                  {filteredHistoryOrders.length === 0 ? (
                     <div className="bg-ink-900 border border-ink-800 rounded-2xl py-12 text-center text-ink-500 font-serif-italic text-sm">
-                      — No hay pedidos registrados hoy —
+                      — No hay pedidos registrados que coincidan con el filtro —
                     </div>
                   ) : (
-                    orders.slice().reverse().map((o) => {
+                    filteredHistoryOrders.slice().reverse().map((o) => {
                       const channel = o.paymentMethod === "transferencia" ? "Web" : "Caja";
                       const statusInfo = mapStatus(o.status);
                       return (
@@ -1101,7 +1204,7 @@ export default function CajaClient({ drinks }: Props) {
             {latestOrder ? (
               // Vista Éxito / Ticket
               <div className="flex flex-col items-center justify-center py-6 gap-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                <div className="w-16 h-16 rounded-full bg-green-soft flex items-center justify-center text-green shrink-0">
                   <Check size={32} strokeWidth={3} className="animate-bounce" />
                 </div>
                 <div>
@@ -1112,7 +1215,7 @@ export default function CajaClient({ drinks }: Props) {
                 <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-2.5 font-mono">
                   <div className="flex justify-between border-b border-white/5 pb-2">
                     <span className="text-ink-400 text-xs uppercase">Número de ticket</span>
-                    <span className="text-xl font-black text-emerald-400">#{latestOrder.displayNumber}</span>
+                    <span className="text-xl font-black text-green">#{latestOrder.displayNumber}</span>
                   </div>
                   <div className="flex justify-between pt-1">
                     <span className="text-ink-400 text-xs uppercase">Hashcode / ID</span>
@@ -1123,7 +1226,7 @@ export default function CajaClient({ drinks }: Props) {
                 <div className="w-full flex flex-col gap-2 mt-2">
                   <button 
                     onClick={() => triggerPrint(latestOrder)} 
-                    className="w-full h-12 bg-emerald-500 text-ink-950 font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer hover:brightness-110"
+                    className="w-full h-12 bg-green text-ink-950 font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer hover:brightness-110"
                   >
                     <Printer size={16} strokeWidth={2.5} />
                     Imprimir Ticket
@@ -1170,7 +1273,7 @@ export default function CajaClient({ drinks }: Props) {
                         onClick={() => setPaymentMethod("efectivo")}
                         className="h-28 rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-white/10 cursor-pointer"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center"><Banknote size={22} /></div>
+                        <div className="w-10 h-10 rounded-xl bg-green-soft text-green flex items-center justify-center"><Banknote size={22} /></div>
                         <span className="font-bold text-sm">Efectivo</span>
                       </button>
                       <button 
@@ -1221,9 +1324,9 @@ export default function CajaClient({ drinks }: Props) {
                           </div>
                         </label>
                         
-                        <div className={`flex justify-between items-center p-4 rounded-2xl border ${receivedAmount && change >= 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/5 border-white/10'}`}>
+                        <div className={`flex justify-between items-center p-4 rounded-2xl border ${receivedAmount && change >= 0 ? 'bg-green-soft border-green-line' : 'bg-white/5 border-white/10'}`}>
                           <span className="text-sm font-bold text-ink-300">Vuelto a entregar</span>
-                          <span className={`text-2xl font-black ${receivedAmount && change >= 0 ? 'text-emerald-400' : 'text-ink-500'}`}>
+                          <span className={`text-2xl font-black ${receivedAmount && change >= 0 ? 'text-green' : 'text-ink-500'}`}>
                             ${receivedAmount && change >= 0 ? change.toLocaleString("es-AR") : "0"}
                           </span>
                         </div>
@@ -1313,11 +1416,32 @@ export default function CajaClient({ drinks }: Props) {
 
               <button 
                 onClick={() => triggerPrint(selectedHistoryOrder)} 
-                className="w-full mt-2 h-11 bg-emerald-500 text-ink-950 font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer hover:brightness-110"
+                className="w-full mt-2 h-11 bg-green text-ink-950 font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer hover:brightness-110"
               >
                 <Printer size={14} strokeWidth={2.5} />
                 Reimprimir Ticket
               </button>
+
+              {selectedHistoryOrder.status !== "cancelado" && selectedHistoryOrder.status !== "entregado" && (currentUser?.role === "admin" || currentUser?.permissions?.cancelarTickets) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.confirm("¿Seguro que deseas cancelar este ticket?")) {
+                      try {
+                        const updated = await ordersService.updateStatus(selectedHistoryOrder.id, "cancelado");
+                        setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+                        setSelectedHistoryOrder(null);
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : "Error al cancelar el ticket");
+                      }
+                    }
+                  }}
+                  className="w-full mt-2 h-11 bg-danger-soft hover:bg-danger-soft/80 border border-danger-line text-danger font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer animate-in fade-in duration-200"
+                >
+                  <X size={14} strokeWidth={2.5} />
+                  Cancelar Ticket
+                </button>
+              )}
             </div>
           </div>
         </div>

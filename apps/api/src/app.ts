@@ -115,7 +115,7 @@ app.get("/health", (_req, res) => {
 // Routes
 app.use("/api/auth", createAuthController(usersRepo));
 app.use("/api/drinks", createDrinksController(drinksService));
-app.use("/api/orders", createOrdersController(ordersService));
+app.use("/api/orders", createOrdersController(ordersService, usersRepo));
 app.use("/api/cash-sales", createCashSalesController(cashSalesService));
 app.use("/api/events", createSSEController());
 app.use("/api/tickets", createTicketsController(ticketsService));

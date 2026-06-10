@@ -24,6 +24,9 @@ export default function GeneralSection() {
     cardBg: "#0d1119",
     accent: "#d4a76a",
     borders: "#232a3c",
+    textColor: "#f1ede2",
+    success: "#34d399",
+    danger: "#ef4444",
   });
 
   // Branding states
@@ -48,7 +51,16 @@ export default function GeneralSection() {
       setActiveTheme(c.theme || "normal");
 
       if (c.customTheme) {
-        setCustomColors(c.customTheme);
+        setCustomColors({
+          primary: c.customTheme.primary || "#6db3f2",
+          background: c.customTheme.background || "#07090f",
+          cardBg: c.customTheme.cardBg || "#0d1119",
+          accent: c.customTheme.accent || "#d4a76a",
+          borders: c.customTheme.borders || "#232a3c",
+          textColor: c.customTheme.textColor || "#f1ede2",
+          success: c.customTheme.success || "#34d399",
+          danger: c.customTheme.danger || "#ef4444",
+        });
       } else {
         // Fallback default colors based on theme if no custom colors defined yet
         if (c.theme === "bosko") {
@@ -58,6 +70,9 @@ export default function GeneralSection() {
             cardBg: "#0a1a10",
             accent: "#c98a6c",
             borders: "#1f472c",
+            textColor: "#f0e8d5",
+            success: "#4ade80",
+            danger: "#ef4444",
           });
         } else {
           setCustomColors({
@@ -66,6 +81,9 @@ export default function GeneralSection() {
             cardBg: "#0d1119",
             accent: "#d4a76a",
             borders: "#232a3c",
+            textColor: "#f1ede2",
+            success: "#34d399",
+            danger: "#ef4444",
           });
         }
       }
@@ -82,6 +100,9 @@ export default function GeneralSection() {
         cardBg: "#0d1119",
         accent: "#d4a76a",
         borders: "#232a3c",
+        textColor: "#f1ede2",
+        success: "#34d399",
+        danger: "#ef4444",
       });
       setUseLogoUrl(false);
       setLogoUrl("");
@@ -95,6 +116,9 @@ export default function GeneralSection() {
         cardBg: "#0a1a10",
         accent: "#c98a6c",
         borders: "#1f472c",
+        textColor: "#f0e8d5",
+        success: "#4ade80",
+        danger: "#ef4444",
       });
       setUseLogoUrl(true);
       setLogoUrl("/bosko.webp");
@@ -127,13 +151,19 @@ export default function GeneralSection() {
         cardBg: activeTheme === "bosko" ? "#0a1a10" : "#0d1119",
         accent: activeTheme === "bosko" ? "#c98a6c" : "#d4a76a",
         borders: activeTheme === "bosko" ? "#1f472c" : "#232a3c",
+        textColor: activeTheme === "bosko" ? "#f0e8d5" : "#f1ede2",
+        success: activeTheme === "bosko" ? "#4ade80" : "#34d399",
+        danger: "#ef4444",
       };
       colorsChanged =
         customColors.primary !== initialColors.primary ||
         customColors.background !== initialColors.background ||
         customColors.cardBg !== initialColors.cardBg ||
         customColors.accent !== initialColors.accent ||
-        customColors.borders !== initialColors.borders;
+        customColors.borders !== initialColors.borders ||
+        customColors.textColor !== (initialColors.textColor || "#f1ede2") ||
+        customColors.success !== (initialColors.success || "#34d399") ||
+        customColors.danger !== (initialColors.danger || "#ef4444");
     }
 
     return (
@@ -163,28 +193,14 @@ export default function GeneralSection() {
 
       setInitialConfig(updated);
 
-      // Apply theme variables directly to document to update UI instantly
+      // The SSE event from configService.update will trigger ThemeProvider to apply
+      // colors globally. We still apply locally for instant feedback.
       if (activeTheme === "bosko") {
         document.documentElement.setAttribute("data-theme", "bosko");
-        document.documentElement.style.removeProperty("--primary-base");
-        document.documentElement.style.removeProperty("--ink-950");
-        document.documentElement.style.removeProperty("--ink-900");
-        document.documentElement.style.removeProperty("--accent-base");
-        document.documentElement.style.removeProperty("--ink-700");
       } else if (activeTheme === "custom") {
         document.documentElement.setAttribute("data-theme", "custom");
-        document.documentElement.style.setProperty("--primary-base", customColors.primary);
-        document.documentElement.style.setProperty("--ink-950", customColors.background);
-        document.documentElement.style.setProperty("--ink-900", customColors.cardBg);
-        document.documentElement.style.setProperty("--accent-base", customColors.accent);
-        document.documentElement.style.setProperty("--ink-700", customColors.borders);
       } else {
         document.documentElement.removeAttribute("data-theme");
-        document.documentElement.style.removeProperty("--primary-base");
-        document.documentElement.style.removeProperty("--ink-950");
-        document.documentElement.style.removeProperty("--ink-900");
-        document.documentElement.style.removeProperty("--accent-base");
-        document.documentElement.style.removeProperty("--ink-700");
       }
 
       localStorage.setItem("cocktrail_theme", activeTheme);
@@ -327,19 +343,20 @@ export default function GeneralSection() {
                   <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-ink-400">
                     Ajuste de Tonos
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {(["primary", "background", "cardBg", "accent", "borders"] as const).map((key) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-3.5">
+                    {([
+                      { key: "primary" as const, label: "Color Primario" },
+                      { key: "accent" as const, label: "Acento" },
+                      { key: "success" as const, label: "Éxito / Confirmar" },
+                      { key: "danger" as const, label: "Peligro / Cancelar" },
+                      { key: "background" as const, label: "Fondo Principal" },
+                      { key: "cardBg" as const, label: "Fondo Tarjeta" },
+                      { key: "borders" as const, label: "Bordes" },
+                      { key: "textColor" as const, label: "Texto Principal" },
+                    ]).map(({ key, label }) => (
                       <div key={key}>
-                        <label className="text-[10px] font-medium text-ink-400 block mb-1.5 capitalize">
-                          {key === "cardBg"
-                            ? "Card Background"
-                            : key === "primary"
-                            ? "Color Primario"
-                            : key === "background"
-                            ? "Fondo Principal"
-                            : key === "accent"
-                            ? "Acento"
-                            : "Bordes"}
+                        <label className="text-[10px] font-medium text-ink-400 block mb-1.5 truncate" title={label}>
+                          {label}
                         </label>
                         <div className="flex items-center gap-2">
                           <input
@@ -352,7 +369,7 @@ export default function GeneralSection() {
                             type="text"
                             value={customColors[key]}
                             onChange={(e) => handleColorChange(key, e.target.value)}
-                            className="flex-1 h-9 px-3 bg-ink-850 border border-ink-700 rounded-lg text-[12px] text-ink-200 font-mono focus:outline-none focus:border-blue transition-all"
+                            className="min-w-0 flex-1 h-9 px-2 bg-ink-850 border border-ink-700 rounded-lg text-[12px] text-ink-200 font-mono focus:outline-none focus:border-blue transition-all"
                           />
                         </div>
                       </div>
@@ -553,6 +570,7 @@ export default function GeneralSection() {
             style={{
               backgroundColor: customColors.background,
               borderColor: customColors.borders,
+              color: customColors.textColor,
               fontFamily: 'var(--font-sans)',
             }}
           >
@@ -574,8 +592,8 @@ export default function GeneralSection() {
                   />
                 ) : (
                   <span
-                    className="font-serif-italic font-black leading-none text-ink-50"
-                    style={{ fontSize: `${textLogoSize * 1.55}px` }}
+                    className="font-serif-italic font-black leading-none"
+                    style={{ fontSize: `${textLogoSize * 1.55}px`, color: customColors.textColor }}
                   >
                     {textLogoValue || "Cocktrail"}
                   </span>
@@ -583,10 +601,10 @@ export default function GeneralSection() {
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping" style={{ backgroundColor: customColors.success }} />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ backgroundColor: customColors.success }} />
                 </span>
-                <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-[#4ade80]">
+                <span className="text-[9px] font-bold uppercase tracking-[0.22em]" style={{ color: customColors.success }}>
                   Carta Online
                 </span>
               </div>
@@ -647,14 +665,43 @@ export default function GeneralSection() {
                     {/* Round Add Button */}
                     <button
                       type="button"
-                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-ink-950 font-black shadow-lg transition-all active:scale-90 cursor-pointer"
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center font-black shadow-lg transition-all active:scale-90 cursor-pointer"
                       style={{
-                        backgroundColor: customColors.primary,
+                        backgroundColor: customColors.success,
+                        color: customColors.background,
                       }}
                     >
                       <Plus size={20} strokeWidth={3} />
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Regular item preview */}
+              <div
+                className="flex items-center justify-between p-3 rounded-2xl border transition-all"
+                style={{
+                  borderColor: `${customColors.borders}60`,
+                  backgroundColor: `${customColors.cardBg}80`,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center border"
+                    style={{ borderColor: `${customColors.borders}60`, backgroundColor: customColors.background }}
+                  >
+                    <span style={{ color: `${customColors.textColor}50` }}>🍸</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-sm" style={{ color: customColors.textColor }}>Fernet con Cola</span>
+                    <span className="font-mono font-black text-sm" style={{ color: customColors.primary }}>$4.500</span>
+                  </div>
+                </div>
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: customColors.success, color: customColors.background }}
+                >
+                  <Plus size={16} strokeWidth={3} />
                 </div>
               </div>
             </div>

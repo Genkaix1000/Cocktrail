@@ -144,6 +144,9 @@ export const UpdateConfigSchema = z.object({
     cardBg: z.string().max(50),
     accent: z.string().max(50),
     borders: z.string().max(50),
+    textColor: z.string().max(50),
+    success: z.string().max(50),
+    danger: z.string().max(50),
   }).nullable().optional(),
   mercadoPago: z.object({
     publicKey: z.string().max(200).default(""),

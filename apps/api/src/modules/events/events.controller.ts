@@ -42,7 +42,8 @@ export function createEventsController(
         // Check closeNight permission for caja role
         if (req.session?.role === "caja") {
           const dbUser = usersRepo.findByUsername(username);
-          if (dbUser && !dbUser.permissions.closeNight) {
+          const hasCloseNight = dbUser ? dbUser.permissions.closeNight : false;
+          if (!hasCloseNight) {
             throw new Forbidden("No tenés permiso para cerrar la noche.");
           }
         }

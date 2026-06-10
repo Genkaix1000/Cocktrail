@@ -5,6 +5,9 @@ export type CustomTheme = {
   cardBg: string;
   accent: string;
   borders: string;
+  textColor: string;
+  success: string;
+  danger: string;
 };
 export type Theme = "normal" | "bosko" | "custom";
 
@@ -51,6 +54,9 @@ export type Order = {
   readyAt?: number;
   deliveredAt?: number;
   ticketCode?: string;
+  createdBy?: string;
+  cancelledBy?: string;
+  cancelledAt?: number;
 };
 
 export type CashSale = {

@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Printer,
   CalendarDays,
+  FileText,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useEffect } from "react";
@@ -32,6 +34,7 @@ import { formatHm } from "@/lib/utils";
 
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
+import { ordersService } from "@/services/orders.service";
 
 import GeneralSection from "@/components/settings/GeneralSection";
 import CartaSection from "@/components/settings/CartaSection";
@@ -120,12 +123,37 @@ export default function AdminClient({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
+  // Audit Logs state
+  const [auditLogs, setAuditLogs] = useState<Order[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [logsLoaded, setLogsLoaded] = useState(false);
+  const [selectedLogOrder, setSelectedLogOrder] = useState<Order | null>(null);
+
   // QR print page state
   const ENV_HOST = process.env.NEXT_PUBLIC_LAN_HOST;
   const [qrUrl, setQrUrl] = useState<string>("");
 
   // Chart interactivity state
   const [activeHoverSlot, setActiveHoverSlot] = useState<number | null>(null);
+
+  const fetchLogs = useCallback(async () => {
+    setLoadingLogs(true);
+    try {
+      const data = await ordersService.getAuditLogs();
+      setAuditLogs(data);
+      setLogsLoaded(true);
+    } catch (err) {
+      console.error("Error fetching logs:", err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "logs" && !logsLoaded) {
+      fetchLogs();
+    }
+  }, [activeTab, logsLoaded, fetchLogs]);
 
   // Fetch current user details
   useEffect(() => {
@@ -363,6 +391,8 @@ export default function AdminClient({
         return ["Administración", "Dashboard", "Métricas"];
       case "historial":
         return ["Administración", "Operación", "Historial de Noches"];
+      case "logs":
+        return ["Administración", "Operación", "Auditoría de Tickets"];
       case "qr":
         return ["Administración", "Operación", "Imprimir QR"];
       case "general":
@@ -488,6 +518,25 @@ export default function AdminClient({
                   <History size={13} strokeWidth={1.8} />
                 </div>
                 <span className="text-[13.5px]">Historial de Noches</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTabChange("logs")}
+                className={`
+                  w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-200 cursor-pointer
+                  ${activeTab === "logs"
+                    ? "bg-blue-soft border border-blue-line text-white shadow-[0_0_15px_rgba(var(--primary-base),0.02)] font-bold"
+                    : "bg-transparent border border-transparent text-ink-200 hover:text-white hover:bg-ink-850/50"
+                  }
+                `}
+              >
+                <div className={`
+                  w-7.5 h-7.5 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200
+                  ${activeTab === "logs" ? accentBgClass + " " + accentColorClass : "bg-ink-800/50 text-ink-400"}
+                `}>
+                  <FileText size={13} strokeWidth={1.8} />
+                </div>
+                <span className="text-[13.5px]">Auditoría de Tickets</span>
               </button>
               <button
                 type="button"
@@ -1202,6 +1251,220 @@ export default function AdminClient({
                 <Printer size={15} />
                 Imprimir QR
               </button>
+            </div>
+          )}
+
+          {/* TAB 4.5: AUDITORIA DE LOGS */}
+          {activeTab === "logs" && (
+            <div className="space-y-6 max-w-6xl mx-auto w-full animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                <div>
+                  <h1 className="text-xl font-bold text-ink-50">Auditoría de Tickets</h1>
+                  <p className="text-[12px] text-ink-400 mt-1">
+                    Historial completo de todos los tickets emitidos, con registro de operadores y estado de canje.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchLogs}
+                  disabled={loadingLogs}
+                  className={`h-9 px-4 rounded-lg bg-ink-800 border border-ink-700 text-ink-100 hover:text-white text-[12px] font-bold uppercase tracking-[0.08em] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50`}
+                >
+                  Actualizar logs
+                </button>
+              </div>
+
+              {loadingLogs ? (
+                <div className="flex justify-center items-center h-64 bg-ink-900 border border-ink-800 rounded-xl">
+                  <span className="text-sm text-ink-400 font-mono">Cargando logs...</span>
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <div className="bg-ink-900 border border-ink-800 rounded-xl p-10 text-center">
+                  <p className="text-sm text-ink-500 font-serif-italic">— No hay tickets registrados en el historial —</p>
+                </div>
+              ) : (
+                <div className="bg-ink-900 border border-ink-800 rounded-xl overflow-hidden shadow-xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-ink-950 border-b border-ink-800 text-[10px] uppercase tracking-wider font-bold text-ink-400">
+                          <th className="py-3 px-4">Ticket</th>
+                          <th className="py-3 px-4">Token / ID</th>
+                          <th className="py-3 px-4">Creador</th>
+                          <th className="py-3 px-4">Fecha / Hora</th>
+                          <th className="py-3 px-4">Método</th>
+                          <th className="py-3 px-4">Total</th>
+                          <th className="py-3 px-4">Estado</th>
+                          <th className="py-3 px-4 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-ink-850">
+                        {auditLogs.slice().reverse().map((log) => {
+                          const isCancelled = log.status === "cancelado";
+                          const isDelivered = log.status === "entregado";
+                          const isActive = !isCancelled && !isDelivered;
+                          const createdTime = new Date(log.createdAt).toLocaleString("es-AR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+
+                          return (
+                            <tr
+                              key={log.id}
+                              onClick={() => setSelectedLogOrder(log)}
+                              className="hover:bg-ink-850/30 transition-colors cursor-pointer text-[13px] group"
+                            >
+                              <td className="py-3 px-4 font-mono font-black text-white">
+                                #{log.displayNumber}
+                              </td>
+                              <td className="py-3 px-4 font-mono text-ink-400 text-xs">
+                                {log.token}
+                              </td>
+                              <td className="py-3 px-4 text-ink-200">
+                                {log.createdBy || "Cliente (Web)"}
+                              </td>
+                              <td className="py-3 px-4 text-ink-300">
+                                {createdTime}
+                              </td>
+                              <td className="py-3 px-4 capitalize text-ink-400">
+                                {log.paymentMethod === "transferencia" ? "MP Link (Web)" : log.paymentMethod}
+                              </td>
+                              <td className="py-3 px-4 font-mono font-black text-blue">
+                                ${log.total.toLocaleString("es-AR")}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                                  isCancelled
+                                    ? "bg-danger-soft text-danger border border-danger-line"
+                                    : isDelivered
+                                    ? "bg-green-soft text-green border border-green-line"
+                                    : "bg-amber-soft text-amber border border-amber-line"
+                                }`}>
+                                  {log.status === "pagado" ? "pagado" : log.status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                {isActive ? (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (window.confirm(`¿Seguro que deseas cancelar el Ticket #${log.displayNumber}?`)) {
+                                        try {
+                                          const updated = await ordersService.updateStatus(log.id, "cancelado");
+                                          setAuditLogs((prev) => prev.map((o) => o.id === updated.id ? updated : o));
+                                          if (selectedLogOrder?.id === log.id) {
+                                            setSelectedLogOrder(updated);
+                                          }
+                                        } catch (err) {
+                                          alert(err instanceof Error ? err.message : "Error al cancelar el ticket");
+                                        }
+                                      }
+                                    }}
+                                    className="px-2 py-1 rounded bg-danger-soft hover:bg-danger-soft/80 border border-danger-line text-danger text-[10px] font-bold uppercase transition-all cursor-pointer"
+                                  >
+                                    Cancelar
+                                  </button>
+                                ) : isCancelled ? (
+                                  <span className="text-[10px] text-ink-500 font-mono">
+                                    Por: {log.cancelledBy || "sistema"}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-ink-500 font-mono">
+                                    Entregado
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Log Order Detail Popup */}
+              {selectedLogOrder && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+                  <div className="bg-ink-900 border border-white/10 w-full max-w-sm rounded-[24px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                      <div>
+                        <h3 className="font-mono text-lg font-black text-white">Ticket #{selectedLogOrder.displayNumber}</h3>
+                        <p className="font-mono text-[10px] text-ink-400 select-all">{selectedLogOrder.token}</p>
+                      </div>
+                      <button onClick={() => setSelectedLogOrder(null)} className="p-2.5 bg-white/5 rounded-full active:scale-90 transition-transform cursor-pointer">
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-3 py-2 max-h-[35vh] overflow-y-auto">
+                      {selectedLogOrder.items.map((item) => (
+                        <div key={item.drinkId} className="flex justify-between items-center text-sm">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-white truncate">{item.name}</span>
+                            <span className="text-xs text-ink-400 font-mono tabular">{item.qty} x ${item.unitPrice.toLocaleString("es-AR")}</span>
+                          </div>
+                          <span className="font-mono font-bold text-ink-200">${item.subtotal.toLocaleString("es-AR")}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-white/10 flex flex-col gap-2 font-mono text-xs">
+                      <div className="flex justify-between text-ink-300">
+                        <span>Creado por</span>
+                        <span className="font-bold">{selectedLogOrder.createdBy || "Cliente (Web)"}</span>
+                      </div>
+                      <div className="flex justify-between text-ink-300">
+                        <span>Medio de pago</span>
+                        <span className="capitalize font-bold">{selectedLogOrder.paymentMethod === "transferencia" ? "MP Link (Web)" : selectedLogOrder.paymentMethod}</span>
+                      </div>
+                      <div className="flex justify-between text-ink-300">
+                        <span>Fecha / Hora</span>
+                        <span>{new Date(selectedLogOrder.createdAt).toLocaleString("es-AR")}</span>
+                      </div>
+
+                      {selectedLogOrder.status === "cancelado" && (
+                        <div className="p-2.5 rounded-lg bg-danger-soft border border-danger-line text-danger mt-2 flex flex-col gap-1">
+                          <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Cancelación:</span>
+                          <span className="text-[10px]">Cancelado por: {selectedLogOrder.cancelledBy || "sistema"}</span>
+                          {selectedLogOrder.cancelledAt && (
+                            <span className="text-[10px]">Hora: {new Date(selectedLogOrder.cancelledAt).toLocaleString("es-AR")}</span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex justify-between text-base font-black text-white pt-2 border-t border-white/5 pb-2">
+                        <span>TOTAL</span>
+                        <span className="text-blue">${selectedLogOrder.total.toLocaleString("es-AR")}</span>
+                      </div>
+
+                      {/* Cancel Button in details */}
+                      {selectedLogOrder.status !== "cancelado" && selectedLogOrder.status !== "entregado" && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm("¿Seguro que deseas cancelar este ticket?")) {
+                              try {
+                                const updated = await ordersService.updateStatus(selectedLogOrder.id, "cancelado");
+                                setAuditLogs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+                                setSelectedLogOrder(updated);
+                              } catch (err) {
+                                alert(err instanceof Error ? err.message : "Error al cancelar el ticket");
+                              }
+                            }
+                          }}
+                          className="w-full mt-2 h-11 bg-danger-soft hover:bg-danger-soft/80 border border-danger-line text-danger font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <X size={14} strokeWidth={2.5} />
+                          Cancelar Ticket
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

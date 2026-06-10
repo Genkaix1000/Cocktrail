@@ -453,7 +453,7 @@ export default function BarraClient() {
   const historicalScans = recentScans.slice(1, 6);
 
   return (
-    <main className="min-h-screen bg-ink-950 text-ink-50 flex flex-col pb-10 selection:bg-emerald-500/20">
+    <main className="min-h-screen bg-ink-950 text-ink-50 flex flex-col pb-10 selection:bg-green-soft">
       {/* Dynamic Keyframes Injection */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes shrinkWidth {
@@ -484,11 +484,11 @@ export default function BarraClient() {
         </div>
 
         {/* Center Scanner Status */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-ink-950/80 border border-red-500/25 rounded-full px-4 py-1.5 shadow-inner select-none animate-pulse">
-          <div className="relative w-2 h-2 rounded-full bg-red-500">
-            <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75" />
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-ink-950/80 border border-danger/25 rounded-full px-4 py-1.5 shadow-inner select-none animate-pulse">
+          <div className="relative w-2 h-2 rounded-full bg-danger">
+            <span className="absolute inset-0 rounded-full bg-danger animate-ping opacity-75" />
           </div>
-          <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-red-500">
+          <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-danger">
             SCANNER NO ENCONTRADO
           </span>
         </div>
@@ -516,14 +516,14 @@ export default function BarraClient() {
 
       {/* Offline Pending Queue Banner */}
       {offlineQueue.length > 0 && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2 flex items-center justify-between text-xs font-mono text-amber-500 animate-pulse shrink-0">
+        <div className="bg-amber-soft border-b border-amber-line px-6 py-2 flex items-center justify-between text-xs font-mono text-amber animate-pulse shrink-0">
           <div className="flex items-center gap-2">
             <span>⚠️</span>
             <span>
               <strong>Modo Sin Conexión</strong> · Hay {offlineQueue.length} canjes pendientes de sincronización en este dispositivo.
             </span>
           </div>
-          <span className="text-[10px] uppercase tracking-wider text-amber-500/60">
+          <span className="text-[10px] uppercase tracking-wider text-amber/60">
             Se enviarán automáticamente al recuperar señal
           </span>
         </div>
@@ -541,21 +541,21 @@ export default function BarraClient() {
             </h3>
             
             {latestScan ? (
-              <div className="relative overflow-hidden bg-ink-900 border-2 border-emerald-500/60 rounded-[28px] p-6 md:p-8 shadow-[0_0_40px_rgba(16,185,129,0.12)] flex flex-col md:flex-row items-center md:justify-between gap-6 transition-all duration-300 animate-in fade-in zoom-in-95">
+              <div className="relative overflow-hidden bg-ink-900 border-2 border-green/60 rounded-[28px] p-6 md:p-8 shadow-[0_0_40px_var(--success-soft)] flex flex-col md:flex-row items-center md:justify-between gap-6 transition-all duration-300 animate-in fade-in zoom-in-95">
                 {/* Decorative radial blur background */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full filter blur-3xl pointer-events-none -mr-20 -mt-20" />
+                <div className="absolute top-0 right-0 w-64 h-64 bg-green/5 rounded-full filter blur-3xl pointer-events-none -mr-20 -mt-20" />
                 
                 <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 w-full">
                   {/* Huge Number */}
-                  <div className="w-32 h-32 md:w-36 md:h-36 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col items-center justify-center font-serif text-[52px] md:text-[64px] font-black text-emerald-400 select-none shadow-inner shrink-0">
-                    <span className="text-emerald-500/60 text-2xl leading-none font-sans font-medium uppercase tracking-wider -mb-1">Pedido</span>
+                  <div className="w-32 h-32 md:w-36 md:h-36 rounded-2xl bg-green-soft border border-green-line flex flex-col items-center justify-center font-serif text-[52px] md:text-[64px] font-black text-green select-none shadow-inner shrink-0">
+                    <span className="text-green/60 text-2xl leading-none font-sans font-medium uppercase tracking-wider -mb-1">Pedido</span>
                     #{latestScan.displayNumber}
                   </div>
 
                   {/* Main Drink Details */}
                   <div className="flex-1 flex flex-col text-center md:text-left min-w-0 w-full">
                     <div className="flex items-center justify-center md:justify-start gap-2.5 mb-2">
-                      <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full px-2.5 py-0.5 font-bold uppercase tracking-wider font-mono">
+                      <span className="text-[10px] bg-green-soft border border-green-line text-green rounded-full px-2.5 py-0.5 font-bold uppercase tracking-wider font-mono">
                         Listo para servir
                       </span>
                       <span className="text-xs text-ink-400 font-mono">
@@ -568,7 +568,7 @@ export default function BarraClient() {
                       {latestScan.items.map((it, idx) => (
                         <li key={`${it.drinkId}-${idx}`} className="flex items-center justify-between gap-4 w-full">
                           <div className="flex items-center gap-4 min-w-0">
-                            <span className="font-mono font-black text-3xl md:text-4xl text-emerald-400 shrink-0">
+                            <span className="font-mono font-black text-3xl md:text-4xl text-green shrink-0">
                               {it.qty}×
                             </span>
                             <span className="text-2xl md:text-3xl font-extrabold text-white tracking-tight truncate text-left">
@@ -743,10 +743,10 @@ export default function BarraClient() {
           onClick={dismissFlash}
           className={`fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 cursor-pointer select-none transition-all duration-355 ${
             flash.type === "success"
-              ? "bg-emerald-950/95 border-[12px] border-emerald-500 text-emerald-400"
+              ? "bg-green/5 border-[12px] border-green text-green"
               : flash.type === "duplicate"
-                ? "bg-amber-950/95 border-[12px] border-amber-500 text-amber-400"
-                : "bg-red-950/95 border-[12px] border-red-500 text-red-400"
+                ? "bg-amber/5 border-[12px] border-amber text-amber"
+                : "bg-danger/5 border-[12px] border-danger text-danger"
           }`}
           style={{
             animation: "flashFadeInOut 5s ease-in-out forwards"
@@ -777,7 +777,7 @@ export default function BarraClient() {
                   {flash.items.map((it, idx) => (
                     <li key={idx} className="flex justify-between items-center text-left">
                       <div className="flex items-center gap-3">
-                        <span className="font-mono font-black text-emerald-400 text-lg">
+                        <span className="font-mono font-black text-green text-lg">
                           {it.qty}×
                         </span>
                         <span className="font-extrabold text-white text-[15px] uppercase tracking-wide">
@@ -800,10 +800,10 @@ export default function BarraClient() {
             <div
               className={`h-full ${
                 flash.type === "success"
-                  ? "bg-emerald-500"
+                  ? "bg-green"
                   : flash.type === "duplicate"
-                    ? "bg-amber-500"
-                    : "bg-red-500"
+                    ? "bg-amber"
+                    : "bg-danger"
               }`}
               style={{
                 animation: "shrinkWidth 5s linear forwards"
@@ -1057,7 +1057,7 @@ function Stat({
       : tone === "amber"
         ? "text-orange-500"
         : tone === "green"
-          ? "text-emerald-500"
+          ? "text-green"
           : "text-ink-50";
   return (
     <div className="flex flex-col gap-1 select-none">
@@ -1104,8 +1104,8 @@ function ToastItem({
     >
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-emerald-400 font-bold">
+          <span className="w-2 h-2 rounded-full bg-green animate-pulse" />
+          <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-green font-bold">
             Nuevo Pedido
           </span>
           <span className="font-serif text-sm font-black text-white">
@@ -1127,7 +1127,7 @@ function ToastItem({
       {/* Progress bar */}
       <div className="absolute bottom-0 left-0 right-0 h-1 bg-ink-950">
         <div 
-          className="h-full bg-emerald-500" 
+          className="h-full bg-green" 
           style={{
             animation: "shrinkWidth 5s linear forwards"
           }}

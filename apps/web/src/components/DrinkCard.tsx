@@ -60,7 +60,7 @@ function ActionButtons({ quantity, onAdd, onRemove }: ActionButtonsProps) {
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
-        className="w-10 h-10 rounded-xl bg-emerald-500 text-black flex items-center justify-center active:scale-95 transition-transform hover:bg-emerald-400"
+        className="w-10 h-10 rounded-xl bg-green text-black flex items-center justify-center active:scale-95 transition-transform hover:brightness-110"
       >
         <Plus size={20} strokeWidth={3} className="font-bold" />
       </button>
@@ -108,7 +108,7 @@ export default function DrinkCard({
             <span className="font-bold text-[16px] text-white leading-tight truncate">
               {name}
             </span>
-            <span className="text-[15px] font-black text-emerald-400 tabular mt-1">
+            <span className="text-[15px] font-black text-blue tabular mt-1">
               ${price.toLocaleString("es-AR")}
             </span>
           </div>
@@ -151,7 +151,7 @@ export default function DrinkCard({
       <div className="relative z-20 flex flex-col flex-1 p-4">
         <div className="mb-auto">
           <span className={`inline-block text-[9px] font-black tracking-[0.2em] uppercase px-2.5 py-1 rounded-full backdrop-blur-md ${
-            variant === "promo" ? "text-amber-300 bg-amber-500/20 border border-amber-500/30" : "text-emerald-300 bg-emerald-500/20 border border-emerald-500/30"
+            variant === "promo" ? "text-amber bg-amber-soft border border-amber-line" : "text-blue bg-blue-soft border border-blue-line"
           }`}>
             {variant === "promo" ? "⚡ PROMO" : "▲ TREND"}
           </span>
@@ -162,7 +162,7 @@ export default function DrinkCard({
             <span className="font-bold text-[20px] leading-tight text-white mb-1 drop-shadow-md">
               {name}
             </span>
-            <span className="text-[18px] font-black tabular text-emerald-400 drop-shadow-md">
+            <span className="text-[18px] font-black tabular text-blue drop-shadow-md">
               ${price.toLocaleString("es-AR")}
             </span>
           </div>

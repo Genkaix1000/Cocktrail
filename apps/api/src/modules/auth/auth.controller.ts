@@ -112,8 +112,8 @@ export function createAuthController(usersRepo: UsersRepository): Router {
       if (dbUser) {
         permissions = { ...permissions, ...dbUser.permissions };
       } else if (session.role === "caja") {
-        permissions.closeNight = true;
-        permissions.metricas = true;
+        permissions.closeNight = false;
+        permissions.metricas = false;
         permissions.historial = true;
       } else if (session.role === "barman") {
         permissions.cancelarTickets = true;

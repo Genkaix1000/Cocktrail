@@ -20,12 +20,12 @@ export const STATUS_META: Record<
   preparando: {
     short: "Preparando",
     long: "El barman lo está preparando",
-    tone: "text-amber-300",
+    tone: "text-amber",
   },
   listo: {
     short: "Listo",
     long: "¡Listo! Retiralo en la barra",
-    tone: "text-emerald-400",
+    tone: "text-green",
   },
   entregado: {
     short: "Entregado",
@@ -35,7 +35,7 @@ export const STATUS_META: Record<
   cancelado: {
     short: "Cancelado",
     long: "Cancelado",
-    tone: "text-red-400",
+    tone: "text-danger",
   },
 };
 

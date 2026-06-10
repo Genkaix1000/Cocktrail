@@ -340,7 +340,7 @@ export default function CartaSection() {
                   placeholder="5500"
                 />
                 {editDrink.price > 0 && (
-                  <span className="text-[10px] text-emerald-400 font-mono mt-1.5 block">
+                  <span className="text-[10px] text-green font-mono mt-1.5 block">
                     Valor formateado: ${editDrink.price.toLocaleString("es-AR")}
                   </span>
                 )}
@@ -469,12 +469,12 @@ export default function CartaSection() {
                           <span className="font-bold text-sm text-white leading-tight truncate">
                             {editDrink.name || "Nombre del Trago"}
                           </span>
-                          <span className="text-xs font-black text-emerald-400 mt-0.5">
+                          <span className="text-xs font-black text-blue mt-0.5">
                             ${(editDrink.price || 0).toLocaleString("es-AR")}
                           </span>
                         </div>
                       </div>
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-lg leading-none">+</div>
+                      <div className="w-8 h-8 rounded-lg bg-green-soft border border-green-line flex items-center justify-center text-green font-bold text-lg leading-none">+</div>
                     </div>
                   ) : (
                     /* Promo/Trending Banner Mockup */
@@ -502,11 +502,11 @@ export default function CartaSection() {
                            <span className="font-bold text-base leading-tight text-white mb-0.5 truncate drop-shadow-md">
                              {editDrink.name || "Nombre del Trago"}
                            </span>
-                           <span className="text-sm font-black text-emerald-400 drop-shadow-md">
+                           <span className="text-sm font-black text-blue drop-shadow-md">
                              ${(editDrink.price || 0).toLocaleString("es-AR")}
                            </span>
                          </div>
-                         <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-black font-bold text-lg leading-none shrink-0 shadow-lg">+</div>
+                         <div className="w-8 h-8 rounded-lg bg-green flex items-center justify-center text-black font-bold text-lg leading-none shrink-0 shadow-lg">+</div>
                       </div>
                     </div>
                   )}

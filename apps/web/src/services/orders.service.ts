@@ -24,4 +24,8 @@ export const ordersService = {
   list() {
     return apiFetch<Order[]>("/api/orders");
   },
+
+  getAuditLogs() {
+    return apiFetch<Order[]>("/api/orders/log");
+  },
 };

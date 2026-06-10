@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { NewOrderInput, Order, OrderStatus } from "@cocktrail/shared";
-import type { OrdersRepository } from "./orders.repository.js";
+import { type OrdersRepository, getOrdersLog } from "./orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
 import { emit } from "../../shared/sse/sse-manager.js";
@@ -26,7 +26,7 @@ export class OrdersService {
     private generateTicketCode?: (orderId: string) => string,
   ) {}
 
-  createOrder(input: NewOrderInput): Order {
+  createOrder(input: NewOrderInput, createdBy?: string): Order {
     if (this.getEventStatus() !== "activo") {
       throw new Conflict("No hay un evento activo. No se pueden crear pedidos.");
     }
@@ -60,6 +60,7 @@ export class OrdersService {
       paymentMethod: input.paymentMethod,
       status: "pagado",
       createdAt: Date.now(),
+      createdBy: createdBy || "Cliente",
     };
 
     if (this.generateTicketCode) {
@@ -71,7 +72,7 @@ export class OrdersService {
     return order;
   }
 
-  updateOrderStatus(id: string, status: OrderStatus): Order {
+  updateOrderStatus(id: string, status: OrderStatus, operator?: string): Order {
     const order = this.ordersRepo.findById(id);
     if (!order) throw new NotFound(`Order ${id} no existe.`);
 
@@ -80,9 +81,18 @@ export class OrdersService {
       throw new Conflict(`Transición inválida: ${order.status} → ${status}.`);
     }
 
-    const timestamps: { readyAt?: number; deliveredAt?: number } = {};
+    const timestamps: {
+      readyAt?: number;
+      deliveredAt?: number;
+      cancelledAt?: number;
+      cancelledBy?: string;
+    } = {};
     if (status === "listo") timestamps.readyAt = Date.now();
     if (status === "entregado") timestamps.deliveredAt = Date.now();
+    if (status === "cancelado") {
+      timestamps.cancelledAt = Date.now();
+      timestamps.cancelledBy = operator || "desconocido";
+    }
 
     const updated = this.ordersRepo.updateStatus(id, status, timestamps);
     emit({ type: "order.updated", order: updated });
@@ -95,6 +105,10 @@ export class OrdersService {
 
   listOrders(): Order[] {
     return this.ordersRepo.list();
+  }
+
+  getOrdersLog(): Order[] {
+    return getOrdersLog();
   }
 
   getOrder(id: string): Order | undefined {

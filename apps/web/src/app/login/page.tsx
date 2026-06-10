@@ -134,12 +134,12 @@ export default function LoginPage() {
               onClick={() => handleSelectGenericRole("barman")}
               className={`w-full p-4 rounded-2xl border flex items-center gap-3.5 transition-all duration-200 cursor-pointer text-left active:scale-[0.98] ${
                 username === "barra"
-                  ? "bg-emerald-500/10 border-emerald-500 text-white"
+                  ? "bg-green-soft border-green text-white"
                   : "bg-white/5 border-white/5 text-ink-300 hover:bg-white/10 hover:border-ink-700"
               }`}
             >
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${
-                username === "barra" ? "bg-emerald-500/25 border-emerald-400 text-white" : "bg-ink-800 border-ink-700"
+                username === "barra" ? "bg-green/25 border-green text-white" : "bg-ink-800 border-ink-700"
               }`}>
                 <Scan size={16} />
               </div>

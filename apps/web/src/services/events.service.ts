@@ -32,4 +32,12 @@ export const eventsService = {
   getHistory() {
     return apiFetch<EventSummary[]>("/api/events/history");
   },
+
+  getPublicConfig() {
+    return apiFetch<{
+      theme: Theme;
+      customTheme: import("@cocktrail/shared").CustomTheme | null;
+      eventStartedAt: number;
+    }>("/api/theme");
+  },
 };

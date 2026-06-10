@@ -11,6 +11,9 @@ export type CustomTheme = {
   cardBg: string;
   accent: string;
   borders: string;
+  textColor: string;
+  success: string;
+  danger: string;
 };
 
 export type MercadoPagoConfig = {
