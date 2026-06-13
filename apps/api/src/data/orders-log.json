@@ -80,10 +80,12 @@
     ],
     "total": 16500,
     "paymentMethod": "efectivo",
-    "status": "pagado",
+    "status": "cancelado",
     "createdAt": 1780987172550,
     "createdBy": "caja",
-    "ticketCode": "6H8DPE2Y-959729ee"
+    "ticketCode": "6H8DPE2Y-959729ee",
+    "cancelledAt": 1781217976698,
+    "cancelledBy": "admin"
   },
   {
     "id": "b8f56476-ea26-4d5a-9e31-0b7ae79a9036",
@@ -100,10 +102,12 @@
     ],
     "total": 900,
     "paymentMethod": "transferencia",
-    "status": "pagado",
+    "status": "cancelado",
     "createdAt": 1781112021467,
     "createdBy": "admin",
-    "ticketCode": "KGEHG2KW-4e127cfc"
+    "ticketCode": "KGEHG2KW-4e127cfc",
+    "cancelledAt": 1781217974922,
+    "cancelledBy": "admin"
   },
   {
     "id": "d8a08a80-4bc2-422c-a046-9c5f44751414",
@@ -134,9 +138,99 @@
     ],
     "total": 16400,
     "paymentMethod": "transferencia",
-    "status": "pagado",
+    "status": "cancelado",
     "createdAt": 1781112046715,
     "createdBy": "admin",
-    "ticketCode": "EHQ55FCB-b1f3707e"
+    "ticketCode": "EHQ55FCB-b1f3707e",
+    "cancelledAt": 1781217959537,
+    "cancelledBy": "admin"
+  },
+  {
+    "id": "f9f202ea-7731-4bbe-8463-f7b9d74c009e",
+    "token": "ec2c42e8",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 3,
+        "unitPrice": 5500,
+        "subtotal": 16500
+      }
+    ],
+    "total": 16500,
+    "paymentMethod": "transferencia",
+    "status": "pagado",
+    "createdAt": 1781235735365,
+    "createdBy": "Cliente",
+    "ticketCode": "84Z7DH6W-43b2265f"
+  },
+  {
+    "id": "25e078d6-2f80-4654-9bfc-13a1340a6a19",
+    "token": "15a9b583",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 1,
+        "unitPrice": 5500,
+        "subtotal": 5500
+      },
+      {
+        "drinkId": 2,
+        "name": "Vodka con Speed",
+        "qty": 1,
+        "unitPrice": 5000,
+        "subtotal": 5000
+      },
+      {
+        "drinkId": 7,
+        "name": "Cerveza Corona",
+        "qty": 1,
+        "unitPrice": 3500,
+        "subtotal": 3500
+      }
+    ],
+    "total": 14000,
+    "paymentMethod": "transferencia",
+    "status": "pagado",
+    "createdAt": 1781235774981,
+    "createdBy": "Cliente",
+    "ticketCode": "NXMPZVYP-f7733603"
+  },
+  {
+    "id": "299bc97a-6d8c-4283-bb84-acb1392a3eb6",
+    "token": "c5945939",
+    "displayNumber": 3,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 5,
+        "unitPrice": 5500,
+        "subtotal": 27500
+      },
+      {
+        "drinkId": 2,
+        "name": "Vodka con Speed",
+        "qty": 2,
+        "unitPrice": 5000,
+        "subtotal": 10000
+      },
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 1,
+        "unitPrice": 300,
+        "subtotal": 300
+      }
+    ],
+    "total": 37800,
+    "paymentMethod": "efectivo",
+    "status": "pagado",
+    "createdAt": 1781235844889,
+    "createdBy": "caja",
+    "ticketCode": "SQVUSLYJ-c5b99f17"
   }
 ]

@@ -123,19 +123,5 @@
     "trending": false,
     "promo": false,
     "available": true
-  },
-  {
-    "id": 8,
-    "name": "Agua Mineral",
-    "description": "Agua mineral sin gas.",
-    "price": 2000,
-    "vibe": "CONDUCTOR DESIGNADO",
-    "flavors": [
-      "Refrescante"
-    ],
-    "iconName": "droplet",
-    "trending": false,
-    "promo": false,
-    "available": true
   }
 ]

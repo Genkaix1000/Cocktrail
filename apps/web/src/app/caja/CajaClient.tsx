@@ -425,7 +425,12 @@ export default function CajaClient({ drinks }: Props) {
   }, [totals]);
 
   const totalOps = useMemo(() => {
-    return totals.transferenciaCount + totals.efectivoCount;
+    return (
+      totals.transferenciaCount +
+      totals.efectivoCount +
+      totals.qrCount +
+      totals.debitoCount
+    );
   }, [totals]);
 
   const avgTicket = useMemo(() => {

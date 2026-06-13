@@ -10,6 +10,7 @@ import {
 } from "@/services/users.service";
 import type { Role } from "@cocktrail/shared";
 import { useTheme } from "@/components/ThemeProvider";
+import SafeDeleteModal from "@/components/SafeDeleteModal";
 
 const ROLE_META: Record<Role, { label: string; color: string; bg: string }> = {
   admin: { label: "Administrador", color: "text-blue", bg: "bg-blue-soft" },
@@ -57,7 +58,7 @@ export default function UsuariosSection() {
   const [modalOpen, setModalOpen] = useState(false); // Side-drawer state
   const [editUser, setEditUser] = useState<(Partial<CreateUserInput> & { id?: string }) | null>(null);
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<SafeUser | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const { theme } = useTheme();
@@ -274,35 +275,14 @@ export default function UsuariosSection() {
                         )}
                       </div>
 
-                      {deleteConfirm === u.id ? (
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(u.id)}
-                            className="w-8 h-8 rounded-lg bg-danger-soft border border-danger-line text-danger flex items-center justify-center hover:brightness-110 transition-all cursor-pointer"
-                            title="Confirmar"
-                          >
-                            <Check size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirm(null)}
-                            className="w-8 h-8 rounded-lg bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-ink-200 transition-all cursor-pointer"
-                            title="Cancelar"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setDeleteConfirm(u.id)}
-                          className="w-8 h-8 rounded-lg bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-danger hover:border-danger-line transition-all cursor-pointer"
-                          title="Eliminar usuario"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(u)}
+                        className="w-8 h-8 rounded-lg bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-danger hover:border-danger-line transition-all cursor-pointer"
+                        title="Eliminar usuario"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -454,6 +434,16 @@ export default function UsuariosSection() {
           Cambios guardados
         </div>
       )}
+
+      {/* Safe Delete Modal */}
+      <SafeDeleteModal
+        isOpen={deleteConfirm !== null}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm.id)}
+        title="Eliminar Usuario de Staff"
+        expectedText={deleteConfirm?.username || ""}
+        typeLabel="el usuario"
+      />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
 import { drinksService } from "@/services/drinks.service";
 import type { Drink } from "@cocktrail/shared";
 import { useTheme } from "@/components/ThemeProvider";
+import SafeDeleteModal from "@/components/SafeDeleteModal";
 
 type DrinkForm = Omit<Drink, "id"> & { id?: number };
 
@@ -58,7 +59,7 @@ export default function CartaSection() {
   const [modalOpen, setModalOpen] = useState(false); // Controls side-drawer visibility
   const [editDrink, setEditDrink] = useState<DrinkForm | null>(null);
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<Drink | null>(null);
   const [saved, setSaved] = useState(false);
   const [iconSearch, setIconSearch] = useState("");
   const [imageUrlInput, setImageUrlInput] = useState("");
@@ -272,25 +273,14 @@ export default function CartaSection() {
                         >
                           {d.available ? <Eye size={12} /> : <EyeOff size={12} />}
                         </button>
-                        {deleteConfirm === d.id ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(d.id)}
-                            className="w-7 h-7 rounded-md bg-danger-soft border border-danger-line text-danger flex items-center justify-center hover:brightness-110 transition-all cursor-pointer"
-                            title="Confirmar eliminación"
-                          >
-                            <Check size={11} />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirm(d.id)}
-                            className="w-7 h-7 rounded-md bg-ink-800 border border-ink-700 text-ink-300 flex items-center justify-center hover:text-danger hover:border-danger-line transition-all cursor-pointer"
-                            title="Eliminar"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirm(d)}
+                          className="w-7 h-7 rounded-md bg-ink-800 border border-ink-700 text-ink-300 flex items-center justify-center hover:text-danger hover:border-danger-line transition-all cursor-pointer"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -543,6 +533,16 @@ export default function CartaSection() {
           Cambios guardados
         </div>
       )}
+
+      {/* Safe Delete Modal */}
+      <SafeDeleteModal
+        isOpen={deleteConfirm !== null}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm.id)}
+        title="Eliminar Trago/Producto"
+        expectedText={deleteConfirm?.name || ""}
+        typeLabel="el trago"
+      />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   CalendarDays,
   FileText,
   X,
+  Download,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useEffect } from "react";
@@ -40,6 +41,35 @@ import GeneralSection from "@/components/settings/GeneralSection";
 import CartaSection from "@/components/settings/CartaSection";
 import PagosSection from "@/components/settings/PagosSection";
 import UsuariosSection from "@/components/settings/UsuariosSection";
+
+import PaymentDonut from "@/components/analytics/PaymentDonut";
+import RevenueByProduct from "@/components/analytics/RevenueByProduct";
+import NightEvolutionChart from "@/components/analytics/NightEvolutionChart";
+import NightRecords from "@/components/analytics/NightRecords";
+import OperationalVelocity from "@/components/analytics/OperationalVelocity";
+import SmartInsights from "@/components/analytics/SmartInsights";
+import NightComparator from "@/components/analytics/NightComparator";
+
+import {
+  computeDelta,
+  getLastNightTotals,
+  computeCancellationRate,
+  computeDigitalConversion,
+  computeProductRevenue,
+  computePaymentBreakdown,
+  computeOperationalVelocity,
+  computeHourlySlots,
+  findPeakHours,
+  computeSegmentedTicket,
+  computeNightEvolution,
+  computeMovingAverage,
+  computeNightRecords,
+  computeWeeklyDelta,
+  computeMonthlyDelta,
+  exportHistoryCSV,
+  downloadCSV,
+  generateInsights
+} from "@/lib/analytics";
 
 import type {
   CashSale,
@@ -289,98 +319,150 @@ export default function AdminClient({
     router.refresh();
   }
 
-  // Dashboard variables
-  const maxDrinkQty = totals.drinksSold[0]?.qty ?? 0;
-  const totalDrinkUnits = totals.drinksSold.reduce((s, d) => s + d.qty, 0);
-  const totalOps = totals.transferenciaCount + totals.efectivoCount;
-  const avgTicket = totalOps > 0 ? Math.round(totals.total / totalOps) : 0;
-  const transferPct = totals.total > 0 ? Math.round((totals.transferenciaTotal / totals.total) * 100) : 0;
-  const cashPct = totals.total > 0 ? Math.max(0, 100 - transferPct) : 0;
-  const startedAtStr = formatHm(event.startedAt);
+  // Analytics computation hooks
+  const {
+    maxDrinkQty,
+    totalDrinkUnits,
+    totalOps,
+    avgTicket,
+    startedAtStr,
+    deltaTotal,
+    cancellationInfo,
+    digitalConversion,
+    productRevenue,
+    paymentBreakdown,
+    operationalVelocity,
+    hourlyData,
+    maxHourSales,
+    peakHour,
+    segmentedTicket,
+    nightEvolution,
+    movingAvg,
+    nightRecords,
+    weeklyDelta,
+    monthlyDelta,
+    allTotal,
+    avgNight,
+    smartInsights,
+    webTotal,
+    webCount,
+    webPct,
+    barraTotal,
+    barraCount,
+    barraPct,
+  } = useMemo(() => {
+    // 1. Base Variables
+    const _maxDrinkQty = totals.drinksSold[0]?.qty ?? 0;
+    const _totalDrinkUnits = totals.drinksSold.reduce((s, d) => s + d.qty, 0);
+    
+    // Correct totalOps calculation (include QR and Debit)
+    const _totalOps =
+      totals.transferenciaCount +
+      totals.efectivoCount +
+      totals.qrCount +
+      totals.debitoCount;
+    const _avgTicket = _totalOps > 0 ? Math.round(totals.total / _totalOps) : 0;
 
-  // Hourly metrics logic
-  const hourlyData = useMemo(() => {
-    const startTs = event.startedAt;
-    const startHourDate = new Date(startTs);
-    startHourDate.setMinutes(0, 0, 0);
+    // Web vs Barra calculation
+    const _webTotal = totals.transferenciaTotal;
+    const _webCount = totals.transferenciaCount;
+    const _webPct = totals.total > 0 ? Math.round((_webTotal / totals.total) * 100) : 0;
 
-    const slots: {
-      label: string;
-      hour: number;
-      digitalSales: number;
-      digitalCount: number;
-      cashSales: number;
-      cashCount: number;
-      totalSales: number;
-    }[] = [];
+    const _barraTotal =
+      totals.efectivoTotal + totals.qrTotal + totals.debitoTotal;
+    const _barraCount =
+      totals.efectivoCount + totals.qrCount + totals.debitoCount;
+    const _barraPct = totals.total > 0 ? Math.round((_barraTotal / totals.total) * 100) : 0;
 
-    // Generar exactamente 10 franjas horarias a partir de la hora de inicio del evento
-    for (let i = 0; i < 10; i++) {
-      const currentTs = startHourDate.getTime() + i * 3600 * 1000;
-      const hrDate = new Date(currentTs);
-      const hr = hrDate.getHours();
-      slots.push({
-        label: `${String(hr).padStart(2, "0")}:00`,
-        hour: hr,
-        digitalSales: 0,
-        digitalCount: 0,
-        cashSales: 0,
-        cashCount: 0,
-        totalSales: 0,
-      });
-    }
+    const _startedAtStr = formatHm(event.startedAt);
 
-    for (const order of orders) {
-      if (order.status === "cancelado") continue;
-      const orderDate = new Date(order.createdAt);
-      const hr = orderDate.getHours();
-      const slot = slots.find((s) => s.hour === hr);
-      if (slot) {
-        slot.digitalSales += order.total;
-        slot.digitalCount += 1;
-        slot.totalSales += order.total;
-      }
-    }
+    // 2. New Analytics (A)
+    const prevTotals = getLastNightTotals(historyEvents);
+    const _deltaTotal = prevTotals ? computeDelta(totals.total, prevTotals.total) : null;
+    const _cancellationInfo = computeCancellationRate(orders);
+    const _digitalConversion = computeDigitalConversion(orders, cashSales);
 
-    for (const sale of cashSales) {
-      const saleDate = new Date(sale.createdAt);
-      const hr = saleDate.getHours();
-      const slot = slots.find((s) => s.hour === hr);
-      if (slot) {
-        slot.cashSales += sale.amount;
-        slot.cashCount += 1;
-        slot.totalSales += sale.amount;
-      }
-    }
+    // 3. Dashboards (B)
+    const _productRevenue = computeProductRevenue(totals.drinksSold);
+    const _paymentBreakdown = computePaymentBreakdown(totals);
+    const _operationalVelocity = computeOperationalVelocity(orders);
+    const _hourlySlots = computeHourlySlots({ startedAt: event.startedAt }, orders, cashSales);
+    const _maxHourSales = Math.max(..._hourlySlots.map((s) => s.totalSales), 1000);
+    const peak = findPeakHours(_hourlySlots);
+    const _peakHour = peak.peakRevenue ? `${peak.peakRevenue.label} hs` : "—";
+    const _segmentedTicket = computeSegmentedTicket(orders, cashSales);
 
-    return slots;
-  }, [event, orders, cashSales]);
+    // 4. Historial & Evolución (C)
+    const _nightEvolution = computeNightEvolution(historyEvents);
+    const _movingAvg = computeMovingAverage(_nightEvolution, 3);
+    const _nightRecords = computeNightRecords(historyEvents);
+    const _weeklyDelta = computeWeeklyDelta(historyEvents);
+    const _monthlyDelta = computeMonthlyDelta(historyEvents);
+    const _allTotal = historyEvents.reduce((s, e) => s + e.totals.total, 0);
+    const _avgNight = historyEvents.length > 0 ? Math.round(_allTotal / historyEvents.length) : 0;
 
-  const maxHourSales = useMemo(() => {
-    const max = Math.max(...hourlyData.map((s) => s.totalSales));
-    return max > 0 ? max : 1000;
-  }, [hourlyData]);
+    // 5. Smart Insights
+    const _smartInsights = generateInsights(
+      totals,
+      orders,
+      cashSales,
+      _hourlySlots,
+      prevTotals
+    );
 
-  const peakHour = useMemo(() => {
-    if (hourlyData.length === 0) return "—";
-    const sorted = [...hourlyData].sort((a, b) => b.totalSales - a.totalSales);
-    if (sorted[0] && sorted[0].totalSales > 0) {
-      return `${sorted[0].label} hs`;
-    }
-    return "—";
-  }, [hourlyData]);
+    return {
+      maxDrinkQty: _maxDrinkQty,
+      totalDrinkUnits: _totalDrinkUnits,
+      totalOps: _totalOps,
+      avgTicket: _avgTicket,
+      startedAtStr: _startedAtStr,
+      deltaTotal: _deltaTotal,
+      cancellationInfo: _cancellationInfo,
+      digitalConversion: _digitalConversion,
+      productRevenue: _productRevenue,
+      paymentBreakdown: _paymentBreakdown,
+      operationalVelocity: _operationalVelocity,
+      hourlyData: _hourlySlots,
+      maxHourSales: _maxHourSales,
+      peakHour: _peakHour,
+      segmentedTicket: _segmentedTicket,
+      nightEvolution: _nightEvolution,
+      movingAvg: _movingAvg,
+      nightRecords: _nightRecords,
+      weeklyDelta: _weeklyDelta,
+      monthlyDelta: _monthlyDelta,
+      allTotal: _allTotal,
+      avgNight: _avgNight,
+      smartInsights: _smartInsights,
+      webTotal: _webTotal,
+      webCount: _webCount,
+      webPct: _webPct,
+      barraTotal: _barraTotal,
+      barraCount: _barraCount,
+      barraPct: _barraPct,
+    };
+  }, [totals, event.startedAt, orders, cashSales, historyEvents]);
 
   // Historial aggregates
   const historyNow = useMemo(() => new Date(), []);
-  const weekStart = useMemo(() => startOfWeek(historyNow), [historyNow]);
-  const monthStart = useMemo(() => startOfMonth(historyNow), [historyNow]);
+  const weekStart = useMemo(() => {
+    const day = historyNow.getDay();
+    const offset = day === 0 ? 6 : day - 1;
+    const start = new Date(historyNow);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - offset);
+    return start.getTime();
+  }, [historyNow]);
+  
+  const monthStart = useMemo(() => {
+    return new Date(historyNow.getFullYear(), historyNow.getMonth(), 1, 0, 0, 0, 0).getTime();
+  }, [historyNow]);
+
   const weekEvents = useMemo(() => historyEvents.filter((e) => (e.closedAt ?? 0) >= weekStart), [historyEvents, weekStart]);
   const monthEvents = useMemo(() => historyEvents.filter((e) => (e.closedAt ?? 0) >= monthStart), [historyEvents, monthStart]);
   const sumHistory = (arr: EventSummary[]) => arr.reduce((s, e) => s + e.totals.total, 0);
   const weekTotal = sumHistory(weekEvents);
   const monthTotal = sumHistory(monthEvents);
-  const allTotal = sumHistory(historyEvents);
-  const avgNight = historyEvents.length > 0 ? Math.round(allTotal / historyEvents.length) : 0;
 
   // Breadcrumbs computation
   const breadcrumbs = useMemo(() => {
@@ -774,39 +856,39 @@ export default function AdminClient({
           {activeTab === "monitoreo" && (
             <div className="space-y-6">
               {/* Row 1: 4 KPIs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
                 <Kpi
                   label="Total noche"
                   value={totals.total}
                   isCurrency
                   sub={
                     totalOps > 0
-                      ? `${totalOps} operaciones · ticket $${avgTicket.toLocaleString("es-AR")}`
+                      ? `${totalOps} op. · ticket $${avgTicket.toLocaleString("es-AR")}`
                       : "Sin movimientos"
                   }
-                  deltaTone="up"
-                  deltaText="EN VIVO"
+                  deltaTone={deltaTotal?.direction === "down" ? "neutral" : "up"}
+                  deltaText={deltaTotal ? deltaTotal.label : "EN VIVO"}
                 />
                 <Kpi
-                  label="Transferencia"
-                  value={totals.transferenciaTotal}
+                  label="Ventas Web"
+                  value={webTotal}
                   isCurrency
-                  sub={`${totals.transferenciaCount} ${totals.transferenciaCount === 1 ? "pedido" : "pedidos"} · Mercado Pago`}
+                  sub={`${webCount} pedidos · ${webPct}% del total`}
                   deltaTone="neutral"
-                  deltaText={`${transferPct}%`}
+                  deltaText={`${webPct}%`}
                 />
                 <Kpi
-                  label="Efectivo"
-                  value={totals.efectivoTotal}
+                  label="Ventas Barra"
+                  value={barraTotal}
                   isCurrency
-                  sub={`${totals.efectivoCount} ${totals.efectivoCount === 1 ? "venta en barra" : "ventas en barra"}`}
+                  sub={`${barraCount} op. · ${barraPct}% del total`}
                   deltaTone="neutral"
-                  deltaText={`${cashPct}%`}
+                  deltaText={`${barraPct}%`}
                 />
                 <Kpi
-                  label="Tragos servidos"
+                  label="Tragos"
                   value={totalDrinkUnits}
-                  sub={`${totals.drinksSold.length} ${totals.drinksSold.length === 1 ? "variedad" : "variedades"} distintas`}
+                  sub={`${totals.drinksSold.length} vars.`}
                   deltaTone="up"
                   deltaText={totalDrinkUnits > 0 ? `+${totalDrinkUnits}` : "0"}
                 />
@@ -893,6 +975,12 @@ export default function AdminClient({
                     </div>
                   )}
                 </section>
+              </div>
+
+              {/* Row 3: Insights & Velocity */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start mt-2">
+                <OperationalVelocity velocity={operationalVelocity} isBosko={isBosko} />
+                <SmartInsights insights={smartInsights} isBosko={isBosko} />
               </div>
 
               {/* Bottom footer status */}
@@ -1005,29 +1093,32 @@ export default function AdminClient({
               </div>
 
               {/* Statistics overview widgets below the chart */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 
-                {/* Widget A: Avg ticket */}
-                <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">
-                    Ticket Promedio
-                  </span>
-                  <span className={`font-mono text-[26px] font-bold leading-none ${accentColorClass}`}>
-                    ${avgTicket.toLocaleString("es-AR")}
-                  </span>
-                  <span className="text-[10px] text-ink-400">Calculado sobre transacciones cobradas</span>
+                {/* Widget A: Segmented Ticket */}
+                <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-4 min-w-0">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">
+                      Ticket Promedio
+                    </span>
+                    <span className={`font-mono text-[26px] font-bold leading-none ${accentColorClass}`}>
+                      ${segmentedTicket.general.toLocaleString("es-AR")}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 border-t border-ink-800 pt-3">
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-ink-400">Página Web</span>
+                      <span className="font-mono font-bold text-ink-100">${segmentedTicket.digital.toLocaleString("es-AR")}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-ink-400">Ventas Barra</span>
+                      <span className="font-mono font-bold text-ink-100">${segmentedTicket.barra.toLocaleString("es-AR")}</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Widget B: Drinks sold */}
-                <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">
-                    Tragos Vendidos
-                  </span>
-                  <span className="font-mono text-[26px] font-bold leading-none text-ink-50">
-                    {totalDrinkUnits} <span className="text-xs text-ink-400 font-sans font-medium">unidades</span>
-                  </span>
-                  <span className="text-[10px] text-ink-400">Volumen físico total servido en barra</span>
-                </div>
+                {/* Widget B: Payment Donut */}
+                <PaymentDonut breakdown={paymentBreakdown} total={totals.total} isBosko={isBosko} />
 
                 {/* Widget C: Peak Hour */}
                 <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-2">
@@ -1040,6 +1131,9 @@ export default function AdminClient({
                   <span className="text-[10px] text-ink-400">Franja con mayor recaudación bruta</span>
                 </div>
               </div>
+
+              {/* Revenue by Product */}
+              <RevenueByProduct products={productRevenue} isBosko={isBosko} />
             </div>
           )}
 
@@ -1061,18 +1155,28 @@ export default function AdminClient({
               {/* Aggregations */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 <div className="bg-ink-900 border border-ink-800 rounded-2xl p-4.5 flex flex-col gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">Esta semana</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">Esta semana</span>
+                    <span className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded tabular ${weeklyDelta.delta.direction === "up" ? "bg-green-soft text-green" : weeklyDelta.delta.direction === "down" ? "bg-danger-soft text-danger" : "bg-ink-800 text-ink-300"}`}>
+                      {weeklyDelta.delta.label}
+                    </span>
+                  </div>
                   <span className={`font-mono text-[24px] font-bold leading-none ${accentColorClass}`}>
-                    ${weekTotal.toLocaleString("es-AR")}
+                    ${weeklyDelta.thisWeek.toLocaleString("es-AR")}
                   </span>
-                  <span className="text-[10px] text-ink-400">{weekEvents.length} {weekEvents.length === 1 ? "noche" : "noches"}</span>
+                  <span className="text-[10px] text-ink-400">{weeklyDelta.thisWeekCount} {weeklyDelta.thisWeekCount === 1 ? "noche" : "noches"}</span>
                 </div>
                 <div className="bg-ink-900 border border-ink-800 rounded-2xl p-4.5 flex flex-col gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">Este mes</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">Este mes</span>
+                    <span className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded tabular ${monthlyDelta.delta.direction === "up" ? "bg-green-soft text-green" : monthlyDelta.delta.direction === "down" ? "bg-danger-soft text-danger" : "bg-ink-800 text-ink-300"}`}>
+                      {monthlyDelta.delta.label}
+                    </span>
+                  </div>
                   <span className={`font-mono text-[24px] font-bold leading-none ${accentColorClass}`}>
-                    ${monthTotal.toLocaleString("es-AR")}
+                    ${monthlyDelta.thisMonth.toLocaleString("es-AR")}
                   </span>
-                  <span className="text-[10px] text-ink-400">{monthEvents.length} {monthEvents.length === 1 ? "noche" : "noches"}</span>
+                  <span className="text-[10px] text-ink-400">{monthlyDelta.thisMonthCount} {monthlyDelta.thisMonthCount === 1 ? "noche" : "noches"}</span>
                 </div>
                 <div className="bg-ink-900 border border-ink-800 rounded-2xl p-4.5 flex flex-col gap-2">
                   <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400">Total archivado</span>
@@ -1090,11 +1194,32 @@ export default function AdminClient({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <NightEvolutionChart points={nightEvolution} movingAvg={movingAvg} isBosko={isBosko} />
+                <NightComparator nights={historyEvents} isBosko={isBosko} />
+              </div>
+
+              <NightRecords records={nightRecords} isBosko={isBosko} />
+
               {/* Night list detail */}
               <div className="flex flex-col gap-3.5">
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400">
-                  Detalle por noche
-                </h2>
+                <div className="flex justify-between items-center">
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400">
+                    Detalle por noche
+                  </h2>
+                  {historyEvents.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const csv = exportHistoryCSV(historyEvents);
+                        downloadCSV(csv, "cocktrail_historial.csv");
+                      }}
+                      className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink-300 hover:text-white px-2.5 py-1.5 rounded bg-ink-800 border border-ink-700 transition-all cursor-pointer active:scale-95"
+                    >
+                      <Download size={12} />
+                      <span>Exportar CSV</span>
+                    </button>
+                  )}
+                </div>
 
                 {loadingHistory ? (
                   <div className="flex justify-center items-center py-20">
