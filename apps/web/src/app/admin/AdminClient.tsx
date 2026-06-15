@@ -1418,6 +1418,8 @@ export default function AdminClient({
                           <th className="py-3 px-4">Creador</th>
                           <th className="py-3 px-4">Fecha / Hora</th>
                           <th className="py-3 px-4">Método</th>
+                          <th className="py-3 px-4">Barra</th>
+                          <th className="py-3 px-4">Canje</th>
                           <th className="py-3 px-4">Total</th>
                           <th className="py-3 px-4">Estado</th>
                           <th className="py-3 px-4 text-right">Acciones</th>
@@ -1455,6 +1457,19 @@ export default function AdminClient({
                               </td>
                               <td className="py-3 px-4 capitalize text-ink-400">
                                 {log.paymentMethod === "transferencia" ? "MP Link (Web)" : log.paymentMethod}
+                              </td>
+                              <td className="py-3 px-4 font-mono text-xs text-ink-300">
+                                {log.deliveredByBar || "—"}
+                              </td>
+                              <td className="py-3 px-4 text-ink-300">
+                                {isDelivered ? (
+                                  <span className="text-[10px] font-mono uppercase">
+                                    {log.redeemMethod === "manual" ? "Manual" : "Escaneo"}
+                                    {log.deliveredBy ? ` · ${log.deliveredBy}` : ""}
+                                  </span>
+                                ) : (
+                                  <span className="text-ink-600">—</span>
+                                )}
                               </td>
                               <td className="py-3 px-4 font-mono font-black text-blue">
                                 ${log.total.toLocaleString("es-AR")}
@@ -1549,6 +1564,28 @@ export default function AdminClient({
                         <span>Fecha / Hora</span>
                         <span>{new Date(selectedLogOrder.createdAt).toLocaleString("es-AR")}</span>
                       </div>
+
+                      {selectedLogOrder.status === "entregado" && (
+                        <div className="p-2.5 rounded-lg bg-green-soft border border-green-line text-green mt-2 flex flex-col gap-1">
+                          <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Entrega:</span>
+                          {selectedLogOrder.deliveredByBar && (
+                            <span className="text-[10px]">Barra: {selectedLogOrder.deliveredByBar}</span>
+                          )}
+                          {selectedLogOrder.deliveredBy && (
+                            <span className="text-[10px]">Operador: {selectedLogOrder.deliveredBy}</span>
+                          )}
+                          {selectedLogOrder.redeemMethod && (
+                            <span className="text-[10px] capitalize">
+                              Método: {selectedLogOrder.redeemMethod === "manual" ? "Manual" : "Escaneo QR"}
+                            </span>
+                          )}
+                          {selectedLogOrder.deliveredAt && (
+                            <span className="text-[10px]">
+                              Hora: {new Date(selectedLogOrder.deliveredAt).toLocaleString("es-AR")}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {selectedLogOrder.status === "cancelado" && (
                         <div className="p-2.5 rounded-lg bg-danger-soft border border-danger-line text-danger mt-2 flex flex-col gap-1">

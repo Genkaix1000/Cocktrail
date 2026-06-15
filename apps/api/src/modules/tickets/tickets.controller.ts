@@ -3,6 +3,7 @@ import type { TicketsService } from "./tickets.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, RedeemTicketSchema } from "../../shared/middleware/validate.js";
 import { ticketLimiter } from "../../shared/middleware/rate-limit.js";
+import { env } from "../../config/env.js";
 
 export function createTicketsController(service: TicketsService): Router {
   const router = Router();
@@ -16,16 +17,23 @@ export function createTicketsController(service: TicketsService): Router {
     validate(RedeemTicketSchema),
     (req, res, next) => {
       try {
-        const { code } = req.body;
-        const redeemer = "scanner";
-        const order = service.redeemTicket(code, redeemer);
+        const { code, barCode, method } = req.body;
+        const redeemer = req.session?.username ?? "desconocido";
+        const resolvedBarCode = barCode?.trim() || env.BAR_CODE;
+        const resolvedMethod = method ?? "scan";
+        const order = service.redeemTicket(code, redeemer, {
+          barCode: resolvedBarCode,
+          method: resolvedMethod,
+        });
 
-        // Audit Logging (who, when, which ticket, and from which IP)
+        // Audit Logging (who, when, which ticket, bar station, method and from which IP)
         console.log(
           JSON.stringify({
             event: "ticket.redeemed",
             ticket: code,
             redeemer,
+            barCode: resolvedBarCode,
+            method: resolvedMethod,
             ip: req.ip,
             timestamp: new Date().toISOString(),
           })

@@ -36,7 +36,11 @@ export class TicketsService {
    * Throws detailed HTTP errors for not found, signature validation failure, or duplicate scan.
    * If code is exactly 8 characters, resolves the ticket via its human-readable prefix.
    */
-  redeemTicket(code: string, username: string): Order {
+  redeemTicket(
+    code: string,
+    username: string,
+    options?: { barCode?: string; method?: "scan" | "manual" },
+  ): Order {
     let ticket: Ticket | undefined;
     const cleanCode = code.trim();
 
@@ -87,13 +91,19 @@ export class TicketsService {
       updatedOrder = this.ordersService.updateOrderStatus(order.id, "listo");
     }
     if (updatedOrder.status === "listo") {
-      updatedOrder = this.ordersService.updateOrderStatus(order.id, "entregado");
+      updatedOrder = this.ordersService.updateOrderStatus(order.id, "entregado", username, {
+        deliveredByBar: options?.barCode,
+        redeemMethod: options?.method ?? "scan",
+      });
     } else {
       throw new Conflict(`El pedido está en un estado (${order.status}) que no se puede entregar.`);
     }
 
     // Mark ticket as redeemed
-    this.ticketsRepo.updateRedemption(ticket.code, username);
+    this.ticketsRepo.updateRedemption(ticket.code, username, {
+      barCode: options?.barCode,
+      method: options?.method ?? "scan",
+    });
 
     return updatedOrder;
   }

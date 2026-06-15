@@ -72,7 +72,12 @@ export class OrdersService {
     return order;
   }
 
-  updateOrderStatus(id: string, status: OrderStatus, operator?: string): Order {
+  updateOrderStatus(
+    id: string,
+    status: OrderStatus,
+    operator?: string,
+    deliveryMeta?: { deliveredByBar?: string; redeemMethod?: "scan" | "manual" },
+  ): Order {
     const order = this.ordersRepo.findById(id);
     if (!order) throw new NotFound(`Order ${id} no existe.`);
 
@@ -86,9 +91,17 @@ export class OrdersService {
       deliveredAt?: number;
       cancelledAt?: number;
       cancelledBy?: string;
+      deliveredBy?: string;
+      deliveredByBar?: string;
+      redeemMethod?: "scan" | "manual";
     } = {};
     if (status === "listo") timestamps.readyAt = Date.now();
-    if (status === "entregado") timestamps.deliveredAt = Date.now();
+    if (status === "entregado") {
+      timestamps.deliveredAt = Date.now();
+      timestamps.deliveredBy = operator || "desconocido";
+      if (deliveryMeta?.deliveredByBar) timestamps.deliveredByBar = deliveryMeta.deliveredByBar;
+      if (deliveryMeta?.redeemMethod) timestamps.redeemMethod = deliveryMeta.redeemMethod;
+    }
     if (status === "cancelado") {
       timestamps.cancelledAt = Date.now();
       timestamps.cancelledBy = operator || "desconocido";

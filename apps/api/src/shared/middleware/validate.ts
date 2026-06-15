@@ -69,6 +69,13 @@ export const RedeemTicketSchema = z.object({
     .min(1, "Código de ticket requerido")
     .max(50, "Código de ticket demasiado largo")
     .trim(),
+  barCode: z
+    .string()
+    .min(1, "Código de barra requerido")
+    .max(20, "Código de barra demasiado largo")
+    .trim()
+    .optional(),
+  method: z.enum(["scan", "manual"]).optional(),
 });
 
 // 7. Esquema para crear un trago (CRUD Carta)

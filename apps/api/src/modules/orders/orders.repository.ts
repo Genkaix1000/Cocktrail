@@ -18,6 +18,9 @@ export interface OrdersRepository {
       deliveredAt?: number;
       cancelledAt?: number;
       cancelledBy?: string;
+      deliveredBy?: string;
+      deliveredByBar?: string;
+      redeemMethod?: "scan" | "manual";
     },
   ): Order;
   clear(): void;
@@ -112,6 +115,9 @@ export class InMemoryOrdersRepository implements OrdersRepository {
       deliveredAt?: number;
       cancelledAt?: number;
       cancelledBy?: string;
+      deliveredBy?: string;
+      deliveredByBar?: string;
+      redeemMethod?: "scan" | "manual";
     },
   ): Order {
     const order = this.orders.get(id);
@@ -125,6 +131,9 @@ export class InMemoryOrdersRepository implements OrdersRepository {
         if (timestamps?.deliveredAt) loggedOrder.deliveredAt = timestamps.deliveredAt;
         if (timestamps?.cancelledAt) loggedOrder.cancelledAt = timestamps.cancelledAt;
         if (timestamps?.cancelledBy) loggedOrder.cancelledBy = timestamps.cancelledBy;
+        if (timestamps?.deliveredBy) loggedOrder.deliveredBy = timestamps.deliveredBy;
+        if (timestamps?.deliveredByBar) loggedOrder.deliveredByBar = timestamps.deliveredByBar;
+        if (timestamps?.redeemMethod) loggedOrder.redeemMethod = timestamps.redeemMethod;
 
         // Persistir el cambio
         try {
@@ -142,6 +151,9 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     if (timestamps?.deliveredAt) order.deliveredAt = timestamps.deliveredAt;
     if (timestamps?.cancelledAt) order.cancelledAt = timestamps.cancelledAt;
     if (timestamps?.cancelledBy) order.cancelledBy = timestamps.cancelledBy;
+    if (timestamps?.deliveredBy) order.deliveredBy = timestamps.deliveredBy;
+    if (timestamps?.deliveredByBar) order.deliveredByBar = timestamps.deliveredByBar;
+    if (timestamps?.redeemMethod) order.redeemMethod = timestamps.redeemMethod;
 
     logOrder(order);
     return order;

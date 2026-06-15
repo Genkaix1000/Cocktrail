@@ -5,6 +5,8 @@ export interface Ticket {
   createdAt: number;
   redeemedAt?: number;
   redeemedBy?: string;
+  redeemedByBar?: string;
+  redeemMethod?: "scan" | "manual";
 }
 
 export interface TicketsRepository {
@@ -13,7 +15,11 @@ export interface TicketsRepository {
   findByReadable(readable: string): Ticket | undefined;
   findByOrderId(orderId: string): Ticket | undefined;
   list(): Ticket[];
-  updateRedemption(code: string, redeemedBy: string): Ticket;
+  updateRedemption(
+    code: string,
+    redeemedBy: string,
+    meta?: { barCode?: string; method?: "scan" | "manual" },
+  ): Ticket;
   clear(): void;
 }
 
@@ -51,13 +57,19 @@ export class InMemoryTicketsRepository implements TicketsRepository {
     return Array.from(this.tickets.values());
   }
 
-  updateRedemption(code: string, redeemedBy: string): Ticket {
+  updateRedemption(
+    code: string,
+    redeemedBy: string,
+    meta?: { barCode?: string; method?: "scan" | "manual" },
+  ): Ticket {
     const ticket = this.tickets.get(code);
     if (!ticket) {
       throw new Error(`Ticket with code ${code} not found in repository`);
     }
     ticket.redeemedAt = Date.now();
     ticket.redeemedBy = redeemedBy;
+    if (meta?.barCode) ticket.redeemedByBar = meta.barCode;
+    if (meta?.method) ticket.redeemMethod = meta.method;
     return ticket;
   }
 

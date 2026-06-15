@@ -57,6 +57,9 @@ export type Order = {
   createdBy?: string;
   cancelledBy?: string;
   cancelledAt?: number;
+  deliveredBy?: string;
+  deliveredByBar?: string;
+  redeemMethod?: "scan" | "manual";
 };
 
 export type CashSale = {

@@ -22,6 +22,7 @@ const EnvSchema = z.object({
   CAJA_PASS: z.string().default("caja"),
   BARMAN_USER: z.string().default("barra"),
   BARMAN_PASS: z.string().default("barra"),
+  BAR_CODE: z.string().min(1).max(20).default("BARRA-01"),
 });
 
 function loadEnv() {
