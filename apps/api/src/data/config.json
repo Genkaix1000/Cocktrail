@@ -1,0 +1,17 @@
+{
+  "theme": "bosko",
+  "brandName": "Bosko",
+  "logoUrl": "/bosko.webp",
+  "customTheme": null,
+  "mercadoPago": {
+    "publicKey": "",
+    "accessToken": "",
+    "sandbox": true
+  },
+  "clubId": "cocktrail_club_01",
+  "clubName": "Bosko Club",
+  "useLogoUrl": true,
+  "logoSize": 25,
+  "textLogoValue": "Bosko",
+  "textLogoSize": 26
+}

@@ -1,0 +1,397 @@
+[
+  {
+    "id": "a521386c-62ea-463b-af2e-11210247fed2",
+    "token": "385dfdaa",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 2,
+        "unitPrice": 300,
+        "subtotal": 600
+      }
+    ],
+    "total": 600,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1780958089689,
+    "createdBy": "admin",
+    "ticketCode": "9KSPPNZZ-4009de8d",
+    "readyAt": 1780958196719,
+    "deliveredAt": 1780958196719
+  },
+  {
+    "id": "17f5f4ed-7a73-4e7b-a24b-10834b1532ad",
+    "token": "0ac69ac9",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 2,
+        "unitPrice": 300,
+        "subtotal": 600
+      }
+    ],
+    "total": 600,
+    "paymentMethod": "efectivo",
+    "status": "cancelado",
+    "createdAt": 1780958151982,
+    "createdBy": "caja",
+    "ticketCode": "REVCV866-8ec0be92",
+    "cancelledAt": 1780958228236,
+    "cancelledBy": "admin"
+  },
+  {
+    "id": "f5f258a8-c3cb-4659-bd79-d5df96e42c2e",
+    "token": "3ffae7e7",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 1,
+        "unitPrice": 5500,
+        "subtotal": 5500
+      }
+    ],
+    "total": 5500,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1780987099120,
+    "createdBy": "Cliente",
+    "ticketCode": "LUJ732TK-2f4e24e9",
+    "readyAt": 1780987128181,
+    "deliveredAt": 1780987128181
+  },
+  {
+    "id": "cb46b679-f4bd-4b83-b25b-7faab6b613aa",
+    "token": "fde27695",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 3,
+        "unitPrice": 5500,
+        "subtotal": 16500
+      }
+    ],
+    "total": 16500,
+    "paymentMethod": "efectivo",
+    "status": "cancelado",
+    "createdAt": 1780987172550,
+    "createdBy": "caja",
+    "ticketCode": "6H8DPE2Y-959729ee",
+    "cancelledAt": 1781217976698,
+    "cancelledBy": "admin"
+  },
+  {
+    "id": "b8f56476-ea26-4d5a-9e31-0b7ae79a9036",
+    "token": "aa93f7ce",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 3,
+        "unitPrice": 300,
+        "subtotal": 900
+      }
+    ],
+    "total": 900,
+    "paymentMethod": "transferencia",
+    "status": "cancelado",
+    "createdAt": 1781112021467,
+    "createdBy": "admin",
+    "ticketCode": "KGEHG2KW-4e127cfc",
+    "cancelledAt": 1781217974922,
+    "cancelledBy": "admin"
+  },
+  {
+    "id": "d8a08a80-4bc2-422c-a046-9c5f44751414",
+    "token": "b81def52",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 2,
+        "unitPrice": 5500,
+        "subtotal": 11000
+      },
+      {
+        "drinkId": 3,
+        "name": "Campari con Naranja",
+        "qty": 1,
+        "unitPrice": 4800,
+        "subtotal": 4800
+      },
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 2,
+        "unitPrice": 300,
+        "subtotal": 600
+      }
+    ],
+    "total": 16400,
+    "paymentMethod": "transferencia",
+    "status": "cancelado",
+    "createdAt": 1781112046715,
+    "createdBy": "admin",
+    "ticketCode": "EHQ55FCB-b1f3707e",
+    "cancelledAt": 1781217959537,
+    "cancelledBy": "admin"
+  },
+  {
+    "id": "f9f202ea-7731-4bbe-8463-f7b9d74c009e",
+    "token": "ec2c42e8",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 3,
+        "unitPrice": 5500,
+        "subtotal": 16500
+      }
+    ],
+    "total": 16500,
+    "paymentMethod": "transferencia",
+    "status": "pagado",
+    "createdAt": 1781235735365,
+    "createdBy": "Cliente",
+    "ticketCode": "84Z7DH6W-43b2265f"
+  },
+  {
+    "id": "25e078d6-2f80-4654-9bfc-13a1340a6a19",
+    "token": "15a9b583",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 1,
+        "unitPrice": 5500,
+        "subtotal": 5500
+      },
+      {
+        "drinkId": 2,
+        "name": "Vodka con Speed",
+        "qty": 1,
+        "unitPrice": 5000,
+        "subtotal": 5000
+      },
+      {
+        "drinkId": 7,
+        "name": "Cerveza Corona",
+        "qty": 1,
+        "unitPrice": 3500,
+        "subtotal": 3500
+      }
+    ],
+    "total": 14000,
+    "paymentMethod": "transferencia",
+    "status": "pagado",
+    "createdAt": 1781235774981,
+    "createdBy": "Cliente",
+    "ticketCode": "NXMPZVYP-f7733603"
+  },
+  {
+    "id": "299bc97a-6d8c-4283-bb84-acb1392a3eb6",
+    "token": "c5945939",
+    "displayNumber": 3,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 5,
+        "unitPrice": 5500,
+        "subtotal": 27500
+      },
+      {
+        "drinkId": 2,
+        "name": "Vodka con Speed",
+        "qty": 2,
+        "unitPrice": 5000,
+        "subtotal": 10000
+      },
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 1,
+        "unitPrice": 300,
+        "subtotal": 300
+      }
+    ],
+    "total": 37800,
+    "paymentMethod": "efectivo",
+    "status": "pagado",
+    "createdAt": 1781235844889,
+    "createdBy": "caja",
+    "ticketCode": "SQVUSLYJ-c5b99f17"
+  },
+  {
+    "id": "14a793e8-e3e1-4404-8dd4-6bae0ce61489",
+    "token": "28bd17ba",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 3,
+        "unitPrice": 5500,
+        "subtotal": 16500
+      }
+    ],
+    "total": 16500,
+    "paymentMethod": "efectivo",
+    "status": "entregado",
+    "createdAt": 1781491997863,
+    "createdBy": "caja",
+    "ticketCode": "U5CAHQNL-5e955d66",
+    "readyAt": 1781492088322,
+    "deliveredAt": 1781492088375
+  },
+  {
+    "id": "6715df26-8d13-407d-b9cc-54cfc04a8cb8",
+    "token": "fba385be",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 10,
+        "unitPrice": 5500,
+        "subtotal": 55000
+      }
+    ],
+    "total": 55000,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1781492130254,
+    "createdBy": "admin",
+    "ticketCode": "N5TGEYCE-21f8dd27",
+    "readyAt": 1781492167651,
+    "deliveredAt": 1781492167651
+  },
+  {
+    "id": "c3b5dd26-0bdc-4c69-9aab-6aef7abccec8",
+    "token": "42df4fcc",
+    "displayNumber": 3,
+    "items": [
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 1,
+        "unitPrice": 3000,
+        "subtotal": 3000
+      }
+    ],
+    "total": 3000,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1781492409584,
+    "createdBy": "barra",
+    "ticketCode": "LRMP4HLZ-10ff77b6",
+    "readyAt": 1781492426148,
+    "deliveredAt": 1781492426156
+  },
+  {
+    "id": "f531d469-a0a7-4d37-a741-25fe1f8ed2f0",
+    "token": "68d05fb5",
+    "displayNumber": 4,
+    "items": [
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 1,
+        "unitPrice": 3000,
+        "subtotal": 3000
+      }
+    ],
+    "total": 3000,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1781492448880,
+    "createdBy": "barra",
+    "ticketCode": "7PVQ3J2D-613e0289",
+    "readyAt": 1781492477094,
+    "deliveredAt": 1781492477133
+  },
+  {
+    "id": "869776de-2b3e-46f2-9411-f321f99518ff",
+    "token": "d2b1611c",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 1,
+        "unitPrice": 3000,
+        "subtotal": 3000
+      }
+    ],
+    "total": 3000,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1781563520775,
+    "createdBy": "barra",
+    "ticketCode": "C4RDQNJ8-c8bf4a32",
+    "readyAt": 1781563527070,
+    "deliveredAt": 1781563527109
+  },
+  {
+    "id": "0f9a5947-3b43-42b9-b4b0-99efcdd30875",
+    "token": "eb45f55f",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 1,
+        "unitPrice": 3000,
+        "subtotal": 3000
+      }
+    ],
+    "total": 3000,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1781564197016,
+    "createdBy": "barra",
+    "ticketCode": "RWJKE2YL-58abb0be",
+    "readyAt": 1781564199684,
+    "deliveredAt": 1781564199684
+  },
+  {
+    "id": "cd236a3d-1e8c-409d-a768-6b9c92b49a83",
+    "token": "b50f935f",
+    "displayNumber": 3,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 1,
+        "unitPrice": 5500,
+        "subtotal": 5500
+      },
+      {
+        "drinkId": 100,
+        "name": "Balde Corona 3x2",
+        "qty": 1,
+        "unitPrice": 3000,
+        "subtotal": 3000
+      }
+    ],
+    "total": 8500,
+    "paymentMethod": "transferencia",
+    "status": "entregado",
+    "createdAt": 1781564213434,
+    "createdBy": "barra",
+    "ticketCode": "BCXGH9JP-a176764d",
+    "readyAt": 1781564217299,
+    "deliveredAt": 1781564217299
+  }
+]

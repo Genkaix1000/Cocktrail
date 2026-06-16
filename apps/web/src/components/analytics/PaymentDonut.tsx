@@ -1,0 +1,143 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { PaymentBreakdown } from "@/lib/analytics";
+
+type Props = {
+  breakdown: PaymentBreakdown[];
+  total: number;
+  isBosko: boolean;
+};
+
+export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // Delay to trigger CSS transition on mount
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const size = 180;
+  const strokeWidth = 25;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const center = size / 2;
+
+  // Build segments
+  let cumulativeOffset = 0;
+  const segments = breakdown.map((b) => {
+    const segmentLength = (b.pct / 100) * circumference;
+    const dashOffset = circumference - cumulativeOffset;
+    cumulativeOffset += segmentLength;
+    return {
+      ...b,
+      segmentLength,
+      dashOffset,
+    };
+  });
+
+  const accentColor = isBosko ? "#4ade80" : "#6db3f2";
+
+  return (
+    <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-5">
+      {/* Title */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest">
+          Distribución por Canal
+        </h3>
+        <span className="text-[10px] font-mono text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
+          {breakdown.length}
+        </span>
+      </div>
+
+      {/* Donut SVG */}
+      <div className="flex justify-center">
+        <div className="relative" style={{ width: size, height: size }}>
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+            className="-rotate-90"
+          >
+            {/* Background ring */}
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="var(--ink-800, #1e293b)"
+              strokeWidth={strokeWidth}
+            />
+            {/* Data segments */}
+            {segments.map((seg) => (
+              <circle
+                key={seg.method}
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${mounted ? seg.segmentLength : 0} ${circumference}`}
+                strokeDashoffset={-seg.dashOffset + circumference}
+                strokeLinecap="butt"
+                className="transition-all duration-700 ease-out"
+              />
+            ))}
+          </svg>
+          {/* Center label */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-400">
+              Total
+            </span>
+            <span
+              className="font-mono text-[20px] font-bold leading-none"
+              style={{ color: accentColor }}
+            >
+              ${total.toLocaleString("es-AR")}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-col gap-2">
+        {breakdown.map((b) => (
+          <div
+            key={b.method}
+            className="flex items-center gap-3 py-1.5 border-t border-ink-850 first:border-t-0"
+          >
+            {/* Colored dot */}
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: b.color }}
+            />
+            {/* Label */}
+            <span className="text-[13px] text-ink-200 flex-1 min-w-0 truncate">
+              {b.label}
+            </span>
+            {/* Count */}
+            <span className="text-[10px] text-ink-500 font-mono tabular">
+              {b.count} ops
+            </span>
+            {/* Amount */}
+            <span className="font-mono text-[13px] text-ink-100 tabular text-right min-w-[80px]">
+              ${b.total.toLocaleString("es-AR")}
+            </span>
+            {/* Pct */}
+            <span className="font-mono text-[11px] text-ink-400 tabular text-right w-[38px]">
+              {b.pct}%
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Empty state */}
+      {breakdown.length === 0 && (
+        <div className="text-center py-8 text-[13px] text-ink-500">
+          Sin datos de pago disponibles
+        </div>
+      )}
+    </div>
+  );
+}

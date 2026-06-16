@@ -1,8 +1,18 @@
 node_modules/
 .next/
 out/
-.env*.local
+dist/
+build/
+.turbo/
 .DS_Store
+
+# ignore all env files except env.example templates
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 
 # tooling local
 .claude/
@@ -16,3 +26,4 @@ paso*-summary.png
 # notas locales del proyecto
 CLAUDE.md
 AGENTS.md
+
