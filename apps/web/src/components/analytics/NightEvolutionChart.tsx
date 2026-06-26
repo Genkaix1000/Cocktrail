@@ -277,9 +277,9 @@ export default function NightEvolutionChart({
             <span className="font-mono text-[11px] font-bold text-ink-50 text-right">
               ${points[hoveredIdx]!.total.toLocaleString("es-AR")}
             </span>
-            <span className="text-[11px] text-ink-300">Transferencia:</span>
+            <span className="text-[11px] text-ink-300">Ventas Web:</span>
             <span className="font-mono text-[11px] text-ink-200 text-right">
-              ${points[hoveredIdx]!.transferencia.toLocaleString("es-AR")}
+              ${points[hoveredIdx]!.web.toLocaleString("es-AR")}
             </span>
             <span className="text-[11px] text-ink-300">Efectivo:</span>
             <span className="font-mono text-[11px] text-ink-200 text-right">

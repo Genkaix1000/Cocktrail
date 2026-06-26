@@ -23,6 +23,17 @@ const EnvSchema = z.object({
   BARMAN_USER: z.string().default("barra"),
   BARMAN_PASS: z.string().default("barra"),
   BAR_CODE: z.string().min(1).max(20).default("BARRA-01"),
+  SUPABASE_URL: z.string().url().default("http://127.0.0.1:54321"),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).default("service-role-key-placeholder"),
+  SUPABASE_CLOUD_URL: z.string().url().optional(),
+  SUPABASE_CLOUD_SERVICE_ROLE_KEY: z.string().optional(),
+
+  // Mercado Pago
+  MP_ACCESS_TOKEN: z.string().optional(),
+  MP_POS_DEVICE_ID: z.string().optional(),
+
+  // Printer Simulation
+  PRINTER_CONNECTED: z.string().default("true"),
 });
 
 function loadEnv() {

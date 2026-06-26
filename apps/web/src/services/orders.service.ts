@@ -25,7 +25,8 @@ export const ordersService = {
     return apiFetch<Order[]>("/api/orders");
   },
 
-  getAuditLogs() {
-    return apiFetch<Order[]>("/api/orders/log");
+  getAuditLogs(all?: boolean) {
+    const url = all ? "/api/orders/log?all=true" : "/api/orders/log";
+    return apiFetch<Order[]>(url);
   },
 };

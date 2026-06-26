@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type {
-  CashSale,
   EventSummary,
   EventTotals,
   NightEvent,
-  Order,
   Theme,
 } from "@cocktrail/shared";
+import type { EventsRepository } from "./events.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
@@ -15,106 +14,224 @@ import { Conflict } from "../../shared/errors/http-errors.js";
 import { computeTotals } from "../../shared/utils/totals.js";
 import { emit } from "../../shared/sse/sse-manager.js";
 import { toSafeConfig } from "../config/config.repository.js";
-
-const HISTORY_CAP = 60;
+import { env } from "../../config/env.js";
 
 export class EventsService {
-  private event: NightEvent;
-  private closedEvents: EventSummary[] = [];
+  private event!: NightEvent;
   private activeTheme: Theme = "normal";
+  private initPromise: Promise<void> | null = null;
+  private isInitialized = false;
 
   constructor(
+    private eventsRepo: EventsRepository,
     private ordersRepo: OrdersRepository,
     private cashSalesRepo: CashSalesRepository,
     private drinksRepo: DrinksRepository,
     private configRepo?: ConfigRepository,
-  ) {
-    this.event = {
-      id: randomUUID(),
-      status: "activo",
-      startedAt: Date.now(),
-      orderCounter: 0,
-    };
-    if (configRepo) {
-      this.activeTheme = configRepo.get().theme;
+  ) {}
+
+  async ensureInitialized(): Promise<void> {
+    if (this.isInitialized) return;
+
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+
+    // Wait up to 15 seconds for initialize to be called and complete
+    const startTime = Date.now();
+    const timeout = 15000;
+    while (!this.isInitialized && (Date.now() - startTime) < timeout) {
+      if (this.initPromise) {
+        await this.initPromise;
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    if (!this.isInitialized) {
+      throw new Error("El servicio de eventos no ha sido inicializado.");
     }
   }
 
-  getCurrentEvent(): NightEvent {
+  async initialize(): Promise<void> {
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+    this.initPromise = (async () => {
+      // 1. Get or create active event from database
+      let active = await this.eventsRepo.getActive();
+      
+      if (active) {
+        // Check if active event is from a previous calendar day
+        const eventDate = new Date(active.startedAt).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+        const todayDate = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+        if (eventDate !== todayDate && active.startedAt < Date.now()) {
+          console.log(`[EventsService] Active event ${active.id} is from a past day (${eventDate}). Auto-closing on startup...`);
+          const closedAt = Date.now();
+          const orders = await this.ordersRepo.listForEvent(active.id);
+          const cashSales = await this.cashSalesRepo.listForEvent(active.id);
+          const totals = computeTotals(orders, cashSales);
+          
+          active.status = "cerrado";
+          active.closedAt = closedAt;
+          active.closedBy = "sistema";
+          
+          await this.eventsRepo.update(active.id, {
+            status: "cerrado",
+            closedAt,
+            closedBy: "sistema",
+          });
+
+          // Sync this event to cloud in background
+          this.syncEventToCloudBackground(active, totals);
+          
+          // Force a new event creation
+          active = null;
+        }
+      }
+
+      if (!active) {
+        active = {
+          id: randomUUID(),
+          status: "activo",
+          startedAt: Date.now(),
+          orderCounter: 0,
+        };
+        await this.eventsRepo.create(active);
+      }
+      this.event = active;
+
+      if (this.configRepo) {
+        const config = await this.configRepo.get();
+        this.activeTheme = config.theme;
+      }
+      this.isInitialized = true;
+
+      // Trigger automatic sync of all pending events in the background on startup
+      import("../sync/sync.service.js").then(({ syncService }) => {
+        syncService.syncAllPendingEvents(this.ordersRepo, this.cashSalesRepo)
+          .then((res) => {
+            if (res.successCount > 0 || res.failedCount > 0) {
+              console.log(`[EventsService] Auto-sync completed: ${res.successCount} succeeded, ${res.failedCount} failed.`);
+            }
+          })
+          .catch((err) => console.error("[EventsService] Auto-sync failed:", err));
+      }).catch(console.error);
+    })();
+    return this.initPromise;
+  }
+
+  async getCurrentEvent(): Promise<NightEvent> {
+    await this.ensureInitialized();
     return this.event;
   }
 
-  getEventStatus(): string {
+  async getEventStatus(): Promise<string> {
+    await this.ensureInitialized();
     return this.event.status;
   }
 
-  incrementOrderCounter(): number {
-    this.event.orderCounter += 1;
-    return this.event.orderCounter;
+  async incrementOrderCounter(): Promise<number> {
+    await this.ensureInitialized();
+    const nextCounter = this.event.orderCounter + 1;
+    this.event.orderCounter = nextCounter;
+    await this.eventsRepo.update(this.event.id, { orderCounter: nextCounter });
+    return nextCounter;
   }
 
-  getEventTotals(): EventTotals {
-    return computeTotals(
-      this.ordersRepo.list(),
-      this.cashSalesRepo.list(),
-    );
+  async getEventTotals(): Promise<EventTotals> {
+    await this.ensureInitialized();
+    const orders = await this.ordersRepo.listForEvent(this.event.id);
+    const cashSales = await this.cashSalesRepo.listForEvent(this.event.id);
+    return computeTotals(orders, cashSales);
   }
 
-  closeEvent(): EventSummary {
+  async closeEvent(closedBy: string = "desconocido"): Promise<EventSummary> {
+    await this.ensureInitialized();
     if (this.event.status !== "activo") {
       throw new Conflict("El evento ya está cerrado.");
     }
 
+    const closedAt = Date.now();
+    const orders = await this.ordersRepo.listForEvent(this.event.id);
+    const cashSales = await this.cashSalesRepo.listForEvent(this.event.id);
+    const totals = computeTotals(orders, cashSales);
+
+    // Update status to closed
     this.event.status = "cerrado";
-    this.event.closedAt = Date.now();
+    this.event.closedAt = closedAt;
+    this.event.closedBy = closedBy;
+
+    const closedEvent = await this.eventsRepo.update(this.event.id, {
+      status: "cerrado",
+      closedAt,
+      closedBy,
+    });
 
     const summary: EventSummary = {
-      ...this.event,
-      totals: this.getEventTotals(),
-      orders: this.ordersRepo.list(),
-      cashSales: this.cashSalesRepo.list(),
+      ...closedEvent,
+      totals,
+      orders,
+      cashSales,
     };
-
-    this.closedEvents.unshift(summary);
-    if (this.closedEvents.length > HISTORY_CAP) {
-      this.closedEvents.length = HISTORY_CAP;
-    }
 
     emit({ type: "event.closed", summary });
 
-    // Reset
-    this.event = {
+    // Perform cloud sync in the background
+    this.syncEventToCloudBackground(closedEvent, totals);
+
+    // Create next active event
+    const nextEvent: NightEvent = {
       id: randomUUID(),
       status: "activo",
       startedAt: Date.now(),
       orderCounter: 0,
     };
-    this.ordersRepo.clear();
-    this.cashSalesRepo.clear();
+    await this.eventsRepo.create(nextEvent);
+    this.event = nextEvent;
 
     return summary;
   }
 
-  listClosedEvents(): EventSummary[] {
-    return [...this.closedEvents];
+  async listClosedEvents(): Promise<EventSummary[]> {
+    await this.ensureInitialized();
+    const closed = await this.eventsRepo.listClosed();
+    const summaries: EventSummary[] = [];
+    for (const ev of closed) {
+      const orders = await this.ordersRepo.listForEvent(ev.id);
+      const cashSales = await this.cashSalesRepo.listForEvent(ev.id);
+      const totals = computeTotals(orders, cashSales);
+      summaries.push({
+        ...ev,
+        totals,
+        orders,
+        cashSales,
+      });
+    }
+    return summaries;
   }
 
-  setTheme(theme: Theme): void {
+  async setTheme(theme: Theme): Promise<void> {
+    await this.ensureInitialized();
     if (this.activeTheme === theme) return;
     this.activeTheme = theme;
     if (this.configRepo) {
-      this.configRepo.update({ theme });
+      await this.configRepo.update({ theme });
     }
-    const customTheme = this.configRepo ? this.configRepo.get().customTheme : null;
+    const config = this.configRepo ? await this.configRepo.get() : null;
+    const customTheme = config ? config.customTheme : null;
     emit({ type: "theme.changed", theme, customTheme });
   }
 
-  getTheme(): Theme {
+  async getTheme(): Promise<Theme> {
+    await this.ensureInitialized();
     return this.activeTheme;
   }
 
-  getPublicConfig() {
-    const config = this.configRepo ? toSafeConfig(this.configRepo.get()) : {
+  async getPublicConfig() {
+    await this.ensureInitialized();
+    const config = this.configRepo ? toSafeConfig(await this.configRepo.get()) : {
       theme: this.activeTheme,
       brandName: "Cocktrail",
       logoUrl: "",
@@ -132,23 +249,46 @@ export class EventsService {
     };
   }
 
-  snapshot() {
+  async snapshot() {
+    await this.ensureInitialized();
+    const drinks = await this.drinksRepo.list();
+    const orders = await this.ordersRepo.listForEvent(this.event.id);
+    const cashSales = await this.cashSalesRepo.listForEvent(this.event.id);
+    const totals = computeTotals(orders, cashSales);
     return {
-      event: this.getCurrentEvent(),
-      drinks: this.drinksRepo.list(),
-      orders: this.ordersRepo.list(),
-      cashSales: this.cashSalesRepo.list(),
-      totals: this.getEventTotals(),
+      event: this.event,
+      drinks,
+      orders,
+      cashSales,
+      totals,
       activeTheme: this.activeTheme,
     };
   }
 
-  /** Seed para el demo — agrega un EventSummary fabricado al historial. */
-  seedClosedEvent(summary: EventSummary): void {
-    this.closedEvents.push(summary);
-    this.closedEvents.sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0));
-    if (this.closedEvents.length > HISTORY_CAP) {
-      this.closedEvents.length = HISTORY_CAP;
+  private async syncEventToCloudBackground(event: NightEvent, totals: EventTotals) {
+    import("../sync/sync.service.js").then(({ syncService }) => {
+      syncService.pushEventData(event.id, event, totals).catch(console.error);
+    });
+  }
+
+  async seedClosedEvent(summary: EventSummary): Promise<void> {
+    await this.ensureInitialized();
+    const event: NightEvent = {
+      id: summary.id,
+      status: summary.status,
+      startedAt: summary.startedAt,
+      closedAt: summary.closedAt,
+      orderCounter: summary.orderCounter,
+      closedBy: summary.closedBy,
+    };
+    await this.eventsRepo.create(event);
+
+    for (const o of summary.orders) {
+      await this.ordersRepo.create(o, event.id);
+    }
+
+    for (const cs of summary.cashSales) {
+      await this.cashSalesRepo.add(cs, event.id);
     }
   }
 }

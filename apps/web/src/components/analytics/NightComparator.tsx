@@ -67,8 +67,8 @@ function buildRows(a: EventSummary, b: EventSummary): ComparisonRow[] {
   const avgA = ticketsA > 0 ? Math.round(totalA / ticketsA) : 0;
   const avgB = ticketsB > 0 ? Math.round(totalB / ticketsB) : 0;
 
-  const transA = a.totals.transferenciaTotal;
-  const transB = b.totals.transferenciaTotal;
+  const webSalesA = a.totals.webTotal;
+  const webSalesB = b.totals.webTotal;
 
   const efA = a.totals.efectivoTotal;
   const efB = b.totals.efectivoTotal;
@@ -108,13 +108,13 @@ function buildRows(a: EventSummary, b: EventSummary): ComparisonRow[] {
       delta: computeDeltaPct(avgA, avgB),
     },
     {
-      label: "Transferencia",
-      valueA: formatMoney(transA),
-      valueB: formatMoney(transB),
-      rawA: transA,
-      rawB: transB,
+      label: "Ventas Web",
+      valueA: formatMoney(webSalesA),
+      valueB: formatMoney(webSalesB),
+      rawA: webSalesA,
+      rawB: webSalesB,
       winMode: "higher",
-      delta: computeDeltaPct(transA, transB),
+      delta: computeDeltaPct(webSalesA, webSalesB),
     },
     {
       label: "Efectivo",

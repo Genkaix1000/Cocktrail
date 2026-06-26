@@ -7,11 +7,11 @@ export function createCashSalesController(service: CashSalesService): Router {
   const router = Router();
 
   // POST /api/cash-sales — agregar venta (admin y caja)
-  router.post("/", authMiddleware, requireRole("admin", "caja"), validate(CreateCashSaleSchema), (req, res, next) => {
+  router.post("/", authMiddleware, requireRole("admin", "caja"), validate(CreateCashSaleSchema), async (req, res, next) => {
     try {
       const { amount, description } = req.body;
       const addedBy = req.session?.username || "admin";
-      const sale = service.addCashSale({ amount, description }, addedBy);
+      const sale = await service.addCashSale({ amount, description }, addedBy);
       res.status(201).json(sale);
     } catch (err) {
       next(err);
@@ -19,8 +19,12 @@ export function createCashSalesController(service: CashSalesService): Router {
   });
 
   // GET /api/cash-sales — listar (admin only)
-  router.get("/", authMiddleware, requireRole("admin"), (_req, res) => {
-    res.json(service.listCashSales());
+  router.get("/", authMiddleware, requireRole("admin"), async (_req, res, next) => {
+    try {
+      res.json(await service.listCashSales());
+    } catch (err) {
+      next(err);
+    }
   });
 
   return router;

@@ -18,7 +18,7 @@ export function createAuthController(usersRepo: UsersRepository): Router {
   const router = Router();
 
   // POST /api/auth/login
-  router.post("/login", loginLimiter, validate(LoginSchema), (req, res, next) => {
+  router.post("/login", loginLimiter, validate(LoginSchema), async (req, res, next) => {
     try {
       const { username, password, captchaAnswer } = req.body;
       const ip = req.ip || "unknown";
@@ -41,7 +41,7 @@ export function createAuthController(usersRepo: UsersRepository): Router {
       }
 
       // 2. Perform authentication
-      const user = authenticate(username, password, usersRepo);
+      const user = await authenticate(username, password, usersRepo);
       if (!user) {
         // Register failed attempt
         const failedInfo = registerFailedAttempt(ip);
@@ -70,7 +70,7 @@ export function createAuthController(usersRepo: UsersRepository): Router {
   });
 
   // GET /api/auth/me
-  router.get("/me", (req, res) => {
+  router.get("/me", async (req, res) => {
     const raw = req.cookies?.[COOKIE_NAME];
     const session = verifySession(raw);
     if (!session) {
@@ -108,7 +108,7 @@ export function createAuthController(usersRepo: UsersRepository): Router {
         cancelarTickets: true,
       };
     } else {
-      const dbUser = usersRepo.findByUsername(session.username);
+      const dbUser = await usersRepo.findByUsername(session.username);
       if (dbUser) {
         permissions = { ...permissions, ...dbUser.permissions };
       } else if (session.role === "caja") {

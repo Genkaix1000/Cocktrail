@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { CashSale, NewCashSaleInput } from "@cocktrail/shared";
+import type { CashSale, NewCashSaleInput, NightEvent } from "@cocktrail/shared";
 import type { CashSalesRepository } from "./cash-sales.repository.js";
 import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
 import { emit } from "../../shared/sse/sse-manager.js";
@@ -7,11 +7,12 @@ import { emit } from "../../shared/sse/sse-manager.js";
 export class CashSalesService {
   constructor(
     private repo: CashSalesRepository,
-    private getEventStatus: () => string,
+    private getActiveEvent: () => Promise<NightEvent | null>,
   ) {}
 
-  addCashSale(input: NewCashSaleInput, addedBy: string): CashSale {
-    if (this.getEventStatus() !== "activo") {
+  async addCashSale(input: NewCashSaleInput, addedBy: string): Promise<CashSale> {
+    const event = await this.getActiveEvent();
+    if (!event || event.status !== "activo") {
       throw new Conflict("No hay un evento activo.");
     }
     if (input.amount <= 0) throw new BadRequest("Monto inválido.");
@@ -24,12 +25,14 @@ export class CashSalesService {
       createdAt: Date.now(),
     };
 
-    this.repo.add(cashSale);
+    await this.repo.add(cashSale, event.id);
     emit({ type: "cash_sale.added", cashSale });
     return cashSale;
   }
 
-  listCashSales(): CashSale[] {
-    return this.repo.list();
+  async listCashSales(): Promise<CashSale[]> {
+    const event = await this.getActiveEvent();
+    if (!event) return [];
+    return this.repo.listForEvent(event.id);
   }
 }

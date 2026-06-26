@@ -1,13 +1,8 @@
 export type Role = "admin" | "caja" | "barman";
 export type CustomTheme = {
-  primary: string;
-  background: string;
-  cardBg: string;
-  accent: string;
-  borders: string;
-  textColor: string;
-  success: string;
-  danger: string;
+  backgroundColor: string;
+  surfaceColor: string;
+  accentColor: string;
 };
 export type Theme = "normal" | "bosko" | "custom";
 
@@ -40,7 +35,7 @@ export type OrderStatus =
   | "entregado"
   | "cancelado";
 
-export type PaymentMethod = "transferencia" | "efectivo" | "qr" | "debito";
+export type PaymentMethod = "efectivo" | "qr" | "debito";
 
 export type Order = {
   id: string;
@@ -78,6 +73,7 @@ export type NightEvent = {
   startedAt: number;
   closedAt?: number;
   orderCounter: number;
+  closedBy?: string;
 };
 
 export type DrinkSold = {
@@ -88,8 +84,8 @@ export type DrinkSold = {
 };
 
 export type EventTotals = {
-  transferenciaTotal: number;
-  transferenciaCount: number;
+  webTotal: number;
+  webCount: number;
   efectivoTotal: number;
   efectivoCount: number;
   qrTotal: number;

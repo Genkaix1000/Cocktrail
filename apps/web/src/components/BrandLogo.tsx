@@ -3,11 +3,11 @@ import { useTheme } from "./ThemeProvider";
 export type BrandSize = "sm" | "md" | "lg" | "xl" | "hero";
 
 const SCALE: Record<BrandSize, number> = {
-  sm: 0.9,
-  md: 1.25,
-  lg: 1.55,
-  xl: 1.85,
-  hero: 2.3,
+  sm: 0.7,
+  md: 0.95,
+  lg: 1.2,
+  xl: 1.45,
+  hero: 1.8,
 };
 
 type Props = {
@@ -27,11 +27,18 @@ export function BrandLogo({ size = "md", className = "" }: Props) {
       logoSize: 40,
       textLogoValue: "Cocktrail",
       textLogoSize: 26,
+      isDark: true,
     };
   }
 
   const { useLogoUrl, logoUrl, logoSize, textLogoValue, textLogoSize } = themeProps;
   const scale = SCALE[size];
+  
+  const logoStyle: React.CSSProperties = {
+    height: `${logoSize * scale}px`,
+    width: "auto",
+    maxWidth: "100%",
+  };
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
@@ -41,11 +48,7 @@ export function BrandLogo({ size = "md", className = "" }: Props) {
           src={logoUrl}
           alt={textLogoValue || "Logo"}
           className="object-contain"
-          style={{
-            height: `${logoSize * scale}px`,
-            width: "auto",
-            maxWidth: "100%",
-          }}
+          style={logoStyle}
         />
       ) : (
         <span

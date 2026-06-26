@@ -4,50 +4,146 @@ import type {
   UsersRepository,
   SafeUser,
   UserPermissions,
+  StaffUser,
 } from "./users.repository.js";
 import { hashPassword } from "./users.repository.js";
 import { BadRequest, NotFound, Conflict } from "../../shared/errors/http-errors.js";
 
+const SYSTEM_USERS: SafeUser[] = [
+  {
+    id: "system-admin",
+    username: "admin",
+    role: "admin",
+    permissions: {
+      closeNight: true,
+      modifyCarta: true,
+      manageUsers: true,
+      monitoreo: true,
+      metricas: true,
+      historial: true,
+      general: true,
+      carta: true,
+      pagos: true,
+      staff: true,
+      cancelarTickets: true,
+    },
+    createdAt: 1782229602710,
+  },
+  {
+    id: "system-caja",
+    username: "caja",
+    role: "caja",
+    permissions: {
+      closeNight: false,
+      modifyCarta: false,
+      manageUsers: false,
+      monitoreo: false,
+      metricas: false,
+      historial: true,
+      general: false,
+      carta: false,
+      pagos: false,
+      staff: false,
+      cancelarTickets: true,
+    },
+    createdAt: 1782229602710,
+  },
+  {
+    id: "system-cajavip",
+    username: "cajavip",
+    role: "caja",
+    permissions: {
+      closeNight: true,
+      modifyCarta: false,
+      manageUsers: false,
+      monitoreo: false,
+      metricas: true,
+      historial: true,
+      general: false,
+      carta: false,
+      pagos: false,
+      staff: false,
+      cancelarTickets: true,
+    },
+    createdAt: 1782229602710,
+  },
+  {
+    id: "system-barra",
+    username: "barra",
+    role: "barman",
+    permissions: {
+      closeNight: false,
+      modifyCarta: false,
+      manageUsers: false,
+      monitoreo: false,
+      metricas: false,
+      historial: false,
+      general: false,
+      carta: false,
+      pagos: false,
+      staff: false,
+      cancelarTickets: true,
+    },
+    createdAt: 1782229602710,
+  },
+];
+
+const RESERVED_NAMES = ["admin", "caja", "barra", "cajavip"];
+
 export class UsersService {
   constructor(private repo: UsersRepository) {}
 
-  listUsers(): SafeUser[] {
-    return this.repo.list();
+  async listUsers(): Promise<SafeUser[]> {
+    const dbUsers = await this.repo.list();
+    const systemUsernames = new Set(SYSTEM_USERS.map(u => u.username));
+    
+    // Filter out db users that have system usernames to avoid duplicates
+    const filteredDb = dbUsers.filter(u => !systemUsernames.has(u.username.toLowerCase()));
+    
+    return [...SYSTEM_USERS, ...filteredDb];
   }
 
-  createUser(input: {
+  async createUser(input: {
     username: string;
     password: string;
     role: Role;
     permissions: UserPermissions;
-  }): SafeUser {
-    // Validar que no exista un usuario con el mismo nombre
-    const existing = this.repo.findByUsername(input.username);
+  }): Promise<SafeUser> {
+    const cleanUsername = input.username.trim();
+    if (RESERVED_NAMES.includes(cleanUsername.toLowerCase())) {
+      throw new Conflict(`El nombre de usuario "${cleanUsername}" está reservado por el sistema.`);
+    }
+
+    if (!cleanUsername || cleanUsername.length === 0) {
+      throw new BadRequest("El nombre de usuario es requerido.");
+    }
+
+    const existing = await this.repo.findByUsername(cleanUsername);
     if (existing) {
-      throw new Conflict(`Ya existe un usuario con el nombre "${input.username}"`);
+      throw new Conflict(`Ya existe un usuario con el nombre "${cleanUsername}"`);
     }
 
-    if (!input.username || input.username.trim().length === 0) {
-      throw new BadRequest("El nombre de usuario es requerido");
+    const cleanPermissions = { ...input.permissions };
+    if (cleanPermissions.cancelarTickets) {
+      cleanPermissions.historial = true;
     }
 
-    const user = {
+    const user: StaffUser = {
       id: randomUUID(),
-      username: input.username.trim(),
+      username: cleanUsername,
       passwordHash: hashPassword(input.password),
       role: input.role,
-      permissions: input.permissions,
+      permissions: cleanPermissions,
       createdAt: Date.now(),
     };
 
-    this.repo.create(user);
+    await this.repo.create(user);
 
-    // Retornar sin el hash
     const { passwordHash: _ph, ...safe } = user;
     return safe;
   }
 
-  updateUser(
+  async updateUser(
     id: string,
     input: {
       username?: string;
@@ -55,18 +151,30 @@ export class UsersService {
       role?: Role;
       permissions?: Partial<UserPermissions>;
     }
-  ): SafeUser {
-    const existing = this.repo.findById(id);
+  ): Promise<SafeUser> {
+    if (id.startsWith("system-")) {
+      throw new BadRequest("No se puede modificar un usuario del sistema");
+    }
+
+    const existing = await this.repo.findById(id);
     if (!existing) {
       throw new NotFound(`Usuario con id ${id} no encontrado`);
     }
 
+    if (RESERVED_NAMES.includes(existing.username.toLowerCase())) {
+      throw new BadRequest("No se puede modificar un usuario del sistema");
+    }
+
     if (input.username && input.username !== existing.username) {
-      const dup = this.repo.findByUsername(input.username);
-      if (dup) {
-        throw new Conflict(`Ya existe un usuario con el nombre "${input.username}"`);
+      const cleanUsername = input.username.trim();
+      if (RESERVED_NAMES.includes(cleanUsername.toLowerCase())) {
+        throw new Conflict(`El nombre de usuario "${cleanUsername}" está reservado por el sistema.`);
       }
-      existing.username = input.username.trim();
+      const dup = await this.repo.findByUsername(cleanUsername);
+      if (dup) {
+        throw new Conflict(`Ya existe un usuario con el nombre "${cleanUsername}"`);
+      }
+      existing.username = cleanUsername;
     }
 
     if (input.password) {
@@ -78,23 +186,36 @@ export class UsersService {
     }
 
     if (input.permissions) {
-      existing.permissions = {
+      const merged = {
         ...existing.permissions,
         ...input.permissions,
       };
+      if (merged.cancelarTickets) {
+        merged.historial = true;
+      }
+      existing.permissions = merged;
     }
 
-    this.repo.update(existing);
+    await this.repo.update(existing);
 
     const { passwordHash: _ph, ...safe } = existing;
     return safe;
   }
 
-  deleteUser(id: string): void {
-    const existing = this.repo.findById(id);
+  async deleteUser(id: string): Promise<void> {
+    if (id.startsWith("system-")) {
+      throw new BadRequest("No se puede eliminar un usuario del sistema");
+    }
+
+    const existing = await this.repo.findById(id);
     if (!existing) {
       throw new NotFound(`Usuario con id ${id} no encontrado`);
     }
-    this.repo.delete(id);
+
+    if (RESERVED_NAMES.includes(existing.username.toLowerCase())) {
+      throw new BadRequest("No se puede eliminar un usuario del sistema");
+    }
+
+    await this.repo.delete(id);
   }
 }

@@ -14,9 +14,13 @@ export function createConfigController(repo: ConfigRepository, eventsService?: E
     "/",
     authMiddleware,
     requireRole("admin"),
-    (_req, res) => {
-      const config = repo.get();
-      res.json(toSafeConfig(config));
+    async (_req, res, next) => {
+      try {
+        const config = await repo.get();
+        res.json(toSafeConfig(config));
+      } catch (err) {
+        next(err);
+      }
     },
   );
 
@@ -26,29 +30,33 @@ export function createConfigController(repo: ConfigRepository, eventsService?: E
     authMiddleware,
     requireRole("admin"),
     validate(UpdateConfigSchema),
-    (req, res) => {
-      const updated = repo.update(req.body);
-      if (eventsService) {
-        if (req.body.theme) {
-          eventsService.setTheme(req.body.theme);
+    async (req, res, next) => {
+      try {
+        const updated = await repo.update(req.body);
+        if (eventsService) {
+          if (req.body.theme) {
+            await eventsService.setTheme(req.body.theme);
+          }
         }
-      }
-      
-      const safe = toSafeConfig(updated);
-      emit({
-        type: "theme.changed",
-        theme: safe.theme,
-        customTheme: safe.customTheme,
-        useLogoUrl: safe.useLogoUrl,
-        logoUrl: safe.logoUrl,
-        logoSize: safe.logoSize,
-        textLogoValue: safe.textLogoValue,
-        textLogoSize: safe.textLogoSize,
-        clubId: safe.clubId,
-        clubName: safe.clubName,
-      });
+        
+        const safe = toSafeConfig(updated);
+        emit({
+          type: "theme.changed",
+          theme: safe.theme,
+          customTheme: safe.customTheme,
+          useLogoUrl: safe.useLogoUrl,
+          logoUrl: safe.logoUrl,
+          logoSize: safe.logoSize,
+          textLogoValue: safe.textLogoValue,
+          textLogoSize: safe.textLogoSize,
+          clubId: safe.clubId,
+          clubName: safe.clubName,
+        });
 
-      res.json(safe);
+        res.json(safe);
+      } catch (err) {
+        next(err);
+      }
     },
   );
 

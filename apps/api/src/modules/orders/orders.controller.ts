@@ -14,14 +14,14 @@ export function createOrdersController(
   const router = Router();
 
   // POST /api/orders — crear pedido (público)
-  router.post("/", orderLimiter, validate(CreateOrderSchema), (req, res, next) => {
+  router.post("/", orderLimiter, validate(CreateOrderSchema), async (req, res, next) => {
     try {
       const { items, paymentMethod } = req.body;
       const sessionCookie = req.cookies?.[COOKIE_NAME];
       const session = verifySession(sessionCookie);
       const createdBy = session ? session.username : "Cliente";
 
-      const order = service.createOrder({ items, paymentMethod }, createdBy);
+      const order = await service.createOrder({ items, paymentMethod }, createdBy);
       res.status(201).json(order);
     } catch (err) {
       next(err);
@@ -29,32 +29,49 @@ export function createOrdersController(
   });
 
   // GET /api/orders — listar todos (staff only)
-  router.get("/", authMiddleware, requireRole("admin", "caja"), (_req, res) => {
-    res.json(service.listOrders());
+  router.get("/", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
+    try {
+      res.json(await service.listOrders());
+    } catch (err) {
+      next(err);
+    }
   });
 
   // GET /api/orders/log — historial de auditoría de todos los tickets (admin only)
-  router.get("/log", authMiddleware, requireRole("admin"), (_req, res) => {
-    res.json(service.getOrdersLog());
+  router.get("/log", authMiddleware, requireRole("admin"), async (req, res, next) => {
+    try {
+      const all = req.query.all === "true";
+      res.json(await service.getOrdersLog(all));
+    } catch (err) {
+      next(err);
+    }
   });
 
   // GET /api/orders/active — pedidos activos (staff only)
-  router.get("/active", authMiddleware, requireRole("admin", "caja", "barman"), (_req, res) => {
-    res.json(service.getActiveOrders());
+  router.get("/active", authMiddleware, requireRole("admin", "caja", "barman"), async (_req, res, next) => {
+    try {
+      res.json(await service.getActiveOrders());
+    } catch (err) {
+      next(err);
+    }
   });
 
   // GET /api/orders/by-token/:token — buscar por token (público, para el cliente)
-  router.get("/by-token/:token", (req, res) => {
-    const order = service.getOrderByToken(req.params.token);
-    if (!order) {
-      res.status(404).json({ error: "Pedido no encontrado" });
-      return;
+  router.get("/by-token/:token", async (req, res, next) => {
+    try {
+      const order = await service.getOrderByToken(req.params.token);
+      if (!order) {
+        res.status(404).json({ error: "Pedido no encontrado" });
+        return;
+      }
+      res.json(order);
+    } catch (err) {
+      next(err);
     }
-    res.json(order);
   });
 
   // PATCH /api/orders/:id — cambiar estado (staff only)
-  router.patch("/:id", authMiddleware, requireRole("admin", "caja", "barman"), validate(UpdateOrderStatusSchema), (req, res, next) => {
+  router.patch("/:id", authMiddleware, requireRole("admin", "caja", "barman"), validate(UpdateOrderStatusSchema), async (req, res, next) => {
     try {
       const { status } = req.body;
       const username = req.session?.username || "desconocido";
@@ -63,7 +80,7 @@ export function createOrdersController(
       // If they want to cancel, check if they have cancelarTickets permission
       if (status === "cancelado") {
         if (role !== "admin") {
-          const dbUser = usersRepo.findByUsername(username);
+          const dbUser = await usersRepo.findByUsername(username);
           const hasCancel = dbUser
             ? dbUser.permissions.cancelarTickets
             : (role === "barman" ? true : false); // default barman has it, default caja doesn't
@@ -73,7 +90,7 @@ export function createOrdersController(
         }
       }
 
-      const order = service.updateOrderStatus(req.params.id as string, status, username);
+      const order = await service.updateOrderStatus(req.params.id as string, status, username);
       res.json(order);
     } catch (err) {
       next(err);

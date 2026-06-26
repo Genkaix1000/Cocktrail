@@ -1,15 +1,97 @@
 import { env } from "./config/env.js";
 import { app, eventsService } from "./app.js";
+import { syncService } from "./modules/sync/sync.service.js";
 import { seedHistoryDemo } from "./data/seed-history.js";
+import { supabase } from "./shared/supabase.js";
+import { exec } from "node:child_process";
 
-// Seed del historial demo (idempotente)
-if (eventsService.listClosedEvents().length === 0) {
-  seedHistoryDemo(eventsService);
-  console.log("[boot] Historial demo seedeado");
+async function ensureDatabaseConnection(): Promise<void> {
+  const maxAttempts = 3;
+  let connected = false;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const { error } = await supabase.from("night_events").select("id").limit(1);
+      if (!error || (!error.message.includes("fetch failed") && !error.message.includes("ECONNREFUSED"))) {
+        connected = true;
+        break;
+      }
+      console.warn(`[boot] Connection attempt ${attempt}/${maxAttempts} failed: ${error.message}`);
+    } catch (err: any) {
+      console.warn(`[boot] Connection attempt ${attempt}/${maxAttempts} exception: ${err.message || err}`);
+    }
+
+    if (attempt === 1) {
+      console.log("[boot] ⚠️ Local database connection refused. Attempting to start database services...");
+      await new Promise<void>((resolve) => {
+        // Try starting via supabase CLI first, fallback to docker compose
+        exec("pnpm exec supabase start", (errSupabase, stdoutSupabase, stderrSupabase) => {
+          if (errSupabase) {
+            console.warn("[boot] Supabase CLI start failed or skipped. Trying Docker Compose...");
+            exec("docker compose up -d", (errDocker, stdoutDocker, stderrDocker) => {
+              if (errDocker) {
+                console.error("[boot] Docker Compose up failed:", errDocker.message);
+              } else {
+                console.log("[boot] docker compose up -d executed:", stdoutDocker.trim() || stderrDocker.trim());
+              }
+              resolve();
+            });
+          } else {
+            console.log("[boot] Supabase CLI started:", stdoutSupabase.trim() || stderrSupabase.trim());
+            resolve();
+          }
+        });
+      });
+    }
+
+    if (attempt < maxAttempts) {
+      console.log(`[boot] Waiting 5 seconds before retry...`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
+
+  if (!connected) {
+    throw new Error("Could not connect to the local database after auto-healing attempts.");
+  }
 }
 
-app.listen(env.PORT, () => {
-  console.log(`🍸 Cocktrail API corriendo en http://localhost:${env.PORT}`);
-  console.log(`   CORS: ${env.FRONTEND_URL}`);
-  console.log(`   Env: ${env.NODE_ENV}`);
+async function boot() {
+  // 1. Start listening on configured port IMMEDIATELY so the port is open and Next.js doesn't receive ECONNREFUSED
+  const server = app.listen(env.PORT, () => {
+    console.log(`🍸 Cocktrail API corriendo en http://localhost:${env.PORT}`);
+    console.log(`   CORS: ${env.FRONTEND_URL}`);
+    console.log(`   Env: ${env.NODE_ENV}`);
+  });
+
+  // 2. Perform self-healing local DB connection check and initialization
+  try {
+    console.log("[boot] Checking local database connection...");
+    await ensureDatabaseConnection();
+    console.log("[boot] Local database connection verified.");
+
+    // Initialize events service (queries local database)
+    await eventsService.initialize();
+    console.log("[boot] EventsService initialized");
+
+    // Seed the closed night history demo if database is empty
+    const closed = await eventsService.listClosedEvents();
+    if (closed.length === 0) {
+      await seedHistoryDemo(eventsService);
+      console.log("[boot] Historial demo seedeado");
+    }
+  } catch (err: any) {
+    console.error("❌ Failed to initialize local database on boot:", err.message || err);
+    // Keep the server running even if DB is down so the UI displays diagnostics
+  }
+
+  // 3. Ensure local master data is seeded in the background (no Cloud Pull on boot)
+  console.log("[boot] Ensuring local master data is seeded...");
+  syncService.ensureLocalMasterDataSeeded()
+    .then(() => console.log("[boot] Local master data check completed."))
+    .catch((err) => console.error("[boot] Local master data check failed:", err));
+}
+
+boot().catch((err) => {
+  console.error("❌ Failed to boot server process:", err);
+  process.exit(1);
 });

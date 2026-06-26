@@ -11,8 +11,12 @@ export function createUsersController(service: UsersService): Router {
     "/",
     authMiddleware,
     requireRole("admin"),
-    (_req, res) => {
-      res.json(service.listUsers());
+    async (_req, res, next) => {
+      try {
+        res.json(await service.listUsers());
+      } catch (err) {
+        next(err);
+      }
     },
   );
 
@@ -22,9 +26,9 @@ export function createUsersController(service: UsersService): Router {
     authMiddleware,
     requireRole("admin"),
     validate(CreateUserSchema),
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
-        const user = service.createUser(req.body);
+        const user = await service.createUser(req.body);
         res.status(201).json(user);
       } catch (err) {
         next(err);
@@ -37,9 +41,9 @@ export function createUsersController(service: UsersService): Router {
     "/:id",
     authMiddleware,
     requireRole("admin"),
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
-        service.deleteUser(req.params.id as string);
+        await service.deleteUser(req.params.id as string);
         res.json({ ok: true });
       } catch (err) {
         next(err);
@@ -53,9 +57,9 @@ export function createUsersController(service: UsersService): Router {
     authMiddleware,
     requireRole("admin"),
     validate(UpdateUserSchema),
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
-        const user = service.updateUser(req.params.id as string, req.body);
+        const user = await service.updateUser(req.params.id as string, req.body);
         res.json(user);
       } catch (err) {
         next(err);

@@ -7,19 +7,23 @@ export function createDrinksController(service: DrinksService): Router {
   const router = Router();
 
   // GET /api/drinks — público (la carta se lee sin auth)
-  router.get("/", (_req, res) => {
-    res.json(service.listDrinks());
+  router.get("/", async (_req, res, next) => {
+    try {
+      res.json(await service.listDrinks());
+    } catch (err) {
+      next(err);
+    }
   });
 
   // GET /api/drinks/:id
-  router.get("/:id", (req, res, next) => {
+  router.get("/:id", async (req, res, next) => {
     try {
       const id = Number(req.params.id);
       if (Number.isNaN(id)) {
         res.status(400).json({ error: "ID inválido" });
         return;
       }
-      const drink = service.getDrink(id);
+      const drink = await service.getDrink(id);
       if (!drink) {
         res.status(404).json({ error: "Trago no encontrado" });
         return;
@@ -36,9 +40,9 @@ export function createDrinksController(service: DrinksService): Router {
     authMiddleware,
     requireRole("admin"),
     validate(CreateDrinkSchema),
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
-        const drink = service.createDrink(req.body);
+        const drink = await service.createDrink(req.body);
         res.status(201).json(drink);
       } catch (err) {
         next(err);
@@ -52,14 +56,14 @@ export function createDrinksController(service: DrinksService): Router {
     authMiddleware,
     requireRole("admin"),
     validate(UpdateDrinkSchema),
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
         const id = Number(req.params.id);
         if (Number.isNaN(id)) {
           res.status(400).json({ error: "ID inválido" });
           return;
         }
-        const drink = service.updateDrink(id, req.body);
+        const drink = await service.updateDrink(id, req.body);
         res.json(drink);
       } catch (err) {
         next(err);
@@ -72,14 +76,14 @@ export function createDrinksController(service: DrinksService): Router {
     "/:id",
     authMiddleware,
     requireRole("admin"),
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
         const id = Number(req.params.id);
         if (Number.isNaN(id)) {
           res.status(400).json({ error: "ID inválido" });
           return;
         }
-        service.deleteDrink(id);
+        await service.deleteDrink(id);
         res.json({ ok: true });
       } catch (err) {
         next(err);

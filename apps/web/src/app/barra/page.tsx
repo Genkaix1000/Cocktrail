@@ -15,11 +15,16 @@ export default function BarraPage() {
     authService
       .getMe()
       .then((user) => {
-        if (!user || (user.role !== "admin" && user.role !== "barman")) {
+        if (!user) {
           router.push("/login");
-        } else {
-          setLoading(false);
+          return;
         }
+        if (user.role !== "barman") {
+          const dest = user.role === "admin" ? "/admin" : "/caja";
+          router.push(dest);
+          return;
+        }
+        setLoading(false);
       })
       .catch(() => {
         router.push("/login");

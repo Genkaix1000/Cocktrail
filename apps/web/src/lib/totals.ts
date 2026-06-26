@@ -17,8 +17,8 @@ export function computeTotals(
   orders: Order[],
   cashSales: CashSale[],
 ): EventTotals {
-  let transferenciaTotal = 0;
-  let transferenciaCount = 0;
+  let webTotal = 0;
+  let webCount = 0;
   let efectivoTotal = 0;
   let efectivoCount = 0;
   let qrTotal = 0;
@@ -30,10 +30,12 @@ export function computeTotals(
   for (const order of orders) {
     if (order.status === "cancelado") continue;
 
-    if (order.paymentMethod === "transferencia") {
-      transferenciaTotal += order.total;
-      transferenciaCount += 1;
-    } else if (order.paymentMethod === "efectivo") {
+    if (order.createdBy === "Cliente") {
+      webTotal += order.total;
+      webCount += 1;
+    }
+
+    if (order.paymentMethod === "efectivo") {
       efectivoTotal += order.total;
       efectivoCount += 1;
     } else if (order.paymentMethod === "qr") {
@@ -66,8 +68,8 @@ export function computeTotals(
   }
 
   return {
-    transferenciaTotal,
-    transferenciaCount,
+    webTotal,
+    webCount,
     efectivoTotal,
     efectivoCount,
     qrTotal,
@@ -77,6 +79,6 @@ export function computeTotals(
     drinksSold: Array.from(drinksByDrinkId.values()).sort(
       (a, b) => b.qty - a.qty,
     ),
-    total: transferenciaTotal + efectivoTotal + qrTotal + debitoTotal,
+    total: efectivoTotal + qrTotal + debitoTotal,
   };
 }
