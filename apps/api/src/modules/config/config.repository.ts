@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import type { Theme } from "@cocktrail/shared";
 
 // ── Types ──
@@ -47,13 +44,7 @@ export interface ConfigRepository {
   update(partial: Partial<AppConfig>): Promise<AppConfig>;
 }
 
-// ── Implementación JSON Local ──
-
-const DATA_DIR = path.resolve(
-  new URL(".", import.meta.url).pathname,
-  "../../data",
-);
-const CONFIG_FILE = path.join(DATA_DIR, "config.json");
+// ── Default config ──
 
 const DEFAULT_CONFIG: AppConfig = {
   theme: "normal",
@@ -72,54 +63,6 @@ const DEFAULT_CONFIG: AppConfig = {
   textLogoValue: "Cocktrail",
   textLogoSize: 26,
 };
-
-export class LocalJSONConfigRepository implements ConfigRepository {
-  private config: AppConfig;
-
-  constructor() {
-    this.config = this.load();
-  }
-
-  private load(): AppConfig {
-    try {
-      if (fs.existsSync(CONFIG_FILE)) {
-        const raw = fs.readFileSync(CONFIG_FILE, "utf-8");
-        return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-      }
-    } catch (err) {
-      console.error("[LocalJSONConfigRepository] Error loading config.json:", err);
-    }
-    return { ...DEFAULT_CONFIG };
-  }
-
-  private persist(): void {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(this.config, null, 2), "utf-8");
-    } catch (err) {
-      console.error("[LocalJSONConfigRepository] Error persisting config.json:", err);
-    }
-  }
-
-  async get(): Promise<AppConfig> {
-    return { ...this.config };
-  }
-
-  async update(partial: Partial<AppConfig>): Promise<AppConfig> {
-    this.config = { ...this.config, ...partial };
-    // Merge nested objects
-    if (partial.mercadoPago) {
-      this.config.mercadoPago = {
-        ...this.config.mercadoPago,
-        ...partial.mercadoPago,
-      };
-    }
-    this.persist();
-    return { ...this.config };
-  }
-}
 
 // ── Implementación Supabase (fase 4 — Edge Sync) ──
 

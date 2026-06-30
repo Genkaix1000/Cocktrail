@@ -23,7 +23,15 @@ tsconfig.tsbuildinfo
 # capturas y artefactos de tests manuales
 paso*-summary.png
 
-# notas locales del proyecto
+# notas locales del proyecto (config de agentes IA, local a cada dev)
 CLAUDE.md
 AGENTS.md
+# excepción: la doc de agentes/skills SÍ se versiona
+!docs/AGENTS.md
+
+# autogenerado por Next.js (se regenera en cada build)
+next-env.d.ts
+
+# datos de runtime / código muerto (ver docs/ROADMAP.md R4) — no versionar
+apps/api/src/data/*.json
 

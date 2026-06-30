@@ -1,25 +1,167 @@
-version: '3.8'
+# ──────────────────────────────────────────────────────────────────────────
+# Cocktrail / BarQR — Stack Supabase local MÍNIMO (self-hosting recortado)
+#
+# Objetivo: un solo `docker compose up -d` deja la REST de Supabase escuchando
+# en http://127.0.0.1:54321, que es lo que el backend (@supabase/supabase-js)
+# necesita. Resuelve el riesgo R1 del ROADMAP (antes esto era Postgres pelado).
+#
+# Servicios incluidos (y por qué):
+#   - db   : Postgres de Supabase (trae roles anon/authenticated/service_role/
+#            authenticator + extensiones). Es la fuente de verdad local.
+#   - rest : PostgREST. Convierte las tablas en la API REST que usa supabase-js.
+#   - kong : API gateway. Enruta /rest/v1/* -> rest y valida la `apikey`.
+#   (debug, opcionales) meta + studio: UI web para inspeccionar la base.
+#
+# Lo que NO incluye a propósito (el backend no lo usa): auth/gotrue, realtime,
+# storage, edge-functions, analytics, vector, pooler. Auth es HMAC propia y el
+# real-time es SSE propio.
+#
+# Valores por defecto embebidos => corre sin archivo .env. Para overridear,
+# copiá supabase/.env.example a supabase/.env y usá `--env-file supabase/.env`.
+# Las apikeys son las DEMO keys estándar de Supabase (ver supabase/.env.example).
+# ──────────────────────────────────────────────────────────────────────────
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: cocktrail-postgres-local
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-    ports:
-      - "54321:54321"
-    command: -p 54321
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./supabase/migrations/schema.sql:/docker-entrypoint-initdb.d/init.sql
+  db:
+    image: supabase/postgres:17.6.1.136
+    container_name: cocktrail-db
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -p 54321"]
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    ports:
+      # Acceso directo a Postgres (psql/debug). No lo usa el backend.
+      - ${POSTGRES_EXTERNAL_PORT:-54322}:5432
+    volumes:
+      - cocktrail_db_data:/var/lib/postgresql/data
+      # Orden de init = orden alfabético del nombre dentro de init-scripts/.
+      # OJO: es string-sort, así que zero-padeamos ("10-" < "20-").
+      #   01-roles -> setea el password de `authenticator` (los roles ya existen)
+      #   02-jwt   -> expone el jwt secret como GUC
+      #   10..13   -> migraciones del proyecto, en orden, DESPUÉS de los roles
+      # NUEVA MIGRACIÓN: agregá acá una línea `14-...`, `15-...`, etc.
+      - ./supabase/docker/roles.sql:/docker-entrypoint-initdb.d/init-scripts/01-roles.sql:Z
+      - ./supabase/docker/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/02-jwt.sql:Z
+      - ./supabase/migrations/20240101000000_schema.sql:/docker-entrypoint-initdb.d/init-scripts/10-schema.sql:Z
+      - ./supabase/migrations/20240102000000_edge_sync.sql:/docker-entrypoint-initdb.d/init-scripts/11-edge_sync.sql:Z
+      - ./supabase/migrations/20260626175947_add_closed_by.sql:/docker-entrypoint-initdb.d/init-scripts/12-add_closed_by.sql:Z
+      - ./supabase/migrations/20260629201500_create_audit_logs.sql:/docker-entrypoint-initdb.d/init-scripts/13-create_audit_logs.sql:Z
+
+  rest:
+    image: postgrest/postgrest:v14.12
+    container_name: cocktrail-rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
       interval: 5s
       timeout: 5s
       retries: 5
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-postgres}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      # Admin server: lo usa el healthcheck `postgrest --ready`.
+      # `--ready` exige admin-server-host = localhost.
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_ADMIN_SERVER_HOST: localhost
+      PGRST_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+    command: ["postgrest"]
+
+  kong:
+    image: kong/kong:3.9.1
+    container_name: cocktrail-kong
+    restart: unless-stopped
+    depends_on:
+      rest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+    ports:
+      # ESTE es el endpoint que usa el backend: SUPABASE_URL=http://127.0.0.1:54321
+      - ${KONG_HTTP_PORT:-54321}:8000/tcp
+    volumes:
+      - ./supabase/docker/kong.yml:/home/kong/kong.yml:ro,Z
+
+  # ── Opcionales (perfil `debug`): UI web para inspeccionar la base ──────────
+  #   docker compose --profile debug up -d
+  #   Studio: http://localhost:${STUDIO_PORT:-54323}
+  meta:
+    image: supabase/postgres-meta:v0.96.6
+    container_name: cocktrail-meta
+    profiles: ["debug"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: postgres
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+  studio:
+    image: supabase/studio:2026.06.03-sha-0bca601
+    container_name: cocktrail-studio
+    profiles: ["debug"]
+    restart: unless-stopped
+    depends_on:
+      - meta
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})\"",
+        ]
+      timeout: 10s
+      interval: 5s
+      retries: 3
+      start_period: 20s
+    environment:
+      HOSTNAME: "0.0.0.0"
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PORT: 5432
+      POSTGRES_HOST: db
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DEFAULT_ORGANIZATION_NAME: Cocktrail
+      DEFAULT_PROJECT_NAME: Cocktrail Local
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:54321}
+      SUPABASE_ANON_KEY: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlLWRlbW8iLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.zQomPPgIVgwVRMh3NJhhAl2cJ-GKQgNXpMTbIKxKyoo}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UtZGVtbyIsImlhdCI6MTY0MTc2OTIwMCwiZXhwIjoxNzk5NTM1NjAwfQ.4HviqYnTKiRK-RJvWzgAAuaFiq8--foTrXQpl7HYMU4}
+      AUTH_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+    ports:
+      - ${STUDIO_PORT:-54323}:3000/tcp
 
 volumes:
-  postgres_data:
+  cocktrail_db_data:

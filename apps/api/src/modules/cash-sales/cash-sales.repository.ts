@@ -7,26 +7,6 @@ export interface CashSalesRepository {
   clear(): Promise<void>;
 }
 
-export class InMemoryCashSalesRepository implements CashSalesRepository {
-  private sales = new Map<string, { sale: CashSale; eventId: string }>();
-
-  async add(sale: CashSale, eventId: string): Promise<CashSale> {
-    this.sales.set(sale.id, { sale, eventId });
-    return sale;
-  }
-
-  async listForEvent(eventId: string): Promise<CashSale[]> {
-    return Array.from(this.sales.values())
-      .filter((entry) => entry.eventId === eventId)
-      .map((entry) => entry.sale)
-      .sort((a, b) => a.createdAt - b.createdAt);
-  }
-
-  async clear(): Promise<void> {
-    this.sales.clear();
-  }
-}
-
 export class SupabaseCashSalesRepository implements CashSalesRepository {
   async add(sale: CashSale, eventId: string): Promise<CashSale> {
     const { data, error } = await supabase

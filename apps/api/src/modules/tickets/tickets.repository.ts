@@ -25,61 +25,6 @@ export interface TicketsRepository {
   clear(): Promise<void>;
 }
 
-export class InMemoryTicketsRepository implements TicketsRepository {
-  private tickets = new Map<string, Ticket>(); // key is the ticket code
-
-  async create(ticket: Ticket): Promise<Ticket> {
-    this.tickets.set(ticket.code, ticket);
-    return ticket;
-  }
-
-  async findByCode(code: string): Promise<Ticket | undefined> {
-    return this.tickets.get(code);
-  }
-
-  async findByReadable(readable: string): Promise<Ticket | undefined> {
-    const search = readable.toUpperCase().trim();
-    for (const ticket of this.tickets.values()) {
-      const parts = ticket.code.split("-");
-      if (parts[0] === search) {
-        return ticket;
-      }
-    }
-    return undefined;
-  }
-
-  async findByOrderId(orderId: string): Promise<Ticket | undefined> {
-    for (const ticket of this.tickets.values()) {
-      if (ticket.orderId === orderId) return ticket;
-    }
-    return undefined;
-  }
-
-  async list(): Promise<Ticket[]> {
-    return Array.from(this.tickets.values());
-  }
-
-  async updateRedemption(
-    code: string,
-    redeemedBy: string,
-    meta?: { barCode?: string; method?: "scan" | "manual" },
-  ): Promise<Ticket> {
-    const ticket = this.tickets.get(code);
-    if (!ticket) {
-      throw new Error(`Ticket with code ${code} not found in repository`);
-    }
-    ticket.redeemedAt = Date.now();
-    ticket.redeemedBy = redeemedBy;
-    if (meta?.barCode) ticket.redeemedByBar = meta.barCode;
-    if (meta?.method) ticket.redeemMethod = meta.method;
-    return ticket;
-  }
-
-  async clear(): Promise<void> {
-    this.tickets.clear();
-  }
-}
-
 function mapRowToTicket(row: any): Ticket {
   return {
     id: row.id,

@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { createHash } from "node:crypto";
 import type { Role } from "@cocktrail/shared";
 
@@ -49,82 +47,6 @@ function hashPassword(password: string): string {
 }
 
 export { hashPassword };
-
-// ── Implementación JSON Local (fase 3.5 — persistencia en disco) ──
-
-const DATA_DIR = path.resolve(
-  new URL(".", import.meta.url).pathname,
-  "../../data",
-);
-const USERS_FILE = path.join(DATA_DIR, "users.json");
-
-export class LocalJSONUsersRepository implements UsersRepository {
-  private users = new Map<string, StaffUser>();
-
-  constructor() {
-    this.load();
-  }
-
-  private load(): void {
-    try {
-      if (fs.existsSync(USERS_FILE)) {
-        const raw = fs.readFileSync(USERS_FILE, "utf-8");
-        const arr: StaffUser[] = JSON.parse(raw);
-        this.users.clear();
-        for (const u of arr) this.users.set(u.id, u);
-      }
-    } catch (err) {
-      console.error("[LocalJSONUsersRepository] Error loading users.json:", err);
-    }
-  }
-
-  private persist(): void {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      const arr = Array.from(this.users.values());
-      fs.writeFileSync(USERS_FILE, JSON.stringify(arr, null, 2), "utf-8");
-    } catch (err) {
-      console.error("[LocalJSONUsersRepository] Error persisting users.json:", err);
-    }
-  }
-
-  async list(): Promise<SafeUser[]> {
-    return Array.from(this.users.values()).map(
-      ({ passwordHash: _ph, ...rest }) => rest,
-    );
-  }
-
-  async findById(id: string): Promise<StaffUser | undefined> {
-    return this.users.get(id);
-  }
-
-  async findByUsername(username: string): Promise<StaffUser | undefined> {
-    for (const u of this.users.values()) {
-      if (u.username === username) return u;
-    }
-    return undefined;
-  }
-
-  async create(user: StaffUser): Promise<StaffUser> {
-    this.users.set(user.id, user);
-    this.persist();
-    return user;
-  }
-
-  async update(user: StaffUser): Promise<StaffUser> {
-    this.users.set(user.id, user);
-    this.persist();
-    return user;
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const deleted = this.users.delete(id);
-    if (deleted) this.persist();
-    return deleted;
-  }
-}
 
 // ── Implementación Supabase (fase 4 — Edge Sync) ──
 
