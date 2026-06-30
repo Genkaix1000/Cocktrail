@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { NewOrderInput, Order, OrderStatus } from "@cocktrail/shared";
-import { type OrdersRepository, getOrdersLog } from "./orders.repository.js";
+import type { NewOrderInput, Order, OrderStatus, NightEvent } from "@cocktrail/shared";
+import type { OrdersRepository } from "./orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
 import { emit } from "../../shared/sse/sse-manager.js";
@@ -21,35 +21,38 @@ export class OrdersService {
   constructor(
     private ordersRepo: OrdersRepository,
     private drinksRepo: DrinksRepository,
-    private getEventStatus: () => string,
-    private incrementOrderCounter: () => number,
-    private generateTicketCode?: (orderId: string) => string,
+    private getActiveEvent: () => Promise<NightEvent | null>,
+    private incrementOrderCounter: (eventId: string) => Promise<number>,
+    private generateTicketCodeString?: (orderId: string) => string,
+    private saveTicket?: (orderId: string, code: string) => Promise<void>,
   ) {}
 
-  createOrder(input: NewOrderInput, createdBy?: string): Order {
-    if (this.getEventStatus() !== "activo") {
+  async createOrder(input: NewOrderInput, createdBy?: string): Promise<Order> {
+    const event = await this.getActiveEvent();
+    if (!event || event.status !== "activo") {
       throw new Conflict("No hay un evento activo. No se pueden crear pedidos.");
     }
     if (input.items.length === 0) {
       throw new BadRequest("El pedido no tiene items.");
     }
 
-    const items = input.items.map((it) => {
-      const drink = this.drinksRepo.findById(it.drinkId);
+    const items = [];
+    for (const it of input.items) {
+      const drink = await this.drinksRepo.findById(it.drinkId);
       if (!drink) throw new NotFound(`Drink ${it.drinkId} no existe.`);
       if (!drink.available) throw new Conflict(`${drink.name} no está disponible.`);
       if (it.qty <= 0) throw new BadRequest("Cantidad inválida.");
-      return {
+      items.push({
         drinkId: drink.id,
         name: drink.name,
         qty: it.qty,
         unitPrice: drink.price,
         subtotal: drink.price * it.qty,
-      };
-    });
+      });
+    }
 
     const total = items.reduce((sum, it) => sum + it.subtotal, 0);
-    const displayNumber = this.incrementOrderCounter();
+    const displayNumber = await this.incrementOrderCounter(event.id);
 
     const order: Order = {
       id: randomUUID(),
@@ -63,22 +66,26 @@ export class OrdersService {
       createdBy: createdBy || "Cliente",
     };
 
-    if (this.generateTicketCode) {
-      order.ticketCode = this.generateTicketCode(order.id);
+    if (this.generateTicketCodeString) {
+      order.ticketCode = this.generateTicketCodeString(order.id);
     }
 
-    this.ordersRepo.create(order);
+    await this.ordersRepo.create(order, event.id);
+
+    if (this.saveTicket && order.ticketCode) {
+      await this.saveTicket(order.id, order.ticketCode);
+    }
     emit({ type: "order.created", order });
     return order;
   }
 
-  updateOrderStatus(
+  async updateOrderStatus(
     id: string,
     status: OrderStatus,
     operator?: string,
     deliveryMeta?: { deliveredByBar?: string; redeemMethod?: "scan" | "manual" },
-  ): Order {
-    const order = this.ordersRepo.findById(id);
+  ): Promise<Order> {
+    const order = await this.ordersRepo.findById(id);
     if (!order) throw new NotFound(`Order ${id} no existe.`);
 
     const allowed = STATUS_TRANSITIONS[order.status];
@@ -107,28 +114,37 @@ export class OrdersService {
       timestamps.cancelledBy = operator || "desconocido";
     }
 
-    const updated = this.ordersRepo.updateStatus(id, status, timestamps);
+    const updated = await this.ordersRepo.updateStatus(id, status, timestamps);
     emit({ type: "order.updated", order: updated });
     return updated;
   }
 
-  getActiveOrders(): Order[] {
-    return this.ordersRepo.findActive();
+  async getActiveOrders(): Promise<Order[]> {
+    const event = await this.getActiveEvent();
+    if (!event) return [];
+    return this.ordersRepo.findActive(event.id);
   }
 
-  listOrders(): Order[] {
-    return this.ordersRepo.list();
+  async listOrders(): Promise<Order[]> {
+    const event = await this.getActiveEvent();
+    if (!event) return [];
+    return this.ordersRepo.listForEvent(event.id);
   }
 
-  getOrdersLog(): Order[] {
-    return getOrdersLog();
+  async getOrdersLog(all: boolean = false): Promise<Order[]> {
+    if (all) {
+      return this.ordersRepo.listAll();
+    }
+    const event = await this.getActiveEvent();
+    if (!event) return [];
+    return this.ordersRepo.listForEvent(event.id);
   }
 
-  getOrder(id: string): Order | undefined {
+  async getOrder(id: string): Promise<Order | undefined> {
     return this.ordersRepo.findById(id);
   }
 
-  getOrderByToken(token: string): Order | undefined {
+  async getOrderByToken(token: string): Promise<Order | undefined> {
     return this.ordersRepo.findByToken(token);
   }
 }

@@ -13,7 +13,7 @@
       }
     ],
     "total": 600,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1780958089689,
     "createdBy": "admin",
@@ -57,7 +57,7 @@
       }
     ],
     "total": 5500,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1780987099120,
     "createdBy": "Cliente",
@@ -101,7 +101,7 @@
       }
     ],
     "total": 900,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "cancelado",
     "createdAt": 1781112021467,
     "createdBy": "admin",
@@ -137,7 +137,7 @@
       }
     ],
     "total": 16400,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "cancelado",
     "createdAt": 1781112046715,
     "createdBy": "admin",
@@ -159,7 +159,7 @@
       }
     ],
     "total": 16500,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "pagado",
     "createdAt": 1781235735365,
     "createdBy": "Cliente",
@@ -193,7 +193,7 @@
       }
     ],
     "total": 14000,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "pagado",
     "createdAt": 1781235774981,
     "createdBy": "Cliente",
@@ -269,7 +269,7 @@
       }
     ],
     "total": 55000,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1781492130254,
     "createdBy": "admin",
@@ -291,7 +291,7 @@
       }
     ],
     "total": 3000,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1781492409584,
     "createdBy": "barra",
@@ -313,7 +313,7 @@
       }
     ],
     "total": 3000,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1781492448880,
     "createdBy": "barra",
@@ -335,7 +335,7 @@
       }
     ],
     "total": 3000,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1781563520775,
     "createdBy": "barra",
@@ -357,7 +357,7 @@
       }
     ],
     "total": 3000,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1781564197016,
     "createdBy": "barra",
@@ -386,12 +386,97 @@
       }
     ],
     "total": 8500,
-    "paymentMethod": "transferencia",
+    "paymentMethod": "qr",
     "status": "entregado",
     "createdAt": 1781564213434,
     "createdBy": "barra",
     "ticketCode": "BCXGH9JP-a176764d",
     "readyAt": 1781564217299,
     "deliveredAt": 1781564217299
+  },
+  {
+    "id": "e4ebcfcc-288e-4e77-8f0b-24a64154effc",
+    "token": "74aea69c",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 1,
+        "unitPrice": 5500,
+        "subtotal": 5500
+      }
+    ],
+    "total": 5500,
+    "paymentMethod": "qr",
+    "status": "entregado",
+    "createdAt": 1781564629115,
+    "createdBy": "barra",
+    "ticketCode": "T75GY9D3-dee6026a",
+    "readyAt": 1781564633596,
+    "deliveredAt": 1781564633635,
+    "deliveredBy": "barra",
+    "deliveredByBar": "BARRA-01",
+    "redeemMethod": "manual"
+  },
+  {
+    "id": "2f3c6d93-3411-4d7a-aafd-dc0f3d36b6fc",
+    "token": "d773de4d",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 1,
+        "name": "Fernet con Coca",
+        "qty": 1,
+        "unitPrice": 5500,
+        "subtotal": 5500
+      }
+    ],
+    "total": 5500,
+    "paymentMethod": "qr",
+    "status": "pagado",
+    "createdAt": 1782159369033,
+    "createdBy": "caja",
+    "ticketCode": "VDB69TXD-980aea2c"
+  },
+  {
+    "id": "84c8955f-d396-470e-8f64-23038a83ffc0",
+    "token": "a03ca7a0",
+    "displayNumber": 1,
+    "items": [
+      {
+        "drinkId": 2,
+        "name": "Vodka con Speed",
+        "qty": 2,
+        "unitPrice": 5000,
+        "subtotal": 10000
+      }
+    ],
+    "total": 10000,
+    "paymentMethod": "efectivo",
+    "status": "pagado",
+    "createdAt": 1782160744707,
+    "createdBy": "caja",
+    "ticketCode": "2T33RRXM-6c507b22"
+  },
+  {
+    "id": "3ae5db3f-a673-40e7-9a61-09e84e4671f8",
+    "token": "33d07f18",
+    "displayNumber": 2,
+    "items": [
+      {
+        "drinkId": 2,
+        "name": "Vodka con Speed",
+        "qty": 1,
+        "unitPrice": 5000,
+        "subtotal": 5000
+      }
+    ],
+    "total": 5000,
+    "paymentMethod": "efectivo",
+    "status": "pagado",
+    "createdAt": 1782160769261,
+    "createdBy": "caja",
+    "ticketCode": "BHPBPND9-8ae5cfc7"
   }
 ]

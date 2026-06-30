@@ -37,7 +37,7 @@ export const CreateOrderSchema = z.object({
     )
     .min(1, "El pedido debe tener al menos 1 ítem")
     .max(50, "Máximo 50 ítems por pedido"),
-  paymentMethod: z.enum(["transferencia", "efectivo", "qr", "debito"], {
+  paymentMethod: z.enum(["efectivo", "qr", "debito"], {
     errorMap: () => ({ message: "Método de pago inválido" }),
   }),
 });
@@ -146,14 +146,9 @@ export const UpdateConfigSchema = z.object({
   brandName: z.string().max(100).trim().optional(),
   logoUrl: z.string().max(500).optional(),
   customTheme: z.object({
-    primary: z.string().max(50),
-    background: z.string().max(50),
-    cardBg: z.string().max(50),
-    accent: z.string().max(50),
-    borders: z.string().max(50),
-    textColor: z.string().max(50),
-    success: z.string().max(50),
-    danger: z.string().max(50),
+    backgroundColor: z.string().max(50),
+    surfaceColor: z.string().max(50),
+    accentColor: z.string().max(50),
   }).nullable().optional(),
   mercadoPago: z.object({
     publicKey: z.string().max(200).default(""),

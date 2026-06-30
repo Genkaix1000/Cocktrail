@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, X, Clock, CheckCircle2 } from "lucide-react";
+import { Minus, Plus, X, Clock, CheckCircle2, Banknote, QrCode, CreditCard, Sparkles, TrendingUp, GlassWater } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DrinkCard from "../../components/DrinkCard";
@@ -12,13 +12,14 @@ import { ordersService } from "@/services/orders.service";
 import { eventsService } from "@/services/events.service";
 import { useSSE } from "@/lib/useSSE";
 import { STATUS_META } from "@/lib/orderStatus";
-import type { Drink, OrderStatus } from "@cocktrail/shared";
+import type { Drink, OrderStatus, PaymentMethod } from "@cocktrail/shared";
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({ children, icon: Icon }: { children: React.ReactNode; icon?: any }) {
   return (
     <div className="flex items-center gap-3 mb-4">
-      <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-ink-400 whitespace-nowrap">
-        {children}
+      <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-ink-400 whitespace-nowrap flex items-center gap-1.5">
+        {Icon && <Icon size={12} className="text-accent" />}
+        <span>{children}</span>
       </h2>
       <span className="flex-1 h-px bg-white/5" />
     </div>
@@ -44,6 +45,7 @@ export default function CartaPage() {
   const [myOrders, setMyOrders] = useState<SavedOrder[]>([]);
   const [activeTab, setActiveTab] = useState<"pending" | "redeemed">("pending");
   const [eventStartedAt, setEventStartedAt] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("qr");
 
   useSSE({
     "order.updated": ({ order: updated }) => {
@@ -210,7 +212,7 @@ export default function CartaPage() {
     setSubmitting(true);
     try {
       const items = Object.entries(cart).map(([idStr, qty]) => ({ drinkId: Number(idStr), qty }));
-      const order = await ordersService.create({ items, paymentMethod: "transferencia" });
+      const order = await ordersService.create({ items, paymentMethod });
       saveActiveOrder({ token: order.token, displayNumber: order.displayNumber, createdAt: order.createdAt });
       
       // Save new order to list in localStorage
@@ -251,7 +253,7 @@ export default function CartaPage() {
     } catch {
       setSubmitting(false);
     }
-  }, [submitting, totalItems, cart, router, eventStartedAt]);
+  }, [submitting, totalItems, cart, router, eventStartedAt, paymentMethod]);
 
   return (
     <main className="min-h-screen pb-40 bg-ink-950 text-ink-50">
@@ -293,8 +295,53 @@ export default function CartaPage() {
                 );
               })}
             </div>
-            <div className="mt-6 pt-6 border-t border-white/10">
-              <div className="flex justify-between items-center mb-6">
+            
+            <div className="mt-5 pt-4 border-t border-white/5 space-y-3">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-ink-400">
+                Método de Pago
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("efectivo")}
+                  className={`py-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer active:scale-95 text-center ${
+                    paymentMethod === "efectivo"
+                      ? "bg-green-500/10 border-green-500 text-green-400 font-bold"
+                      : "bg-white/5 border-white/10 text-ink-300 hover:bg-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <Banknote size={16} />
+                  <span className="text-[9.5px] uppercase font-bold tracking-wider">Efectivo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("qr")}
+                  className={`py-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer active:scale-95 text-center ${
+                    paymentMethod === "qr"
+                      ? "bg-purple-500/10 border-purple-500 text-purple-400 font-bold"
+                      : "bg-white/5 border-white/10 text-ink-300 hover:bg-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <QrCode size={16} />
+                  <span className="text-[9.5px] uppercase font-bold tracking-wider">QR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("debito")}
+                  className={`py-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer active:scale-95 text-center ${
+                    paymentMethod === "debito"
+                      ? "bg-blue/10 border-blue text-blue font-bold"
+                      : "bg-white/5 border-white/10 text-ink-300 hover:bg-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <CreditCard size={16} />
+                  <span className="text-[9.5px] uppercase font-bold tracking-wider">Tarjeta</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 pt-4 border-t border-white/10">
+              <div className="flex justify-between items-center mb-5">
                 <span className="text-xs uppercase font-black text-ink-400">Total</span>
                 <span className="text-3xl font-black text-blue">${totalPrice.toLocaleString("es-AR")}</span>
               </div>
@@ -492,7 +539,7 @@ export default function CartaPage() {
 
             {promoDrinks.length > 0 && (
               <section>
-                <SectionTitle>Promos Especiales</SectionTitle>
+                <SectionTitle icon={Sparkles}>Promos Especiales</SectionTitle>
                 <div className="flex flex-col gap-4">
                   {promoDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="promo" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
                 </div>
@@ -501,7 +548,7 @@ export default function CartaPage() {
 
             {trendingDrinks.length > 0 && (
               <section>
-                <SectionTitle>Tendencia de la noche</SectionTitle>
+                <SectionTitle icon={TrendingUp}>Tendencia de la noche</SectionTitle>
                 <div className="flex flex-col gap-4">
                   {trendingDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="trending" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
                 </div>
@@ -509,7 +556,7 @@ export default function CartaPage() {
             )}
 
             <section>
-              <SectionTitle>Nuestra Carta</SectionTitle>
+              <SectionTitle icon={GlassWater}>Nuestra Carta</SectionTitle>
               <div className="flex flex-col gap-3">
                 {regularDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="regular" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
               </div>

@@ -38,3 +38,12 @@ export const ticketLimiter = rateLimit({
   message: { error: "Demasiados escaneos de tickets. Intentá de nuevo en un minuto." },
 });
 
+// Comprobaciones de estado: máximo 10 consultas por minuto
+export const systemStatusLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas comprobaciones de estado. Esperá un minuto." },
+});
+

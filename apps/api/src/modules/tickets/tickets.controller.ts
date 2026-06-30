@@ -15,13 +15,13 @@ export function createTicketsController(service: TicketsService): Router {
     requireRole("admin", "barman"),
     ticketLimiter,
     validate(RedeemTicketSchema),
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
         const { code, barCode, method } = req.body;
         const redeemer = req.session?.username ?? "desconocido";
         const resolvedBarCode = barCode?.trim() || env.BAR_CODE;
         const resolvedMethod = method ?? "scan";
-        const order = service.redeemTicket(code, redeemer, {
+        const order = await service.redeemTicket(code, redeemer, {
           barCode: resolvedBarCode,
           method: resolvedMethod,
         });

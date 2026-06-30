@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CreditCard } from "lucide-react";
 import type { PaymentBreakdown } from "@/lib/analytics";
 
 type Props = {
@@ -39,11 +40,14 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
   const accentColor = isBosko ? "#4ade80" : "#6db3f2";
 
   return (
-    <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-5">
+    <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between h-[380px] shadow-lg">
       {/* Title */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest">
-          Distribución por Canal
+      <div className="flex items-center justify-between shrink-0">
+        <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+            <CreditCard size={13} />
+          </div>
+          <span>Distribución por Canal</span>
         </h3>
         <span className="text-[10px] font-mono text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
           {breakdown.length}
@@ -51,7 +55,7 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
       </div>
 
       {/* Donut SVG */}
-      <div className="flex justify-center">
+      <div className="flex justify-center shrink-0 my-1">
         <div className="relative" style={{ width: size, height: size }}>
           <svg
             width={size}
@@ -101,40 +105,39 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-col gap-2">
-        {breakdown.map((b) => (
-          <div
-            key={b.method}
-            className="flex items-center gap-3 py-1.5 border-t border-ink-850 first:border-t-0"
-          >
-            {/* Colored dot */}
-            <span
-              className="w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ backgroundColor: b.color }}
-            />
-            {/* Label */}
-            <span className="text-[13px] text-ink-200 flex-1 min-w-0 truncate">
-              {b.label}
-            </span>
-            {/* Count */}
-            <span className="text-[10px] text-ink-500 font-mono tabular">
-              {b.count} ops
-            </span>
-            {/* Amount */}
-            <span className="font-mono text-[13px] text-ink-100 tabular text-right min-w-[80px]">
-              ${b.total.toLocaleString("es-AR")}
-            </span>
-            {/* Pct */}
-            <span className="font-mono text-[11px] text-ink-400 tabular text-right w-[38px]">
-              {b.pct}%
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Empty state */}
-      {breakdown.length === 0 && (
-        <div className="text-center py-8 text-[13px] text-ink-500">
+      {breakdown.length > 0 ? (
+        <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[95px] no-scrollbar shrink-0">
+          {breakdown.map((b) => (
+            <div
+              key={b.method}
+              className="flex items-center gap-3 py-1 border-t border-ink-850 first:border-t-0"
+            >
+              {/* Colored dot */}
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: b.color }}
+              />
+              {/* Label */}
+              <span className="text-[13px] text-ink-200 flex-1 min-w-0 truncate">
+                {b.label}
+              </span>
+              {/* Count */}
+              <span className="text-[10px] text-ink-500 font-mono tabular">
+                {b.count} ops
+              </span>
+              {/* Amount */}
+              <span className="font-mono text-[13px] text-ink-100 tabular text-right min-w-[80px]">
+                ${b.total.toLocaleString("es-AR")}
+              </span>
+              {/* Pct */}
+              <span className="font-mono text-[11px] text-ink-400 tabular text-right w-[38px]">
+                {b.pct}%
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-8 text-[13px] text-ink-500 flex-1 flex items-center justify-center">
           Sin datos de pago disponibles
         </div>
       )}

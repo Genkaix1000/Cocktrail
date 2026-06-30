@@ -1,20 +1,11 @@
-import type { Theme } from "@cocktrail/shared";
+import type { Theme, CustomTheme } from "@cocktrail/shared";
 import { apiFetch } from "./api-client";
 
 export type SafeConfig = {
   theme: Theme;
   brandName: string;
   logoUrl: string;
-  customTheme: {
-    primary: string;
-    background: string;
-    cardBg: string;
-    accent: string;
-    borders: string;
-    textColor: string;
-    success: string;
-    danger: string;
-  } | null;
+  customTheme: CustomTheme | null;
   mercadoPago: {
     publicKey: string;
     accessTokenMasked: string;
@@ -32,16 +23,7 @@ export type ConfigUpdate = {
   theme?: Theme;
   brandName?: string;
   logoUrl?: string;
-  customTheme?: {
-    primary: string;
-    background: string;
-    cardBg: string;
-    accent: string;
-    borders: string;
-    textColor: string;
-    success: string;
-    danger: string;
-  } | null;
+  customTheme?: CustomTheme | null;
   mercadoPago?: {
     publicKey: string;
     accessToken: string;

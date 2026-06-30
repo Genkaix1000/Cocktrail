@@ -15,47 +15,52 @@ import { createSSEController } from "./modules/sse/sse.controller.js";
 import { createTicketsController } from "./modules/tickets/tickets.controller.js";
 import { createUsersController } from "./modules/users/users.controller.js";
 import { createConfigController } from "./modules/config/config.controller.js";
+import { createMercadoPagoController } from "./modules/mercadopago/mercadopago.controller.js";
 
 // Services & Repositories
-import { LocalJSONDrinksRepository } from "./modules/drinks/drinks.repository.js";
+import { SupabaseDrinksRepository } from "./modules/drinks/drinks.repository.js";
 import { DrinksService } from "./modules/drinks/drinks.service.js";
-import { InMemoryOrdersRepository } from "./modules/orders/orders.repository.js";
+import { SupabaseOrdersRepository } from "./modules/orders/orders.repository.js";
 import { OrdersService } from "./modules/orders/orders.service.js";
-import { InMemoryTicketsRepository } from "./modules/tickets/tickets.repository.js";
+import { SupabaseTicketsRepository } from "./modules/tickets/tickets.repository.js";
 import { TicketsService } from "./modules/tickets/tickets.service.js";
-import { InMemoryCashSalesRepository } from "./modules/cash-sales/cash-sales.repository.js";
+import { SupabaseCashSalesRepository } from "./modules/cash-sales/cash-sales.repository.js";
 import { CashSalesService } from "./modules/cash-sales/cash-sales.service.js";
+import { SupabaseEventsRepository } from "./modules/events/events.repository.js";
 import { EventsService } from "./modules/events/events.service.js";
-import { LocalJSONUsersRepository } from "./modules/users/users.repository.js";
+import { SupabaseUsersRepository } from "./modules/users/users.repository.js";
 import { UsersService } from "./modules/users/users.service.js";
-import { LocalJSONConfigRepository } from "./modules/config/config.repository.js";
+import { SupabaseConfigRepository } from "./modules/config/config.repository.js";
+import { MercadoPagoService } from "./modules/mercadopago/mercadopago.service.js";
 
 // Middleware
 import { errorHandler } from "./shared/middleware/error-handler.js";
 
 // ── Dependency Injection ──
 
-const drinksRepo = new LocalJSONDrinksRepository();
-const ordersRepo = new InMemoryOrdersRepository();
-const cashSalesRepo = new InMemoryCashSalesRepository();
-const usersRepo = new LocalJSONUsersRepository();
-const configRepo = new LocalJSONConfigRepository();
+const drinksRepo = new SupabaseDrinksRepository();
+const eventsRepo = new SupabaseEventsRepository();
+const ordersRepo = new SupabaseOrdersRepository();
+const cashSalesRepo = new SupabaseCashSalesRepository();
+const ticketsRepo = new SupabaseTicketsRepository();
+const usersRepo = new SupabaseUsersRepository();
+const configRepo = new SupabaseConfigRepository();
 
 const drinksService = new DrinksService(drinksRepo);
 const usersService = new UsersService(usersRepo);
 
-const eventsService = new EventsService(ordersRepo, cashSalesRepo, drinksRepo, configRepo);
+const eventsService = new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, configRepo);
 
-const ordersService: OrdersService = new OrdersService(
+const ordersService = new OrdersService(
   ordersRepo,
   drinksRepo,
-  () => eventsService.getEventStatus(),
-  () => eventsService.incrementOrderCounter(),
-  (orderId: string): string => ticketsService.generateForOrder(orderId),
+  async () => eventsService.getCurrentEvent(),
+  async () => eventsService.incrementOrderCounter(),
+  (orderId: string): string => ticketsService.generateCodeString(orderId),
+  async (orderId: string, code: string): Promise<void> => ticketsService.saveTicketForOrder(orderId, code),
 );
 
-const ticketsRepo = new InMemoryTicketsRepository();
-const ticketsService: TicketsService = new TicketsService(
+const ticketsService = new TicketsService(
   ticketsRepo,
   ordersService,
   env.AUTH_SECRET,
@@ -63,8 +68,10 @@ const ticketsService: TicketsService = new TicketsService(
 
 const cashSalesService = new CashSalesService(
   cashSalesRepo,
-  () => eventsService.getEventStatus(),
+  async () => eventsService.getCurrentEvent(),
 );
+
+const mpService = new MercadoPagoService();
 
 // ── Express App ──
 
@@ -113,6 +120,8 @@ app.get("/health", (_req, res) => {
 });
 
 // Routes
+import { createSystemController } from "./modules/system/system.controller.js";
+
 app.use("/api/auth", createAuthController(usersRepo));
 app.use("/api/drinks", createDrinksController(drinksService));
 app.use("/api/orders", createOrdersController(ordersService, usersRepo));
@@ -121,6 +130,8 @@ app.use("/api/events", createSSEController());
 app.use("/api/tickets", createTicketsController(ticketsService));
 app.use("/api/users", createUsersController(usersService));
 app.use("/api/config", createConfigController(configRepo, eventsService));
+app.use("/api/mercadopago", createMercadoPagoController(mpService));
+app.use("/api/system", createSystemController(usersRepo, ordersRepo, cashSalesRepo, mpService));
 app.use("/api", createEventsController(eventsService, usersRepo));
 
 // Error handler global (ÚLTIMO)

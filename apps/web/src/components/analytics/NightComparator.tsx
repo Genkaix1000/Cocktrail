@@ -67,8 +67,8 @@ function buildRows(a: EventSummary, b: EventSummary): ComparisonRow[] {
   const avgA = ticketsA > 0 ? Math.round(totalA / ticketsA) : 0;
   const avgB = ticketsB > 0 ? Math.round(totalB / ticketsB) : 0;
 
-  const transA = a.totals.transferenciaTotal;
-  const transB = b.totals.transferenciaTotal;
+  const webSalesA = a.totals.webTotal;
+  const webSalesB = b.totals.webTotal;
 
   const efA = a.totals.efectivoTotal;
   const efB = b.totals.efectivoTotal;
@@ -108,13 +108,13 @@ function buildRows(a: EventSummary, b: EventSummary): ComparisonRow[] {
       delta: computeDeltaPct(avgA, avgB),
     },
     {
-      label: "Transferencia",
-      valueA: formatMoney(transA),
-      valueB: formatMoney(transB),
-      rawA: transA,
-      rawB: transB,
+      label: "Ventas Web",
+      valueA: formatMoney(webSalesA),
+      valueB: formatMoney(webSalesB),
+      rawA: webSalesA,
+      rawB: webSalesB,
       winMode: "higher",
-      delta: computeDeltaPct(transA, transB),
+      delta: computeDeltaPct(webSalesA, webSalesB),
     },
     {
       label: "Efectivo",
@@ -342,7 +342,7 @@ function NightSelector({
           className="w-full appearance-none bg-ink-850 border border-ink-700 rounded-xl px-3 py-2 pr-8 text-ink-50 text-[12px] font-medium cursor-pointer focus:outline-none focus:border-ink-600 transition-colors"
         >
           {nights.map((n, idx) => (
-            <option key={n.id} value={idx}>
+            <option key={n.id || (n as any).dateKey || idx} value={idx}>
               {formatNightDate(n.closedAt ?? n.startedAt)} —{" "}
               {formatMoney(n.totals.total)}
             </option>

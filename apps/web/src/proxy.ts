@@ -20,7 +20,7 @@ const ROLES = new Set(["admin", "caja", "barman"]);
  * usando Web Crypto APIs (HMAC-SHA256). Evita flicker y no requiere
  * fetch al backend durante la fase de transición.
  *
- * Fase futura: este middleware mutará para consultar
+ * Fase futura: este proxy mutará para consultar
  * NEXT_PUBLIC_API_URL + '/api/auth/me'.
  */
 async function verifySessionEdge(
@@ -69,7 +69,7 @@ async function verifySessionEdge(
   return { role, username, expiresAt };
 }
 
-export default async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const session = await verifySessionEdge(

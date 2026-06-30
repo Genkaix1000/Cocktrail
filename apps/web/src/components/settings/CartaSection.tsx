@@ -20,6 +20,10 @@ import {
   Citrus,
   CupSoda,
   BottleWine,
+  ChevronDown,
+  ChevronUp,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
 import { drinksService } from "@/services/drinks.service";
 import type { Drink } from "@cocktrail/shared";
@@ -66,6 +70,9 @@ export default function CartaSection() {
   const [imgPreview, setImgPreview] = useState("");
   const { theme } = useTheme();
 
+  const [sortField, setSortField] = useState<"name" | "price">("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
   const loadDrinks = useCallback(async () => {
     try {
       const data = await drinksService.list();
@@ -82,14 +89,40 @@ export default function CartaSection() {
     loadDrinks();
   }, [loadDrinks]);
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return drinks;
-    const q = search.toLowerCase();
-    return drinks.filter(
-      (d) =>
-        d.name.toLowerCase().includes(q)
-    );
-  }, [drinks, search]);
+  const sortedAndFiltered = useMemo(() => {
+    let list = [...drinks];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((d) => d.name.toLowerCase().includes(q));
+    }
+    
+    list.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+      if (sortField === "name") {
+        valA = a.name.toLowerCase();
+        valB = b.name.toLowerCase();
+      } else if (sortField === "price") {
+        valA = a.price;
+        valB = b.price;
+      }
+      
+      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+    
+    return list;
+  }, [drinks, search, sortField, sortDirection]);
+
+  const handleSort = (field: "name" | "price") => {
+    if (sortField === field) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
 
   const openCreate = useCallback(() => {
     setEditDrink({ ...EMPTY_FORM });
@@ -189,24 +222,29 @@ export default function CartaSection() {
       {/* Title + actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-ink-50">Carta</h1>
-          <p className="text-[12px] text-ink-400 mt-1">
+          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+              <Wine size={16} />
+            </div>
+            <span>Carta</span>
+          </h1>
+          <p className="text-[13px] text-ink-400/80 mt-1">
             Gestioná los tragos de tu boliche. {drinks.length} tragos registrados.
           </p>
         </div>
         <button
           type="button"
           onClick={openCreate}
-          className={`h-9 px-4 rounded-lg text-ink-950 text-[12px] font-bold uppercase tracking-[0.08em] flex items-center gap-1.5 hover:brightness-110 transition-all cursor-pointer ${isBosko ? "bg-[#4ade80]" : "bg-blue"}`}
+          className="h-10 px-4 rounded-xl bg-ink-800 border border-ink-700 text-ink-100 hover:text-ink-50 text-[12px] font-bold uppercase tracking-[0.08em] flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.97]"
         >
-          <Plus size={14} strokeWidth={3} />
+          <Plus size={14} strokeWidth={2.5} />
           Nuevo Trago
         </button>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* Table & search panel */}
-        <div className="flex-1 w-full space-y-4 min-w-0">
+        <div className={`flex-1 w-full space-y-4 min-w-0 ${modalOpen ? "" : "max-w-4xl"}`}>
           {/* Search */}
           <div className="relative">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
@@ -222,26 +260,60 @@ export default function CartaSection() {
           {/* Drinks table */}
           <div className="bg-ink-900 border border-ink-800 rounded-xl overflow-hidden">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_100px_110px] gap-3 px-5 py-3 border-b border-ink-800 bg-ink-925/50">
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-500">Nombre</span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-500 text-right">Precio</span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-500 text-center">Acciones</span>
+            <div className="grid grid-cols-[1fr_120px_110px] gap-0 border-b border-ink-800 bg-ink-950 text-[13px] font-bold select-none">
+              <div
+                onClick={() => handleSort("name")}
+                className={`px-5 py-3 cursor-pointer hover:bg-ink-900/60 transition-colors flex items-center gap-1.5 group/th ${
+                  sortField === "name"
+                    ? isBosko
+                      ? "bg-[#4ade80]/10 text-[#4ade80]"
+                      : "bg-blue/10 text-blue"
+                    : "text-ink-200"
+                }`}
+              >
+                <Wine size={13} className={sortField === "name" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
+                <span>Nombre</span>
+                <span className={`transition-all duration-200 ${sortField === "name" ? "scale-100 opacity-100" : "opacity-0 scale-75"}`}>
+                  {sortField === "name" && sortDirection === "desc" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                </span>
+              </div>
+              <div
+                onClick={() => handleSort("price")}
+                className={`px-5 py-3 cursor-pointer hover:bg-ink-900/60 transition-colors flex items-center justify-end gap-1.5 group/th ${
+                  sortField === "price"
+                    ? isBosko
+                      ? "bg-[#4ade80]/10 text-[#4ade80]"
+                      : "bg-blue/10 text-blue"
+                    : "text-ink-200"
+                }`}
+              >
+                <DollarSign size={13} className={sortField === "price" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
+                <span>Precio</span>
+                <span className={`transition-all duration-200 ${sortField === "price" ? "scale-100 opacity-100" : "opacity-0 scale-75"}`}>
+                  {sortField === "price" && sortDirection === "desc" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                </span>
+              </div>
+              <div className="text-ink-500 text-center px-5 py-3 flex items-center justify-center">
+                Acciones
+              </div>
             </div>
 
-            {filtered.length === 0 ? (
+            {sortedAndFiltered.length === 0 ? (
               <div className="px-5 py-10 text-center text-[12px] text-ink-500">
                 {search ? "Sin resultados para tu búsqueda" : "No hay tragos registrados"}
               </div>
             ) : (
               <div className="divide-y divide-ink-850">
-                {filtered.map((d) => {
+                {sortedAndFiltered.map((d, idx) => {
                   const DrinkIcon = ICONS_LIST.find((i) => i.id === d.iconName)?.icon || GlassWater;
                   const isSelected = editDrink?.id === d.id;
                   return (
                     <div
                       key={d.id}
                       onClick={() => openEdit(d)}
-                      className={`grid grid-cols-[1fr_100px_110px] gap-3 items-center px-5 py-3 transition-colors cursor-pointer hover:bg-ink-850/50 ${
+                      className={`grid grid-cols-[1fr_120px_110px] gap-0 items-stretch transition-colors cursor-pointer hover:bg-ink-850/30 ${
+                        idx % 2 === 0 ? "bg-ink-800/30" : ""
+                      } ${
                         isSelected
                           ? isBosko
                             ? "bg-[#4ade80]/5 border-l-2 border-l-[#4ade80]"
@@ -249,18 +321,40 @@ export default function CartaSection() {
                           : "border-l-2 border-transparent"
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-ink-800 flex items-center justify-center text-ink-450 shrink-0">
+                      <div className="flex items-center gap-3 min-w-0 px-5 py-3 h-full">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                          sortField === "name"
+                            ? isBosko
+                              ? "bg-[#4ade80]/15 text-[#4ade80]"
+                              : "bg-blue/15 text-blue"
+                            : "bg-ink-800 text-ink-450"
+                        }`}>
                           <DrinkIcon size={16} />
                         </div>
                         <div className="min-w-0">
-                          <p className={`text-[13px] font-medium truncate ${d.available ? "text-ink-50" : "text-ink-500 line-through"}`}>{d.name}</p>
+                          <p className={`text-[13px] truncate transition-all ${
+                            !d.available
+                              ? "text-ink-500 line-through"
+                              : sortField === "name"
+                              ? isBosko
+                                ? "text-[#4ade80] font-bold"
+                                : "text-blue font-bold"
+                              : "text-ink-50 font-semibold"
+                          }`}>{d.name}</p>
                         </div>
                       </div>
-                      <span className={`font-mono text-[13px] text-right tabular ${d.available ? "text-ink-100" : "text-ink-500"}`}>
+                      <span className={`font-mono text-[13px] text-right tabular px-5 py-3 h-full flex items-center justify-end transition-all ${
+                        !d.available
+                          ? "text-ink-500"
+                          : sortField === "price"
+                          ? isBosko
+                            ? "text-[#4ade80] font-bold"
+                            : "text-blue font-bold"
+                          : "text-ink-100 font-semibold"
+                      }`}>
                         ${d.price.toLocaleString("es-AR")}
                       </span>
-                      <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1.5 px-5 py-3 h-full" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={(e) => toggleAvailable(d, e)}
@@ -415,6 +509,7 @@ export default function CartaSection() {
                   {(["generic", "promo", "trending"] as const).map((tag) => {
                     const isSelected = tag === "promo" ? editDrink.promo : tag === "trending" ? editDrink.trending : (!editDrink.promo && !editDrink.trending);
                     const label = tag === "generic" ? "Genérico" : tag === "promo" ? "Promo" : "Tendencia";
+                    const Icon = tag === "generic" ? GlassWater : tag === "promo" ? Zap : TrendingUp;
                     const activeClass = tag === "promo"
                       ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
                       : tag === "trending"
@@ -429,13 +524,14 @@ export default function CartaSection() {
                           promo: tag === "promo",
                           trending: tag === "trending",
                         })}
-                        className={`h-8 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                        className={`h-8 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
                           isSelected
                             ? activeClass
                             : "bg-transparent border-transparent text-ink-400 hover:text-ink-200"
                         }`}
                       >
-                        {label}
+                        <Icon size={12} />
+                        <span>{label}</span>
                       </button>
                     );
                   })}

@@ -19,16 +19,25 @@ export class TicketsService {
    * Generates a signed ticket code for a given order, saves it in the repository,
    * and returns the code string.
    */
-  generateForOrder(orderId: string): string {
-    const code = generateTicketCode(orderId, this.secret);
+  async generateForOrder(orderId: string): Promise<string> {
+    const code = this.generateCodeString(orderId);
+    await this.saveTicketForOrder(orderId, code);
+    return code;
+  }
+
+  generateCodeString(orderId: string): string {
+    return generateTicketCode(orderId, this.secret);
+  }
+
+  async saveTicketForOrder(orderId: string, code: string): Promise<void> {
     const ticket: Ticket = {
       id: randomUUID(),
       orderId,
       code,
       createdAt: Date.now(),
     };
-    this.ticketsRepo.create(ticket);
-    return code;
+    await this.ticketsRepo.create(ticket);
+    // function returns void
   }
 
   /**
@@ -36,19 +45,19 @@ export class TicketsService {
    * Throws detailed HTTP errors for not found, signature validation failure, or duplicate scan.
    * If code is exactly 8 characters, resolves the ticket via its human-readable prefix.
    */
-  redeemTicket(
+  async redeemTicket(
     code: string,
     username: string,
     options?: { barCode?: string; method?: "scan" | "manual" },
-  ): Order {
+  ): Promise<Order> {
     let ticket: Ticket | undefined;
     const cleanCode = code.trim();
 
     // Support human-readable fallback (first 8 characters prefix)
     if (cleanCode.length === 8) {
-      ticket = this.ticketsRepo.findByReadable(cleanCode);
+      ticket = await this.ticketsRepo.findByReadable(cleanCode);
     } else {
-      ticket = this.ticketsRepo.findByCode(cleanCode);
+      ticket = await this.ticketsRepo.findByCode(cleanCode);
     }
 
     if (!ticket) {
@@ -77,7 +86,7 @@ export class TicketsService {
     }
 
     // Fetch order to verify existence
-    const order = this.ordersService.getOrder(ticket.orderId);
+    const order = await this.ordersService.getOrder(ticket.orderId);
     if (!order) {
       throw new NotFound("Pedido asociado no encontrado");
     }
@@ -85,13 +94,13 @@ export class TicketsService {
     // Transition order state sequentially to entregado
     let updatedOrder = order;
     if (order.status === "pagado") {
-      updatedOrder = this.ordersService.updateOrderStatus(order.id, "preparando");
+      updatedOrder = await this.ordersService.updateOrderStatus(order.id, "preparando");
     }
     if (updatedOrder.status === "preparando") {
-      updatedOrder = this.ordersService.updateOrderStatus(order.id, "listo");
+      updatedOrder = await this.ordersService.updateOrderStatus(order.id, "listo");
     }
     if (updatedOrder.status === "listo") {
-      updatedOrder = this.ordersService.updateOrderStatus(order.id, "entregado", username, {
+      updatedOrder = await this.ordersService.updateOrderStatus(order.id, "entregado", username, {
         deliveredByBar: options?.barCode,
         redeemMethod: options?.method ?? "scan",
       });
@@ -100,7 +109,7 @@ export class TicketsService {
     }
 
     // Mark ticket as redeemed
-    this.ticketsRepo.updateRedemption(ticket.code, username, {
+    await this.ticketsRepo.updateRedemption(ticket.code, username, {
       barCode: options?.barCode,
       method: options?.method ?? "scan",
     });
@@ -108,7 +117,7 @@ export class TicketsService {
     return updatedOrder;
   }
 
-  getTicketByOrderId(orderId: string): Ticket | undefined {
+  async getTicketByOrderId(orderId: string): Promise<Ticket | undefined> {
     return this.ticketsRepo.findByOrderId(orderId);
   }
 }

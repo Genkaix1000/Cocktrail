@@ -44,7 +44,7 @@ function makeOrder(
     displayNumber,
     items,
     total,
-    paymentMethod: "transferencia",
+    paymentMethod: "qr",
     status: "entregado",
     createdAt,
     readyAt: createdAt + 3 * 60 * 1000,
@@ -99,8 +99,9 @@ function buildSummary(params: {
   };
 }
 
-export function seedHistoryDemo(eventsService: EventsService): void {
-  if (eventsService.listClosedEvents().length > 0) return;
+export async function seedHistoryDemo(eventsService: EventsService): Promise<void> {
+  const closed = await eventsService.listClosedEvents();
+  if (closed.length > 0) return;
 
   const noches = [
     buildSummary({
@@ -165,5 +166,7 @@ export function seedHistoryDemo(eventsService: EventsService): void {
     }),
   ];
 
-  for (const n of noches) eventsService.seedClosedEvent(n);
+  for (const n of noches) {
+    await eventsService.seedClosedEvent(n);
+  }
 }

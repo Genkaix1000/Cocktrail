@@ -7,78 +7,213 @@
    Tipografía Inter (refactor V3).
    ────────────────────────────────────────────────────────── */
 
-/* TEMA: NORMAL (Por defecto - Fiestero, moderno, nocturno) */
+/*
+  MODELO DE COLOR · 2 MODOS INDEPENDIENTES
+  ─────────────────────────────────────────
+  En MODO DÍA la escala va de CLARO (950) a OSCURO (50):
+    950 = fondo de página (tintado suave)
+    900 = tarjeta / surface (blanco puro o casi)
+    850…700 = bordes y superficies activas (tinte suavísimo del acento)
+    600…400 = texto muted, subtítulos
+    200…50  = texto principal (casi negro)
+
+  En MODO NOCHE la escala va de OSCURO (950) a CLARO (50):
+    950 = fondo profundo
+    900 = tarjeta oscura elevada
+    850…700 = bordes oscuros
+    600…400 = texto muted
+    200…50  = texto claro / blanco
+*/
+
+/* ────────────────────────────────────────────────────────── */
+/* COCKTRAIL · MODO DÍA (por defecto)                        */
+/* ────────────────────────────────────────────────────────── */
 :root {
-  /* Surface · azul medianoche cálido */
-  --ink-950: #07090f;
-  --ink-925: #0a0d15;
-  --ink-900: #0d1119;
-  --ink-850: #11151f;
-  --ink-800: #161b27;
-  --ink-750: #1c2231;
-  --ink-700: #232a3c;
-  --ink-600: #2f3850;
-  --ink-500: #404a66;
-  --ink-400: #5a6480;
-  --ink-300: #8590ad;
-  --ink-200: #b4bdd2;
-  --ink-100: #d8dde8;
-  --ink-50:  #f1ede2;
+  --bg-primary: #f0f2e8;   /* Linen Cloud — fondo de página */
+  --bg-surface: #ffffff;   /* Blanco puro — tarjetas */
+  --text-accent: #5e4074;  /* Plum Wine — texto y acentos */
+  --text-primary: #1c1917; /* Off-black */
 
-  /* Colores de Acento (Normal) */
-  --primary-base: oklch(0.81 0.14 230); /* Azul */
-  --primary-soft: oklch(0.81 0.14 230 / 0.14);
-  --primary-line: oklch(0.81 0.14 230 / 0.28);
+  --success: #10b981;
+  --danger:  #ef4444;
 
-  --accent-base: oklch(0.80 0.13 75); /* Ambar */
-  --accent-soft: oklch(0.80 0.13 75 / 0.14);
-  --accent-line: oklch(0.80 0.13 75 / 0.30);
-  --accent-border: oklch(0.80 0.13 75 / 0.50);
+  /* ── ESCALA INK (Modo Día: 950=claro → 50=oscuro) ──
+     Estrategia: de 950→900 interpolamos entre bg-primary y surface.
+     De 900→700 usamos tintes muy suaves del acento (4-18%) sobre surface.
+     De 600→50  interpolamos del acento hacia negro puro.          */
 
-  /* Otros acentos (se mantienen para compatibilidad o uso secundario) */
-  --danger-base: oklch(0.70 0.18 25);
-  --danger-soft: oklch(0.70 0.18 25 / 0.14);
-  --danger-line: oklch(0.70 0.18 25 / 0.30);
+  --ink-950: var(--bg-primary);
+  --ink-925: color-mix(in oklab, var(--bg-primary) 60%, var(--bg-surface));
+  --ink-900: var(--bg-surface);
 
-  --success-base: oklch(0.78 0.16 155);
-  --success-soft: oklch(0.78 0.16 155 / 0.14);
-  --success-line: oklch(0.78 0.16 155 / 0.30);
+  /* Bordes y surfaces activos — tinte minimal del acento */
+  --ink-850: color-mix(in oklab, var(--bg-surface) 96%, var(--text-accent));
+  --ink-800: color-mix(in oklab, var(--bg-surface) 91%, var(--text-accent));
+  --ink-750: color-mix(in oklab, var(--bg-surface) 85%, var(--text-accent));
+  --ink-700: color-mix(in oklab, var(--bg-surface) 78%, var(--text-accent));
 
-  --purple-base: oklch(0.70 0.15 300);
-  --purple-soft: oklch(0.70 0.15 300 / 0.14);
-  --purple-border: oklch(0.70 0.15 300 / 0.50);
+  /* Texto muted */
+  --ink-600: color-mix(in oklab, var(--text-primary) 35%, var(--bg-surface));
+  --ink-500: color-mix(in oklab, var(--text-primary) 50%, var(--bg-surface));
+  --ink-450: color-mix(in oklab, var(--text-primary) 58%, var(--bg-surface));
+  --ink-400: color-mix(in oklab, var(--text-primary) 65%, var(--bg-surface));
+
+  /* Texto fuerte */
+  --ink-300: color-mix(in oklab, var(--text-primary) 80%, var(--bg-surface));
+  --ink-200: color-mix(in oklab, var(--text-primary) 90%, var(--bg-surface));
+  --ink-100: color-mix(in oklab, var(--text-primary) 96%, var(--bg-surface));
+  --ink-50:  var(--text-primary);
+
+  /* Acentos y variantes */
+  --primary-base:  var(--text-accent);
+  --primary-soft:  color-mix(in oklab, var(--text-accent) 10%, transparent);
+  --primary-line:  color-mix(in oklab, var(--text-accent) 20%, transparent);
+
+  --accent-base:   var(--text-accent);
+  --accent-soft:   color-mix(in oklab, var(--text-accent) 10%, transparent);
+  --accent-line:   color-mix(in oklab, var(--text-accent) 20%, transparent);
+  --accent-border: color-mix(in oklab, var(--text-accent) 35%, transparent);
+
+  --success-base: var(--success);
+  --success-soft: color-mix(in oklab, var(--success) 12%, transparent);
+  --success-line: color-mix(in oklab, var(--success) 25%, transparent);
+
+  --danger-base: var(--danger);
+  --danger-soft: color-mix(in oklab, var(--danger) 12%, transparent);
+  --danger-line: color-mix(in oklab, var(--danger) 25%, transparent);
+
+  /* Sombras tarjetas (modo día) */
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.07);
 }
 
-/* TEMA: BOSKO (Social Garden - Orgánico, verde bosque, elegante) */
+/* ────────────────────────────────────────────────────────── */
+/* COCKTRAIL · MODO NOCHE                                    */
+/* ────────────────────────────────────────────────────────── */
+.dark {
+  --bg-primary: #1e1328;   /* Fondo oscuro profundo */
+  --bg-surface: #2d1e3e;   /* Tarjeta — Plum oscuro */
+  --text-accent: #b89fd4;  /* Lila de acento puro en modo noche */
+  --text-primary: #e8e4f0; /* Casi blanco con tinte lila para texto */
+
+  --ink-950: #130d1c;
+  --ink-925: #1e1328;
+  --ink-900: #2d1e3e;
+
+  --ink-850: color-mix(in oklab, #2d1e3e 90%, var(--text-accent));
+  --ink-800: color-mix(in oklab, #2d1e3e 80%, var(--text-accent));
+  --ink-750: color-mix(in oklab, #2d1e3e 68%, var(--text-accent));
+  --ink-700: color-mix(in oklab, #2d1e3e 55%, var(--text-accent));
+
+  --ink-600: color-mix(in oklab, var(--text-primary) 35%, #2d1e3e);
+  --ink-500: color-mix(in oklab, var(--text-primary) 50%, #2d1e3e);
+  --ink-450: color-mix(in oklab, var(--text-primary) 60%, #2d1e3e);
+  --ink-400: color-mix(in oklab, var(--text-primary) 70%, #2d1e3e);
+
+  --ink-300: color-mix(in oklab, var(--text-primary) 85%, #fff);
+  --ink-200: color-mix(in oklab, var(--text-primary) 92%, #fff);
+  --ink-100: color-mix(in oklab, var(--text-primary) 97%, #fff);
+  --ink-50:  var(--text-primary);
+
+  --primary-base:  var(--text-accent);
+  --primary-soft:  color-mix(in oklab, var(--text-accent) 15%, transparent);
+  --primary-line:  color-mix(in oklab, var(--text-accent) 28%, transparent);
+
+  --accent-base:   var(--text-accent);
+  --accent-soft:   color-mix(in oklab, var(--text-accent) 15%, transparent);
+  --accent-line:   color-mix(in oklab, var(--text-accent) 28%, transparent);
+  --accent-border: color-mix(in oklab, var(--text-accent) 45%, transparent);
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.30), 0 4px 16px rgba(0,0,0,0.25);
+  --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.40), 0 8px 28px rgba(0,0,0,0.30);
+}
+
+/* ────────────────────────────────────────────────────────── */
+/* BOSKO · MODO DÍA                                          */
+/* ────────────────────────────────────────────────────────── */
 [data-theme="bosko"] {
-  /* Surface · Dark Tropical Botanical */
-  --ink-950: #050d07; /* Fondo principal muy oscuro */
-  --ink-925: #07130a;
-  --ink-900: #0a1a10; /* Fondo de tarjetas */
-  --ink-850: #0d2215;
-  --ink-800: #122d1c;
-  --ink-750: #183a24;
-  --ink-700: #1f472c;
-  --ink-600: #2b613c;
-  --ink-500: #397e4e;
-  --ink-400: #499d62;
-  --ink-300: #5db777;
-  --ink-200: #85c999;
-  --ink-100: #bde0ca;
-  --ink-50:  #f0e8d5; /* Texto principal hueso/crema */
+  --bg-primary: #fffef2;   /* Crema/manteca cálido editorial */
+  --bg-surface: #ffffff;   /* Blanco puro para tarjetas */
+  --text-accent: #013e37;  /* Verde botella profundo */
+  --text-primary: #013e37; /* Verde botella profundo para textos y sidebar */
 
-  /* Colores de Acento (Bosko) */
-  --primary-base: #4ade80; /* Verde menta brillante (para precios y resalte) */
-  --primary-soft: rgba(74, 222, 128, 0.1);
-  --primary-line: rgba(74, 222, 128, 0.2);
+  --ink-950: var(--bg-primary);
+  --ink-925: color-mix(in oklab, var(--bg-primary) 92%, var(--text-accent)); /* Sidebar crema oscuro */
+  --ink-900: var(--bg-surface);
 
-  --accent-base: #c98a6c; /* Cobre / Rose-Gold */
-  --accent-soft: rgba(201, 138, 108, 0.1);
-  --accent-line: rgba(201, 138, 108, 0.2);
-  --accent-border: rgba(201, 138, 108, 0.4);
+  --ink-850: color-mix(in oklab, var(--bg-surface) 96%, var(--text-accent));
+  --ink-800: color-mix(in oklab, var(--bg-surface) 91%, var(--text-accent));
+  --ink-750: color-mix(in oklab, var(--bg-surface) 85%, var(--text-accent));
+  --ink-700: color-mix(in oklab, var(--bg-surface) 78%, var(--text-accent));
+
+  --ink-600: color-mix(in oklab, var(--text-primary) 35%, var(--bg-surface));
+  --ink-500: color-mix(in oklab, var(--text-primary) 50%, var(--bg-surface));
+  --ink-450: color-mix(in oklab, var(--text-primary) 58%, var(--bg-surface));
+  --ink-400: color-mix(in oklab, var(--text-primary) 65%, var(--bg-surface));
+
+  --ink-300: color-mix(in oklab, var(--text-primary) 80%, var(--bg-surface));
+  --ink-200: color-mix(in oklab, var(--text-primary) 90%, var(--bg-surface));
+  --ink-100: color-mix(in oklab, var(--text-primary) 96%, var(--bg-surface));
+  --ink-50:  var(--text-primary);
+
+  --primary-base:  var(--text-accent);
+  --primary-soft:  color-mix(in oklab, var(--text-accent) 10%, transparent);
+  --primary-line:  color-mix(in oklab, var(--text-accent) 20%, transparent);
+
+  --accent-base:   var(--text-accent);
+  --accent-soft:   color-mix(in oklab, var(--text-accent) 10%, transparent);
+  --accent-line:   color-mix(in oklab, var(--text-accent) 20%, transparent);
+  --accent-border: color-mix(in oklab, var(--text-accent) 35%, transparent);
+
+  --shadow-card: 0 1px 3px rgba(1,62,55,0.04), 0 4px 12px rgba(1,62,55,0.02);
+  --shadow-card-hover: 0 2px 8px rgba(1,62,55,0.08), 0 8px 24px rgba(1,62,55,0.05);
 }
 
-/* Base de Radios */
+/* ────────────────────────────────────────────────────────── */
+/* BOSKO · MODO NOCHE                                        */
+/* ────────────────────────────────────────────────────────── */
+.dark[data-theme="bosko"] {
+  --bg-primary: #013e37;   /* Verde botella profundo */
+  --bg-surface: #012b26;   /* Variante más oscura para tarjetas y sidebar */
+  --text-accent: #fffeb3;  /* Color manteca */
+  --text-primary: #fffeb3; /* Color manteca */
+
+  --ink-950: #013e37;
+  --ink-925: #012b26;
+  --ink-900: #012b26;
+
+  --ink-850: color-mix(in oklab, #012b26 92%, var(--text-accent));
+  --ink-800: color-mix(in oklab, #012b26 84%, var(--text-accent));
+  --ink-750: color-mix(in oklab, #012b26 74%, var(--text-accent));
+  --ink-700: color-mix(in oklab, #012b26 62%, var(--text-accent));
+
+  --ink-600: color-mix(in oklab, var(--text-primary) 35%, #012b26);
+  --ink-500: color-mix(in oklab, var(--text-primary) 50%, #012b26);
+  --ink-450: color-mix(in oklab, var(--text-primary) 60%, #012b26);
+  --ink-400: color-mix(in oklab, var(--text-primary) 70%, #012b26);
+
+  --ink-300: color-mix(in oklab, var(--text-primary) 85%, #ffffff);
+  --ink-200: color-mix(in oklab, var(--text-primary) 92%, #ffffff);
+  --ink-100: color-mix(in oklab, var(--text-primary) 97%, #ffffff);
+  --ink-50:  var(--text-primary);
+
+  --primary-base:  var(--text-accent);
+  --primary-soft:  color-mix(in oklab, var(--text-accent) 15%, transparent);
+  --primary-line:  color-mix(in oklab, var(--text-accent) 28%, transparent);
+
+  --accent-base:   var(--text-accent);
+  --accent-soft:   color-mix(in oklab, var(--text-accent) 15%, transparent);
+  --accent-line:   color-mix(in oklab, var(--text-accent) 28%, transparent);
+  --accent-border: color-mix(in oklab, var(--text-accent) 45%, transparent);
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.35), 0 4px 16px rgba(0,0,0,0.22);
+  --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.45), 0 8px 28px rgba(0,0,0,0.28);
+}
+
+
+/* ────────────────────────────────────────────────────────── */
+/* Base de Radios                                            */
+/* ────────────────────────────────────────────────────────── */
 :root {
   --r-sm: 6px;
   --r-md: 10px;
@@ -92,7 +227,12 @@
 @theme inline {
   --font-sans: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-  /* Surfaces */
+  /* Semantic Variables (New System) */
+  --color-primary: var(--bg-primary);
+  --color-surface: var(--bg-surface);
+  --color-accent: var(--text-accent);
+
+  /* Surfaces (Backward Compatibility) */
   --color-ink-950: var(--ink-950);
   --color-ink-925: var(--ink-925);
   --color-ink-900: var(--ink-900);
@@ -102,6 +242,7 @@
   --color-ink-700: var(--ink-700);
   --color-ink-600: var(--ink-600);
   --color-ink-500: var(--ink-500);
+  --color-ink-450: var(--ink-450);
   --color-ink-400: var(--ink-400);
   --color-ink-300: var(--ink-300);
   --color-ink-200: var(--ink-200);
@@ -110,7 +251,7 @@
 
   /* Mapeo dinámico: Clases de color antiguas apuntan a las variables del tema actual */
   --color-blue: var(--primary-base);
-  --color-blue-bright: var(--primary-base); /* simplificamos al base */
+  --color-blue-bright: var(--primary-base);
   --color-blue-soft: var(--primary-soft);
   --color-blue-line: var(--primary-line);
 
@@ -119,10 +260,9 @@
   --color-amber-line: var(--accent-line);
   --color-amber-border: var(--accent-border);
 
-  /* Mantener utilidades por si se usan directas, aunque mapeadas a danger/success */
-  --color-purple: var(--purple-base);
-  --color-purple-soft: var(--purple-soft);
-  --color-purple-border: var(--purple-border);
+  --color-purple: var(--purple-base, #9b72cf);
+  --color-purple-soft: var(--purple-soft, rgba(155,114,207,0.12));
+  --color-purple-border: var(--purple-border, rgba(155,114,207,0.25));
 
   --color-green: var(--success-base);
   --color-green-soft: var(--success-soft);
@@ -147,6 +287,7 @@ body {
   color: var(--ink-50);
   margin: 0;
   padding: 0;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 * {
@@ -173,6 +314,17 @@ body {
 }
 .brand-image {
   display: none; /* Oculto por defecto en skin Normal */
+}
+
+/* ──────────────────────────────────────────────────────────
+   Sombras semánticas (clase utilitaria)
+   ────────────────────────────────────────────────────────── */
+.shadow-card {
+  box-shadow: var(--shadow-card);
+}
+.shadow-card-hover:hover {
+  box-shadow: var(--shadow-card-hover);
+  transition: box-shadow 0.2s ease;
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -215,7 +367,6 @@ body[data-theme="bosko"]::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  /* SVG in-line muy sutil de hojas de palmera, color verde muy claro, opacidad bajísima */
   background-image: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10,90 C10,90 20,40 50,20 C50,20 60,60 10,90 Z' fill='%23122d1c' fill-opacity='0.4'/%3E%3Cpath d='M90,10 C90,10 80,60 50,80 C50,80 40,40 90,10 Z' fill='%23122d1c' fill-opacity='0.3'/%3E%3Cpath d='M10,10 C10,10 40,20 60,50 C60,50 20,60 10,10 Z' fill='%23122d1c' fill-opacity='0.5'/%3E%3C/svg%3E");
   background-size: cover;
   background-position: center;
@@ -236,7 +387,7 @@ body[data-theme="bosko"]::after {
   background-repeat: repeat-y;
   background-position: right center;
   pointer-events: none;
-  z-index: 50; /* Por encima del contenido, pero es muy fina */
+  z-index: 50;
   opacity: 0.7;
 }
 
@@ -249,8 +400,6 @@ body[data-theme="bosko"]::after {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(201, 138, 108, 0.05);
 }
 
-
-
 /* Variante regular: borde fino cobre */
 [data-theme="bosko"] .ct-regular-card {
   border: 1px solid var(--accent-line) !important;
@@ -261,7 +410,7 @@ body[data-theme="bosko"]::after {
 [data-theme="bosko"] .ct-action-btn {
   background: linear-gradient(135deg, #e6b999 0%, #c98a6c 50%, #a86c50 100%) !important;
   border: 1px solid #f2cfbb !important;
-  color: #050d07 !important; /* Ícono negro/verde súper oscuro */
+  color: #050d07 !important;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.3) !important;
   position: relative;
   overflow: hidden;
@@ -301,4 +450,48 @@ body[data-theme="bosko"]::after {
 }
 [data-theme="bosko"] .ct-price-trend {
   color: var(--primary-base) !important;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Botón primario de acción (Checkout, Cobrar, Imprimir)
+   Usa tokens semánticos y funciona en todos los temas
+   ────────────────────────────────────────────────────────── */
+.ct-checkout-btn {
+  background: var(--accent-base);
+  color: var(--ink-950);
+  border: 1px solid color-mix(in oklab, var(--accent-base) 80%, #fff);
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.ct-checkout-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.ct-checkout-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Cocktrail dark: accent es lila/azul con texto en superficie oscura */
+.ct-checkout-btn {
+  /* Fallback para temas donde el acento es claro: forzar texto legible */
+  color: var(--ink-950);
+}
+
+/* Bosko dark: acento manteca (#fffeb3) → texto verde oscuro */
+.dark[data-theme="bosko"] .ct-checkout-btn {
+  background: var(--accent-base);
+  color: var(--bg-primary);
+  border-color: color-mix(in oklab, var(--accent-base) 70%, #fff);
+}
+
+/* Bosko día: acento verde botella → texto manteca */
+[data-theme="bosko"]:not(.dark) .ct-checkout-btn {
+  background: var(--accent-base);
+  color: #fffef2;
+  border-color: color-mix(in oklab, var(--accent-base) 70%, #fff);
+}
+
+/* Cocktrail oscuro: acento lila → texto muy oscuro */
+.dark:not([data-theme="bosko"]) .ct-checkout-btn {
+  background: var(--accent-base);
+  color: #13091e;
+  border-color: color-mix(in oklab, var(--accent-base) 70%, #fff);
 }

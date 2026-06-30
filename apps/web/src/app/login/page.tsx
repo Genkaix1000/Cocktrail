@@ -4,11 +4,14 @@ import { Lock, LogIn, Shield, Wallet, Scan } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { useTheme } from "@/components/ThemeProvider";
 import { authService } from "@/services/auth.service";
 import { ApiError } from "@/services/api-client";
+import { OSHeadbar } from "@/components/OSHeadbar";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,23 +67,35 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-ink-900 border border-ink-800 rounded-[28px] p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8 items-stretch transition-all duration-300">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-ink-950">
+      <header className="h-[60px] px-6 border-b border-ink-800 bg-ink-925 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <BrandLogo size="md" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400">
+            Terminal de Acceso
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          <OSHeadbar activeScreen="Login" />
+        </div>
+      </header>
+      <main className="flex-1 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="dark w-full max-w-4xl bg-ink-900 border border-ink-800 rounded-[28px] p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8 items-stretch transition-all duration-300" data-theme={theme}>
         
         {/* Left column: Quick Logins */}
         <div className="flex-1 flex flex-col gap-6 justify-center pb-6 md:pb-0 border-b md:border-b-0 md:border-r border-ink-800 md:pr-8">
           <div className="flex items-center gap-3.5">
             <BrandLogo size="md" />
-            <span className="text-xs font-black uppercase tracking-[0.22em] text-white/90">
+            <span className="text-xs font-black uppercase tracking-[0.22em] text-ink-100">
               Terminales Genéricas
             </span>
           </div>
 
           <div>
-            <h2 className="font-serif-italic text-3xl text-white">
+            <h2 className="font-serif-italic text-3xl text-ink-50">
               Accesos Rápidos
             </h2>
-            <p className="text-xs text-white/70 mt-1.5 leading-relaxed">
+            <p className="text-xs text-ink-300 mt-1.5 leading-relaxed">
               Seleccioná un perfil genérico para auto-completar el usuario e ingresar su clave.
             </p>
           </div>
@@ -92,18 +107,18 @@ export default function LoginPage() {
               onClick={() => handleSelectGenericRole("admin")}
               className={`w-full p-4 rounded-2xl border flex items-center gap-3.5 transition-all duration-200 cursor-pointer text-left active:scale-[0.98] ${
                 username === "admin"
-                  ? "bg-sky-500/10 border-sky-500 text-white"
-                  : "bg-white/5 border-white/5 text-ink-300 hover:bg-white/10 hover:border-ink-700"
+                  ? "bg-sky-500/10 border-sky-500 text-ink-50"
+                  : "bg-ink-950/45 border-ink-800 text-ink-300 hover:bg-ink-850 hover:border-ink-700"
               }`}
             >
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${
-                username === "admin" ? "bg-sky-500/25 border-sky-400 text-white" : "bg-ink-800 border-ink-700"
+                username === "admin" ? "bg-sky-500/25 border-sky-400 text-ink-50" : "bg-ink-800 border-ink-750"
               }`}>
                 <Shield size={16} />
               </div>
               <div className="flex flex-col">
-                <span className="font-bold text-base text-white">Administrador (Admin)</span>
-                <span className="text-xs text-white/80 font-medium mt-1">Control Total y Estadísticas</span>
+                <span className="font-bold text-base text-ink-50">Administrador (Admin)</span>
+                <span className="text-xs text-ink-200 font-medium mt-1">Control Total y Estadísticas</span>
               </div>
             </button>
 
@@ -113,39 +128,18 @@ export default function LoginPage() {
               onClick={() => handleSelectGenericRole("caja")}
               className={`w-full p-4 rounded-2xl border flex items-center gap-3.5 transition-all duration-200 cursor-pointer text-left active:scale-[0.98] ${
                 username === "caja"
-                  ? "bg-purple-500/10 border-purple-500 text-white"
-                  : "bg-white/5 border-white/5 text-ink-300 hover:bg-white/10 hover:border-ink-700"
+                  ? "bg-purple-500/10 border-purple-500 text-ink-50"
+                  : "bg-ink-950/45 border-ink-800 text-ink-300 hover:bg-ink-850 hover:border-ink-700"
               }`}
             >
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${
-                username === "caja" ? "bg-purple-500/25 border-purple-400 text-white" : "bg-ink-800 border-ink-700"
+                username === "caja" ? "bg-purple-500/25 border-purple-400 text-ink-50" : "bg-ink-800 border-ink-750"
               }`}>
                 <Wallet size={16} />
               </div>
               <div className="flex flex-col">
-                <span className="font-bold text-base text-white">Caja Registradora Genérica</span>
-                <span className="text-xs text-white/80 font-medium mt-1">Registros de Cobros y Tickets</span>
-              </div>
-            </button>
-
-            {/* Barra Selector */}
-            <button
-              type="button"
-              onClick={() => handleSelectGenericRole("barman")}
-              className={`w-full p-4 rounded-2xl border flex items-center gap-3.5 transition-all duration-200 cursor-pointer text-left active:scale-[0.98] ${
-                username === "barra"
-                  ? "bg-green-soft border-green text-white"
-                  : "bg-white/5 border-white/5 text-ink-300 hover:bg-white/10 hover:border-ink-700"
-              }`}
-            >
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${
-                username === "barra" ? "bg-green/25 border-green text-white" : "bg-ink-800 border-ink-700"
-              }`}>
-                <Scan size={16} />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-base text-white">Barra KDS (Pantalla)</span>
-                <span className="text-xs text-white/80 font-medium mt-1">Escaneo y Despacho de Bebidas</span>
+                <span className="font-bold text-base text-ink-50">Caja Registradora Genérica</span>
+                <span className="text-xs text-ink-200 font-medium mt-1">Registros de Cobros y Tickets</span>
               </div>
             </button>
           </div>
@@ -154,7 +148,7 @@ export default function LoginPage() {
         {/* Right column: Form */}
         <div className="flex-1 flex flex-col justify-center md:pl-4">
           <div className="flex items-center gap-3.5 mb-6">
-            <span className="text-xs font-black uppercase tracking-[0.22em] text-white/90">
+            <span className="text-xs font-black uppercase tracking-[0.22em] text-ink-100">
               Formulario de Ingreso
             </span>
           </div>
@@ -169,7 +163,7 @@ export default function LoginPage() {
 
             {/* Username field */}
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-black uppercase tracking-[0.18em] text-white">
+              <span className="text-sm font-black uppercase tracking-[0.18em] text-ink-50">
                 Usuario
               </span>
               <input
@@ -186,7 +180,7 @@ export default function LoginPage() {
 
             {/* Password field */}
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-black uppercase tracking-[0.18em] text-white">
+              <span className="text-sm font-black uppercase tracking-[0.18em] text-ink-50">
                 Contraseña
               </span>
               <input
@@ -230,5 +224,6 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  </div>
   );
 }

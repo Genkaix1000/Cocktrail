@@ -5,15 +5,15 @@ import { BadRequest, NotFound } from "../../shared/errors/http-errors.js";
 export class DrinksService {
   constructor(private repo: DrinksRepository) {}
 
-  listDrinks(): Drink[] {
+  async listDrinks(): Promise<Drink[]> {
     return this.repo.list();
   }
 
-  getDrink(id: number): Drink | undefined {
+  async getDrink(id: number): Promise<Drink | undefined> {
     return this.repo.findById(id);
   }
 
-  createDrink(input: Omit<Drink, "id">): Drink {
+  async createDrink(input: Omit<Drink, "id">): Promise<Drink> {
     if (!input.name || input.name.trim().length === 0) {
       throw new BadRequest("El nombre del trago es requerido");
     }
@@ -21,7 +21,7 @@ export class DrinksService {
       throw new BadRequest("El precio debe ser un número positivo");
     }
 
-    const id = this.repo.nextId();
+    const id = await this.repo.nextId();
     const drink: Drink = {
       id,
       name: input.name.trim(),
@@ -39,8 +39,8 @@ export class DrinksService {
     return this.repo.create(drink);
   }
 
-  updateDrink(id: number, partial: Partial<Omit<Drink, "id">>): Drink {
-    const existing = this.repo.findById(id);
+  async updateDrink(id: number, partial: Partial<Omit<Drink, "id">>): Promise<Drink> {
+    const existing = await this.repo.findById(id);
     if (!existing) {
       throw new NotFound(`Trago con id ${id} no encontrado`);
     }
@@ -53,18 +53,18 @@ export class DrinksService {
       throw new BadRequest("El precio debe ser un número positivo");
     }
 
-    const updated = this.repo.update(id, partial);
+    const updated = await this.repo.update(id, partial);
     if (!updated) {
       throw new NotFound(`Trago con id ${id} no encontrado`);
     }
     return updated;
   }
 
-  deleteDrink(id: number): void {
-    const existing = this.repo.findById(id);
+  async deleteDrink(id: number): Promise<void> {
+    const existing = await this.repo.findById(id);
     if (!existing) {
       throw new NotFound(`Trago con id ${id} no encontrado`);
     }
-    this.repo.delete(id);
+    await this.repo.delete(id);
   }
 }

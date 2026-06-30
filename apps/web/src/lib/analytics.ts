@@ -37,6 +37,7 @@ export type HourlySlot = {
   cashCount: number;
   totalSales: number;
   totalCount: number;
+  totalGlasses: number;
 };
 
 export type ProductRevenue = {
@@ -159,8 +160,8 @@ export function computeProductRevenue(
 export function computePaymentBreakdown(
   totals: EventTotals,
 ): PaymentBreakdown[] {
-  const webTotal = totals.transferenciaTotal;
-  const webCount = totals.transferenciaCount;
+  const webTotal = totals.webTotal;
+  const webCount = totals.webCount;
 
   const barraTotal =
     totals.efectivoTotal + totals.qrTotal + totals.debitoTotal;
@@ -245,13 +246,33 @@ export function computeHourlySlots(
   event: { startedAt: number },
   orders: Order[],
   cashSales: CashSale[],
-  slotCount = 10,
 ): HourlySlot[] {
-  const startHourDate = new Date(event.startedAt);
+  const activeOrders = orders.filter((o) => o.status !== "cancelado");
+  const allTimestamps = [
+    ...activeOrders.map((o) => new Date(o.createdAt).getTime()),
+    ...cashSales.map((s) => new Date(s.createdAt).getTime()),
+  ];
+
+  let minTime = event.startedAt;
+  let maxTime = Date.now();
+
+  if (allTimestamps.length > 0) {
+    minTime = Math.min(...allTimestamps);
+    maxTime = Math.max(...allTimestamps);
+  }
+
+  const startHourDate = new Date(minTime);
   startHourDate.setMinutes(0, 0, 0);
 
+  const endHourDate = new Date(maxTime);
+  endHourDate.setMinutes(0, 0, 0);
+
+  // Compute number of hours difference
+  const msDiff = endHourDate.getTime() - startHourDate.getTime();
+  const hoursDiff = Math.max(1, Math.round(msDiff / (3600 * 1000))) + 1; // inclusive
+
   const slots: HourlySlot[] = [];
-  for (let i = 0; i < slotCount; i++) {
+  for (let i = 0; i < hoursDiff; i++) {
     const currentTs = startHourDate.getTime() + i * 3600 * 1000;
     const hrDate = new Date(currentTs);
     const hr = hrDate.getHours();
@@ -264,11 +285,11 @@ export function computeHourlySlots(
       cashCount: 0,
       totalSales: 0,
       totalCount: 0,
+      totalGlasses: 0,
     });
   }
 
-  for (const order of orders) {
-    if (order.status === "cancelado") continue;
+  for (const order of activeOrders) {
     const hr = new Date(order.createdAt).getHours();
     const slot = slots.find((s) => s.hour === hr);
     if (slot) {
@@ -276,6 +297,8 @@ export function computeHourlySlots(
       slot.digitalCount += 1;
       slot.totalSales += order.total;
       slot.totalCount += 1;
+      const glasses = order.items.reduce((sum, item) => sum + item.qty, 0);
+      slot.totalGlasses += glasses;
     }
   }
 
@@ -287,6 +310,8 @@ export function computeHourlySlots(
       slot.cashCount += 1;
       slot.totalSales += sale.amount;
       slot.totalCount += 1;
+      const estimatedGlasses = Math.max(1, Math.round(sale.amount / 5000));
+      slot.totalGlasses += estimatedGlasses;
     }
   }
 
@@ -316,12 +341,12 @@ export function computeSegmentedTicket(
   const validOrders = orders.filter((o) => o.status !== "cancelado");
 
   // Web purchases
-  const webOrders = validOrders.filter((o) => o.paymentMethod === "transferencia");
+  const webOrders = validOrders.filter((o) => o.createdBy === "Cliente");
   const webTotal = webOrders.reduce((s, o) => s + o.total, 0);
   const webCount = webOrders.length;
 
   // Barra purchases = cashSales + orders with other payment methods
-  const barraOrders = validOrders.filter((o) => o.paymentMethod !== "transferencia");
+  const barraOrders = validOrders.filter((o) => o.createdBy !== "Cliente");
   const barraOrdersTotal = barraOrders.reduce((s, o) => s + o.total, 0);
   const barraOrdersCount = barraOrders.length;
 
@@ -346,7 +371,7 @@ export type NightPoint = {
   id: string;
   date: string; // "Vie 6 jun"
   total: number;
-  transferencia: number;
+  web: number;
   efectivo: number;
   orderCount: number;
   closedAt: number;
@@ -371,7 +396,7 @@ export function computeNightEvolution(
       id: e.id,
       date: `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`,
       total: e.totals.total,
-      transferencia: e.totals.transferenciaTotal,
+      web: e.totals.webTotal,
       efectivo: e.totals.efectivoTotal,
       orderCount: e.orderCounter,
       closedAt: e.closedAt ?? e.startedAt,
@@ -445,10 +470,21 @@ export function computeNightRecords(
     });
   }
 
-  // Longest night
-  const withDuration = historyEvents
-    .filter((e) => e.closedAt)
-    .map((e) => ({ ...e, duration: e.closedAt! - e.startedAt }));
+  // Longest night (measured from first drink sale to last drink sale)
+  const withDuration = historyEvents.map((e) => {
+    const timestamps = [
+      ...(e.orders || []).map((o) => o.createdAt),
+      ...(e.cashSales || []).map((c) => c.createdAt),
+    ];
+    let duration = 0;
+    if (timestamps.length > 0) {
+      duration = Math.max(...timestamps) - Math.min(...timestamps);
+    } else if (e.closedAt) {
+      duration = e.closedAt - e.startedAt;
+    }
+    return { ...e, duration };
+  });
+
   if (withDuration.length > 0) {
     const longest = [...withDuration].sort(
       (a, b) => b.duration - a.duration,
@@ -460,7 +496,7 @@ export function computeNightRecords(
     records.push({
       type: "longest",
       label: "Noche Más Larga",
-      value: `${hrs}h ${mins}m`,
+      value: longest.duration > 0 ? `${hrs}h ${mins}m` : "0h 0m",
       sub: formatDate(longest.closedAt ?? longest.startedAt),
       event: longest,
     });
@@ -583,7 +619,7 @@ export function exportHistoryCSV(historyEvents: EventSummary[]): string {
       ? Math.round((e.closedAt - e.startedAt) / 60000)
       : 0;
 
-    const webSales = e.totals.transferenciaTotal;
+    const webSales = e.totals.webTotal;
     const barraSales = e.totals.efectivoTotal + e.totals.qrTotal + e.totals.debitoTotal;
 
     const top3 = e.totals.drinksSold.slice(0, 3).map((t) => `${t.name} (×${t.qty})`);
@@ -669,7 +705,7 @@ export function generateInsights(
   }
 
   // Web conversion
-  const webOrdersCount = orders.filter((o) => o.status !== "cancelado" && o.paymentMethod === "transferencia").length;
+  const webOrdersCount = orders.filter((o) => o.status !== "cancelado" && o.createdBy === "Cliente").length;
   const totalOpsCount = orders.filter((o) => o.status !== "cancelado").length + cashSales.length;
   if (totalOpsCount > 0) {
     const rate = Math.round((webOrdersCount / totalOpsCount) * 100);

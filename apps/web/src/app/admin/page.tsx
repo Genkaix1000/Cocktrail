@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminClient from "./AdminClient";
 import { eventsService } from "@/services/events.service";
+import { authService } from "@/services/auth.service";
 import type { NightEvent, Order, CashSale } from "@cocktrail/shared";
 
 export const dynamic = "force-dynamic";
@@ -16,16 +17,32 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    eventsService
-      .getState()
-      .then((state) => {
-        setInitialEvent(state.event);
-        setInitialOrders(state.orders);
-        setInitialCashSales(state.cashSales);
-        setLoading(false);
+    authService
+      .getMe()
+      .then((user) => {
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+        if (user.role !== "admin") {
+          const dest = user.role === "caja" ? "/caja" : "/barra";
+          router.push(dest);
+          return;
+        }
+
+        eventsService
+          .getState()
+          .then((state) => {
+            setInitialEvent(state.event);
+            setInitialOrders(state.orders);
+            setInitialCashSales(state.cashSales);
+            setLoading(false);
+          })
+          .catch(() => {
+            router.push("/login");
+          });
       })
       .catch(() => {
-        // Si falla el fetch (ej. no autenticado), el middleware ya redirigió
         router.push("/login");
       });
   }, [router]);

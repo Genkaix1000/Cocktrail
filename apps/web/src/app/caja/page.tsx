@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import CajaClient from "./CajaClient";
 import { drinksService } from "@/services/drinks.service";
+import { authService } from "@/services/auth.service";
 import type { Drink } from "@cocktrail/shared";
 
 export default function CajaPage() {
@@ -12,11 +13,28 @@ export default function CajaPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    drinksService
-      .list()
-      .then((data) => {
-        setDrinks(data);
-        setLoading(false);
+    authService
+      .getMe()
+      .then((user) => {
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+        if (user.role !== "caja") {
+          const dest = user.role === "admin" ? "/admin" : "/barra";
+          router.push(dest);
+          return;
+        }
+
+        drinksService
+          .list()
+          .then((data) => {
+            setDrinks(data);
+            setLoading(false);
+          })
+          .catch(() => {
+            router.push("/login");
+          });
       })
       .catch(() => {
         router.push("/login");

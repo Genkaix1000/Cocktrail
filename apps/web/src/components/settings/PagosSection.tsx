@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, CreditCard, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { configService, type SafeConfig } from "@/services/config.service";
+import { useTheme } from "@/components/ThemeProvider";
 
 export default function PagosSection() {
+  const { theme, isDark } = useTheme();
   const [config, setConfig] = useState<SafeConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -14,6 +16,8 @@ export default function PagosSection() {
   const [publicKey, setPublicKey] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [sandbox, setSandbox] = useState(true);
+
+  const isBosko = theme === "bosko";
 
   useEffect(() => {
     configService.get().then((c) => {
@@ -52,32 +56,37 @@ export default function PagosSection() {
   return (
     <div className="max-w-2xl space-y-8">
       <div>
-        <h1 className="text-xl font-bold text-ink-50">Pagos</h1>
-        <p className="text-[12px] text-ink-400 mt-1">
+        <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+            <CreditCard size={16} />
+          </div>
+          <span>Pagos</span>
+        </h1>
+        <p className="text-[13px] text-ink-400/80 mt-1">
           Configurá la integración con Mercado Pago para cobrar los pedidos digitalmente.
         </p>
       </div>
 
       {/* Status */}
-      <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+      <div className={`flex items-center gap-4 p-5 rounded-xl border transition-all duration-200 ${
         config?.mercadoPago.publicKey
-          ? "bg-green-soft border-green-line"
+          ? "bg-green-soft border-green-line/30"
           : "bg-ink-900 border-ink-800"
       }`}>
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+        <div className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
           config?.mercadoPago.publicKey
-            ? "bg-green/10 text-green"
+            ? "bg-green/15 text-green"
             : "bg-ink-800 text-ink-500"
         }`}>
-          {config?.mercadoPago.publicKey ? <ShieldCheck size={20} /> : <CreditCard size={20} />}
+          {config?.mercadoPago.publicKey ? <ShieldCheck size={22} /> : <CreditCard size={22} />}
         </div>
         <div>
-          <p className={`text-[13px] font-semibold ${
+          <p className={`text-[14px] font-bold ${
             config?.mercadoPago.publicKey ? "text-green" : "text-ink-300"
           }`}>
             {config?.mercadoPago.publicKey ? "Mercado Pago Vinculado" : "Sin Vincular"}
           </p>
-          <p className="text-[10px] text-ink-500">
+          <p className="text-[12px] text-ink-400/80 mt-0.5">
             {config?.mercadoPago.publicKey
               ? `Entorno: ${config.mercadoPago.sandbox ? "Sandbox (pruebas)" : "Producción"}`
               : "Ingresá tus credenciales para habilitar cobros"
@@ -87,14 +96,14 @@ export default function PagosSection() {
       </div>
 
       {/* Form */}
-      <div className="bg-ink-900 border border-ink-800 rounded-xl p-5 space-y-5">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.18em] text-ink-300">
+      <div className="bg-ink-900 border border-ink-800 rounded-xl p-6 space-y-6">
+        <h3 className="text-[18px] font-bold tracking-tight text-ink-100">
           Credenciales
         </h3>
 
         {/* Public Key */}
-        <div>
-          <label htmlFor="mpPublicKey" className="text-[11px] font-medium text-ink-400 block mb-1.5">
+        <div className="space-y-1.5">
+          <label htmlFor="mpPublicKey" className="text-[14px] font-semibold text-ink-100 block">
             Public Key
           </label>
           <input
@@ -102,17 +111,17 @@ export default function PagosSection() {
             type="text"
             value={publicKey}
             onChange={(e) => setPublicKey(e.target.value)}
-            className="w-full h-10 px-3.5 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 font-mono placeholder:text-ink-500 focus:outline-none focus:border-blue focus:ring-1 focus:ring-blue/30 transition-all"
+            className="w-full h-10 px-3.5 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 font-mono placeholder:text-ink-500 focus:outline-none focus:border-accent transition-all duration-200"
             placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
           />
         </div>
 
         {/* Access Token */}
-        <div>
-          <label htmlFor="mpAccessToken" className="text-[11px] font-medium text-ink-400 block mb-1.5">
+        <div className="space-y-1.5">
+          <label htmlFor="mpAccessToken" className="text-[14px] font-semibold text-ink-100 block">
             Access Token
             {config?.mercadoPago.accessTokenMasked && (
-              <span className="ml-2 text-ink-600 font-mono">
+              <span className="ml-2 text-ink-600 font-mono text-[13px]">
                 (actual: {config.mercadoPago.accessTokenMasked})
               </span>
             )}
@@ -123,7 +132,7 @@ export default function PagosSection() {
               type={showToken ? "text" : "password"}
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
-              className="w-full h-10 px-3.5 pr-12 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 font-mono placeholder:text-ink-500 focus:outline-none focus:border-blue focus:ring-1 focus:ring-blue/30 transition-all"
+              className="w-full h-10 px-3.5 pr-12 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 font-mono placeholder:text-ink-500 focus:outline-none focus:border-accent transition-all duration-200"
               placeholder="Dejar vacío para mantener el actual"
             />
             <button
@@ -139,8 +148,8 @@ export default function PagosSection() {
         {/* Sandbox toggle */}
         <div className="flex items-center justify-between py-2">
           <div>
-            <p className="text-[13px] font-medium text-ink-200">Modo Sandbox</p>
-            <p className="text-[10px] text-ink-500">
+            <p className="text-[14px] font-semibold text-ink-100">Modo Sandbox</p>
+            <p className="text-[12px] text-ink-400/80">
               Activá esto para usar credenciales de prueba
             </p>
           </div>
@@ -148,8 +157,8 @@ export default function PagosSection() {
             type="button"
             onClick={() => setSandbox(!sandbox)}
             className={`
-              relative w-12 h-6 rounded-full transition-all duration-300
-              ${sandbox ? "bg-blue" : "bg-ink-700"}
+              relative w-12 h-6 rounded-full transition-all duration-300 cursor-pointer
+              ${sandbox ? (isBosko ? "bg-accent" : "bg-blue") : "bg-ink-700"}
             `}
           >
             <div className={`
@@ -160,10 +169,10 @@ export default function PagosSection() {
         </div>
 
         {/* Info */}
-        <div className="p-3 rounded-lg bg-ink-850/50 border border-ink-800">
-          <p className="text-[10px] text-ink-500 leading-relaxed">
+        <div className="p-4 rounded-lg bg-ink-850/50 border border-ink-800">
+          <p className="text-[12px] text-ink-400/80 leading-relaxed">
             💡 Las credenciales de Mercado Pago se obtienen desde{" "}
-            <span className="text-blue font-medium">mercadopago.com.ar/developers</span>.
+            <span className="text-accent font-semibold">mercadopago.com.ar/developers</span>.
             El Access Token se guarda encriptado en el servidor y nunca se expone al frontend.
             Para producción, desactivá el Modo Sandbox y usá credenciales reales.
           </p>
@@ -173,9 +182,19 @@ export default function PagosSection() {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="h-9 px-5 rounded-lg bg-blue text-ink-950 text-[12px] font-bold uppercase tracking-[0.08em] hover:brightness-110 transition-all disabled:opacity-50"
+          className="h-11 px-6 rounded-xl bg-ink-800 border border-ink-700 text-ink-100 hover:text-ink-50 hover:bg-ink-750 text-xs font-bold uppercase tracking-[0.12em] transition-all duration-300 flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50"
         >
-          {saving ? "Guardando..." : "Guardar configuración de pagos"}
+          {saving ? (
+            <>
+              <Loader2 size={14} className="animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            <>
+              <Check size={14} strokeWidth={2.5} />
+              Guardar configuración de pagos
+            </>
+          )}
         </button>
       </div>
 
