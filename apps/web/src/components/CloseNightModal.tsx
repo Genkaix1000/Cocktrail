@@ -488,11 +488,11 @@ function SummaryView({
 
       <button
         type="button"
-        onClick={onCloseAndShutdown || onClose}
-        className="mt-6 w-full h-13 rounded-xl bg-gradient-to-r from-red-650 to-red-550 text-white font-black text-xs uppercase tracking-[0.16em] flex items-center justify-center gap-2 hover:from-red-600 hover:to-red-500 active:scale-95 transition-all shadow-[0_4px_15px_rgba(220,38,38,0.25)] cursor-pointer"
+        onClick={onClose}
+        className="mt-6 w-full h-13 rounded-xl bg-gradient-to-r from-green-600 to-green-500 text-white font-black text-xs uppercase tracking-[0.16em] flex items-center justify-center gap-2 hover:from-green-550 hover:to-green-450 active:scale-95 transition-all shadow-[0_4px_15px_rgba(74,222,128,0.25)] cursor-pointer"
       >
-        <Power size={15} strokeWidth={3} />
-        Cerrar terminal
+        <CheckCircle2 size={15} strokeWidth={3} />
+        Cerrar y continuar
       </button>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, Shield, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Loader2, Shield, Trash2, UserPlus, X, Users } from "lucide-react";
 import {
   usersService,
   type SafeUser,
@@ -199,7 +199,12 @@ export default function UsuariosSection() {
       {/* Title + actions */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight">Usuarios</h1>
+          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+              <Users size={16} />
+            </div>
+            <span>Usuarios</span>
+          </h1>
           <p className="text-[13px] text-ink-400/80 mt-1">
             Gestioná las cuentas de personal de tu boliche. {users.length} usuarios creados.
           </p>

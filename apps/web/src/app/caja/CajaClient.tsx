@@ -26,6 +26,8 @@ import {
   Moon,
   LayoutGrid,
   Home,
+  FileText,
+  Search,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { OSHeadbar, OSProfileFooter } from "@/components/OSHeadbar";
@@ -359,10 +361,11 @@ export default function CajaClient({ drinks }: Props) {
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [summary, setSummary] = useState<EventSummary | null>(null);
 
-  // History states: Day grouping & Pagination
+  // History states: Day grouping, Infinite Scroll & Search
   const [selectedDay, setSelectedDay] = useState<string>("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [ticketSearch, setTicketSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(20);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const groupedOrders = useMemo(() => {
     const groups: Record<string, Order[]> = {};
@@ -394,25 +397,30 @@ export default function CajaClient({ drinks }: Props) {
     }
   }, [days, selectedDay]);
 
-  // Reset page on day change
+  // Reset scroll page limit on day change
   useEffect(() => {
-    setCurrentPage(1);
+    setVisibleCount(20);
   }, [selectedDay]);
 
   const dayOrders = useMemo(() => {
     return groupedOrders[selectedDay] || [];
   }, [groupedOrders, selectedDay]);
 
-  const totalPages = Math.ceil(dayOrders.length / itemsPerPage);
+  const filteredDayOrders = useMemo(() => {
+    let list = dayOrders;
+    if (ticketSearch.trim()) {
+      const q = ticketSearch.toLowerCase();
+      list = list.filter((o) => 
+        o.displayNumber.toString().includes(q) || 
+        (o.createdBy || "").toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [dayOrders, ticketSearch]);
 
-  const paginatedOrders = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return dayOrders.slice(start, start + itemsPerPage);
-  }, [dayOrders, currentPage]);
-
-  const paginationRange = useMemo(() => {
-    return getPaginationRange(currentPage, totalPages);
-  }, [currentPage, totalPages]);
+  const displayedOrders = useMemo(() => {
+    return filteredDayOrders.slice(0, visibleCount);
+  }, [filteredDayOrders, visibleCount]);
 
   // Fetch current user details
   useEffect(() => {
@@ -680,6 +688,19 @@ export default function CajaClient({ drinks }: Props) {
       router.refresh();
     }
   }
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 20) {
+      if (visibleCount < filteredDayOrders.length && !loadingMore) {
+        setLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount((prev) => prev + 10);
+          setLoadingMore(false);
+        }, 300);
+      }
+    }
+  };
 
   const totals = useMemo(
     () => computeTotals(activeNightOrders, activeNightCashSales),
@@ -1207,11 +1228,18 @@ export default function CajaClient({ drinks }: Props) {
           {/* TAB 2: HISTORIAL DE VENTAS */}
           <div className={activeTab === "historial" ? "flex-1 overflow-y-auto p-5 md:p-6 bg-ink-950 min-h-0 w-full" : "hidden"}>
             <div className="max-w-4xl mx-auto w-full space-y-6">
-              <div>
-                <h1 className="text-xl font-bold text-ink-50">Auditoría de Tickets</h1>
-                <p className="text-[12px] text-ink-400 mt-1">
-                  Listado paginado de órdenes registradas en caja agrupadas por día.
-                </p>
+              <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-ink-800 pb-5">
+                <div>
+                  <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+                      <FileText size={16} />
+                    </div>
+                    <span>Auditoría de Tickets</span>
+                  </h1>
+                  <p className="text-[13px] text-ink-400 mt-1">
+                    Historial de órdenes registradas en caja filtrado por fecha.
+                  </p>
+                </div>
               </div>
 
               {/* Filtro por Día */}
@@ -1238,94 +1266,74 @@ export default function CajaClient({ drinks }: Props) {
                 </div>
               )}
 
-              {/* Listado de tickets paginados */}
+              {/* Listado de tickets con buscador e infinite scroll */}
               {days.length > 0 && (
-                <div className="flex flex-col gap-2.5">
-                  {paginatedOrders.length === 0 ? (
-                    <div className="bg-ink-900 border border-ink-800 rounded-2xl py-12 text-center text-ink-500 font-serif-italic text-sm">
-                      — No hay tickets para mostrar en esta página —
-                    </div>
-                  ) : (
-                    paginatedOrders.map((o) => {
-                      const paymentLabel = o.paymentMethod === "efectivo" ? "Efectivo" : "Posnet";
-                      return (
-                        <div 
-                          key={o.id} 
-                          onClick={() => setSelectedHistoryOrder(o)}
-                          className="bg-ink-900 border border-ink-800 hover:border-accent/25 hover:bg-ink-850/50 transition-all rounded-2xl p-4 flex flex-col gap-2 cursor-pointer active:scale-[0.99]"
-                        >
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2.5">
-                              <span className="font-mono text-base font-black text-ink-50">#{String(o.displayNumber).padStart(3, "0")}</span>
-                              <span className="text-[10px] text-ink-400 font-semibold">Cajero: {o.createdBy || "CJ"}</span>
-                            </div>
-                            <span className="font-mono text-sm font-black text-accent">${o.total.toLocaleString("es-AR")}</span>
-                          </div>
+                <div className="space-y-4">
+                  {/* Buscador */}
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
+                    <input
+                      type="text"
+                      value={ticketSearch}
+                      onChange={(e) => {
+                        setTicketSearch(e.target.value);
+                        setVisibleCount(20); // Reset infinite scroll limit
+                      }}
+                      placeholder="Buscar por número de ticket o cajero..."
+                      className="w-full h-10 pl-10 pr-4 bg-ink-900 border border-ink-800 rounded-xl text-sm text-ink-50 placeholder:text-ink-500 focus:outline-none focus:border-blue transition-all"
+                    />
+                  </div>
 
-                          <p className="text-xs text-ink-300 leading-tight">
-                            {getItemsPreview(o.items)}
-                          </p>
-
-                          <div className="flex justify-between items-center mt-1">
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
-                              paymentLabel === "Efectivo" 
-                                ? "bg-green-soft text-green border-green-line" 
-                                : "bg-blue-soft text-blue border-blue-line"
-                            }`}>
-                              {paymentLabel}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-
-                  {/* Pagination Section (Limitada a 7 celdas con gaps) */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-1.5 pt-4">
-                      <button
-                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="w-9 h-9 rounded-lg border border-ink-800 bg-ink-900 hover:bg-ink-850 text-ink-400 hover:text-ink-50 flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-ink-900 cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        <ArrowLeft size={14} />
-                      </button>
-
-                      {paginationRange.map((page, idx) => {
-                        if (page === "...") {
+                  {/* Scrollable Container */}
+                  <div 
+                    onScroll={handleScroll}
+                    className="max-h-[500px] overflow-y-auto pr-1 no-scrollbar rounded-xl border border-ink-800/80 bg-ink-950/20 p-1"
+                  >
+                    {displayedOrders.length === 0 ? (
+                      <div className="py-12 text-center text-[12px] text-ink-500 font-serif-italic">
+                        {ticketSearch ? "— Sin resultados para tu búsqueda —" : "— No hay tickets para mostrar —"}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {displayedOrders.map((o) => {
+                          const paymentLabel = o.paymentMethod === "efectivo" ? "Efectivo" : "Posnet";
                           return (
-                            <span
-                              key={`gap-${idx}`}
-                              className="w-9 h-9 flex items-center justify-center text-ink-500 font-mono"
+                            <div 
+                              key={o.id} 
+                              onClick={() => setSelectedHistoryOrder(o)}
+                              className="bg-ink-900 border border-ink-800 hover:border-accent/25 hover:bg-ink-850/50 transition-all rounded-xl p-3.5 flex flex-col justify-between gap-1.5 cursor-pointer active:scale-[0.99] select-none h-[105px]"
                             >
-                              ...
-                            </span>
+                              <div className="flex justify-between items-center min-w-0">
+                                <span className="font-mono text-sm font-black text-ink-50 truncate">#{String(o.displayNumber).padStart(3, "0")}</span>
+                                <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none border ${
+                                  o.paymentMethod === "efectivo" 
+                                    ? "bg-green-soft text-green border-green-line" 
+                                    : "bg-blue-soft text-blue border-blue-line"
+                                }`}>
+                                  {paymentLabel}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-ink-300 truncate leading-tight">
+                                {getItemsPreview(o.items)}
+                              </p>
+                              <div className="flex justify-between items-center mt-1 border-t border-ink-800/50 pt-1.5">
+                                <span className="text-[9px] text-ink-500 font-medium">Cajero: {o.createdBy || "CJ"}</span>
+                                <span className="font-mono text-[13px] font-black text-accent">${o.total.toLocaleString("es-AR")}</span>
+                              </div>
+                            </div>
                           );
-                        }
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => setCurrentPage(Number(page))}
-                            className={`w-9 h-9 rounded-lg border font-mono text-xs transition-all cursor-pointer ${
-                              currentPage === page
-                                ? "bg-accent/15 text-accent border-accent/20 font-bold"
-                                : "bg-ink-900 border-ink-800 text-ink-400 hover:text-ink-200 hover:bg-ink-850"
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        );
-                      })}
+                        })}
+                      </div>
+                    )}
 
-                      <button
-                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="w-9 h-9 rounded-lg border border-ink-800 bg-ink-900 hover:bg-ink-850 text-ink-400 hover:text-ink-50 flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-ink-900 cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        <ArrowRight size={14} />
-                      </button>
-                    </div>
-                  )}
+                    {/* Infinite Scroll Loader Spinner */}
+                    {loadingMore && (
+                      <div className="flex items-center justify-center py-4 gap-2">
+                        <Loader2 size={14} className="animate-spin text-accent" />
+                        <span className="text-[10px] text-ink-400 font-medium uppercase tracking-wider">Cargando más...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

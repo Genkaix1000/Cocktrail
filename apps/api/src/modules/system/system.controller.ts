@@ -10,6 +10,7 @@ import { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
 import { env } from "../../config/env.js";
 import { verifySession } from "../auth/auth.service.js";
 import { systemStatusLimiter } from "../../shared/middleware/rate-limit.js";
+import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
 const serverStartedAt = Date.now();
 
@@ -41,6 +42,16 @@ export function createSystemController(
       }
     }
   }
+
+  // GET /api/system/logs
+  router.get("/logs", async (req, res, next) => {
+    try {
+      const logs = await AuditLogsService.getLatest(10);
+      res.json(logs);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   // GET /api/system/status
   router.get("/status", systemStatusLimiter, async (req, res, next) => {

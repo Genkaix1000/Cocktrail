@@ -3,11 +3,11 @@ import { useTheme } from "./ThemeProvider";
 export type BrandSize = "sm" | "md" | "lg" | "xl" | "hero";
 
 const SCALE: Record<BrandSize, number> = {
-  sm: 0.7,
-  md: 0.95,
-  lg: 1.2,
-  xl: 1.45,
-  hero: 1.8,
+  sm: 0.55,
+  md: 0.8,
+  lg: 0.95,
+  xl: 1.2,
+  hero: 1.5,
 };
 
 type Props = {
@@ -47,7 +47,7 @@ export function BrandLogo({ size = "md", className = "" }: Props) {
         <img
           src={logoUrl}
           alt={textLogoValue || "Logo"}
-          className="object-contain"
+          className="object-contain block"
           style={logoStyle}
         />
       ) : (

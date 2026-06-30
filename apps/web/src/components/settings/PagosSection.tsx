@@ -56,7 +56,12 @@ export default function PagosSection() {
   return (
     <div className="max-w-2xl space-y-8">
       <div>
-        <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight">Pagos</h1>
+        <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+            <CreditCard size={16} />
+          </div>
+          <span>Pagos</span>
+        </h1>
         <p className="text-[13px] text-ink-400/80 mt-1">
           Configurá la integración con Mercado Pago para cobrar los pedidos digitalmente.
         </p>

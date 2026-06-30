@@ -6,6 +6,7 @@ import { validate, CreateOrderSchema, UpdateOrderStatusSchema } from "../../shar
 import { orderLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import { Forbidden } from "../../shared/errors/http-errors.js";
+import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
 export function createOrdersController(
   service: OrdersService,
@@ -22,6 +23,11 @@ export function createOrdersController(
       const createdBy = session ? session.username : "Cliente";
 
       const order = await service.createOrder({ items, paymentMethod }, createdBy);
+      await AuditLogsService.log(
+        "order.created",
+        `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,
+        createdBy
+      );
       res.status(201).json(order);
     } catch (err) {
       next(err);
@@ -91,6 +97,34 @@ export function createOrdersController(
       }
 
       const order = await service.updateOrderStatus(req.params.id as string, status, username);
+      
+      // Audit log the status transition
+      if (status === "cancelado") {
+        await AuditLogsService.log(
+          "order.cancelled",
+          `Devolución procesada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,
+          username
+        );
+      } else if (status === "entregado") {
+        await AuditLogsService.log(
+          "order.delivered",
+          `Ticket #${order.displayNumber} entregado`,
+          username
+        );
+      } else if (status === "listo") {
+        await AuditLogsService.log(
+          "order.ready",
+          `Ticket #${order.displayNumber} listo para retirar`,
+          username
+        );
+      } else if (status === "preparando") {
+        await AuditLogsService.log(
+          "order.preparando",
+          `Ticket #${order.displayNumber} en preparación`,
+          username
+        );
+      }
+
       res.json(order);
     } catch (err) {
       next(err);

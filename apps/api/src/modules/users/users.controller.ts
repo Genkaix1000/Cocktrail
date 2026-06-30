@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { UsersService } from "./users.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, CreateUserSchema, UpdateUserSchema } from "../../shared/middleware/validate.js";
+import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
 export function createUsersController(service: UsersService): Router {
   const router = Router();
@@ -29,6 +30,11 @@ export function createUsersController(service: UsersService): Router {
     async (req, res, next) => {
       try {
         const user = await service.createUser(req.body);
+        await AuditLogsService.log(
+          "staff.created",
+          `Staff creado - ${user.username}`,
+          req.session?.username || "admin"
+        );
         res.status(201).json(user);
       } catch (err) {
         next(err);
@@ -43,7 +49,13 @@ export function createUsersController(service: UsersService): Router {
     requireRole("admin"),
     async (req, res, next) => {
       try {
-        await service.deleteUser(req.params.id as string);
+        const id = req.params.id as string;
+        await service.deleteUser(id);
+        await AuditLogsService.log(
+          "staff.deleted",
+          `Staff eliminado - ID #${id}`,
+          req.session?.username || "admin"
+        );
         res.json({ ok: true });
       } catch (err) {
         next(err);
@@ -59,7 +71,13 @@ export function createUsersController(service: UsersService): Router {
     validate(UpdateUserSchema),
     async (req, res, next) => {
       try {
-        const user = await service.updateUser(req.params.id as string, req.body);
+        const id = req.params.id as string;
+        const user = await service.updateUser(id, req.body);
+        await AuditLogsService.log(
+          "staff.updated",
+          `Staff actualizado - ${user.username}`,
+          req.session?.username || "admin"
+        );
         res.json(user);
       } catch (err) {
         next(err);

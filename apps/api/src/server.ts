@@ -6,7 +6,7 @@ import { supabase } from "./shared/supabase.js";
 import { exec } from "node:child_process";
 
 async function ensureDatabaseConnection(): Promise<void> {
-  const maxAttempts = 3;
+  const maxAttempts = 6;
   let connected = false;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -64,7 +64,9 @@ async function boot() {
   });
 
   // 2. Perform self-healing local DB connection check and initialization
-  try {
+  let dbInitialized = false;
+
+  async function initializeDatabase() {
     console.log("[boot] Checking local database connection...");
     await ensureDatabaseConnection();
     console.log("[boot] Local database connection verified.");
@@ -79,16 +81,52 @@ async function boot() {
       await seedHistoryDemo(eventsService);
       console.log("[boot] Historial demo seedeado");
     }
-  } catch (err: any) {
-    console.error("❌ Failed to initialize local database on boot:", err.message || err);
-    // Keep the server running even if DB is down so the UI displays diagnostics
+
+    // Ensure local master data is seeded in the background (no Cloud Pull on boot)
+    console.log("[boot] Ensuring local master data is seeded...");
+    await syncService.ensureLocalMasterDataSeeded();
+    console.log("[boot] Local master data check completed.");
+    
+    dbInitialized = true;
   }
 
-  // 3. Ensure local master data is seeded in the background (no Cloud Pull on boot)
-  console.log("[boot] Ensuring local master data is seeded...");
-  syncService.ensureLocalMasterDataSeeded()
-    .then(() => console.log("[boot] Local master data check completed."))
-    .catch((err) => console.error("[boot] Local master data check failed:", err));
+  initializeDatabase().catch(async (err: any) => {
+    console.error("❌ Failed to initialize local database on boot:", err.message || err);
+    console.log("[boot] Database initialization failed. Starting background auto-healing retry loop...");
+    
+    while (!dbInitialized) {
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        
+        // Quick connection check
+        const { error } = await supabase.from("night_events").select("id").limit(1);
+        if (error && (error.message.includes("fetch failed") || error.message.includes("ECONNREFUSED"))) {
+          throw new Error(error.message);
+        }
+        
+        console.log("[boot] [Retry] Local database connection established!");
+        
+        // Re-run initialization steps
+        await eventsService.initialize();
+        console.log("[boot] [Retry] EventsService initialized");
+
+        const closed = await eventsService.listClosedEvents();
+        if (closed.length === 0) {
+          await seedHistoryDemo(eventsService);
+          console.log("[boot] [Retry] Historial demo seedeado");
+        }
+
+        console.log("[boot] [Retry] Ensuring local master data is seeded...");
+        await syncService.ensureLocalMasterDataSeeded();
+        console.log("[boot] [Retry] Local master data check completed.");
+
+        dbInitialized = true;
+        console.log("[boot] [Retry] Database initialization fully completed successfully!");
+      } catch (retryErr: any) {
+        // Silently retry to avoid log spam in terminal
+      }
+    }
+  });
 }
 
 boot().catch((err) => {

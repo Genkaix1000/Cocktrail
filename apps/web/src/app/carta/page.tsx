@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, X, Clock, CheckCircle2, Banknote, QrCode, CreditCard } from "lucide-react";
+import { Minus, Plus, X, Clock, CheckCircle2, Banknote, QrCode, CreditCard, Sparkles, TrendingUp, GlassWater } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DrinkCard from "../../components/DrinkCard";
@@ -14,11 +14,12 @@ import { useSSE } from "@/lib/useSSE";
 import { STATUS_META } from "@/lib/orderStatus";
 import type { Drink, OrderStatus, PaymentMethod } from "@cocktrail/shared";
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({ children, icon: Icon }: { children: React.ReactNode; icon?: any }) {
   return (
     <div className="flex items-center gap-3 mb-4">
-      <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-ink-400 whitespace-nowrap">
-        {children}
+      <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-ink-400 whitespace-nowrap flex items-center gap-1.5">
+        {Icon && <Icon size={12} className="text-accent" />}
+        <span>{children}</span>
       </h2>
       <span className="flex-1 h-px bg-white/5" />
     </div>
@@ -538,7 +539,7 @@ export default function CartaPage() {
 
             {promoDrinks.length > 0 && (
               <section>
-                <SectionTitle>Promos Especiales</SectionTitle>
+                <SectionTitle icon={Sparkles}>Promos Especiales</SectionTitle>
                 <div className="flex flex-col gap-4">
                   {promoDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="promo" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
                 </div>
@@ -547,7 +548,7 @@ export default function CartaPage() {
 
             {trendingDrinks.length > 0 && (
               <section>
-                <SectionTitle>Tendencia de la noche</SectionTitle>
+                <SectionTitle icon={TrendingUp}>Tendencia de la noche</SectionTitle>
                 <div className="flex flex-col gap-4">
                   {trendingDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="trending" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
                 </div>
@@ -555,7 +556,7 @@ export default function CartaPage() {
             )}
 
             <section>
-              <SectionTitle>Nuestra Carta</SectionTitle>
+              <SectionTitle icon={GlassWater}>Nuestra Carta</SectionTitle>
               <div className="flex flex-col gap-3">
                 {regularDrinks.map(d => <DrinkCard key={d.id} {...d} icon={d.iconName} variant="regular" quantity={cart[d.id] || 0} onAdd={() => addToCart(d.id)} onRemove={() => removeFromCart(d.id)} />)}
               </div>

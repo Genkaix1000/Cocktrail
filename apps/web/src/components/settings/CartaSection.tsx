@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   DollarSign,
+  TrendingUp,
 } from "lucide-react";
 import { drinksService } from "@/services/drinks.service";
 import type { Drink } from "@cocktrail/shared";
@@ -221,7 +222,12 @@ export default function CartaSection() {
       {/* Title + actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight">Carta</h1>
+          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+              <Wine size={16} />
+            </div>
+            <span>Carta</span>
+          </h1>
           <p className="text-[13px] text-ink-400/80 mt-1">
             Gestioná los tragos de tu boliche. {drinks.length} tragos registrados.
           </p>
@@ -238,7 +244,7 @@ export default function CartaSection() {
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* Table & search panel */}
-        <div className="flex-1 w-full space-y-4 min-w-0">
+        <div className={`flex-1 w-full space-y-4 min-w-0 ${modalOpen ? "" : "max-w-4xl"}`}>
           {/* Search */}
           <div className="relative">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
@@ -503,6 +509,7 @@ export default function CartaSection() {
                   {(["generic", "promo", "trending"] as const).map((tag) => {
                     const isSelected = tag === "promo" ? editDrink.promo : tag === "trending" ? editDrink.trending : (!editDrink.promo && !editDrink.trending);
                     const label = tag === "generic" ? "Genérico" : tag === "promo" ? "Promo" : "Tendencia";
+                    const Icon = tag === "generic" ? GlassWater : tag === "promo" ? Zap : TrendingUp;
                     const activeClass = tag === "promo"
                       ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
                       : tag === "trending"
@@ -517,13 +524,14 @@ export default function CartaSection() {
                           promo: tag === "promo",
                           trending: tag === "trending",
                         })}
-                        className={`h-8 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                        className={`h-8 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
                           isSelected
                             ? activeClass
                             : "bg-transparent border-transparent text-ink-400 hover:text-ink-200"
                         }`}
                       >
-                        {label}
+                        <Icon size={12} />
+                        <span>{label}</span>
                       </button>
                     );
                   })}

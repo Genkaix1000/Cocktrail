@@ -42,7 +42,7 @@ export default function NightRecords({ records, isBosko }: Props) {
           <div
             key={r.type}
             className={`
-              bg-ink-900 border rounded-2xl p-4 flex items-start gap-4 transition-all
+              bg-ink-900 border rounded-2xl p-5 flex items-start gap-4 transition-all
               ${
                 isBest
                   ? "border-amber-500/30 shadow-[0_0_20px_rgba(251,191,36,0.06)]"

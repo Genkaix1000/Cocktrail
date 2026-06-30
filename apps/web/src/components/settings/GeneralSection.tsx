@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, Sun, TreePine, Image as ImageIcon, Type, Sparkles, Plus } from "lucide-react";
+import { Check, Loader2, Sun, TreePine, Image as ImageIcon, Type, Sparkles, Plus, Settings } from "lucide-react";
 import { configService } from "@/services/config.service";
 import { useTheme } from "@/components/ThemeProvider";
 
@@ -216,7 +216,12 @@ export default function GeneralSection() {
     <div className="w-full space-y-8">
       {/* Title */}
       <div>
-        <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight">General</h1>
+        <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+            <Settings size={16} />
+          </div>
+          <span>General</span>
+        </h1>
         <p className="text-[13px] text-ink-400/80 mt-1">Personalizá la apariencia y el branding de tu boliche.</p>
       </div>
 

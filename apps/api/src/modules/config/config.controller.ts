@@ -5,6 +5,7 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, UpdateConfigSchema } from "../../shared/middleware/validate.js";
 import type { EventsService } from "../events/events.service.js";
 import { emit } from "../../shared/sse/sse-manager.js";
+import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
 export function createConfigController(repo: ConfigRepository, eventsService?: EventsService): Router {
   const router = Router();
@@ -52,6 +53,12 @@ export function createConfigController(repo: ConfigRepository, eventsService?: E
           clubId: safe.clubId,
           clubName: safe.clubName,
         });
+
+        await AuditLogsService.log(
+          "config.updated",
+          "Configuración del boliche actualizada",
+          req.session?.username || "admin"
+        );
 
         res.json(safe);
       } catch (err) {
