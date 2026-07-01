@@ -68,7 +68,21 @@ const DEFAULT_CONFIG: AppConfig = {
 
 import { supabase } from "../../shared/supabase.js";
 
-function mapRowToConfig(row: any): AppConfig {
+type AppConfigRow = {
+  theme: Theme;
+  brand_name: string;
+  logo_url: string | null;
+  custom_theme: CustomTheme | null;
+  mercado_pago: MercadoPagoConfig | null;
+  club_id: string;
+  club_name: string;
+  use_logo_url: boolean;
+  logo_size: number;
+  text_logo_value: string;
+  text_logo_size: number;
+};
+
+function mapRowToConfig(row: AppConfigRow): AppConfig {
   return {
     theme: row.theme as Theme,
     brandName: row.brand_name,
@@ -132,7 +146,7 @@ export class SupabaseConfigRepository implements ConfigRepository {
     // Primero obtener la config actual para hacer merge profundo de mercadoPago si hace falta
     const current = await this.get();
     
-    const updates: any = {};
+    const updates: Partial<AppConfigRow> = {};
     if (partial.theme !== undefined) updates.theme = partial.theme;
     if (partial.brandName !== undefined) updates.brand_name = partial.brandName;
     if (partial.logoUrl !== undefined) updates.logo_url = partial.logoUrl || null;

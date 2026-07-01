@@ -7,7 +7,11 @@ import type { EventsService } from "../events/events.service.js";
 import { emit } from "../../shared/sse/sse-manager.js";
 import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
-export function createConfigController(repo: ConfigRepository, eventsService?: EventsService): Router {
+export function createConfigController(
+  repo: ConfigRepository,
+  eventsService?: EventsService,
+  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
+): Router {
   const router = Router();
 
   // GET /api/config — solo admin (datos sensibles enmascarados)
@@ -34,12 +38,12 @@ export function createConfigController(repo: ConfigRepository, eventsService?: E
     async (req, res, next) => {
       try {
         const updated = await repo.update(req.body);
-        if (eventsService) {
-          if (req.body.theme) {
-            await eventsService.setTheme(req.body.theme);
-          }
+        // Solo sincroniza el cache en memoria del tema — la persistencia y el
+        // broadcast SSE ya los hace este handler una única vez, más abajo.
+        if (eventsService && req.body.theme) {
+          eventsService.syncActiveTheme(req.body.theme);
         }
-        
+
         const safe = toSafeConfig(updated);
         emit({
           type: "theme.changed",
@@ -54,7 +58,7 @@ export function createConfigController(repo: ConfigRepository, eventsService?: E
           clubName: safe.clubName,
         });
 
-        await AuditLogsService.log(
+        await auditLogsService.log(
           "config.updated",
           "Configuración del boliche actualizada",
           req.session?.username || "admin"

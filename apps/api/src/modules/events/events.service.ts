@@ -270,6 +270,14 @@ export class EventsService {
     emit({ type: "theme.changed", theme, customTheme });
   }
 
+  /**
+   * Sincroniza el cache en memoria del tema activo sin volver a persistir ni emitir SSE —
+   * para cuando el caller (ej. config.controller) ya persistió y va a emitir el broadcast él mismo.
+   */
+  syncActiveTheme(theme: Theme): void {
+    this.activeTheme = theme;
+  }
+
   async getTheme(): Promise<Theme> {
     await this.ensureInitialized();
     return this.activeTheme;
