@@ -23,12 +23,31 @@ export interface OrdersRepository {
       redeemMethod?: "scan" | "manual";
     },
   ): Promise<Order>;
-  clear(): Promise<void>;
 }
 
 // ── Implementación Supabase ──
 
-function mapRowToOrder(row: any): Order {
+type OrderRow = {
+  id: string;
+  token: string;
+  display_number: number;
+  items: Order["items"];
+  total: number;
+  payment_method: Order["paymentMethod"];
+  status: OrderStatus;
+  created_at: string;
+  ready_at: string | null;
+  delivered_at: string | null;
+  ticket_code: string | null;
+  created_by: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  delivered_by: string | null;
+  delivered_by_bar: string | null;
+  redeem_method: "scan" | "manual" | null;
+};
+
+function mapRowToOrder(row: OrderRow): Order {
   return {
     id: row.id,
     token: row.token,
@@ -166,7 +185,7 @@ export class SupabaseOrdersRepository implements OrdersRepository {
       redeemMethod?: "scan" | "manual";
     },
   ): Promise<Order> {
-    const updates: any = { status };
+    const updates: Partial<Omit<OrderRow, "id">> = { status };
     if (timestamps?.readyAt) updates.ready_at = new Date(timestamps.readyAt).toISOString();
     if (timestamps?.deliveredAt) updates.delivered_at = new Date(timestamps.deliveredAt).toISOString();
     if (timestamps?.cancelledAt) updates.cancelled_at = new Date(timestamps.cancelledAt).toISOString();
@@ -188,9 +207,5 @@ export class SupabaseOrdersRepository implements OrdersRepository {
     }
 
     return mapRowToOrder(data);
-  }
-
-  async clear(): Promise<void> {
-    // In SQL context, we preserve records.
   }
 }

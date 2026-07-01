@@ -7,12 +7,36 @@ import { orderLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import { Forbidden } from "../../shared/errors/http-errors.js";
 import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
+import type { OrderStatus } from "@cocktrail/shared";
 
 export function createOrdersController(
   service: OrdersService,
   usersRepo: UsersRepository,
+  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
 ): Router {
   const router = Router();
+
+  const STATUS_AUDIT_ACTION: Partial<Record<OrderStatus, string>> = {
+    cancelado: "order.cancelled",
+    entregado: "order.delivered",
+    listo: "order.ready",
+    preparando: "order.preparando",
+  };
+
+  function statusAuditMessage(status: OrderStatus, order: { displayNumber: number; total: number }): string {
+    switch (status) {
+      case "cancelado":
+        return `Devolución procesada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`;
+      case "entregado":
+        return `Ticket #${order.displayNumber} entregado`;
+      case "listo":
+        return `Ticket #${order.displayNumber} listo para retirar`;
+      case "preparando":
+        return `Ticket #${order.displayNumber} en preparación`;
+      default:
+        return `Ticket #${order.displayNumber} actualizado a ${status}`;
+    }
+  }
 
   // POST /api/orders — crear pedido (público)
   router.post("/", orderLimiter, validate(CreateOrderSchema), async (req, res, next) => {
@@ -23,7 +47,7 @@ export function createOrdersController(
       const createdBy = session ? session.username : "Cliente";
 
       const order = await service.createOrder({ items, paymentMethod }, createdBy);
-      await AuditLogsService.log(
+      await auditLogsService.log(
         "order.created",
         `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,
         createdBy
@@ -97,32 +121,10 @@ export function createOrdersController(
       }
 
       const order = await service.updateOrderStatus(req.params.id as string, status, username);
-      
-      // Audit log the status transition
-      if (status === "cancelado") {
-        await AuditLogsService.log(
-          "order.cancelled",
-          `Devolución procesada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,
-          username
-        );
-      } else if (status === "entregado") {
-        await AuditLogsService.log(
-          "order.delivered",
-          `Ticket #${order.displayNumber} entregado`,
-          username
-        );
-      } else if (status === "listo") {
-        await AuditLogsService.log(
-          "order.ready",
-          `Ticket #${order.displayNumber} listo para retirar`,
-          username
-        );
-      } else if (status === "preparando") {
-        await AuditLogsService.log(
-          "order.preparando",
-          `Ticket #${order.displayNumber} en preparación`,
-          username
-        );
+
+      const auditAction = STATUS_AUDIT_ACTION[status as OrderStatus];
+      if (auditAction) {
+        await auditLogsService.log(auditAction, statusAuditMessage(status as OrderStatus, order), username);
       }
 
       res.json(order);
