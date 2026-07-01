@@ -52,7 +52,16 @@ export { hashPassword };
 
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
 
-function mapRowToUser(row: any): StaffUser {
+type UserRow = {
+  id: string;
+  username: string;
+  password_hash: string;
+  role: Role;
+  permissions: UserPermissions;
+  created_at: string;
+};
+
+function mapRowToUser(row: UserRow): StaffUser {
   return {
     id: row.id,
     username: row.username,

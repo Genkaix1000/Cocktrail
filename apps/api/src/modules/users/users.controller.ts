@@ -4,7 +4,10 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, CreateUserSchema, UpdateUserSchema } from "../../shared/middleware/validate.js";
 import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
-export function createUsersController(service: UsersService): Router {
+export function createUsersController(
+  service: UsersService,
+  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
+): Router {
   const router = Router();
 
   // GET /api/users — solo admin
@@ -30,7 +33,7 @@ export function createUsersController(service: UsersService): Router {
     async (req, res, next) => {
       try {
         const user = await service.createUser(req.body);
-        await AuditLogsService.log(
+        await auditLogsService.log(
           "staff.created",
           `Staff creado - ${user.username}`,
           req.session?.username || "admin"
@@ -51,7 +54,7 @@ export function createUsersController(service: UsersService): Router {
       try {
         const id = req.params.id as string;
         await service.deleteUser(id);
-        await AuditLogsService.log(
+        await auditLogsService.log(
           "staff.deleted",
           `Staff eliminado - ID #${id}`,
           req.session?.username || "admin"
@@ -73,7 +76,7 @@ export function createUsersController(service: UsersService): Router {
       try {
         const id = req.params.id as string;
         const user = await service.updateUser(id, req.body);
-        await AuditLogsService.log(
+        await auditLogsService.log(
           "staff.updated",
           `Staff actualizado - ${user.username}`,
           req.session?.username || "admin"
