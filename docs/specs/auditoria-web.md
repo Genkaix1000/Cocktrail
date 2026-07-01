@@ -285,12 +285,29 @@ cada vista tenga que volver a resolver permisos por su cuenta).
 
 ### 5. `AdminClient.tsx` — extraer `LogsSection` (`activeTab === "logs"`)
 
-- [ ] Crear `components/admin/LogsSection.tsx` (hoy L2524-3044) con `ordersService.getAuditLogs` y
-  la cancelación de tickets (`ordersService.updateStatus(id, "cancelado")`).
-- [ ] Recibe el filtro precargado desde `onRedirectToLogs` (tarea 4).
-- [ ] Test de caracterización.
-- [ ] Auditoría + fixes chicos.
-- [ ] Typecheck + build en verde. Commit.
+- [x] Crear `components/admin/LogsSection.tsx` (hoy L2524-3044) con `ordersService.getAuditLogs` y
+  la cancelación de tickets (`ordersService.updateStatus(id, "cancelado")`). **Nota de
+  implementación**: a diferencia de Historial, acá el fetch es exclusivo de esta vista (nadie más
+  lo consume), así que se movió completo — estado, `fetchLogs`, agrupado/orden/paginación y el
+  flujo de cancelación quedaron 100% dentro de `LogsSection`, sin nada delegado al shell.
+- [x] Recibe el filtro precargado desde `onRedirectToLogs` (tarea 4): el puente se resolvió con un
+  prop `initialFilterTimestamp?: number | null` que el shell (`AdminClient`) setea en
+  `onRedirectToLogs` y pasa a `LogsSection`. Como esta vista se monta de cero cada vez que
+  `activeTab` pasa a `"logs"` (render condicional en el shell), alcanza con sembrar el estado
+  inicial (`viewAllNights`/`selectedLogMonth`/`selectedLogDay`) desde ese prop vía `useState`
+  lazy-init — no hizo falta un `useEffect` ni un callback de "consumido". El botón del sidebar
+  resetea el prop a `null` antes de navegar por su cuenta, para no arrastrar el filtro de un
+  redirect previo.
+- [x] Test de caracterización (`LogsSection.test.tsx`): render sin crashear, estado de carga
+  inicial, estado vacío, cancelación de ticket end-to-end, y el caso del redirect con
+  `initialFilterTimestamp` precargando mes/día.
+- [x] Auditoría + fixes chicos: se tipó el comparador de sort (`any` → `string | number`) y se
+  agregaron `aria-label`/`aria-current` en paginación y cierre del modal de detalle, igual que en
+  Historial. Sin hallazgos estructurales nuevos — el `set-state-in-effect` de varios `useEffect`
+  (mismo patrón ya presente en `HistorialSection.tsx`) es deuda de lint preexistente en todo el
+  repo, no una regresión de esta extracción; queda fuera del alcance de esta tarea porque no forma
+  parte del gate (typecheck + build + test).
+- [x] Typecheck + build en verde. Commit.
 
 ### 6. `AdminClient.tsx` — extraer `QrSection` (`activeTab === "qr"`) y cerrar el shell
 
