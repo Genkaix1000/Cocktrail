@@ -2,6 +2,7 @@ import { Router } from "express";
 import { exec } from "node:child_process";
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
 import { authenticate } from "../auth/auth.service.js";
+import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { syncService } from "../sync/sync.service.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
@@ -45,8 +46,8 @@ export function createSystemController(
     }
   }
 
-  // GET /api/system/logs
-  router.get("/logs", async (req, res, next) => {
+  // GET /api/system/logs — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
+  router.get("/logs", authMiddleware, requireRole("admin", "caja", "barman"), async (req, res, next) => {
     try {
       const logs = await AuditLogsService.getLatest(10);
       res.json(logs);
@@ -55,8 +56,8 @@ export function createSystemController(
     }
   });
 
-  // GET /api/system/status
-  router.get("/status", systemStatusLimiter, async (req, res, next) => {
+  // GET /api/system/status — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
+  router.get("/status", authMiddleware, requireRole("admin", "caja", "barman"), systemStatusLimiter, async (req, res, next) => {
     try {
       const internetPromise = checkInternet();
       
@@ -158,8 +159,8 @@ export function createSystemController(
     }
   });
 
-  // POST /api/system/sync
-  router.post("/sync", async (req, res, next) => {
+  // POST /api/system/sync — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
+  router.post("/sync", authMiddleware, requireRole("admin", "caja", "barman"), async (req, res, next) => {
     try {
       // 1. Pull Master Data
       await syncService.pullMasterData();
