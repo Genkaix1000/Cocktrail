@@ -35,3 +35,6 @@ next-env.d.ts
 # datos de runtime / código muerto (ver docs/ROADMAP.md R4) — no versionar
 apps/api/src/data/*.json
 
+# reporte de cobertura de tests (generado por vitest --coverage)
+coverage/
+

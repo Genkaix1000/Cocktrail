@@ -10,7 +10,7 @@
 
 **Objetivo**: que el sistema funcione completo en una máquina local del boliche (mini-PC/laptop),
 sin depender de internet, con caja + reconciliación a la nube al cerrar la noche. El pedido por LAN
-(`/carta` + `/barra`) está programado y corre, pero su validación queda para la Fase 4 (ver nota abajo).
+(`/carta` + `/barra`) está programado y corre, pero su validación queda para la Fase 7 (ver nota abajo).
 
 ### Ya construido
 - [x] Monorepo pnpm (`apps/api` Express + `apps/web` Next.js 16 + `packages/shared`).
@@ -38,14 +38,14 @@ sin depender de internet, con caja + reconciliación a la nube al cerrar la noch
 - [ ] **Tests**: smoke/E2E con Playwright de los **2 flujos activos** (`/caja`, `/admin`). Ver nota abajo sobre qué queda fuera y por qué.
 - [ ] Revisar **atomicidad del canje de ticket** (evitar doble canje bajo concurrencia).
 
-> 📌 **Nota — `/carta`, el ticket virtual y `/barra` quedan fuera de la validación hasta la Fase 4**:
+> 📌 **Nota — `/carta`, el ticket virtual y `/barra` quedan fuera de la validación hasta la Fase 7**:
 > las tres pantallas del **flujo digital del cliente** (`/carta` para armar el pedido por QR, la pantalla
 > del ticket con estado en vivo, y `/barra` para que el barman lo canjee) **están programadas y el
 > código corre**, pero **no se van a validar/probar ahora** — el acceso rápido a `/barra` en `/login`
 > directamente está deshabilitado (no aparece en "Accesos Rápidos"; el rol `barman` sigue existiendo
 > en el backend).
 >
-> **Por qué**: ese flujo completo (carta → ticket → barra) se va a **rediseñar junto con la Fase 4**
+> **Por qué**: ese flujo completo (carta → ticket → barra) se va a **rediseñar junto con la Fase 7**
 > (pedido online), incluyendo cómo se sincroniza un pedido creado en la web con la barra local. No
 > tiene sentido validarlo dos veces — se prueba una sola vez, ya rediseñado, al cerrar esa fase.
 >
@@ -82,7 +82,66 @@ cliente lo retire en la barra. El dueño ya compró la impresora térmica.
 
 ---
 
-## Fase 2 — Pulir UI de caja ⚡
+## Fase 2 — Auditoría API 🔍 *(completa)*
+
+**Objetivo**: dejar `apps/api` con tests reales (Vitest + Supertest) y auditada contra SOLID/clean
+code, módulo por módulo, antes de tocar el frontend. Ver `docs/specs/auditoria-api.md`.
+
+- [x] Setup del test runner: Vitest + Supertest, tests unitarios co-ubicados + integración contra
+  Supabase local real (`apps/api/tests/integration/`), con `fileParallelism` desactivado para
+  integración (los archivos comparten la misma DB real).
+- [x] Los 9 módulos (`config, tickets, auth, drinks, orders, users, events, sync, system`) con
+  tests de caracterización, auditados con `architect-reviewer`, y con los fixes de bajo riesgo ya
+  aplicados. 102 tests unitarios + 78 de integración, `pnpm typecheck` en verde.
+- [x] **Bug real corregido**: `POST /api/config` con `theme` hacía doble escritura a DB y doble
+  emit SSE.
+- [x] **R5 resuelta**: eliminada la credencial hardcodeada `cajavip/cajavip` de `auth.service.ts`
+  — si alguien la usaba para operar, hay que crear un usuario real con rol `caja` en
+  `/admin → Usuarios`.
+- [x] **Hallazgo de seguridad corregido**: `GET /api/system/logs`, `GET /api/system/status` y
+  `POST /api/system/sync` no tenían **ningún** middleware de auth pese a estar documentados como
+  protegidos por rol `staff` — cualquiera en la LAN podía ver audit logs, estado interno del
+  sistema y disparar un sync completo. Se agregó `authMiddleware` + `requireRole`.
+- [x] Limpieza: eliminados 2 métodos `clear()` vestigiales (tickets/orders repository, no-ops de
+  una implementación in-memory anterior sin callers). `AuditLogsService` inyectado en vez de
+  import estático en config/tickets/drinks/orders/users. Varios `any` tipados. `mapRowToEvent`
+  extraído (estaba duplicado 5 veces). Seeding de admin/drinks por defecto desduplicado en `sync`.
+- [ ] **Deuda estructural documentada, no resuelta en esta fase** (candidatos para cuando se
+  decida abordarlas, no bloquean nada hoy): `auth.service.ts` mezcla autenticación + firma de
+  sesión + captcha en un archivo; `SyncService` bypasea los repositorios existentes y pega directo
+  a Supabase (`users`/`drinks`/`orders`/`cash-sales` duplican el mismo patrón de sync a cloud);
+  `emit` (SSE) se llama directo desde `orders.service.ts`/`events.service.ts` en vez de una capa
+  de infra separada; `system.controller.ts` no tiene Service propio; `TicketsService.redeemTicket`
+  orquesta directamente la máquina de estados de `OrdersService`.
+- [ ] **Fuera de alcance de esta fase** (sin tests/auditoría todavía): módulos `printer`,
+  `mercadopago`, `cash-sales`, `audit-logs`, `sse`.
+
+---
+
+## Fase 3 — Auditoría Web 🎨
+
+**Objetivo**: mismo tratamiento que la Fase 2 pero para `apps/web` — el problema principal son los
+god-components: `AdminClient.tsx` (3425 líneas), `CajaClient.tsx` (2186), `BarraClient.tsx` (1517).
+Modularizar (hooks, subcomponentes, separar lógica de negocio de presentación), auditar contra
+SOLID/clean code con `architect-reviewer` + `expert-react-frontend-engineer` +
+`expert-nextjs-developer`, y agregar tests donde corresponda.
+
+- [ ] Definir spec/plan/tareas con SDD (`docs/specs/auditoria-web.md`), siguiendo el mismo patrón
+  de la Fase 2.
+
+---
+
+## Fase 4 — E2E post-refactor 🧪
+
+**Objetivo**: una vez que API y Web estén auditadas, pruebas E2E (Playwright, agente
+`e2e-playwright-tester`) de los flujos completos — reemplaza/amplía la verificación manual que hoy
+se hace del flujo caja→admin (ver nota en la Fase actual).
+
+- [ ] Definir alcance una vez cerrada la Fase 3.
+
+---
+
+## Fase 5 — Pulir UI de caja ⚡
 
 **Objetivo**: que la pantalla de caja sea más rápida y dinámica para el ritmo real de una barra
 (menos clicks, cobro más ágil), antes de empaquetar y llevar al boliche.
@@ -93,7 +152,7 @@ cliente lo retire en la barra. El dueño ya compró la impresora térmica.
 
 ---
 
-## Fase 3 — Empaquetado y producto 📦
+## Fase 6 — Empaquetado y producto 📦
 
 **Objetivo**: que el dueño abra la app con **doble-click**, sin instalar Docker ni Node ni levantar
 nada a mano.
@@ -118,7 +177,7 @@ nada a mano.
 
 ---
 
-## Fase 4 — Pedido online "en la web" 🌐 *(lo último de lo último)*
+## Fase 7 — Pedido online "en la web" 🌐 *(lo último de lo último)*
 
 **Objetivo**: que el cliente pueda pedir desde internet (fuera de la LAN del local), reciba su ticket
 online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caja.
@@ -147,7 +206,8 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 | R2 | `night_events.totals` no está en migraciones locales (solo cloud). | El push de totales asume schema cloud. | Abierto |
 | R3 | Canje de ticket podría no ser atómico (read-check-write). | Doble canje bajo concurrencia. | A verificar |
 | R4 | Código muerto (`data/*.json`, repos `LocalJSON/InMemory`). | Confunde, sugiere persistencia que no se usa. | ✅ Resuelto (2026-06-30) |
-| R5 | Credencial `cajavip/cajavip` hardcodeada en `auth.service.ts`. | Acceso no documentado. | A revisar |
+| R5 | Credencial `cajavip/cajavip` hardcodeada en `auth.service.ts`. | Acceso no documentado. | ✅ Resuelto (2026-07-01, Fase 2) — eliminada |
+| R9 | `GET /api/system/logs`, `GET /api/system/status` y `POST /api/system/sync` no tenían **ningún** middleware de auth pese a estar documentados como protegidos por rol `staff`. | Cualquiera en la LAN podía ver audit logs, estado interno del sistema y disparar un sync completo. | ✅ Resuelto (2026-07-01, Fase 2) — agregado `authMiddleware`+`requireRole` |
 | R6 | `next-env.d.ts` y `apps/api/src/data/*.json` aparecen como modificados en runtime. | Ruido en git. | Considerar `.gitignore` |
 | R7 | `supabase/docker/kong.yml` usa las **demo keys públicas** de Supabase (JWT secret demo incluido), hardcodeadas. Kong DB-less **no** interpola env vars en el campo `key` de key-auth (ni `${{}}` de decK ni vault refs), así que no se pueden mover a `.env`. | Para LAN aceptable; si se expone `:54321` a internet = takeover de la DB (secret público). | Abierto — rotar las 3 llaves + JWT_SECRET antes de exponer fuera de LAN; alternativa: render con `envsubst` (la imagen de Kong no lo trae). |
 | R8 | La impresora térmica **no reporta "sin papel"** — verificado en vivo: con el rollo vacío/sin papel, `GET /api/printer/status` sigue devolviendo `connected: true` y la venta marca `printed: true` aunque no salió nada. La impresora no expone protocolo bidireccional confiable (por eso se evitó CUPS), así que el software solo confirma que el device node existe y acepta la escritura, no que el papel esté presente. | La cajera puede creer que el ticket salió cuando en realidad no imprimió nada (papel agotado). | Abierto — mitigación operativa por ahora: revisar visualmente el rollo antes de empezar el turno. Una detección real requeriría lectura de estado bidireccional (fuera de alcance, ver plan técnico de `docs/specs/impresora-termica.md`). |

@@ -1,6 +1,6 @@
 # Auditoría de apps/api — SOLID/clean code + tests reales (Fase 1 de 3)
 
-**Estado**: approved
+**Estado**: done
 **Fecha**: 2026-07-01
 
 > Fase 1 de una iniciativa de 3 fases: **API** (esta spec) → **Web** (god-components:
@@ -197,143 +197,143 @@ mockear el middleware de auth y así también cubrirlo con los tests de integrac
 
 ### 0. Setup del test runner (bloquea todo lo demás)
 
-- [ ] Instalar devDependencies en `apps/api/package.json`: `vitest`, `@vitest/coverage-v8`,
+- [x] Instalar devDependencies en `apps/api/package.json`: `vitest`, `@vitest/coverage-v8`,
   `supertest`, `@types/supertest`.
-- [ ] Agregar scripts en `apps/api/package.json`: `test`, `test:unit`, `test:integration`,
+- [x] Agregar scripts en `apps/api/package.json`: `test`, `test:unit`, `test:integration`,
   `test:coverage`.
-- [ ] Crear `apps/api/vitest.config.ts` (environment `node`, `globalSetup` solo para
+- [x] Crear `apps/api/vitest.config.ts` (environment `node`, `globalSetup` solo para
   `test:integration`).
-- [ ] Crear `apps/api/tests/setup/global-setup.ts` — verifica que `SUPABASE_URL` responda antes de
+- [x] Crear `apps/api/tests/setup/global-setup.ts` — verifica que `SUPABASE_URL` responda antes de
   `test:integration`; aborta con mensaje claro si el stack Docker no está arriba.
-- [ ] Crear `apps/api/.env.test` (copia de `.env` local **sin** `SUPABASE_CLOUD_*`).
-- [ ] Crear `apps/api/tests/setup/db-helpers.ts` con: `cleanNightEvents()` (cascadea
+- [x] Crear `apps/api/.env.test` (copia de `.env` local **sin** `SUPABASE_CLOUD_*`).
+- [x] Crear `apps/api/tests/setup/db-helpers.ts` con: `cleanNightEvents()` (cascadea
   orders/tickets/cash_sales), `cleanUsers()`, `cleanDrinks()`, `cleanAppConfig()`,
   `cleanAuditLogs()`, `createTestAdmin()`, `createOpenNightEvent()`, `signTestSession(role,
   username)`.
-- [ ] Correr `pnpm --filter api test` (debe pasar vacío/sin suites todavía, solo valida que el
+- [x] Correr `pnpm --filter api test` (debe pasar vacío/sin suites todavía, solo valida que el
   runner arranca) y confirmar que `docker compose up` + `global-setup.ts` detectan el stack
   correctamente.
 
 ### 1. Módulo `config` (menor riesgo, arranca la iteración)
 
-- [ ] Tests de caracterización: `apps/api/src/modules/config/config.service.test.ts` (unitario,
+- [x] Tests de caracterización: `apps/api/src/modules/config/config.service.test.ts` (unitario,
   repo mockeado) + `apps/api/tests/integration/config.integration.test.ts` (Supertest, `GET/POST
   /api/config`, tokens enmascarados).
-- [ ] `architect-reviewer` audita `config.controller.ts` + `config.repository.ts` contra SOLID.
-- [ ] Aplicar fixes chicos directo; si hay hallazgo estructural, anotarlo en esta checklist como
+- [x] `architect-reviewer` audita `config.controller.ts` + `config.repository.ts` contra SOLID.
+- [x] Aplicar fixes chicos directo; si hay hallazgo estructural, anotarlo en esta checklist como
   sub-tarea antes de tocarlo.
-- [ ] Actualizar/ampliar los tests sobre el código ya corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Actualizar/ampliar los tests sobre el código ya corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 2. Módulo `tickets`
 
-- [ ] Tests de caracterización: `tickets.service.test.ts` (unitario) +
+- [x] Tests de caracterización: `tickets.service.test.ts` (unitario) +
   `tests/integration/tickets.integration.test.ts` (`POST /api/tickets/redeem`, incluye caso de
   doble canje — ver riesgo `R3` del ROADMAP).
-- [ ] `architect-reviewer` audita `tickets.controller.ts` / `tickets.service.ts` /
+- [x] `architect-reviewer` audita `tickets.controller.ts` / `tickets.service.ts` /
   `tickets.repository.ts` / `tickets.crypto.ts`.
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 3. Módulo `auth`
 
-- [ ] Tests de caracterización: `auth.service.test.ts` (unitario, incluye fallback de usuarios por
+- [x] Tests de caracterización: `auth.service.test.ts` (unitario, incluye fallback de usuarios por
   env) + `tests/integration/auth.integration.test.ts` (`POST /login`, `/logout`, `GET /me`,
   captcha tras 3 fallos, rate limiting).
-- [ ] `architect-reviewer` audita `auth.controller.ts` / `auth.service.ts` / `auth.middleware.ts`.
+- [x] `architect-reviewer` audita `auth.controller.ts` / `auth.service.ts` / `auth.middleware.ts`.
   Revisar explícitamente la credencial hardcodeada `cajavip/cajavip` (deuda `R5` del ROADMAP) — si
   entra en el hallazgo, resolverla acá y marcar `R5` como resuelta.
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 4. Módulo `drinks`
 
-- [ ] Tests de caracterización: `drinks.service.test.ts` (unitario) +
+- [x] Tests de caracterización: `drinks.service.test.ts` (unitario) +
   `tests/integration/drinks.integration.test.ts` (`GET`, `POST/PATCH/DELETE` admin-only).
-- [ ] `architect-reviewer` audita `drinks.controller.ts` / `drinks.service.ts` /
+- [x] `architect-reviewer` audita `drinks.controller.ts` / `drinks.service.ts` /
   `drinks.repository.ts`.
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 5. Módulo `orders`
 
-- [ ] Tests de caracterización: `orders.service.test.ts` (unitario, incluye máquina de estados
+- [x] Tests de caracterización: `orders.service.test.ts` (unitario, incluye máquina de estados
   `pagado→preparando→listo→entregado` + `cancelado`) +
   `tests/integration/orders.integration.test.ts` (`POST /api/orders`, `GET /by-token/:token`,
   `GET /active`, `PATCH /:id`, transiciones inválidas rechazadas).
-- [ ] `architect-reviewer` audita `orders.controller.ts` / `orders.service.ts` /
+- [x] `architect-reviewer` audita `orders.controller.ts` / `orders.service.ts` /
   `orders.repository.ts` (foco: la máquina de estados no debería vivir mezclada con acceso a
   datos).
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 6. Módulo `users`
 
-- [ ] Tests de caracterización: `users.service.test.ts` (unitario, incluye hash de password) +
+- [x] Tests de caracterización: `users.service.test.ts` (unitario, incluye hash de password) +
   `tests/integration/users.integration.test.ts` (`GET/POST/PATCH/DELETE`, permisos granulares
   `UserPermissions`).
-- [ ] `architect-reviewer` audita `users.controller.ts` / `users.service.ts` /
+- [x] `architect-reviewer` audita `users.controller.ts` / `users.service.ts` /
   `users.repository.ts` (es el repo más grande del set, 229 líneas — foco en SRP).
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 7. Módulo `events`
 
-- [ ] Tests de caracterización: `events.service.test.ts` (unitario, incluye auto-cierre por día
+- [x] Tests de caracterización: `events.service.test.ts` (unitario, incluye auto-cierre por día
   calendario AR) + `tests/integration/events.integration.test.ts` (`POST /open` con keyword
   obligatoria, `PATCH /current/keyword`, `POST /close`, `GET /history`, `GET /state`).
-- [ ] `architect-reviewer` audita `events.controller.ts` / `events.service.ts` /
+- [x] `architect-reviewer` audita `events.controller.ts` / `events.service.ts` /
   `events.repository.ts` (es el módulo más grande, 340+200 líneas — foco en SRP y si la lógica de
   auto-cierre debería vivir en el service o en un colaborador aparte).
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 8. Módulo `sync`
 
-- [ ] Tests de caracterización: `sync.service.test.ts` (unitario, mockeando ambos clientes
+- [x] Tests de caracterización: `sync.service.test.ts` (unitario, mockeando ambos clientes
   `supabase`/`supabaseCloud`: `pullMasterData`, `pushEventData`, `syncAllPendingEvents`,
   `ensureLocalMasterDataSeeded`). **Sin test de integración contra cloud real** — se simula con
   mocks, ya que no hay Supabase Cloud disponible en CI/local del dev.
-- [ ] `architect-reviewer` audita `sync.service.ts` (foco: mezcla de pull/push/seed en una sola
+- [x] `architect-reviewer` audita `sync.service.ts` (foco: mezcla de pull/push/seed en una sola
   clase — evaluar si conviene separar responsabilidades).
-- [ ] **Recomendado**: co-revisar con `supabase-expert` cualquier fix que toque el cálculo de
+- [x] **Recomendado**: co-revisar con `supabase-expert` cualquier fix que toque el cálculo de
   `computeTotals` o el manejo de `sync_status`, dado que ya hay deuda conocida (`R2`: columna
   `night_events.totals` no está en migraciones locales).
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 9. Módulo `system`
 
-- [ ] Tests de caracterización: `system.controller.ts` no tiene service/repo propio — tests de
+- [x] Tests de caracterización: `system.controller.ts` no tiene service/repo propio — tests de
   integración directos en `tests/integration/system.integration.test.ts` (`GET /status`, `/logs`,
   `POST /sync`, `POST /shutdown` — este último con cuidado de no matar el proceso real del test
   runner, mockear el `process.exit`/handler correspondiente).
-- [ ] `architect-reviewer` audita `system.controller.ts` (242 líneas, es el 2do más grande del
+- [x] `architect-reviewer` audita `system.controller.ts` (242 líneas, es el 2do más grande del
   set — foco en si debería tener un service propio en vez de lógica inline en el controller).
-- [ ] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
-- [ ] Actualizar/ampliar tests sobre el código corregido.
-- [ ] `pnpm typecheck` en verde.
+- [x] Aplicar fixes chicos directo; documentar hallazgos estructurales como sub-tarea.
+- [x] Actualizar/ampliar tests sobre el código corregido.
+- [x] `pnpm typecheck` en verde.
 
 ### 10. Cierre de la fase
 
-- [ ] Correr `pnpm --filter api test` completo (unit + integration) y `pnpm --filter api
+- [x] Correr `pnpm --filter api test` completo (unit + integration) y `pnpm --filter api
   test:coverage` — revisar que no haya módulos con cobertura sospechosamente baja.
-- [ ] Correr `pnpm typecheck` en la raíz (api + web) — debe pasar en verde.
-- [ ] Actualizar `docs/ROADMAP.md`: marcar la Fase 1 (auditoría API) como completa, agregar la
+- [x] Correr `pnpm typecheck` en la raíz (api + web) — debe pasar en verde.
+- [x] Actualizar `docs/ROADMAP.md`: marcar la Fase 1 (auditoría API) como completa, agregar la
   Fase 2 (auditoría Web / god-components) y Fase 3 (E2E post-refactor) como próximos pasos
   explícitos, y actualizar el estado de `R5` (si se resolvió en el módulo `auth`) y anotar que
   `printer`/`mercadopago`/`cash-sales`/`audit-logs`/`sse` quedaron sin cobertura en esta fase.
-- [ ] Actualizar `docs/ARCHITECTURE.md` **solo si** algún refactor estructural cambió el mapa de
+- [x] Actualizar `docs/ARCHITECTURE.md` **solo si** algún refactor estructural cambió el mapa de
   capas/módulos descrito en §4; si los fixes fueron todos internos sin cambiar la forma pública del
   módulo, no hace falta tocarlo.
-- [ ] Cambiar el estado de esta spec (`docs/specs/auditoria-api.md`) de `approved` a `done`.
+- [x] Cambiar el estado de esta spec (`docs/specs/auditoria-api.md`) de `approved` a `done`.
 
 ---
 
