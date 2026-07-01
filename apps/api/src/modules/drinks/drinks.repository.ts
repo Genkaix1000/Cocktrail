@@ -15,7 +15,21 @@ export interface DrinksRepository {
 
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
 
-function mapRowToDrink(row: any): Drink {
+type DrinkRow = {
+  id: number;
+  name: string;
+  price: number;
+  description: string;
+  vibe: string;
+  flavors: string[];
+  icon_name: string;
+  image: string | null;
+  trending: boolean;
+  promo: boolean | null;
+  available: boolean;
+};
+
+function mapRowToDrink(row: DrinkRow): Drink {
   return {
     id: row.id,
     name: row.name,
@@ -116,7 +130,7 @@ export class SupabaseDrinksRepository implements DrinksRepository {
   }
 
   async update(id: number, partial: Partial<Omit<Drink, "id">>): Promise<Drink | undefined> {
-    const updates: any = {};
+    const updates: Partial<Omit<DrinkRow, "id">> = {};
     if (partial.name !== undefined) updates.name = partial.name;
     if (partial.price !== undefined) updates.price = partial.price;
     if (partial.description !== undefined) updates.description = partial.description;

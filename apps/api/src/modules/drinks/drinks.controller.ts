@@ -4,7 +4,10 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, CreateDrinkSchema, UpdateDrinkSchema } from "../../shared/middleware/validate.js";
 import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
-export function createDrinksController(service: DrinksService): Router {
+export function createDrinksController(
+  service: DrinksService,
+  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
+): Router {
   const router = Router();
 
   // GET /api/drinks — público (la carta se lee sin auth)
@@ -44,7 +47,7 @@ export function createDrinksController(service: DrinksService): Router {
     async (req, res, next) => {
       try {
         const drink = await service.createDrink(req.body);
-        await AuditLogsService.log(
+        await auditLogsService.log(
           "drink.created",
           `Producto creado - ${drink.name}`,
           req.session?.username || "admin"
@@ -70,7 +73,7 @@ export function createDrinksController(service: DrinksService): Router {
           return;
         }
         const drink = await service.updateDrink(id, req.body);
-        await AuditLogsService.log(
+        await auditLogsService.log(
           "drink.updated",
           `Producto actualizado - ${drink.name}`,
           req.session?.username || "admin"
@@ -102,7 +105,7 @@ export function createDrinksController(service: DrinksService): Router {
         } catch {}
 
         await service.deleteDrink(id);
-        await AuditLogsService.log(
+        await auditLogsService.log(
           "drink.deleted",
           `Producto eliminado - ${drinkName}`,
           req.session?.username || "admin"
