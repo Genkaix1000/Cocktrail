@@ -23,7 +23,6 @@ type Props = {
   summary: EventSummary | null;
   onConfirm: (password: string) => Promise<void>;
   onClose: () => void;
-  onCloseAndShutdown?: () => void;
 };
 
 function formatDuration(ms: number): string {
@@ -117,7 +116,6 @@ export default function CloseNightModal({
   summary,
   onConfirm,
   onClose,
-  onCloseAndShutdown,
 }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

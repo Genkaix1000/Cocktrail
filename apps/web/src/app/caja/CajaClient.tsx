@@ -343,10 +343,6 @@ export default function CajaClient({ drinks }: Props) {
           summary={summary}
           onConfirm={handleCloseConfirm}
           onClose={handleCloseModalClose}
-          onCloseAndShutdown={() => {
-            setCloseModalOpen(false);
-            window.dispatchEvent(new CustomEvent("cocktrail-trigger-shutdown"));
-          }}
         />
       )}
 

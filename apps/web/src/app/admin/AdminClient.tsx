@@ -576,10 +576,6 @@ export default function AdminClient({
         summary={summary}
         onConfirm={handleCloseConfirm}
         onClose={handleModalClose}
-        onCloseAndShutdown={() => {
-          setModalOpen(false);
-          window.dispatchEvent(new CustomEvent("cocktrail-trigger-shutdown"));
-        }}
       />
 
       {/* Standard Sidebar - Visible on Desktop */}
