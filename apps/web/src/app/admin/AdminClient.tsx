@@ -2,39 +2,14 @@
 
 import {
   History,
-  LogOut,
   Power,
-  QrCode,
   LayoutDashboard,
-  Palette,
   Wine,
   CreditCard,
   Users,
   ChevronDown,
   ChevronRight,
-  CalendarDays,
   FileText,
-  X,
-  Sun,
-  Moon,
-  RefreshCw,
-  ArrowLeft,
-  ArrowRight,
-  Tag,
-  User,
-  DollarSign,
-  Clock,
-  ChevronUp,
-  Shield,
-  Percent,
-  Undo,
-  Ban,
-  Globe,
-  Database,
-  Wifi,
-  Activity,
-  CheckCircle,
-  Bell,
   KeyRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -47,14 +22,11 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
 import { OSHeadbar, OSProfileFooter } from "@/components/OSHeadbar";
 
-import { byCreatedAtDesc, STATUS_META } from "@/lib/orderStatus";
 import { computeTotals } from "@/lib/totals";
 import { useSSE } from "@/lib/useSSE";
-import { formatHm } from "@/lib/utils";
 
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
-import { ordersService } from "@/services/orders.service";
 import { apiFetch } from "@/services/api-client";
 
 import GeneralSection from "@/components/settings/GeneralSection";
@@ -75,7 +47,6 @@ import type {
   EventSummary,
   NightEvent,
   Order,
-  OrderStatus,
   Role,
 } from "@cocktrail/shared";
 
@@ -85,43 +56,13 @@ type Props = {
   initialCashSales: CashSale[];
 };
 
-const formatHourMinute = (ts: number) => {
-  const d = new Date(ts);
-  const hr = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${hr}:${min}`;
-};
-
-function startOfWeek(d: Date): number {
-  const day = d.getDay();
-  const offset = day === 0 ? 6 : day - 1;
-  const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - offset);
-  return start.getTime();
-}
-
-function startOfMonth(d: Date): number {
-  const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-  return start.getTime();
-}
-
-function durationHs(s: EventSummary): string {
-  if (!s.closedAt) return "—";
-  const ms = s.closedAt - s.startedAt;
-  const h = Math.floor(ms / (60 * 60 * 1000));
-  const m = Math.round((ms % (60 * 60 * 1000)) / 60000);
-  if (h === 0) return `${m} min`;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
-}
-
 export default function AdminClient({
   initialEvent,
   initialOrders,
   initialCashSales,
 }: Props) {
   const router = useRouter();
-  const { theme, isDark, toggleDark } = useTheme();
+  const { theme } = useTheme();
 
   // Basic layout state
   const [event, setEvent] = useState(initialEvent);
@@ -160,7 +101,6 @@ export default function AdminClient({
 
   // System Logs & Status state
   const [systemLogs, setSystemLogs] = useState<AuditLogEntry[]>([]);
-  const [staffCount, setStaffCount] = useState(8);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [chartMetric, setChartMetric] = useState<"sales" | "glasses">("sales");
@@ -202,6 +142,7 @@ export default function AdminClient({
 
   // Fetch history and system info on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingHistory(true);
     eventsService
       .getHistory()
@@ -221,15 +162,6 @@ export default function AdminClient({
 
     return () => clearInterval(interval);
   }, [fetchSystemLogs]);
-
-  useEffect(() => {
-    fetch("/api/users")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setStaffCount(data.length);
-      })
-      .catch(() => {});
-  }, []);
 
   const handleTabChange = (tab: string) => {
     const needsSkeleton = 
@@ -259,12 +191,6 @@ export default function AdminClient({
 
   const pendingDeliveries = useMemo(
     () => orders.filter((o) => o.status === "pendiente").length,
-    [orders],
-  );
-
-  const sortedOrders = useMemo(
-    () =>
-      orders.filter((o) => o.status !== "cancelado").sort(byCreatedAtDesc),
     [orders],
   );
 
@@ -465,19 +391,6 @@ export default function AdminClient({
     };
 
     const sectionTitleClass = isBosko ? "text-white/50 hover:text-white" : "text-ink-400 hover:text-ink-50";
-
-    const footerBorderClass = isBosko ? "border-white/10" : "border-ink-800";
-    
-    const avatarClass = isBosko
-      ? "bg-white/10 border border-white/20 text-[#fffeb3]"
-      : `bg-ink-800 border border-ink-700 text-ink-500 ${accentColorClass}`;
-      
-    const footerTextClass = isBosko ? "text-white font-semibold" : "text-ink-50 font-semibold";
-    const footerSubtextClass = isBosko ? "text-white/50" : "text-ink-450";
-    
-    const footerBtnClass = isBosko
-      ? "bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-[#fffeb3]"
-      : "bg-ink-850 hover:bg-ink-800 border border-ink-700 text-ink-300";
 
     return (
       <aside className={`
