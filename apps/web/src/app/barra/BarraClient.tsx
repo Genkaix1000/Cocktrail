@@ -2,31 +2,33 @@
 
 import {
   LogOut,
-  X,
-  AlertTriangle,
-  Slash,
-  MoreHorizontal,
   ScanLine,
   Radio,
   WifiOff,
   Clock,
   History,
-  Package,
   CheckCircle2,
   CircleAlert,
   CircleX,
-  Inbox,
   Hand,
   Pencil,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useRef, type ReactNode, type MouseEvent } from "react";
+import { useCallback, useEffect, useState, useRef, type FormEvent, type MouseEvent } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useSSE } from "@/lib/useSSE";
 import { ordersService } from "@/services/orders.service";
 import { authService } from "@/services/auth.service";
 import { useOfflineScanQueue } from "@/hooks/useOfflineScanQueue";
 import { eventsService } from "@/services/events.service";
+import SectionTitle from "@/components/shared/SectionTitle";
+import Stat from "@/components/shared/Stat";
+import Sep from "@/components/shared/Sep";
+import PendingOrdersList from "@/components/barra/PendingOrdersList";
+import ManualRedeemModal from "@/components/barra/ManualRedeemModal";
+import CancelOrderModal from "@/components/barra/CancelOrderModal";
+import DevPanel from "@/components/barra/DevPanel";
+import type { FlashData, CurrentUser } from "@/components/barra/types";
 import type { Order, NightEvent } from "@cocktrail/shared";
 
 const RECENT_SCANS_LIMIT = 8;
@@ -38,21 +40,11 @@ export default function BarraClient() {
   const [deliveredCount, setDeliveredCount] = useState<number>(0);
 
   // Feedback overlays
-  const [flash, setFlash] = useState<{
-    type: "success" | "duplicate" | "error";
-    message: string;
-    displayNumber?: number;
-    items?: Array<{ name: string; qty: number }>;
-  } | null>(null);
+  const [flash, setFlash] = useState<FlashData | null>(null);
 
   const flashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const triggerFlash = useCallback((data: {
-    type: "success" | "duplicate" | "error";
-    message: string;
-    displayNumber?: number;
-    items?: Array<{ name: string; qty: number }>;
-  }) => {
+  const triggerFlash = useCallback((data: FlashData) => {
     if (flashTimeoutRef.current) {
       clearTimeout(flashTimeoutRef.current);
     }
@@ -89,7 +81,7 @@ export default function BarraClient() {
   const [manualRedeeming, setManualRedeeming] = useState(false);
 
   // Authenticated user state
-  const [currentUser, setCurrentUser] = useState<{ role: string; username: string; permissions: any } | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
 
   // Pending paid orders state
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
@@ -97,12 +89,9 @@ export default function BarraClient() {
   // Toast notifications state
   const [notifications, setNotifications] = useState<{ id: string; displayNumber: number; text: string; duration: number }[]>([]);
 
-  // Cancellation Modal states
+  // Cancellation modal: solo el pedido objetivo vive acá — step/reason/cancelling
+  // quedaron como estado interno de CancelOrderModal (ver su comentario).
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
-  const [cancellationStep, setCancellationStep] = useState<"confirm" | "reason">("confirm");
-  const [cancelReason, setCancelReason] = useState<string>("");
-  const [customReason, setCustomReason] = useState<string>("");
-  const [cancelling, setCancelling] = useState(false);
 
   // Active night event state (with ref to avoid SSE stale closures)
   const eventRef = useRef<NightEvent | null>(null);
@@ -325,9 +314,6 @@ export default function BarraClient() {
     const hasCancelPermission = currentUser?.role === "admin" || currentUser?.permissions?.cancelarTickets;
     if (!hasCancelPermission) return;
     setCancelOrder(order);
-    setCancellationStep("confirm");
-    setCancelReason("");
-    setCustomReason("");
   }, [currentUser]);
 
   const handleManualRedeemConfirm = useCallback(async () => {
@@ -346,6 +332,12 @@ export default function BarraClient() {
       setManualRedeeming(false);
     }
   }, [manualRedeemOrder, manualRedeeming, handleScan, triggerFlash]);
+
+  const handleDevManualSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleScan(manualCode.trim());
+    setManualCode("");
+  }, [handleScan, manualCode]);
 
   async function logout() {
     await authService.logout();
@@ -579,109 +571,14 @@ export default function BarraClient() {
         </div>
 
         {/* Sidebar: pending orders */}
-        <aside className="w-full xl:w-[360px] shrink-0 flex flex-col min-h-[320px] xl:min-h-0">
-          <div className="relative flex-1 flex flex-col rounded-3xl border border-ink-800 bg-ink-900/60 backdrop-blur-sm overflow-hidden shadow-xl">
-            {/* Toast stack */}
-            <div className="absolute top-3 right-3 z-50 flex flex-col gap-2 w-full max-w-[300px] pointer-events-none">
-              {notifications.map((n) => (
-                <ToastItem
-                  key={n.id}
-                  id={n.id}
-                  displayNumber={n.displayNumber}
-                  text={n.text}
-                  onClose={() => setNotifications((prev) => prev.filter((item) => item.id !== n.id))}
-                />
-              ))}
-            </div>
-
-            <div className="px-5 py-4 border-b border-ink-800/80 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-soft border border-blue-line flex items-center justify-center">
-                  <Package size={15} className="text-blue" />
-                </div>
-                <div>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-100">
-                    Tragos pendientes
-                  </h3>
-                  <p className="text-[10px] text-ink-500 font-mono mt-0.5">Tocá un pedido para canjear manual</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-xl bg-ink-950 border border-ink-800 font-mono text-sm font-black text-blue tabular">
-                {pendingOrders.length}
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto no-scrollbar min-h-0">
-              {pendingOrders.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full min-h-[240px] px-6 text-center">
-                  <div className="w-12 h-12 rounded-2xl bg-ink-950 border border-ink-800 flex items-center justify-center mb-3">
-                    <Inbox size={20} className="text-ink-600" />
-                  </div>
-                  <p className="text-sm font-serif-italic text-ink-500">Sin tragos pendientes</p>
-                  <p className="text-[11px] text-ink-600 mt-1">Los nuevos pedidos aparecen acá en vivo</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-ink-800/60">
-                  {pendingOrders.map((o) => {
-                    const hasCancelPermission =
-                      currentUser?.role === "admin" || currentUser?.permissions?.cancelarTickets;
-                    const statusMeta = getPendingStatus(o.status);
-                    return (
-                      <li
-                        key={o.id}
-                        onClick={() => setManualRedeemOrder(o)}
-                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-ink-850/30 transition-colors cursor-pointer active:bg-ink-850/50"
-                      >
-                        <div className="w-11 h-11 rounded-xl bg-ink-950 border border-ink-800 flex items-center justify-center shrink-0">
-                          <span className="font-mono text-sm font-black text-ink-200 tabular">
-                            {o.displayNumber}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-white truncate leading-tight">
-                            {o.items.map((it) => `${it.qty}× ${it.name}`).join(", ")}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${statusMeta.className}`}>
-                              {statusMeta.label}
-                            </span>
-                            <span className="text-[10px] font-mono text-ink-600 tabular">
-                              ${o.total.toLocaleString("es-AR")}
-                            </span>
-                          </div>
-                        </div>
-
-                        {hasCancelPermission && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleCancelClick(o, e)}
-                            className="w-8 h-8 flex items-center justify-center bg-danger-soft hover:bg-danger-soft/80 border border-danger-line text-danger rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
-                            title="Cancelar pedido"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-
-            {pendingOrders.length > 0 && (
-              <div className="px-5 py-3 border-t border-ink-800/80 bg-ink-950/40 shrink-0">
-                <div className="flex items-center gap-2 text-[10px] font-mono text-ink-500">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue opacity-75" />
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue" />
-                  </span>
-                  Actualización en tiempo real
-                </div>
-              </div>
-            )}
-          </div>
-        </aside>
+        <PendingOrdersList
+          pendingOrders={pendingOrders}
+          notifications={notifications}
+          currentUser={currentUser}
+          onSelectOrder={setManualRedeemOrder}
+          onCancelClick={handleCancelClick}
+          onDismissNotification={(id) => setNotifications((prev) => prev.filter((item) => item.id !== id))}
+        />
       </div>
 
       {/* Visual Flash Overlay for Scanner Feedback */}
@@ -785,64 +682,13 @@ export default function BarraClient() {
 
       {/* Manual redeem confirmation modal */}
       {manualRedeemOrder && (
-        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-5">
-            <div className="flex flex-col gap-1.5 text-center">
-              <div className="mx-auto w-12 h-12 rounded-2xl bg-blue-soft border border-blue-line flex items-center justify-center text-blue">
-                <Hand size={22} />
-              </div>
-              <h2 className="text-lg font-bold text-white tracking-tight">
-                ¿Canjear pedido manualmente?
-              </h2>
-              <p className="text-xs text-ink-400">
-                Se registrará como entrega manual desde {barCode}.
-              </p>
-            </div>
-
-            <div className="bg-ink-950/60 border border-ink-800 rounded-2xl p-4 flex flex-col gap-2">
-              <div className="flex justify-between items-center border-b border-ink-800 pb-2">
-                <span className="font-mono text-sm font-black text-white">
-                  Pedido #{manualRedeemOrder.displayNumber}
-                </span>
-                <span className="text-[10px] font-mono text-ink-500 uppercase">
-                  {getPendingStatus(manualRedeemOrder.status).label}
-                </span>
-              </div>
-              <ul className="space-y-1.5">
-                {manualRedeemOrder.items.map((it, idx) => (
-                  <li key={idx} className="text-xs text-ink-300">
-                    {it.qty}× <strong className="text-white font-semibold">{it.name}</strong>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex justify-between pt-2 border-t border-ink-800 text-xs font-mono">
-                <span className="text-ink-500">Total</span>
-                <span className="text-ink-200 font-bold tabular">
-                  ${manualRedeemOrder.total.toLocaleString("es-AR")}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setManualRedeemOrder(null)}
-                disabled={manualRedeeming}
-                className="flex-1 h-11 rounded-xl bg-ink-800 border border-ink-700 text-xs font-bold uppercase tracking-wider text-ink-300 hover:text-white transition-all cursor-pointer disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleManualRedeemConfirm}
-                disabled={manualRedeeming}
-                className="flex-grow-[1.5] h-11 rounded-xl bg-green-soft border border-green-line text-xs font-bold uppercase tracking-wider text-green hover:brightness-115 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {manualRedeeming ? "Canjeando..." : "Confirmar canje"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ManualRedeemModal
+          order={manualRedeemOrder}
+          barCode={barCode}
+          redeeming={manualRedeeming}
+          onClose={() => setManualRedeemOrder(null)}
+          onConfirm={handleManualRedeemConfirm}
+        />
       )}
 
       {/* Bar code configuration modal */}
@@ -899,226 +745,27 @@ export default function BarraClient() {
 
       {/* Cancellation modal overlay */}
       {cancelOrder && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-5">
-            {cancellationStep === "confirm" ? (
-              <>
-                <div className="flex flex-col gap-1.5 text-center">
-                  <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-soft border border-amber-line flex items-center justify-center text-amber">
-                    <AlertTriangle size={22} />
-                  </div>
-                  <h2 className="text-lg font-bold text-white tracking-tight font-sans">
-                    ¿Cancelar este ticket?
-                  </h2>
-                  <p className="text-xs text-ink-400 font-sans">
-                    Esta acción modificará el estado del pedido a cancelado en el sistema.
-                  </p>
-                </div>
-
-                <div className="bg-ink-950/60 border border-ink-800 rounded-2xl p-4 flex flex-col gap-2">
-                  <div className="flex justify-between items-center border-b border-ink-800 pb-2">
-                    <span className="font-mono text-sm font-black text-white">Pedido #{cancelOrder.displayNumber}</span>
-                    <span className="font-mono text-[10px] text-ink-500">{cancelOrder.token}</span>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {cancelOrder.items.map((it, idx) => (
-                      <li key={idx} className="text-xs text-ink-300">
-                        {it.qty}x <strong className="text-white font-semibold">{it.name}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setCancelOrder(null)}
-                    className="flex-1 h-11 rounded-xl bg-ink-800 border border-ink-700 text-xs font-bold uppercase tracking-wider text-ink-300 hover:text-white transition-all cursor-pointer"
-                  >
-                    Volver
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCancellationStep("reason")}
-                    className="flex-grow-[1.5] h-11 rounded-xl bg-danger-soft border border-danger-line text-xs font-bold uppercase tracking-wider text-danger hover:brightness-115 transition-all cursor-pointer"
-                  >
-                    Confirmar
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-col gap-1.5 text-center">
-                  <h2 className="text-lg font-bold text-white tracking-tight">
-                    Motivo de la cancelación
-                  </h2>
-                  <p className="text-xs text-white">
-                    Por favor, selecciona por qué se cancela el ticket #{cancelOrder.displayNumber}.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 my-2">
-                  {[
-                    { reason: "No podia canjearlo", label: "No podía canjearlo", icon: Slash },
-                    { reason: "No se canceló", label: "No se canceló", icon: AlertTriangle },
-                    { reason: "Otro", label: "Otro motivo", icon: MoreHorizontal }
-                  ].map(({ reason, label, icon: Icon }) => {
-                    const isSelected = cancelReason === reason;
-                    return (
-                      <button
-                        key={reason}
-                        type="button"
-                        onClick={() => setCancelReason(reason)}
-                        className={`aspect-square flex flex-col items-center justify-center gap-3 p-2 rounded-2xl border transition-all cursor-pointer text-center ${
-                          isSelected
-                            ? "bg-purple-500/20 text-white border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.3)]"
-                            : "bg-ink-850 border-ink-750 text-ink-300 hover:text-white hover:border-ink-600"
-                        }`}
-                      >
-                        <Icon size={24} className={isSelected ? "text-purple-400" : "text-ink-400"} />
-                        <span className="text-[11px] font-bold text-white leading-tight">
-                          {label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="flex gap-3 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setCancellationStep("confirm")}
-                    className="flex-1 h-11 rounded-xl bg-ink-800 border border-ink-700 text-xs font-bold uppercase tracking-wider text-ink-300 hover:text-white transition-all cursor-pointer"
-                  >
-                    Atrás
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (cancelling) return;
-                      
-                      setCancelling(true);
-                      try {
-                        await ordersService.updateStatus(cancelOrder.id, "cancelado");
-                        triggerFlash({
-                          type: "duplicate",
-                          message: `Pedido #${cancelOrder.displayNumber} cancelado por: "${cancelReason}"`,
-                          displayNumber: cancelOrder.displayNumber,
-                          items: cancelOrder.items,
-                        });
-                        setCancelOrder(null);
-                        fetchPendingOrders();
-                      } catch (err) {
-                        triggerFlash({
-                          type: "error",
-                          message: err instanceof Error ? err.message : "Error al cancelar ticket",
-                        });
-                      } finally {
-                        setCancelling(false);
-                      }
-                    }}
-                    disabled={!cancelReason || cancelling}
-                    className="flex-grow-[1.5] h-11 rounded-xl bg-danger border border-danger-line text-white font-black text-xs uppercase tracking-wider disabled:opacity-50 hover:brightness-110 transition-all cursor-pointer flex items-center justify-center"
-                  >
-                    {cancelling ? "Cancelando..." : "Confirmar Cancelación"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <CancelOrderModal
+          order={cancelOrder}
+          onClose={() => setCancelOrder(null)}
+          onConfirmed={() => {
+            setCancelOrder(null);
+            fetchPendingOrders();
+          }}
+          triggerFlash={triggerFlash}
+        />
       )}
 
       {/* Dev Simulator Panel (Development only) */}
       {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-0 right-0 left-0 bg-ink-950/95 border-t border-ink-800 z-50 transition-all duration-300">
-          <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setDevPanelOpen(!devPanelOpen)}
-              className="flex items-center gap-2 text-xs font-mono font-semibold text-warning hover:text-warning/80 active:scale-95 transition-all cursor-pointer"
-            >
-              <span>🛠️ Dev Scanner Simulator</span>
-              <span className="text-[10px] opacity-75">{devPanelOpen ? "▲ Ocultar" : "▼ Mostrar"}</span>
-            </button>
-            <div className="text-[10px] font-mono text-ink-500">
-              Modo desarrollo habilitado
-            </div>
-          </div>
-
-          {devPanelOpen && (
-            <div className="max-w-7xl mx-auto px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-ink-900 pt-4 bg-ink-925 animate-in slide-in-from-bottom-5">
-              <div className="flex flex-col gap-2">
-                <span className="text-[10px] text-ink-400 uppercase tracking-wider font-mono">
-                  1. Simulación por Eventos de Hardware (useScannerInput)
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {devOrders.length === 0 ? (
-                    <span className="text-xs text-ink-500 font-serif-italic">No hay pedidos activos pagados para simular canje</span>
-                  ) : (
-                    devOrders.slice(0, 3).map((o) => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        onClick={() => {
-                          const chars = o.ticketCode || "";
-                          let delay = 0;
-                          for (let i = 0; i < chars.length; i++) {
-                            setTimeout(() => {
-                              const e = new KeyboardEvent("keydown", {
-                                key: chars[i],
-                              });
-                              window.dispatchEvent(e);
-                            }, delay);
-                            delay += 10;
-                          }
-                          setTimeout(() => {
-                            const e = new KeyboardEvent("keydown", {
-                              key: "Enter",
-                            });
-                            window.dispatchEvent(e);
-                          }, delay + 10);
-                        }}
-                        className="px-2.5 py-1 bg-ink-900 border border-ink-800 text-[10px] font-mono rounded hover:bg-ink-800 text-ink-200 cursor-pointer"
-                      >
-                        ⚡ Simular Gun Scan #{o.displayNumber}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <span className="text-[10px] text-ink-400 uppercase tracking-wider font-mono">
-                  2. Entrada Manual de Código de Ticket (Fallback)
-                </span>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleScan(manualCode.trim());
-                    setManualCode("");
-                  }}
-                  className="flex gap-2"
-                >
-                  <input
-                    type="text"
-                    placeholder="ABCD1234-a1b2c3d4"
-                    value={manualCode}
-                    onChange={(e) => setManualCode(e.target.value)}
-                    className="flex-1 h-9 px-3 bg-ink-900 border border-ink-700 rounded-lg text-xs font-mono text-ink-50 placeholder-ink-500 focus:outline-none focus:border-ink-500"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!manualCode.trim()}
-                    className="px-4 h-9 bg-ink-50 text-ink-950 font-semibold rounded-lg text-xs hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    Procesar Canje
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
-        </div>
+        <DevPanel
+          devOrders={devOrders}
+          devPanelOpen={devPanelOpen}
+          onToggle={() => setDevPanelOpen(!devPanelOpen)}
+          manualCode={manualCode}
+          onManualCodeChange={setManualCode}
+          onManualSubmit={handleDevManualSubmit}
+        />
       )}
     </main>
   );
@@ -1214,140 +861,3 @@ function EmptyScanSlot({ slot }: { slot: number }) {
   );
 }
 
-function SectionTitle({
-  children,
-  icon,
-}: {
-  children: ReactNode;
-  icon?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 mb-3">
-      {icon && <span className="text-ink-500">{icon}</span>}
-      <h3 className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400 flex items-center gap-2 w-full">
-        {children}
-      </h3>
-      <span className="flex-1 h-px bg-ink-800/80" />
-    </div>
-  );
-}
-
-function getPendingStatus(status: Order["status"]) {
-  switch (status) {
-    case "entregado":
-      return {
-        label: "Entregado",
-        className: "bg-green-soft text-green border-green-line",
-      };
-    case "cancelado":
-      return {
-        label: "Cancelado",
-        className: "bg-danger-soft text-danger border-danger-line",
-      };
-    default:
-      return {
-        label: "Pendiente",
-        className: "bg-amber-soft text-amber border-amber-line",
-      };
-  }
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-  mono = true,
-}: {
-  label: string;
-  value: number | string;
-  tone: "blue" | "amber" | "green" | "ink";
-  mono?: boolean;
-}) {
-  const color =
-    tone === "blue"
-      ? "text-sky-500"
-      : tone === "amber"
-        ? "text-orange-500"
-        : tone === "green"
-          ? "text-green"
-          : "text-ink-50";
-  return (
-    <div className="flex flex-col gap-0.5 select-none items-end">
-      <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-ink-500 leading-none">
-        {label}
-      </span>
-      <span
-        className={`text-[15px] tabular leading-none ${color} ${mono ? "font-mono font-bold" : "font-semibold"}`}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Sep() {
-  return <span className="w-px h-6 bg-ink-800" />;
-}
-
-function ToastItem({ 
-  id, 
-  displayNumber, 
-  text, 
-  onClose 
-}: { 
-  id: string; 
-  displayNumber: number; 
-  text: string; 
-  onClose: () => void; 
-}) {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  return (
-    <div
-      className="relative overflow-hidden w-full bg-ink-900/95 border border-green-line/40 backdrop-blur-xl rounded-2xl p-3.5 shadow-2xl flex flex-col gap-1.5 pointer-events-auto"
-      style={{
-        animation: "toastSlideIn 5s ease-in-out forwards",
-      }}
-    >
-      <div className="flex justify-between items-start gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-green-soft border border-green-line flex items-center justify-center shrink-0">
-            <Package size={13} className="text-green" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-green font-bold block">
-              Nuevo pedido
-            </span>
-            <span className="font-mono text-base font-black text-white tabular">
-              #{displayNumber}
-            </span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center rounded-lg text-ink-500 hover:text-white hover:bg-ink-800 transition-colors cursor-pointer shrink-0"
-        >
-          <X size={12} />
-        </button>
-      </div>
-      <p className="text-xs font-semibold text-ink-200 leading-snug line-clamp-2 pl-9">
-        {text}
-      </p>
-
-      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-ink-950">
-        <div
-          className="h-full bg-green"
-          style={{
-            animation: "shrinkWidth 5s linear forwards",
-          }}
-        />
-      </div>
-    </div>
-  );
-}

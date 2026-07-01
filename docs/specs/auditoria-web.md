@@ -430,20 +430,62 @@ módulo, incluye la tarea 7). 2 vistas extraídas + tests, typecheck+lint+test+b
 
 ### 10. `BarraClient.tsx` — extraer el resto de las secciones
 
-- [ ] Crear `components/barra/PendingOrdersList.tsx` (hoy ~L774-950).
-- [ ] Crear `components/barra/ManualRedeemModal.tsx` (hoy ~L951-1064), reutilizando
+- [x] Crear `components/barra/PendingOrdersList.tsx` (hoy ~L774-950).
+- [x] Crear `components/barra/ManualRedeemModal.tsx` (hoy ~L951-1064), reutilizando
   `useOfflineScanQueue`/`handleScan` de la tarea 9.
-- [ ] Crear `components/barra/CancelOrderModal.tsx` (hoy ~L1065-1200).
-- [ ] Crear `components/barra/DevPanel.tsx` (hoy ~L1201-1287, `NODE_ENV === "development"`) — sin
+- [x] Crear `components/barra/CancelOrderModal.tsx` (hoy ~L1065-1200).
+- [x] Crear `components/barra/DevPanel.tsx` (hoy ~L1201-1287, `NODE_ENV === "development"`) — sin
   tests, no corre en producción.
-- [ ] Migrar a `components/shared/`: `SectionTitle`, `Stat`, `Sep` (genéricos). Migrar con la
+- [x] Migrar a `components/shared/`: `SectionTitle`, `Stat`, `Sep` (genéricos). Migrar con la
   sección que los usa: `RecentScanCard`, `EmptyScanSlot`, `ToastItem`, `getPendingStatus`.
-- [ ] Tests de caracterización de `PendingOrdersList`, `ManualRedeemModal`, `CancelOrderModal`.
-- [ ] Auditoría (`architect-reviewer` + `expert-react-frontend-engineer`, y `expert-nextjs-developer`
+- [x] Tests de caracterización de `PendingOrdersList`, `ManualRedeemModal`, `CancelOrderModal`.
+- [x] Auditoría (`architect-reviewer` + `expert-react-frontend-engineer`, y `expert-nextjs-developer`
   si aparece alguna duda de Server/Client Components) + fixes chicos.
-- [ ] Confirmar que `BarraClient.tsx` quedó reducido a shell: `currentUser`, `event`/`eventRef` +
+- [x] Confirmar que `BarraClient.tsx` quedó reducido a shell: `currentUser`, `event`/`eventRef` +
   `useSSE` global, `barCode`, hero de últimos escaneos, layout general.
-- [ ] Typecheck + build en verde. Commit de cierre de `BarraClient`.
+- [x] Typecheck + build en verde. Commit de cierre de `BarraClient`.
+
+**Resultado de `BarraClient.tsx`**: 1353 → 872 líneas en esta tarea (shell final; el resto de la
+reducción del módulo completo, desde las 1517 originales, incluye la tarea 9 que extrajo
+`useOfflineScanQueue`). 4 componentes + 3 genéricos migrados a `components/shared/` + tests,
+typecheck+lint+test+build en verde.
+
+Decisiones de diseño:
+- **`handleManualRedeemConfirm`** queda en el shell (no se movió a `ManualRedeemModal`): coordina
+  `useOfflineScanQueue.handleScan` + el cierre del modal (`manualRedeemOrder`/`manualRedeeming` son
+  estado del shell porque `PendingOrdersList` necesita abrir el modal seteándolo). El modal recibe
+  el pedido ya resuelto y un `onConfirm`/`redeeming` — evita que el componente de presentación
+  conozca la cola offline.
+- **`customReason`** (estado del shell original, `useState<string>("")`) se eliminó: un grep
+  confirmó que nunca se leía en el JSX — el picker de motivo son 3 botones fijos, sin textarea de
+  texto libre pese a lo que sugiere el nombre. Código muerto preexistente, no migrado.
+- **`getPendingStatus`** migró a `components/barra/orderStatus.ts` (no a `PendingOrdersList.tsx`
+  como sugería el borrador de la spec): lo consumen tanto `PendingOrdersList` como
+  `ManualRedeemModal`, así que vive en un módulo compartido de `components/barra/` para no
+  duplicarlo entre ambos.
+- **`step`/`reason`/`cancelling`** de la cancelación de ticket quedaron como estado **local** de
+  `CancelOrderModal` (no props controladas por el shell, pese a que el borrador de la spec sugería
+  `step`/`setStep`, `reason`/`setReason`): el modal se monta/desmonta completo vía
+  `{cancelOrder && <CancelOrderModal .../>}`, así que siempre arranca limpio al reabrir — evita
+  3 pares estado/setter de prop-drilling sin necesidad real. Auditoría (`architect-reviewer` +
+  `expert-react-frontend-engineer`) confirmó que es correcto con el flujo actual; el único riesgo
+  latente sería si en el futuro `cancelOrder` pasara de un pedido a otro sin pasar por `null`
+  (no ocurre hoy).
+- **`FlashData`/`CurrentUser`** se centralizaron en `components/barra/types.ts` y el shell los
+  adoptó (`BarraClient.tsx` antes declaraba su propio `useState<{ ...permissions: any }>` inline);
+  de paso esto eliminó el único `@typescript-eslint/no-explicit-any` que tenía el archivo.
+  `hooks/useOfflineScanQueue.ts` (tarea 9, cerrada) conserva su propio `FlashData` local porque no
+  se tocó ese archivo — quedó una tercera definición estructuralmente compatible sin unificar,
+  anotada como hallazgo menor.
+
+Hallazgos estructurales dejados sin resolver a propósito (fuera de alcance de esta tarea):
+- El toast de "nuevo pedido" (`ToastItem` dentro de `PendingOrdersList.tsx`) recibe `onClose` como
+  arrow inline recreada en cada render del padre; como el `useEffect` del timer depende de
+  `[onClose]`, un re-render del shell (SSE, cambios en `pendingOrders`) reinicia el timer de 5s.
+  Es un bug preexistente (mismo comportamiento antes de la extracción), no introducido acá.
+- `CancelOrderModal` llama a `ordersService.updateStatus` directamente en vez de a través de un
+  hook dedicado (a diferencia de `useOfflineScanQueue`); aceptable hoy porque es autocontenido, pero
+  si se agrega reintentos/cola offline a la cancelación convendría un `useCancelOrder`.
 
 ### 11. Cierre de la fase
 
