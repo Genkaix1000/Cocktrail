@@ -267,13 +267,21 @@ cada vista tenga que volver a resolver permisos por su cuenta).
 
 ### 4. `AdminClient.tsx` — extraer `HistorialSection` (`activeTab === "historial"`)
 
-- [ ] Crear `components/admin/HistorialSection.tsx` (hoy L1939-2471) con su fetch
-  `eventsService.getHistory()` y el scroll/paginación propios.
-- [ ] Resolver el puente `handleRedirectToAudit` (hoy L299, Historial→Logs) como callback
+- [x] Crear `components/admin/HistorialSection.tsx` (hoy L1939-2471) con su fetch
+  `eventsService.getHistory()` y el scroll/paginación propios. **Nota de implementación**:
+  `historyEvents`/`loadingHistory`/`historyLoaded` (y su fetch) se dejaron en el shell
+  (`AdminClient.tsx`) en vez de moverse a `HistorialSection`, porque `useAdminAnalytics()` y
+  `DashboardSection` también dependen de esos datos sin importar qué tab está activo — moverlos
+  hubiera retrasado la data de Monitoreo hasta visitar Historial. `HistorialSection` recibe esos
+  tres por prop y solo posee el estado/lógica de filtrado, orden y paginación exclusivos suyos.
+- [x] Resolver el puente `handleRedirectToAudit` (hoy L299, Historial→Logs) como callback
   `onRedirectToLogs` pasado desde el shell — no como import directo de `LogsSection`.
-- [ ] Test de caracterización (incluye el caso de `onRedirectToLogs`).
-- [ ] Auditoría + fixes chicos.
-- [ ] Typecheck + build en verde. Commit.
+- [x] Test de caracterización (incluye el caso de `onRedirectToLogs`).
+- [x] Auditoría + fixes chicos (`architect-reviewer` + `expert-react-frontend-engineer`: sin
+  hallazgos estructurales; se aplicaron `aria-label`/`aria-current` en botones de paginación y
+  cierre del modal, y se limpió el destructuring muerto de `analytics` que quedó en
+  `AdminClient.tsx`).
+- [x] Typecheck + build en verde. Commit.
 
 ### 5. `AdminClient.tsx` — extraer `LogsSection` (`activeTab === "logs"`)
 
