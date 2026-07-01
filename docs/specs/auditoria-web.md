@@ -368,14 +368,46 @@ lint en verde.
 
 ### 8. `CajaClient.tsx` — extraer `HistorialSection` y `MetricasSection`
 
-- [ ] Crear `components/caja/HistorialSection.tsx` (hoy ~L1299-1412, scroll infinito), migrando
-  `mapStatus`, `getItemsPreview`, `formatDayMonth`/`formatHourMinute`.
-- [ ] Crear `components/caja/MetricasSection.tsx` (hoy ~L1413-1549 y L772-864).
-- [ ] Tests de caracterización de ambas.
-- [ ] Auditoría + fixes chicos.
-- [ ] Confirmar que `CajaClient.tsx` quedó reducido a shell: `currentUser`, `event`/`orders`/
-  `cashSales` + `useSSE` global, `activeTab`, sidebar, `CloseNightModal`.
-- [ ] Typecheck + build en verde. Commit de cierre de `CajaClient`.
+- [x] Crear `components/caja/HistorialSection.tsx` (tab `historial` completo + popup de detalle de
+  ticket con reimpresión/cancelación), migrando `getItemsPreview`, `formatDayMonth`/
+  `formatHourMinute`. **Nota de implementación**: `mapStatus` y `getPaginationRange` NO se
+  migraron — un grep sobre el `CajaClient.tsx` original confirmó que ninguna de las dos tenía
+  callers (la grilla de tickets nunca mostró badge de estado, y la vista siempre usó scroll
+  infinito, no paginación por número de página). Código muerto preexistente, se eliminó en vez de
+  migrarlo, mismo criterio que `confirmOrderWithMethod` en la tarea 7. Props: `orders`
+  (`activeNightOrders` ya resuelto por el shell, para no duplicar el filtro en dos lugares),
+  `currentUser` (permiso `cancelarTickets`), `printer` (mismo shape `{ reprintTicket, printError,
+  reprinting }` que ya consumía `VentaSection`) y `onOrderUpdated` (callback para que el shell
+  actualice `orders` tras cancelar un ticket). Todo el estado de filtro/búsqueda/scroll
+  infinito/popup quedó local al componente — no ameritaba un hook aparte por ser derivado de
+  props, no fetch propio.
+- [x] Crear `components/caja/MetricasSection.tsx` (gráfico de facturación por hora + los 3 widgets
+  de estadísticas). Toda la lógica derivada (`hourlyData`, `maxHourSales`, `peakHour`,
+  `totalDrinkUnits`, `totalOps`, `avgTicket`, `activeHoverSlot`) era exclusiva de esta vista y se
+  movió completa adentro. Props: `event`, `activeNightOrders`, `activeNightCashSales`, `totals`
+  (todos calculados una sola vez en el shell y compartidos con `HistorialSection`/`CloseNightModal`
+  para no duplicar el cálculo).
+- [x] Tests de caracterización (`HistorialSection.test.tsx`: estado vacío, agrupación por día,
+  buscador, popup de detalle + reimpresión, cancelación de ticket con y sin permiso —
+  `ordersService` mockeado; `MetricasSection.test.tsx`: widgets con totales calculados vía
+  `computeTotals` real, caso sin evento activo, gráfico de facturación).
+- [x] Auditoría + fixes chicos: se eliminó código muerto detectado en el propio shell durante la
+  extracción (`isBosko` de nivel de componente y `avatarClass`/`footerTextClass`/
+  `footerSubtextClass`/`footerBtnClass` dentro de `renderSidebar`, ninguno con uso real —
+  preexistentes desde antes de esta tarea, no introducidos por la extracción). `pnpm exec eslint`
+  sobre los 5 archivos tocados → 0 problemas. Sin hallazgos estructurales nuevos: `renderSidebar`
+  sigue siendo una función-que-renderiza-JSX inline en el shell (no un componente separado), mismo
+  patrón ya aceptado en `AdminClient.tsx`; queda como candidato de extracción futura si se retoma
+  este módulo, pero fuera de alcance de esta tarea.
+- [x] Confirmar que `CajaClient.tsx` quedó reducido a shell: `currentUser`, `event`/`orders`/
+  `cashSales` + `useSSE` global, `activeTab`, sidebar (`renderSidebar`), `CloseNightModal`,
+  `usePrinterStatus()` instanciado una vez (consumido por sidebar, `VentaSection` y
+  `HistorialSection`), `totals`/`pendingDeliveries`/`activeNightOrders`/`activeNightCashSales`
+  calculados una sola vez y compartidos entre vistas.
+- [x] Typecheck + lint + test + build en verde. Commit de cierre de `CajaClient`.
+
+**Resultado de `CajaClient.tsx`**: 1011 → 447 líneas (-56%) en esta tarea (y desde las 2 tareas del
+módulo, incluye la tarea 7). 2 vistas extraídas + tests, typecheck+lint+test+build en verde.
 
 ### 9. `BarraClient.tsx` — extraer `useOfflineScanQueue` (bloque de mayor riesgo)
 
