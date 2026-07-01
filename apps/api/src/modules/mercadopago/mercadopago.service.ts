@@ -4,7 +4,7 @@ import { Conflict } from "../../shared/errors/http-errors.js";
 export class MercadoPagoService {
   private readonly baseUrl = "https://api.mercadopago.com";
 
-  async createPaymentIntent(amount: number, description: string) {
+  async createPaymentIntent(amount: number) {
     if (!env.MP_ACCESS_TOKEN || !env.MP_POS_DEVICE_ID) {
       throw new Conflict("Mercado Pago no está configurado (faltan variables de entorno MP_ACCESS_TOKEN o MP_POS_DEVICE_ID).");
     }

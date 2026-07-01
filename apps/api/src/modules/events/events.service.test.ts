@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { EventsService } from "./events.service.js";
 import type { EventsRepository } from "./events.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";

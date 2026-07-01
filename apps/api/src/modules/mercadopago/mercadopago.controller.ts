@@ -13,7 +13,7 @@ export function createMercadoPagoController(service: MercadoPagoService): Router
         res.status(400).json({ error: "Amount es requerido y debe ser un número." });
         return;
       }
-      const intent = await service.createPaymentIntent(amount, description || "Cobro Posnet Cocktrail");
+      const intent = await service.createPaymentIntent(amount);
       res.json(intent);
     } catch (err) {
       next(err);

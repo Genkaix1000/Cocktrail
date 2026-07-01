@@ -44,7 +44,7 @@ function makeTicketsRepo(overrides?: Partial<TicketsRepository>): TicketsReposit
   };
 }
 
-function makeOrdersService(overrides?: Partial<OrdersService>): OrdersService {
+function makeOrdersService(): OrdersService {
   return {
     getOrder: vi.fn(),
     updateOrderStatus: vi.fn(),

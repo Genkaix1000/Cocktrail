@@ -57,7 +57,7 @@ async function ensureDatabaseConnection(): Promise<void> {
 
 async function boot() {
   // 1. Start listening on configured port IMMEDIATELY so the port is open and Next.js doesn't receive ECONNREFUSED
-  const server = app.listen(env.PORT, () => {
+  app.listen(env.PORT, () => {
     console.log(`🍸 Cocktrail API corriendo en http://localhost:${env.PORT}`);
     console.log(`   CORS: ${env.FRONTEND_URL}`);
     console.log(`   Env: ${env.NODE_ENV}`);

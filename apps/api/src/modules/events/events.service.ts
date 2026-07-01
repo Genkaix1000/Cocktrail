@@ -14,7 +14,6 @@ import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
 import { computeTotals } from "../../shared/utils/totals.js";
 import { emit } from "../../shared/sse/sse-manager.js";
 import { toSafeConfig } from "../config/config.repository.js";
-import { env } from "../../config/env.js";
 
 export class EventsService {
   private event: NightEvent | null = null;
