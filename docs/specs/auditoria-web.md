@@ -224,46 +224,54 @@ cada vista tenga que volver a resolver permisos por su cuenta).
 
 ### 0. Setup (bloquea todo lo demás)
 
-- [ ] Crear rama `refactor/auditoria-web` desde el estado actual de
+- [x] Crear rama `refactor/auditoria-web` desde el estado actual de
   `simplificar-estados-pedido-y-cajavip`.
-- [ ] Instalar en `apps/web`: `vitest`, `@vitejs/plugin-react`, `jsdom`, `@testing-library/react`,
+- [x] Instalar en `apps/web`: `vitest`, `@vitejs/plugin-react`, `jsdom`, `@testing-library/react`,
   `@testing-library/jest-dom`, `@testing-library/user-event`.
-- [ ] Crear `apps/web/vitest.config.ts` (`environment: "jsdom"`, `setupFiles` con
+- [x] Crear `apps/web/vitest.config.ts` (`environment: "jsdom"`, `setupFiles` con
   `@testing-library/jest-dom`).
-- [ ] Agregar scripts `test`/`test:watch` en `apps/web/package.json`.
-- [ ] Correr `pnpm --filter cocktrail-app test` (debe arrancar sin suites, solo valida que el
+- [x] Agregar scripts `test`/`test:watch` en `apps/web/package.json`.
+- [x] Correr `pnpm --filter cocktrail-app test` (debe arrancar sin suites, solo valida que el
   runner levanta) antes de escribir el primer test real.
 
 ### 1. `AdminClient.tsx` — limpieza previa + shared components
 
-- [ ] Eliminar código muerto confirmado sin callers: `Kpi`, `OrderRow`, `statusToBadge`,
+- [x] Eliminar código muerto confirmado sin callers: `Kpi`, `OrderRow`, `statusToBadge`,
   `formatDuration` (~L3307-3411 hoy).
-- [ ] Extraer a `components/shared/`: `MetricCard.tsx`, `Sparkline.tsx`, `AnimatedNumber.tsx`,
-  `EmptyCard.tsx` (compartidos entre ≥2 vistas de `AdminClient`).
-- [ ] `pnpm --filter cocktrail-app exec tsc --noEmit` en verde tras la limpieza (antes de extraer
+- [x] Extraer a `components/shared/`: `MetricCard.tsx`, `Sparkline.tsx`, `AnimatedNumber.tsx`,
+  `EmptyCard.tsx` (compartidos entre ≥2 vistas de `AdminClient`). `MetricCard` quedó tipado con
+  `DeltaInfo`/`LucideIcon` reales (antes `any`).
+- [x] `pnpm --filter cocktrail-app exec tsc --noEmit` en verde tras la limpieza (antes de extraer
   ninguna vista).
 
 ### 2. `AdminClient.tsx` — extraer `DashboardSection` (`activeTab === "monitoreo"`)
 
-- [ ] Extraer `hooks/useAdminAnalytics.ts` con el `useMemo` de ~35 valores derivados (hoy
+- [x] Extraer `hooks/useAdminAnalytics.ts` con el `useMemo` de ~35 valores derivados (hoy
   L827-978), consumido por Monitoreo y Estadísticas.
-- [ ] Crear `components/admin/DashboardSection.tsx` (hoy L1331-1799) + migrar
+- [x] Crear `components/admin/DashboardSection.tsx` (hoy L1331-1799) + migrar
   `TopProductsList.tsx`, `ComparisonRow.tsx`, `formatRelativeTime` junto con ella.
-- [ ] Test de caracterización `DashboardSection.test.tsx` (servicios mockeados).
-- [ ] `architect-reviewer` + `expert-react-frontend-engineer` auditan la sección; fixes chicos
-  directo, estructurales documentados en Riesgos de la spec.
-- [ ] `pnpm --filter cocktrail-app exec tsc --noEmit` + `pnpm --filter cocktrail-app build` en
+- [x] Test de caracterización `DashboardSection.test.tsx` (servicios mockeados).
+- [x] `architect-reviewer` + `expert-react-frontend-engineer` auditan la sección. **Hallazgo real
+  corregido**: `useAdminAnalytics` se llamaba dos veces con los mismos argumentos (shell +
+  `DashboardSection`), recalculando el mismo `useMemo` en cada render — ahora se llama una sola
+  vez en el shell y el resultado (`analytics: AdminAnalytics`) se pasa por prop; este pasó a ser
+  el patrón obligatorio para el resto de las vistas. Fixes chicos aplicados: `buildComparativeSparkline()`
+  para desduplicar 4 IIFEs de sparklines, `systemLogs` tipado (`AuditLogEntry[]`, antes `any[]`).
+  Documentado sin resolver (cambiaría comportamiento visible): `dynamicAlerts` reimplementa reglas
+  que ya cubre `generateInsights()`/`smartInsights`, calculado pero sin usar.
+- [x] `pnpm --filter cocktrail-app exec tsc --noEmit` + `pnpm --filter cocktrail-app build` en
   verde.
-- [ ] Commit.
+- [x] Commit.
 
 ### 3. `AdminClient.tsx` — extraer `EstadisticasSection` (`activeTab === "estadisticas"`)
 
-- [ ] Crear `components/admin/EstadisticasSection.tsx` (hoy L1800-1937), reutilizando
+- [x] Crear `components/admin/EstadisticasSection.tsx` (hoy L1800-1937), reutilizando
   `useAdminAnalytics()`. Se extrae tal cual está (sigue inalcanzable desde la UI — no se decide su
   destino en esta fase, ver Riesgos).
-- [ ] Test de caracterización.
-- [ ] Auditoría + fixes chicos.
-- [ ] Typecheck + build en verde. Commit.
+- [x] Test de caracterización.
+- [x] Auditoría (`architect-reviewer`): confirmó que no repite el error de doble llamada al hook;
+  sin violaciones que ameriten fix inmediato.
+- [x] Typecheck + build en verde. Commit.
 
 ### 4. `AdminClient.tsx` — extraer `HistorialSection` (`activeTab === "historial"`)
 
@@ -311,12 +319,25 @@ cada vista tenga que volver a resolver permisos por su cuenta).
 
 ### 6. `AdminClient.tsx` — extraer `QrSection` (`activeTab === "qr"`) y cerrar el shell
 
-- [ ] Crear `components/admin/QrSection.tsx` (hoy L2474-2521).
-- [ ] Test de caracterización.
-- [ ] Confirmar que `AdminClient.tsx` quedó reducido a shell: `activeTab`/breadcrumbs/sidebar,
+- [x] Crear `components/admin/QrSection.tsx` (hoy L2474-2521). Quedó self-contained (resuelve su
+  propia URL de la carta), sin depender del shell salvo el tema (`isBosko`).
+- [x] Test de caracterización.
+- [x] Confirmar que `AdminClient.tsx` quedó reducido a shell: `activeTab`/breadcrumbs/sidebar,
   `event`/`orders`/`cashSales` + `useSSE` global, `currentUser`/tema, modales de abrir/cerrar
   noche.
-- [ ] Typecheck + build en verde. Commit de cierre de `AdminClient`.
+- [x] Typecheck + build en verde. Commit de cierre de `AdminClient`.
+- [x] **Limpieza extra post-cierre** (detectada por el usuario vía Problems del editor, no prevista
+  en la tarea original): 43 problemas de lint sueltos tras las extracciones 1-6 — 1 error real
+  (`react-hooks/set-state-in-effect`, resuelto con el mismo patrón de disable-comment ya usado en
+  el archivo) + 42 warnings `no-unused-vars` (iconos de lucide-react, 3 funciones muertas de
+  historial que migraron a `HistorialSection`, imports y estado/efectos huérfanos —
+  `staffCount`/fetch a `/api/users`, `sortedOrders`, `isDark`/`toggleDark`, clases de un footer de
+  sidebar ya reemplazado por `<OSProfileFooter>`). `pnpm exec eslint src/app/admin/AdminClient.tsx`
+  → 0 problemas. Commit aparte.
+
+**Resultado de `AdminClient.tsx`**: 3418 → 724 líneas (-79%) a lo largo de las tareas 0-6. 5 vistas
+extraídas + 4 componentes compartidos + 1 hook de analytics compartido, 18 tests, typecheck+build+
+lint en verde.
 
 ### 7. `CajaClient.tsx` — extraer `VentaSection` + checkout
 

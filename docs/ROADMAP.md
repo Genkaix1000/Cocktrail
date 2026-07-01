@@ -127,16 +127,43 @@ code, módulo por módulo, antes de tocar el frontend. Ver `docs/specs/auditoria
 
 ---
 
-## Fase 3 — Auditoría Web 🎨
+## Fase 3 — Auditoría Web 🎨 *(en progreso — `AdminClient.tsx` completo, faltan Caja/Barra)*
 
 **Objetivo**: mismo tratamiento que la Fase 2 pero para `apps/web` — el problema principal son los
 god-components: `AdminClient.tsx` (3425 líneas), `CajaClient.tsx` (2186), `BarraClient.tsx` (1517).
 Modularizar (hooks, subcomponentes, separar lógica de negocio de presentación), auditar contra
 SOLID/clean code con `architect-reviewer` + `expert-react-frontend-engineer` +
-`expert-nextjs-developer`, y agregar tests donde corresponda.
+`expert-nextjs-developer`, y agregar tests donde corresponda. Spec completa (problema, objetivo,
+plan técnico, tareas) en `docs/specs/auditoria-web.md`, rama `refactor/auditoria-web`.
 
-- [ ] Definir spec/plan/tareas con SDD (`docs/specs/auditoria-web.md`), siguiendo el mismo patrón
-  de la Fase 2.
+- [x] Setup: Vitest + React Testing Library + jsdom instalado en `apps/web` (no había nada antes).
+- [x] **`AdminClient.tsx` completo**: 3418 → 724 líneas (-79%). Las 5 vistas que seguían inline
+  (Dashboard/Monitoreo, Estadísticas, Historial, Logs, QR) se extrajeron a
+  `components/admin/*Section.tsx`, cada una con su/sus test(s) de caracterización (18 tests en
+  total). Se extrajo también `hooks/useAdminAnalytics.ts` (el `useMemo` gigante compartido por
+  Monitoreo/Estadísticas) y 4 componentes compartidos a `components/shared/`
+  (`MetricCard`/`Sparkline`/`AnimatedNumber`/`EmptyCard`).
+- [x] **Bug real corregido**: `useAdminAnalytics` se llamaba dos veces con los mismos argumentos
+  (una en el shell, otra dentro de la vista extraída), recalculando el mismo `useMemo` en cada
+  render — se fijó como patrón obligatorio que el hook se llama **una sola vez** en el shell y el
+  resultado se pasa por prop a las vistas.
+- [x] Limpieza de lint post-extracción: 43 problemas sueltos en `AdminClient.tsx` (1 error real de
+  `react-hooks/set-state-in-effect`, 42 imports/estado/funciones muertas) — `eslint` en 0.
+- [ ] **`CajaClient.tsx`** (2182 líneas) — pendiente: extraer Venta+checkout, Historial, Métricas.
+- [ ] **`BarraClient.tsx`** (1517 líneas) — pendiente, incluye el bloque de mayor riesgo de toda la
+  fase: la cola offline de escaneos + lector de código de barras físico (`localStorage`,
+  `navigator.onLine`, reintentos con `setInterval`), a extraer como unidad atómica con test antes
+  de tocar el resto de la pantalla.
+- [ ] Cierre de fase: typecheck+build+test de punta a punta, `docs/ROADMAP.md` marcando Fase 3
+  completa y Fase 4 (E2E post-refactor) como próximo paso, spec a `done`.
+
+**Hallazgos documentados, no resueltos en las tareas hechas hasta ahora** (deuda a considerar en
+una fase futura, no bloquean nada hoy): `useSSE` centralizado en `AdminClient` (los handlers de un
+solo callback tocan estado de varias vistas a la vez, no se descompuso — alto riesgo sin tests de
+integración real de SSE); `activeTab === "estadisticas"` sigue sin ningún botón/link que la
+active en la UI (solo se llega con `?tab=estadisticas`); `dynamicAlerts` en `DashboardSection`
+reimplementa reglas que ya cubre `generateInsights()`/`smartInsights` (calculado pero sin usar,
+swapearlos cambiaría qué se ve en pantalla).
 
 ---
 
