@@ -98,7 +98,9 @@ export function useAdminAnalytics(
     const _paymentBreakdown = computePaymentBreakdown(totals);
     const _operationalVelocity = computeOperationalVelocity(orders);
     const _hourlySlots = computeHourlySlots({ startedAt: eventStartedAt ?? 0 }, orders, cashSales);
-    const _maxHourSales = Math.max(..._hourlySlots.map((s) => s.totalSales), 1000);
+    // reduce en vez de Math.max(...array): un spread revienta el call stack
+    // si _hourlySlots llega a tener miles de franjas (ver computeHourlySlots).
+    const _maxHourSales = _hourlySlots.reduce((max, s) => Math.max(max, s.totalSales), 1000);
     const peak = findPeakHours(_hourlySlots);
     const _peakHour = peak.peakRevenue ? `${peak.peakRevenue.label} hs` : "—";
     const _segmentedTicket = computeSegmentedTicket(orders, cashSales);

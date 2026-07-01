@@ -259,6 +259,12 @@ export function computeHourlySlots(
   if (allTimestamps.length > 0) {
     minTime = Math.min(...allTimestamps);
     maxTime = Math.max(...allTimestamps);
+  } else if (!event.startedAt) {
+    // Sin evento activo ni operaciones: no hay rango real que graficar.
+    // Sin este clamp, minTime queda en epoch (0) y el diff con "ahora"
+    // genera cientos de miles de franjas horarias (ver RangeError en
+    // useAdminAnalytics al hacer Math.max sobre ese array).
+    minTime = maxTime;
   }
 
   const startHourDate = new Date(minTime);
