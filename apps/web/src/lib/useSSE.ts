@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type {
   CashSale,
   EventSummary,
+  NightEvent,
   Order,
   Theme,
   CustomTheme,
@@ -19,6 +20,7 @@ export type DomainEventHandlers = Partial<{
   "order.updated": (data: { order: Order }) => void;
   "cash_sale.added": (data: { cashSale: CashSale }) => void;
   "event.closed": (data: { summary: EventSummary }) => void;
+  "event.opened": (data: { event: NightEvent }) => void;
   "theme.changed": (data: {
     theme: Theme;
     customTheme?: CustomTheme | null;

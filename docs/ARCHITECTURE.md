@@ -1,7 +1,7 @@
 # Cocktrail / BarQR — Arquitectura (fuente de verdad)
 
 > **Este documento describe el sistema TAL COMO ESTÁ CONSTRUIDO HOY**, no un plan aspiracional.
-> Última actualización: 2026-06-30. Para lo que falta, ver [`ROADMAP.md`](./ROADMAP.md).
+> Última actualización: 2026-07-01. Para lo que falta, ver [`ROADMAP.md`](./ROADMAP.md).
 > Reemplaza y deja sin efecto a los docs viejos (`ARCHITECTURE_V2`, `cocktrail_architecture_guide`, `HYBRID_ARCHITECTURE_ES`), ya eliminados.
 
 Internamente el repo se llama **Cocktrail**. En el plan de negocio el producto se presenta como **BarQR**.
@@ -19,7 +19,13 @@ Tres operadores + el cliente:
 | **Carta** (`/carta`) | Cliente (QR) | Ve tragos, arma pedido, recibe ticket con estado en vivo |
 | **Barra** (`/barra`) | Barman | Cola de pedidos (KDS), cambia estado, **canjea tickets** (escáner o manual) |
 | **Caja** (`/caja`) | Cajera | Cobro presencial (efectivo / débito Posnet / QR), ventas en efectivo |
-| **Admin** (`/admin`) | Dueño/encargado | Totales en vivo, historial, carta, usuarios, config, **cerrar noche** |
+| **Admin** (`/admin`) | Dueño/encargado | Totales en vivo, historial, carta, usuarios, config, **abrir/cerrar noche** |
+
+> 🌙 **La noche se abre manualmente**: la admin abre cada noche desde `/admin` (`POST /api/events/open`)
+> con una **palabra clave obligatoria** que se imprime en cada ticket físico vendido esa noche (mecanismo
+> simple anti-falsificación, sin escaneo). Ya **no** se auto-crea sola al arrancar el server ni
+> automáticamente después de cerrar la anterior — así `startedAt` refleja el inicio real del turno. Sin
+> noche activa, `/caja` y `/carta` rechazan ventas con un mensaje claro.
 
 ---
 
@@ -106,14 +112,15 @@ Express 5 + TypeScript. Patrón por capas **Controller → Service → Repositor
 | | `GET /by-token/:token` | público (dueño del token) |
 | | `GET /api/orders`, `/log`, `/active`, `PATCH /:id` | staff (admin/caja/barman) |
 | **cash-sales** | `POST /api/cash-sales`, `GET /` | admin/caja |
-| **events** | `GET /api/state`, `POST /api/event/close`, `GET /api/events/history` | admin/caja |
+| **events** | `GET /api/state`, `POST /api/events/open`, `PATCH /api/events/current/keyword`, `POST /api/event/close`, `GET /api/events/history` | admin (open/keyword/close), admin/caja (state) |
 | | `GET /api/theme` (público), `POST /api/theme` (admin) | |
 | **sse** | `GET /api/events` (stream `text/event-stream`) | público (filtrado client-side) |
 | **tickets** | `POST /api/tickets/redeem` | admin/barman |
 | **users** | `GET /api/users`, `POST`, `PATCH /:id`, `DELETE /:id` | admin |
 | **config** | `GET /api/config` (tokens enmascarados), `POST /api/config` | admin |
 | **mercadopago** | `POST /api/mercadopago/pos/intent`, `GET /pos/intent/:id`, `DELETE /pos/intent/:id` | admin/caja |
-| **system** | `GET /api/system/status`, `/logs`, `/printers`, `POST /sync`, `POST /shutdown` | staff |
+| **printer** | `GET /api/printer/status`, `POST /api/printer/test`, `POST /api/printer/reprint/:orderId` | admin/caja |
+| **system** | `GET /api/system/status`, `/logs`, `POST /sync`, `POST /shutdown` | staff |
 | **sync** | (sin controller; disparado por `system` y `events`) | — |
 | **audit-logs** | (sin controller; `AuditLogsService` usado inline por otros módulos) | — |
 
@@ -138,6 +145,8 @@ El "flag" que decide *single backend* vs *local+cloud* es simplemente **la prese
 - `20240102000000_edge_sync.sql` — datos maestros: `users` (password_hash, role, permissions JSONB), `drinks`, `app_config` (theme, branding, `mercado_pago` JSONB, club, logo).
 - `20260626175947_add_closed_by.sql` — `night_events.closed_by`.
 - `20260629201500_create_audit_logs.sql` — `audit_logs` (action, description, operator, created_at).
+- `20260701000000_add_keyword.sql` — `night_events.keyword` (palabra clave de la noche, la define la
+  admin al abrirla, se imprime en cada ticket físico).
 
 > ⚠️ La columna `night_events.totals` que usa el sync **no está en las migraciones locales** — se asume solo en el esquema cloud. Ver riesgos en [`ROADMAP.md`](./ROADMAP.md).
 
@@ -163,7 +172,7 @@ Implementa el modelo "**caja offline, reconcilia al cerrar**":
 ## 7. Real-time (SSE)
 
 - **Servidor**: `modules/sse/sse.controller.ts` expone `GET /api/events` como `text/event-stream` (frame `connected` inicial + ping cada 25s). Bus: `shared/sse/sse-manager.ts` (Node `EventEmitter`, canal único `domain`).
-- **Eventos** (`DomainEvent`): `order.created`, `order.updated`, `cash_sale.added`, `event.closed`, `theme.changed`.
+- **Eventos** (`DomainEvent`): `order.created`, `order.updated`, `cash_sale.added`, `event.closed`, `event.opened`, `theme.changed`.
 - **Cliente**: hook `apps/web/src/lib/useSSE.ts` abre `EventSource(${API_URL}/api/events, {withCredentials:true})`. El stream es **global** y se filtra del lado del cliente (por token para el cliente, por rol para staff).
 
 > Implicancia: como el estado real-time vive en el `EventEmitter` del proceso Node, el backend **no puede correr en serverless/edge** (Vercel functions). Debe ser un proceso Node persistente — coherente con el modelo local-first.
@@ -236,6 +245,7 @@ type NightEvent = {              // (antes: Event)
   id: string; status: 'activo' | 'cerrado';
   startedAt: number; closedAt?: number; closedBy?: string;
   orderCounter: number;
+  keyword?: string;              // palabra clave de la noche, impresa en cada ticket físico
 };
 
 type CashSale = { id: string; amount: number; description: string; addedBy: string; createdAt: number; };

@@ -17,6 +17,8 @@ function shortToken(): string {
   return randomBytes(4).toString("hex");
 }
 
+export type CreateOrderResult = Order & { printed: boolean };
+
 export class OrdersService {
   constructor(
     private ordersRepo: OrdersRepository,
@@ -25,9 +27,10 @@ export class OrdersService {
     private incrementOrderCounter: (eventId: string) => Promise<number>,
     private generateTicketCodeString?: (orderId: string) => string,
     private saveTicket?: (orderId: string, code: string) => Promise<void>,
+    private printTicket?: (order: Order, nightEvent: NightEvent) => Promise<void>,
   ) {}
 
-  async createOrder(input: NewOrderInput, createdBy?: string): Promise<Order> {
+  async createOrder(input: NewOrderInput, createdBy?: string): Promise<CreateOrderResult> {
     const event = await this.getActiveEvent();
     if (!event || event.status !== "activo") {
       throw new Conflict("No hay un evento activo. No se pueden crear pedidos.");
@@ -75,8 +78,20 @@ export class OrdersService {
     if (this.saveTicket && order.ticketCode) {
       await this.saveTicket(order.id, order.ticketCode);
     }
+
+    let printed = false;
+    const isStaffOrder = Boolean(createdBy && createdBy !== "Cliente");
+    if (this.printTicket && isStaffOrder) {
+      try {
+        await this.printTicket(order, event);
+        printed = true;
+      } catch {
+        printed = false; // red de seguridad extra; printTicket ya no debería nunca tirar
+      }
+    }
+
     emit({ type: "order.created", order });
-    return order;
+    return { ...order, printed };
   }
 
   async updateOrderStatus(

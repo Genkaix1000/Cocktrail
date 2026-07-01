@@ -3,7 +3,7 @@ import type { NewOrderInput, Order, OrderStatus } from "@cocktrail/shared";
 
 export const ordersService = {
   create(input: NewOrderInput) {
-    return apiFetch<Order>("/api/orders", { method: "POST", body: input });
+    return apiFetch<Order & { printed: boolean }>("/api/orders", { method: "POST", body: input });
   },
 
   updateStatus(id: string, status: OrderStatus) {

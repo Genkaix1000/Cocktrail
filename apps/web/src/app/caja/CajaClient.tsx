@@ -32,7 +32,6 @@ import {
 import { useRouter } from "next/navigation";
 import { OSHeadbar, OSProfileFooter } from "@/components/OSHeadbar";
 import { createElement, useMemo, useState, useCallback, useEffect, useRef } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import { gsap } from "gsap";
 import DrinkCard from "@/components/DrinkCard";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -42,6 +41,7 @@ import { eventsService } from "@/services/events.service";
 import { ordersService } from "@/services/orders.service";
 import { authService } from "@/services/auth.service";
 import { mercadopagoService } from "@/services/mercadopago.service";
+import { printerService } from "@/services/printer.service";
 import { useTheme } from "@/components/ThemeProvider";
 import CloseNightModal from "@/components/CloseNightModal";
 import { computeTotals } from "@/lib/totals";
@@ -331,14 +331,53 @@ export default function CajaClient({ drinks }: Props) {
   // Pedido recién concretado (para mostrar en pantalla de éxito)
   const [latestOrder, setLatestOrder] = useState<Order | null>(null);
 
-  // Estado para la comanda de ticket a imprimir
-  const [activePrintOrder, setActivePrintOrder] = useState<Order | null>(null);
+  // Estado de venta / impresión
+  const [saleError, setSaleError] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [reprinting, setReprinting] = useState(false);
+  const [printerStatus, setPrinterStatus] = useState<{ connected: boolean; message: string } | null>(null);
+  const [printerTestMessage, setPrinterTestMessage] = useState<string | null>(null);
 
-  const triggerPrint = useCallback((order: Order) => {
-    setActivePrintOrder(order);
-    setTimeout(() => {
-      window.print();
-    }, 150);
+  const refreshPrinterStatus = useCallback(async () => {
+    try {
+      const status = await printerService.getStatus();
+      setPrinterStatus(status);
+    } catch {
+      setPrinterStatus({ connected: false, message: "No se pudo consultar el estado de la impresora." });
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshPrinterStatus();
+    const interval = setInterval(refreshPrinterStatus, 30000);
+    return () => clearInterval(interval);
+  }, [refreshPrinterStatus]);
+
+  async function testPrint() {
+    setPrinterTestMessage(null);
+    try {
+      const result = await printerService.test();
+      setPrinterTestMessage(result.message);
+    } catch (err) {
+      setPrinterTestMessage(err instanceof Error ? err.message : "Error al imprimir la prueba.");
+    } finally {
+      refreshPrinterStatus();
+    }
+  }
+
+  const reprintTicket = useCallback(async (orderId: string) => {
+    setReprinting(true);
+    setPrintError(null);
+    try {
+      const result = await printerService.reprint(orderId);
+      if (!result.success) {
+        setPrintError(result.message || "No se pudo imprimir el ticket.");
+      }
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : "Error al reimprimir.");
+    } finally {
+      setReprinting(false);
+    }
   }, []);
 
   // Data states
@@ -466,6 +505,10 @@ export default function CajaClient({ drinks }: Props) {
         setCloseModalOpen(true);
         refetch();
       },
+      "event.opened": ({ event: newEvent }) => {
+        setEvent(newEvent);
+        refetch();
+      },
     },
     { onOpen: refetch }
   );
@@ -553,17 +596,22 @@ export default function CajaClient({ drinks }: Props) {
   async function confirmOrder() {
     if (isSubmittingRef.current || submitting || totalItems === 0 || !paymentMethod) return;
     if (paymentMethod === "efectivo" && !canConfirmCash) return;
-    
+
     isSubmittingRef.current = true;
     setSubmitting(true);
+    setSaleError(null);
+    setPrintError(null);
     try {
       const items = Object.entries(cart).map(([idStr, qty]) => ({ drinkId: Number(idStr), qty }));
       const order = await ordersService.create({ items, paymentMethod });
-      
+
       setLatestOrder(order);
       setCart({});
+      if (!order.printed) {
+        setPrintError("No se pudo imprimir el ticket automáticamente. Reintentá desde el botón.");
+      }
     } catch (err) {
-      console.error(err);
+      setSaleError(err instanceof Error ? err.message : "No se pudo registrar la venta.");
     } finally {
       isSubmittingRef.current = false;
       setSubmitting(false);
@@ -591,6 +639,9 @@ export default function CajaClient({ drinks }: Props) {
           setCurrentIntentId(null);
           setPaymentIntentState(null);
           setPosnetErrorMessage(null);
+          if (!order.printed) {
+            setPrintError("No se pudo imprimir el ticket automáticamente. Reintentá desde el botón.");
+          }
         } else if (currentState === "CANCELED" || currentState === "ERROR") {
           if (pollingRef.current) clearInterval(pollingRef.current);
           setPosnetStatus("error");
@@ -660,6 +711,9 @@ export default function CajaClient({ drinks }: Props) {
       const order = await ordersService.create({ items, paymentMethod: method });
       setLatestOrder(order);
       setCart({});
+      if (!order.printed) {
+        setPrintError("No se pudo imprimir el ticket automáticamente. Reintentá desde el botón.");
+      }
     } catch (err) {
       console.error(err);
       alert("Error al confirmar el pedido. Reintentá.");
@@ -946,6 +1000,26 @@ export default function CajaClient({ drinks }: Props) {
                 <span>Cerrar noche</span>
               </button>
             </div>
+          )}
+        </div>
+
+        {/* Estado de la impresora térmica */}
+        <div className={`border-t pt-4 px-1 ${borderClass}`}>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] ${printerStatus?.connected ? "text-green" : "text-danger"}`}>
+              <Printer size={13} />
+              {printerStatus?.connected ? "Impresora conectada" : "Impresora no encontrada"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={testPrint}
+            className="w-full h-9 rounded-xl bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer"
+          >
+            Imprimir ticket de prueba
+          </button>
+          {printerTestMessage && (
+            <p className="text-[10px] text-ink-400 mt-1.5 text-center">{printerTestMessage}</p>
           )}
         </div>
 
@@ -1559,13 +1633,20 @@ export default function CajaClient({ drinks }: Props) {
                   </div>
                 </div>
 
+                {printError && (
+                  <div className="w-full bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-sm">
+                    {printError}
+                  </div>
+                )}
+
                 <div className="w-full flex flex-col gap-2 mt-2">
-                  <button 
-                    onClick={() => triggerPrint(latestOrder)} 
-                    className="ct-checkout-btn w-full h-12 font-black rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                  <button
+                    onClick={() => reprintTicket(latestOrder.id)}
+                    disabled={reprinting}
+                    className="ct-checkout-btn w-full h-12 font-black rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <Printer size={16} strokeWidth={2.5} />
-                    Imprimir Ticket
+                    {reprinting ? "Imprimiendo…" : printError ? "Reintentar impresión" : "Reimprimir Ticket"}
                   </button>
 
                   <button 
@@ -1822,10 +1903,15 @@ export default function CajaClient({ drinks }: Props) {
                           </span>
                         </div>
 
-                        <div className="mt-4 pt-6 border-t border-ink-800 shrink-0">
-                          <button 
-                            onClick={confirmOrder} 
-                            disabled={submitting || !canConfirmCash} 
+                        <div className="mt-4 pt-6 border-t border-ink-800 shrink-0 flex flex-col gap-2.5">
+                          {saleError && (
+                            <div className="bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-sm">
+                              {saleError}
+                            </div>
+                          )}
+                          <button
+                            onClick={confirmOrder}
+                            disabled={submitting || !canConfirmCash}
                             className="ct-checkout-btn w-full h-14 font-black rounded-xl text-sm uppercase tracking-widest disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
                           >
                             {submitting && <Loader2 size={18} className="animate-spin" />}
@@ -2055,13 +2141,19 @@ export default function CajaClient({ drinks }: Props) {
                 <span className="text-accent">${selectedHistoryOrder.total.toLocaleString("es-AR")}</span>
               </div>
 
-              <button 
-                onClick={() => triggerPrint(selectedHistoryOrder)} 
-                className="ct-checkout-btn w-full mt-2 h-11 font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+              <button
+                onClick={() => reprintTicket(selectedHistoryOrder.id)}
+                disabled={reprinting}
+                className="ct-checkout-btn w-full mt-2 h-11 font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <Printer size={14} strokeWidth={2.5} />
-                Reimprimir Ticket
+                {reprinting ? "Imprimiendo…" : "Reimprimir Ticket"}
               </button>
+              {printError && (
+                <div className="w-full mt-2 bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-sm">
+                  {printError}
+                </div>
+              )}
 
               {selectedHistoryOrder.status !== "cancelado" && (currentUser?.role === "admin" || currentUser?.permissions?.cancelarTickets) && (
                 <button
@@ -2088,104 +2180,6 @@ export default function CajaClient({ drinks }: Props) {
         </div>
       )}
 
-      {/* --- PRINTER ONLY TICKET --- */}
-      {activePrintOrder && (
-        <div id="print-receipt" className="hidden">
-          <div className="text-center font-mono text-black">
-            <h2 className="text-xs font-bold uppercase tracking-wider border-b border-dashed border-black pb-1.5 mb-1.5">COCKTRAIL</h2>
-            <div className="text-3xl font-black leading-none my-1 select-none">#{activePrintOrder.displayNumber}</div>
-            <div className="text-[9px] uppercase tracking-wide text-zinc-600 mb-2">
-              {new Date(activePrintOrder.createdAt).toLocaleDateString("es-AR")} - {new Date(activePrintOrder.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs
-            </div>
-
-            {/* QR Code */}
-            {activePrintOrder.ticketCode && (
-              <div className="flex flex-col items-center gap-1 mb-2.5">
-                <div className="border border-black p-1 bg-white inline-block">
-                  <QRCodeSVG
-                    value={activePrintOrder.ticketCode}
-                    size={130}
-                    level="H"
-                    includeMargin={false}
-                    fgColor="#000000"
-                    bgColor="#ffffff"
-                  />
-                </div>
-                <span className="text-[9px] font-mono font-bold mt-0.5 uppercase tracking-wide">
-                  {activePrintOrder.ticketCode}
-                </span>
-              </div>
-            )}
-
-            {/* Ticket Cutout Divider */}
-            <div className="relative my-3 -mx-[14px] h-[20px] flex items-center justify-between pointer-events-none select-none">
-              <div className="w-5 h-5 rounded-full bg-white border-2 border-black absolute left-[-11px] top-1/2 -translate-y-1/2 z-10" />
-              <div className="w-5 h-5 rounded-full bg-white border-2 border-black absolute right-[-11px] top-1/2 -translate-y-1/2 z-10" />
-              <div className="w-full border-t-2 border-dashed border-black" />
-            </div>
-
-            <div className="pt-1 mb-1.5 text-left text-[10px]">
-              <div className="flex justify-between font-bold border-b border-dashed border-black pb-1 mb-1">
-                <span>CANT / DESC</span>
-                <span>SUB</span>
-              </div>
-              <ul className="flex flex-col gap-1.5">
-                {activePrintOrder.items.map((it, idx) => (
-                  <li key={idx} className="flex justify-between items-baseline py-0.5">
-                    <span className="text-[12px] font-black text-black uppercase tracking-tight">
-                      {it.qty}x {it.name}
-                    </span>
-                    <span className="text-[9px] font-mono text-zinc-600 font-bold">${it.subtotal.toLocaleString("es-AR")}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="border-t border-dashed border-black pt-1.5 flex justify-between font-black text-xs">
-              <span>TOTAL PAGADO</span>
-              <span>${activePrintOrder.total.toLocaleString("es-AR")}</span>
-            </div>
-
-            <div className="mt-1 text-[9px] text-zinc-600 text-left">
-              Método: {activePrintOrder.paymentMethod.toUpperCase()}
-            </div>
-
-            <div className="border-t border-dashed border-black mt-2 pt-2 text-[9px] uppercase font-black tracking-wider text-center">
-              Presentar en Barra para retirar
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Print styles block */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          /* Hide all interactive components in the viewport */
-          body > * {
-            visibility: hidden !important;
-            height: 0 !important;
-            overflow: hidden !important;
-          }
-          #print-receipt, #print-receipt * {
-            visibility: visible !important;
-          }
-          #print-receipt {
-            display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 58mm !important;
-            margin: 0 !important;
-            padding: 12px 14px !important;
-            background: white !important;
-            color: black !important;
-            box-sizing: border-box !important;
-            border: 2px solid black !important;
-            border-radius: 8px !important;
-            overflow: hidden !important;
-          }
-        }
-      `}} />
     </main>
     </div>
   );

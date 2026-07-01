@@ -33,6 +33,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
       orderCounter: data.order_counter,
       closedBy: data.closed_by || undefined,
+      keyword: data.keyword || undefined,
     };
   }
 
@@ -46,6 +47,7 @@ export class SupabaseEventsRepository implements EventsRepository {
         closed_at: event.closedAt ? new Date(event.closedAt).toISOString() : null,
         order_counter: event.orderCounter,
         closed_by: event.closedBy || null,
+        keyword: event.keyword || null,
         sync_status: "pending",
       })
       .select()
@@ -63,6 +65,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
       orderCounter: data.order_counter,
       closedBy: data.closed_by || undefined,
+      keyword: data.keyword || undefined,
     };
   }
 
@@ -80,6 +83,9 @@ export class SupabaseEventsRepository implements EventsRepository {
     }
     if (updates.closedBy !== undefined) {
       dbUpdates.closed_by = updates.closedBy || null;
+    }
+    if (updates.keyword !== undefined) {
+      dbUpdates.keyword = updates.keyword || null;
     }
 
     const { data, error } = await supabase
@@ -101,6 +107,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
       orderCounter: data.order_counter,
       closedBy: data.closed_by || undefined,
+      keyword: data.keyword || undefined,
     };
   }
 
@@ -125,6 +132,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
       orderCounter: data.order_counter,
       closedBy: data.closed_by || undefined,
+      keyword: data.keyword || undefined,
     };
   }
 
@@ -147,6 +155,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       closedAt: item.closed_at ? new Date(item.closed_at).getTime() : undefined,
       orderCounter: item.order_counter,
       closedBy: item.closed_by || undefined,
+      keyword: item.keyword || undefined,
     }));
   }
 
@@ -184,6 +193,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       closedAt: item.closed_at ? new Date(item.closed_at).getTime() : undefined,
       orderCounter: item.order_counter,
       closedBy: item.closed_by || undefined,
+      keyword: item.keyword || undefined,
       sync_status: item.sync_status,
     }));
   }

@@ -31,9 +31,6 @@ const EnvSchema = z.object({
   // Mercado Pago
   MP_ACCESS_TOKEN: z.string().optional(),
   MP_POS_DEVICE_ID: z.string().optional(),
-
-  // Printer Simulation
-  PRINTER_CONNECTED: z.string().default("true"),
 });
 
 function loadEnv() {

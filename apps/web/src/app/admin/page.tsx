@@ -47,7 +47,7 @@ export default function AdminPage() {
       });
   }, [router]);
 
-  if (loading || !initialEvent) {
+  if (loading) {
     return (
       <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center">
         <p className="text-ink-400 text-sm animate-pulse">Cargando panel…</p>

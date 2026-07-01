@@ -38,10 +38,6 @@ export const systemService = {
     return apiFetch<SystemStatus>("/api/system/status");
   },
 
-  getPrinters() {
-    return apiFetch<string[]>("/api/system/printers");
-  },
-
   sync() {
     return apiFetch<{ success: boolean; message: string; pulled: boolean; pushed: { successCount: number; failedCount: number } }>("/api/system/sync", {
       method: "POST"

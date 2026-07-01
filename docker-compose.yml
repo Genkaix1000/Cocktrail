@@ -58,6 +58,7 @@ services:
       - ./supabase/migrations/20240102000000_edge_sync.sql:/docker-entrypoint-initdb.d/init-scripts/11-edge_sync.sql:Z
       - ./supabase/migrations/20260626175947_add_closed_by.sql:/docker-entrypoint-initdb.d/init-scripts/12-add_closed_by.sql:Z
       - ./supabase/migrations/20260629201500_create_audit_logs.sql:/docker-entrypoint-initdb.d/init-scripts/13-create_audit_logs.sql:Z
+      - ./supabase/migrations/20260701000000_add_keyword.sql:/docker-entrypoint-initdb.d/init-scripts/14-add_keyword.sql:Z
 
   rest:
     image: postgrest/postgrest:v14.12

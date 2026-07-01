@@ -1,8 +1,8 @@
 import { apiFetch } from "./api-client";
-import type { EventSummary, Theme } from "@cocktrail/shared";
+import type { EventSummary, NightEvent, Theme } from "@cocktrail/shared";
 
 type StateSnapshot = {
-  event: import("@cocktrail/shared").NightEvent;
+  event: NightEvent | null;
   drinks: import("@cocktrail/shared").Drink[];
   orders: import("@cocktrail/shared").Order[];
   cashSales: import("@cocktrail/shared").CashSale[];
@@ -19,6 +19,20 @@ export const eventsService = {
     return apiFetch<EventSummary>("/api/event/close", {
       method: "POST",
       body: { password },
+    });
+  },
+
+  openEvent(keyword: string) {
+    return apiFetch<NightEvent>("/api/events/open", {
+      method: "POST",
+      body: { keyword },
+    });
+  },
+
+  setKeyword(keyword: string) {
+    return apiFetch<NightEvent>("/api/events/current/keyword", {
+      method: "PATCH",
+      body: { keyword },
     });
   },
 

@@ -38,6 +38,7 @@ import {
   Activity,
   CheckCircle,
   Bell,
+  KeyRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useEffect } from "react";
@@ -45,6 +46,7 @@ import { QRCodeSVG } from "qrcode.react";
 
 import CashSaleModal from "@/components/CashSaleModal";
 import CloseNightModal from "@/components/CloseNightModal";
+import OpenNightModal from "@/components/OpenNightModal";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
 import { OSHeadbar, OSProfileFooter } from "@/components/OSHeadbar";
@@ -103,7 +105,7 @@ import type {
 } from "@cocktrail/shared";
 
 type Props = {
-  initialEvent: NightEvent;
+  initialEvent: NightEvent | null;
   initialOrders: Order[];
   initialCashSales: CashSale[];
 };
@@ -227,6 +229,7 @@ export default function AdminClient({
   const [cashSales, setCashSales] = useState<CashSale[]>(initialCashSales);
   const [modalOpen, setModalOpen] = useState(false);
   const [cashOpen, setCashOpen] = useState(false);
+  const [editKeywordOpen, setEditKeywordOpen] = useState(false);
   const [summary, setSummary] = useState<EventSummary | null>(null);
 
   // Tab & sidebar navigation state
@@ -790,6 +793,10 @@ export default function AdminClient({
         fetchSystemLogs();
         setHistoryLoaded(false); // Force reload next time history tab is opened
       },
+      "event.opened": ({ event: newEvent }) => {
+        setEvent(newEvent);
+        refetch();
+      },
     },
     {
       onOpen: () => {
@@ -875,7 +882,7 @@ export default function AdminClient({
     const _barraCount = Math.max(0, _totalOps - totals.webCount);
     const _barraPct = totals.total > 0 ? Math.round((_barraTotal / totals.total) * 100) : 0;
 
-    const _startedAtStr = formatHm(event.startedAt);
+    const _startedAtStr = formatHm(event?.startedAt ?? 0);
 
     // 2. New Analytics (A)
     const prevTotals = getLastNightTotals(historyEvents);
@@ -913,7 +920,7 @@ export default function AdminClient({
     const _productRevenue = computeProductRevenue(totals.drinksSold);
     const _paymentBreakdown = computePaymentBreakdown(totals);
     const _operationalVelocity = computeOperationalVelocity(orders);
-    const _hourlySlots = computeHourlySlots({ startedAt: event.startedAt }, orders, cashSales);
+    const _hourlySlots = computeHourlySlots({ startedAt: event?.startedAt ?? 0 }, orders, cashSales);
     const _maxHourSales = Math.max(..._hourlySlots.map((s) => s.totalSales), 1000);
     const peak = findPeakHours(_hourlySlots);
     const _peakHour = peak.peakRevenue ? `${peak.peakRevenue.label} hs` : "—";
@@ -973,7 +980,7 @@ export default function AdminClient({
       deltaUnits: _deltaUnits,
       deltaClients: _deltaClients,
     };
-  }, [totals, event.startedAt, orders, cashSales, historyEvents]);
+  }, [totals, event?.startedAt, orders, cashSales, historyEvents]);
 
   // Historial aggregates
   const historyNow = useMemo(() => new Date(), []);
@@ -1206,7 +1213,18 @@ export default function AdminClient({
         </div>
 
         {event?.status === "activo" && (
-          <div className="px-5 mb-2 shrink-0">
+          <div className="px-5 mb-2 shrink-0 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEditKeywordOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="w-full h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+            >
+              <KeyRound size={13} />
+              <span>Clave de la noche</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -1227,10 +1245,25 @@ export default function AdminClient({
     );
   };
 
+  if (!event) {
+    return (
+      <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center p-6">
+        <OpenNightModal mode="open" onSubmit={(ev) => setEvent(ev)} />
+      </main>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-ink-950">
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full">
       <CashSaleModal open={cashOpen} onClose={() => setCashOpen(false)} />
+      <OpenNightModal
+        mode="edit"
+        open={editKeywordOpen}
+        onClose={() => setEditKeywordOpen(false)}
+        onSubmit={(ev) => setEvent(ev)}
+        currentKeyword={event.keyword}
+      />
       <CloseNightModal
         open={modalOpen}
         totals={totals}

@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import type {
   CashSale,
   EventSummary,
+  NightEvent,
   Order,
   Theme,
   CustomTheme,
@@ -12,6 +13,7 @@ export type DomainEvent =
   | { type: "order.updated"; order: Order }
   | { type: "cash_sale.added"; cashSale: CashSale }
   | { type: "event.closed"; summary: EventSummary }
+  | { type: "event.opened"; event: NightEvent }
   | {
       type: "theme.changed";
       theme: Theme;

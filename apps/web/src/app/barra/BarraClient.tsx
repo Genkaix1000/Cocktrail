@@ -146,13 +146,14 @@ export default function BarraClient() {
     });
 
     eventsService.getState().then((state) => {
-      if (state.event) {
-        setEvent(state.event);
-        
+      const activeEvent = state.event;
+      if (activeEvent) {
+        setEvent(activeEvent);
+
         // Night isolation: reset state if event changed
         const savedEventId = localStorage.getItem("cocktrail_last_event_id");
-        if (savedEventId !== state.event.id) {
-          localStorage.setItem("cocktrail_last_event_id", state.event.id);
+        if (savedEventId !== activeEvent.id) {
+          localStorage.setItem("cocktrail_last_event_id", activeEvent.id);
           localStorage.setItem("cocktrail_delivered_count", "0");
           localStorage.setItem("cocktrail_recent_scans", "[]");
           setDeliveredCount(0);
@@ -163,7 +164,7 @@ export default function BarraClient() {
           if (savedScans) {
             try {
               const scans: Order[] = JSON.parse(savedScans);
-              const filtered = scans.filter((s) => s.createdAt >= state.event.startedAt);
+              const filtered = scans.filter((s) => s.createdAt >= activeEvent.startedAt);
               setRecentScans(filtered);
             } catch {
               setRecentScans([]);

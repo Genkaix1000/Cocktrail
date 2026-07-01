@@ -7,6 +7,7 @@ import type { UsersRepository } from "../users/users.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
+import type { PrinterService } from "../printer/printer.service.js";
 import { env } from "../../config/env.js";
 import { verifySession } from "../auth/auth.service.js";
 import { systemStatusLimiter } from "../../shared/middleware/rate-limit.js";
@@ -18,7 +19,8 @@ export function createSystemController(
   usersRepo: UsersRepository,
   ordersRepo: OrdersRepository,
   cashSalesRepo: CashSalesRepository,
-  mpService: MercadoPagoService
+  mpService: MercadoPagoService,
+  printerService: PrinterService
 ): Router {
   const router = Router();
 
@@ -143,38 +145,13 @@ export function createSystemController(
           message: posnetMessage,
           details: posnetDetails
         },
-        printer: {
-          connected: env.PRINTER_CONNECTED !== "false",
-          configured: true,
-          message: env.PRINTER_CONNECTED !== "false" ? "Impresora térmica conectada" : "Impresora fuera de línea / sin papel"
-        },
+        printer: printerService.getStatus(),
         sync: {
           synced,
           pendingEvents
         },
         eventDetails,
         serverStartedAt
-      });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // GET /api/system/printers
-  router.get("/printers", async (req, res, next) => {
-    try {
-      exec("lpstat -p", (error, stdout, stderr) => {
-        const printers = [];
-        if (!error && stdout) {
-          const lines = stdout.split("\n");
-          for (const line of lines) {
-            const match = line.match(/^printer\s+(\S+)/);
-            if (match) {
-              printers.push(match[1]);
-            }
-          }
-        }
-        res.json(printers);
       });
     } catch (err) {
       next(err);

@@ -74,6 +74,7 @@ export type NightEvent = {
   closedAt?: number;
   orderCounter: number;
   closedBy?: string;
+  keyword?: string;
 };
 
 export type DrinkSold = {

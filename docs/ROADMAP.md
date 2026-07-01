@@ -2,14 +2,15 @@
 
 > Estado y plan de trabajo. La arquitectura vigente está en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 > Convención: `[x]` hecho · `[~]` parcial/a verificar · `[ ]` pendiente.
-> Última actualización: 2026-06-30.
+> Última actualización: 2026-07-01.
 
 ---
 
 ## Fase actual — MVP local-first para el boliche de prueba
 
 **Objetivo**: que el sistema funcione completo en una máquina local del boliche (mini-PC/laptop),
-sin depender de internet, con caja + barra + pedido por LAN, y reconciliación a la nube al cerrar la noche.
+sin depender de internet, con caja + reconciliación a la nube al cerrar la noche. El pedido por LAN
+(`/carta` + `/barra`) está programado y corre, pero su validación queda para la Fase 4 (ver nota abajo).
 
 ### Ya construido
 - [x] Monorepo pnpm (`apps/api` Express + `apps/web` Next.js 16 + `packages/shared`).
@@ -24,6 +25,7 @@ sin depender de internet, con caja + barra + pedido por LAN, y reconciliación a
 - [x] Real-time por SSE (KDS barra, ticket cliente, totales admin).
 - [x] Tickets con código HMAC + canje (escáner o manual).
 - [x] Audit logs.
+- [x] **Impresora térmica** (Fase 1, ver abajo) + **Abrir Noche manual** con palabra clave.
 
 ### Pendiente de esta fase
 - [ ] **Documentación consolidada** (este commit): `docs/ARCHITECTURE.md` + `ROADMAP.md`, `CLAUDE.md` reescrito, `AGENTS.md`, README. *(en progreso)*
@@ -32,21 +34,51 @@ sin depender de internet, con caja + barra + pedido por LAN, y reconciliación a
 - [ ] **Migración faltante**: la columna `night_events.totals` que usa el sync no está en las migraciones locales. Agregarla o documentar que es cloud-only.
 - [ ] **Guía de despliegue en la mini-PC**: `docs/DEPLOY.md` con pasos reproducibles (instalar Docker/Supabase CLI, env, arranque, acceso por LAN, generación del QR).
 - [ ] **Activar el sync cloud** (la lógica ya existe en `sync.service.ts`; falta config): el usuario YA tiene proyecto en supabase.com. Pasos: (1) asegurar que el esquema cloud matchea las migraciones + la columna `night_events.totals` (R2); (2) setear `SUPABASE_CLOUD_URL` + `SUPABASE_CLOUD_SERVICE_ROLE_KEY` en `apps/api/.env`; (3) probar un cierre de noche con internet y confirmar el push. Diferido a pedido del usuario.
-- [ ] **Verificación E2E del flujo demo** completo (carta → ticket → barra → entregado → caja efectivo → cerrar noche → sync).
-- [ ] **Tests**: smoke/E2E con Playwright de los 4 flujos (cliente, barra, caja, admin).
+- [ ] **Verificación E2E del flujo demo que SÍ se prueba ahora**: venta directa en **caja** (la cajera elige el trago en `/caja`, cobra — efectivo/Posnet/QR — y se genera el ticket con código) → **cerrar noche** desde `/admin` → **sync** a Supabase Cloud. El cliente retira el trago en barra físicamente, pero eso es logística del local, no un paso de software a validar.
+- [ ] **Tests**: smoke/E2E con Playwright de los **2 flujos activos** (`/caja`, `/admin`). Ver nota abajo sobre qué queda fuera y por qué.
 - [ ] Revisar **atomicidad del canje de ticket** (evitar doble canje bajo concurrencia).
+
+> 📌 **Nota — `/carta`, el ticket virtual y `/barra` quedan fuera de la validación hasta la Fase 4**:
+> las tres pantallas del **flujo digital del cliente** (`/carta` para armar el pedido por QR, la pantalla
+> del ticket con estado en vivo, y `/barra` para que el barman lo canjee) **están programadas y el
+> código corre**, pero **no se van a validar/probar ahora** — el acceso rápido a `/barra` en `/login`
+> directamente está deshabilitado (no aparece en "Accesos Rápidos"; el rol `barman` sigue existiendo
+> en el backend).
+>
+> **Por qué**: ese flujo completo (carta → ticket → barra) se va a **rediseñar junto con la Fase 4**
+> (pedido online), incluyendo cómo se sincroniza un pedido creado en la web con la barra local. No
+> tiene sentido validarlo dos veces — se prueba una sola vez, ya rediseñado, al cerrar esa fase.
+>
+> **Qué se prueba en cambio, ahora**: el flujo real del local es **caja → barra físico** (sin apps):
+> el cliente pide el trago en la barra/caja, la cajera lo carga y cobra en `/caja`, imprime el ticket
+> (Fase 1, impresora térmica) y se lo entrega para que lo retire. Ese es el circuito que hoy se valida
+> de punta a punta, junto con `/admin` para el cierre de noche y el sync.
 
 ---
 
-## Fase 1 — Tickets + impresora térmica 🖨️
+## Fase 1 — Tickets + impresora térmica 🖨️ *(completa)*
 
 **Objetivo**: cuando se vende un trago en caja, imprimir un ticket físico (POS 58mm) para que el
 cliente lo retire en la barra. El dueño ya compró la impresora térmica.
 
-- [ ] Integrar impresora térmica POS 58mm (protocolo ESC/POS; conexión USB/serie/red según el modelo).
-- [ ] Imprimir el ticket al confirmar la venta en caja (reusar el mismo código HMAC que el ticket digital).
-- [ ] Manejo de errores de impresión (sin papel / desconectada) sin frenar la venta.
-- [ ] Config de impresora en `/admin` (seleccionar dispositivo + test de impresión).
+- [x] Integrar impresora térmica NICTOM IT06 (POS58, USB, protocolo ESC/POS). Módulo
+  `apps/api/src/modules/printer/` — bytes ESC/POS crudos escritos directo a `/dev/usb/lp*`
+  (detección automática por glob), **sin CUPS** (el backend USB bidireccional de CUPS falla
+  silenciosamente con este clon) y sin librerías npm externas.
+- [x] Imprimir el ticket al confirmar la venta en caja, automático y solo para ventas de staff
+  (`createdBy !== "Cliente"`, no para pedidos anónimos de `/carta`). Contenido: nombre del local y
+  tragos en letra grande, número de venta + fecha + **palabra clave de la noche** + primeros 4
+  caracteres del `ticketCode` (HMAC) como respaldo de auditoría, en tamaño normal.
+- [x] Manejo de errores de impresión (sin papel / desconectada) sin frenar la venta: la venta se
+  registra igual, `/caja` muestra aviso + botón de reintento.
+- [x] Estado real de la impresora + botón "Imprimir ticket de prueba" — quedó en **`/caja`**, no en
+  `/admin` (ajuste de alcance pedido durante la implementación: es donde efectivamente se opera).
+- [x] **Cambio de alcance sumado**: "Abrir Noche" pasó de automática a **manual** desde `/admin`, con
+  palabra clave obligatoria (`night_events.keyword`) — necesario para que la clave tenga un momento
+  real de apertura, y de paso deja `startedAt` preciso para medir horas trabajadas a futuro. Ver
+  `docs/specs/impresora-termica.md`.
+- [ ] Corte automático de papel — la impresora es una comandera simple sin cuchilla, queda fuera de
+  alcance (se corta a mano).
 
 ---
 
@@ -96,6 +128,7 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 - [ ] Auth de la zona cloud (las cookies HMAC LAN no sirven cross-origin contra un host cloud).
 - [ ] Reconciliación de tragos online al **cerrar la caja** (juntar lo online con lo presencial en el resumen de la noche).
 - [ ] Mercado Pago **online** (Checkout Pro / QR / Bricks) además del Point físico — usar el plugin oficial de MP (ver `docs/AGENTS.md`).
+- [ ] **Reactivar `/barra`**: sumar de nuevo el acceso rápido de barman en `/login` y verificar E2E el flujo completo (pedido online → ticket en el celular → barman lo lee/canjea en `/barra` → reconciliación).
 
 ---
 
@@ -117,6 +150,7 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 | R5 | Credencial `cajavip/cajavip` hardcodeada en `auth.service.ts`. | Acceso no documentado. | A revisar |
 | R6 | `next-env.d.ts` y `apps/api/src/data/*.json` aparecen como modificados en runtime. | Ruido en git. | Considerar `.gitignore` |
 | R7 | `supabase/docker/kong.yml` usa las **demo keys públicas** de Supabase (JWT secret demo incluido), hardcodeadas. Kong DB-less **no** interpola env vars en el campo `key` de key-auth (ni `${{}}` de decK ni vault refs), así que no se pueden mover a `.env`. | Para LAN aceptable; si se expone `:54321` a internet = takeover de la DB (secret público). | Abierto — rotar las 3 llaves + JWT_SECRET antes de exponer fuera de LAN; alternativa: render con `envsubst` (la imagen de Kong no lo trae). |
+| R8 | La impresora térmica **no reporta "sin papel"** — verificado en vivo: con el rollo vacío/sin papel, `GET /api/printer/status` sigue devolviendo `connected: true` y la venta marca `printed: true` aunque no salió nada. La impresora no expone protocolo bidireccional confiable (por eso se evitó CUPS), así que el software solo confirma que el device node existe y acepta la escritura, no que el papel esté presente. | La cajera puede creer que el ticket salió cuando en realidad no imprimió nada (papel agotado). | Abierto — mitigación operativa por ahora: revisar visualmente el rollo antes de empezar el turno. Una detección real requeriría lectura de estado bidireccional (fuera de alcance, ver plan técnico de `docs/specs/impresora-termica.md`). |
 
 ---
 

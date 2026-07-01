@@ -11,14 +11,14 @@ import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { ConfigRepository } from "../config/config.repository.js";
-import { Conflict } from "../../shared/errors/http-errors.js";
+import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
 import { computeTotals } from "../../shared/utils/totals.js";
 import { emit } from "../../shared/sse/sse-manager.js";
 import { toSafeConfig } from "../config/config.repository.js";
 import { env } from "../../config/env.js";
 
 export class EventsService {
-  private event!: NightEvent;
+  private event: NightEvent | null = null;
   private activeTheme: Theme = "normal";
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
@@ -93,15 +93,9 @@ export class EventsService {
           }
         }
 
-        if (!active) {
-          active = {
-            id: randomUUID(),
-            status: "activo",
-            startedAt: Date.now(),
-            orderCounter: 0,
-          };
-          await this.eventsRepo.create(active);
-        }
+        // Ya no se auto-crea una noche nueva: queda `null` hasta que la admin la abra
+        // manualmente desde /admin (POST /api/events/open), para que `startedAt` refleje
+        // el inicio real del turno, no el arranque del server.
         this.event = active;
 
         if (this.configRepo) {
@@ -128,18 +122,19 @@ export class EventsService {
     return this.initPromise;
   }
 
-  async getCurrentEvent(): Promise<NightEvent> {
+  async getCurrentEvent(): Promise<NightEvent | null> {
     await this.ensureInitialized();
     return this.event;
   }
 
   async getEventStatus(): Promise<string> {
     await this.ensureInitialized();
-    return this.event.status;
+    return this.event?.status ?? "sin_evento";
   }
 
   async incrementOrderCounter(): Promise<number> {
     await this.ensureInitialized();
+    if (!this.event) throw new Conflict("No hay un evento activo.");
     const nextCounter = this.event.orderCounter + 1;
     this.event.orderCounter = nextCounter;
     await this.eventsRepo.update(this.event.id, { orderCounter: nextCounter });
@@ -148,15 +143,52 @@ export class EventsService {
 
   async getEventTotals(): Promise<EventTotals> {
     await this.ensureInitialized();
+    if (!this.event) return computeTotals([], []);
     const orders = await this.ordersRepo.listForEvent(this.event.id);
     const cashSales = await this.cashSalesRepo.listForEvent(this.event.id);
     return computeTotals(orders, cashSales);
   }
 
+  async openEvent(keyword: string): Promise<NightEvent> {
+    await this.ensureInitialized();
+    if (this.event && this.event.status === "activo") {
+      throw new Conflict("Ya hay una noche activa. Cerrala antes de abrir una nueva.");
+    }
+    const trimmed = keyword.trim();
+    if (!trimmed) {
+      throw new BadRequest("La palabra clave es obligatoria para abrir la noche.");
+    }
+    const newEvent: NightEvent = {
+      id: randomUUID(),
+      status: "activo",
+      startedAt: Date.now(),
+      orderCounter: 0,
+      keyword: trimmed,
+    };
+    await this.eventsRepo.create(newEvent);
+    this.event = newEvent;
+    emit({ type: "event.opened", event: newEvent });
+    return newEvent;
+  }
+
+  async setKeyword(keyword: string): Promise<NightEvent> {
+    await this.ensureInitialized();
+    if (!this.event || this.event.status !== "activo") {
+      throw new Conflict("No hay ninguna noche activa para editar.");
+    }
+    const trimmed = keyword.trim();
+    if (!trimmed) {
+      throw new BadRequest("La palabra clave no puede quedar vacía.");
+    }
+    const updated = await this.eventsRepo.update(this.event.id, { keyword: trimmed });
+    this.event = updated;
+    return updated;
+  }
+
   async closeEvent(closedBy: string = "desconocido"): Promise<EventSummary> {
     await this.ensureInitialized();
-    if (this.event.status !== "activo") {
-      throw new Conflict("El evento ya está cerrado.");
+    if (!this.event || this.event.status !== "activo") {
+      throw new Conflict("No hay ninguna noche activa para cerrar.");
     }
 
     const closedAt = Date.now();
@@ -187,15 +219,9 @@ export class EventsService {
     // Perform cloud sync in the background
     this.syncEventToCloudBackground(closedEvent, totals);
 
-    // Create next active event
-    const nextEvent: NightEvent = {
-      id: randomUUID(),
-      status: "activo",
-      startedAt: Date.now(),
-      orderCounter: 0,
-    };
-    await this.eventsRepo.create(nextEvent);
-    this.event = nextEvent;
+    // Ya no se crea la noche siguiente automáticamente: queda sin noche activa
+    // hasta que la admin abra una manualmente (POST /api/events/open).
+    this.event = null;
 
     return summary;
   }
@@ -265,15 +291,15 @@ export class EventsService {
     };
     return {
       ...config,
-      eventStartedAt: this.event.startedAt,
+      eventStartedAt: this.event?.startedAt ?? null,
     };
   }
 
   async snapshot() {
     await this.ensureInitialized();
     const drinks = await this.drinksRepo.list();
-    const orders = await this.ordersRepo.listForEvent(this.event.id);
-    const cashSales = await this.cashSalesRepo.listForEvent(this.event.id);
+    const orders = this.event ? await this.ordersRepo.listForEvent(this.event.id) : [];
+    const cashSales = this.event ? await this.cashSalesRepo.listForEvent(this.event.id) : [];
     const totals = computeTotals(orders, cashSales);
     return {
       event: this.event,

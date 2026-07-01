@@ -16,6 +16,7 @@ import { createTicketsController } from "./modules/tickets/tickets.controller.js
 import { createUsersController } from "./modules/users/users.controller.js";
 import { createConfigController } from "./modules/config/config.controller.js";
 import { createMercadoPagoController } from "./modules/mercadopago/mercadopago.controller.js";
+import { createPrinterController } from "./modules/printer/printer.controller.js";
 
 // Services & Repositories
 import { SupabaseDrinksRepository } from "./modules/drinks/drinks.repository.js";
@@ -32,6 +33,7 @@ import { SupabaseUsersRepository } from "./modules/users/users.repository.js";
 import { UsersService } from "./modules/users/users.service.js";
 import { SupabaseConfigRepository } from "./modules/config/config.repository.js";
 import { MercadoPagoService } from "./modules/mercadopago/mercadopago.service.js";
+import { PrinterService } from "./modules/printer/printer.service.js";
 
 // Middleware
 import { errorHandler } from "./shared/middleware/error-handler.js";
@@ -51,6 +53,8 @@ const usersService = new UsersService(usersRepo);
 
 const eventsService = new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, configRepo);
 
+const printerService = new PrinterService();
+
 const ordersService = new OrdersService(
   ordersRepo,
   drinksRepo,
@@ -58,6 +62,15 @@ const ordersService = new OrdersService(
   async () => eventsService.incrementOrderCounter(),
   (orderId: string): string => ticketsService.generateCodeString(orderId),
   async (orderId: string, code: string): Promise<void> => ticketsService.saveTicketForOrder(orderId, code),
+  async (order, nightEvent): Promise<void> => {
+    // printerService.printTicket ya atrapa toda excepción interna y devuelve
+    // { success, message } en vez de tirar — si success es false, hay que propagar
+    // el fallo (throw) para que OrdersService.createOrder marque printed=false.
+    const result = await printerService.printTicket(order, nightEvent);
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+  },
 );
 
 const ticketsService = new TicketsService(
@@ -131,7 +144,8 @@ app.use("/api/tickets", createTicketsController(ticketsService));
 app.use("/api/users", createUsersController(usersService));
 app.use("/api/config", createConfigController(configRepo, eventsService));
 app.use("/api/mercadopago", createMercadoPagoController(mpService));
-app.use("/api/system", createSystemController(usersRepo, ordersRepo, cashSalesRepo, mpService));
+app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
+app.use("/api/system", createSystemController(usersRepo, ordersRepo, cashSalesRepo, mpService, printerService));
 app.use("/api", createEventsController(eventsService, usersRepo));
 
 // Error handler global (ÚLTIMO)
