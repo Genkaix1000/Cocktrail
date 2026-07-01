@@ -214,4 +214,3 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   };
 }
 
-export type UseCheckoutResult = ReturnType<typeof useCheckout>;

@@ -348,5 +348,4 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
 }
 
 
-// Se conservan exportados para el test de caracterización.
-export { getItemsPreview, formatDayMonth, formatHourMinute };
+

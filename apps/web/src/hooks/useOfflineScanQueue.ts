@@ -219,4 +219,3 @@ export function useOfflineScanQueue({
   };
 }
 
-export type UseOfflineScanQueueResult = ReturnType<typeof useOfflineScanQueue>;

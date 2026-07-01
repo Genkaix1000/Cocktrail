@@ -127,7 +127,7 @@ export function getCaptchaInfo(ip: string): { required: boolean; question?: stri
   return { required: false };
 }
 
-export function generateCaptchaFor(ip: string): string {
+function generateCaptchaFor(ip: string): string {
   const num1 = Math.floor(Math.random() * 10) + 1;
   const num2 = Math.floor(Math.random() * 10) + 1;
   const question = `¿Cuánto es ${num1} + ${num2}?`;

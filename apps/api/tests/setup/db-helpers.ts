@@ -80,29 +80,6 @@ export function signTestSession(username: string, role: Role): string {
   return `${COOKIE_NAME}=${value}`;
 }
 
-/**
- * Inserta una night_event `activo` directo en la DB.
- *
- * OJO: `EventsService` cachea la noche activa en memoria (no relee la DB en cada
- * request) — un insert directo acá NO actualiza ese cache. Sirve para tests que leen
- * la tabla vía repository/histórico (ej. `events`), pero NO para flujos que crean
- * pedidos/tickets/cash-sales vía la API real (`orders`, `tickets`, `cash-sales`): para
- * esos, abrí la noche con `POST /api/events/open` (ver tickets.integration.test.ts).
- */
-export async function createOpenNightEvent(opts?: {
-  keyword?: string;
-}): Promise<{ id: string; keyword?: string }> {
-  const id = randomUUID();
-  const { error } = await supabase.from("night_events").insert({
-    id,
-    status: "activo",
-    started_at: new Date().toISOString(),
-    order_counter: 0,
-    keyword: opts?.keyword ?? "test-keyword",
-  });
-  if (error) throw error;
-  return { id, keyword: opts?.keyword ?? "test-keyword" };
-}
 
 /** Crea un trago de test disponible, para tests de orders/drinks. */
 export async function createTestDrink(opts?: {

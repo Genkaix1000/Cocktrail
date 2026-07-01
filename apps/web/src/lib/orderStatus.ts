@@ -29,10 +29,3 @@ export const STATUS_META: Record<
   },
 };
 
-/** Comparador: ascendente por createdAt (más viejo primero). */
-export const byCreatedAtAsc = (a: Order | CashSale, b: Order | CashSale) =>
-  a.createdAt - b.createdAt;
-
-/** Comparador: descendente por createdAt (más nuevo primero). */
-export const byCreatedAtDesc = (a: Order | CashSale, b: Order | CashSale) =>
-  b.createdAt - a.createdAt;

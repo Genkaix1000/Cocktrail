@@ -16,24 +16,6 @@ function isBrowser() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
-export function readActiveOrder(): ActiveOrderRef | null {
-  if (!isBrowser()) return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ActiveOrderRef>;
-    if (
-      typeof parsed.token === "string" &&
-      typeof parsed.displayNumber === "number" &&
-      typeof parsed.createdAt === "number"
-    ) {
-      return parsed as ActiveOrderRef;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 export function saveActiveOrder(ref: ActiveOrderRef): void {
   if (!isBrowser()) return;

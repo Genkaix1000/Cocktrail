@@ -2,13 +2,13 @@ import type { Theme } from "@cocktrail/shared";
 
 // ── Types ──
 
-export type CustomTheme = {
+type CustomTheme = {
   backgroundColor: string;
   surfaceColor: string;
   accentColor: string;
 };
 
-export type MercadoPagoConfig = {
+type MercadoPagoConfig = {
   publicKey: string;
   accessToken: string;
   sandbox: boolean;

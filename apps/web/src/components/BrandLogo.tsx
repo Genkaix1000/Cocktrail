@@ -1,6 +1,6 @@
 import { useTheme } from "./ThemeProvider";
 
-export type BrandSize = "sm" | "md" | "lg" | "xl" | "hero";
+type BrandSize = "sm" | "md" | "lg" | "xl" | "hero";
 
 const SCALE: Record<BrandSize, number> = {
   sm: 0.55,

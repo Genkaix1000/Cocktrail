@@ -76,4 +76,3 @@ export function usePrinterStatus() {
   };
 }
 
-export type UsePrinterStatusResult = ReturnType<typeof usePrinterStatus>;
