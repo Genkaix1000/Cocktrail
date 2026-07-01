@@ -93,6 +93,15 @@ code, módulo por módulo, antes de tocar el frontend. Ver `docs/specs/auditoria
 - [x] Los 9 módulos (`config, tickets, auth, drinks, orders, users, events, sync, system`) con
   tests de caracterización, auditados con `architect-reviewer`, y con los fixes de bajo riesgo ya
   aplicados. 102 tests unitarios + 78 de integración, `pnpm typecheck` en verde.
+- [x] **Seguimiento post-auditoría (rama `simplificar-estados-pedido-y-cajavip`)**: se revisó en
+  vivo qué eran `cajavip` y el flujo de estados `pagado/preparando/listo/entregado` — ninguno tenía
+  operación manual real detrás (el canje de ticket ya saltaba directo a `entregado`). Se eliminó
+  `cajavip` (usuario de sistema sin uso confirmado) y se colapsó `OrderStatus` a 3 valores
+  (`pendiente`, `entregado`, `cancelado`) en `packages/shared/src/domain.ts` + toda la API y la
+  web. Los tests de `orders`/`tickets`/`users` de esta fase se actualizaron al nuevo modelo (96
+  unitarios + 78 de integración tras el cambio — bajó de 102 a 96 unitarios porque la máquina de
+  estados pasó de 6 transiciones válidas a 2). Sin migraciones (la columna `orders.status` es
+  `TEXT` libre, sin `CHECK`).
 - [x] **Bug real corregido**: `POST /api/config` con `theme` hacía doble escritura a DB y doble
   emit SSE.
 - [x] **R5 resuelta**: eliminada la credencial hardcodeada `cajavip/cajavip` de `auth.service.ts`

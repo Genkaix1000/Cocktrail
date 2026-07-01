@@ -63,7 +63,7 @@ describe("POST /api/tickets/redeem (integración)", () => {
     expect(res.status).toBe(404);
   });
 
-  it("canjea un ticket recién creado: pasa el pedido de 'pagado' a 'entregado'", async () => {
+  it("canjea un ticket recién creado: pasa el pedido de 'pendiente' a 'entregado'", async () => {
     const drink = await createTestDrink();
     const order = await createOrderWithTicket(drink.id);
     expect(order.ticketCode).toBeTruthy();
