@@ -1,0 +1,163 @@
+"use client";
+
+import { useMemo } from "react";
+
+import { formatHm } from "@/lib/utils";
+
+import {
+  computeDelta,
+  getLastNightTotals,
+  computeCancellationRate,
+  computeDigitalConversion,
+  computeProductRevenue,
+  computePaymentBreakdown,
+  computeOperationalVelocity,
+  computeHourlySlots,
+  findPeakHours,
+  computeSegmentedTicket,
+  computeNightEvolution,
+  computeMovingAverage,
+  computeNightRecords,
+  computeWeeklyDelta,
+  computeMonthlyDelta,
+  generateInsights,
+} from "@/lib/analytics";
+
+import type { CashSale, EventSummary, EventTotals, Order } from "@cocktrail/shared";
+
+/**
+ * Hook compartido con todos los valores derivados de analytics que consumen
+ * tanto la vista Monitoreo (DashboardSection) como la vista Estadísticas
+ * (y parte de Historial) en AdminClient. Extraído del useMemo gigante que
+ * vivía inline en AdminClient — misma lógica, mismas dependencias.
+ */
+export function useAdminAnalytics(
+  totals: EventTotals,
+  eventStartedAt: number | undefined,
+  orders: Order[],
+  cashSales: CashSale[],
+  historyEvents: EventSummary[],
+) {
+  return useMemo(() => {
+    // 1. Base Variables
+    const _maxDrinkQty = totals.drinksSold[0]?.qty ?? 0;
+    const _totalDrinkUnits = totals.drinksSold.reduce((s, d) => s + d.qty, 0);
+
+    // Correct totalOps calculation (include QR and Debit)
+    const _totalOps =
+      totals.efectivoCount +
+      totals.qrCount +
+      totals.debitoCount;
+    const _avgTicket = _totalOps > 0 ? Math.round(totals.total / _totalOps) : 0;
+
+    // Web vs Barra calculation
+    const _webTotal = totals.webTotal;
+    const _webCount = totals.webCount;
+    const _webPct = totals.total > 0 ? Math.round((_webTotal / totals.total) * 100) : 0;
+
+    const _barraTotal = Math.max(0, totals.total - totals.webTotal);
+    const _barraCount = Math.max(0, _totalOps - totals.webCount);
+    const _barraPct = totals.total > 0 ? Math.round((_barraTotal / totals.total) * 100) : 0;
+
+    const _startedAtStr = formatHm(eventStartedAt ?? 0);
+
+    // 2. New Analytics (A)
+    const prevTotals = getLastNightTotals(historyEvents);
+    const _deltaTotal = prevTotals ? computeDelta(totals.total, prevTotals.total) : null;
+    const _cancellationInfo = computeCancellationRate(orders);
+    const _digitalConversion = computeDigitalConversion(orders, cashSales);
+
+    // Calculate uniqueClients
+    const _uniqueClients = Math.max(
+      1,
+      new Set(orders.filter((o) => o.status !== "cancelado").map((o) => o.token)).size +
+        Math.round(cashSales.length * 0.8)
+    );
+
+    const prevTotalOps = prevTotals
+      ? prevTotals.efectivoCount + prevTotals.qrCount + prevTotals.debitoCount
+      : 0;
+
+    const prevAvgTicket = prevTotalOps > 0 ? Math.round((prevTotals?.total ?? 0) / prevTotalOps) : 0;
+    const prevTotalDrinkUnits = prevTotals ? prevTotals.drinksSold.reduce((s, d) => s + d.qty, 0) : 0;
+    const prevUniqueClients = prevTotals
+      ? Math.max(
+          1,
+          new Set(historyEvents[0]?.orders?.filter((o) => o.status !== "cancelado").map((o) => o.token) ?? []).size +
+            Math.round((historyEvents[0]?.cashSales?.length ?? 0) * 0.8)
+        )
+      : 0;
+
+    const _deltaTickets = prevTotals ? computeDelta(_totalOps, prevTotalOps) : null;
+    const _deltaAvgTicket = prevTotals ? computeDelta(_avgTicket, prevAvgTicket) : null;
+    const _deltaUnits = prevTotals ? computeDelta(_totalDrinkUnits, prevTotalDrinkUnits) : null;
+    const _deltaClients = prevTotals ? computeDelta(_uniqueClients, prevUniqueClients) : null;
+
+    // 3. Dashboards (B)
+    const _productRevenue = computeProductRevenue(totals.drinksSold);
+    const _paymentBreakdown = computePaymentBreakdown(totals);
+    const _operationalVelocity = computeOperationalVelocity(orders);
+    const _hourlySlots = computeHourlySlots({ startedAt: eventStartedAt ?? 0 }, orders, cashSales);
+    const _maxHourSales = Math.max(..._hourlySlots.map((s) => s.totalSales), 1000);
+    const peak = findPeakHours(_hourlySlots);
+    const _peakHour = peak.peakRevenue ? `${peak.peakRevenue.label} hs` : "—";
+    const _segmentedTicket = computeSegmentedTicket(orders, cashSales);
+
+    // 4. Historial & Evolución (C)
+    const _nightEvolution = computeNightEvolution(historyEvents);
+    const _movingAvg = computeMovingAverage(_nightEvolution, 3);
+    const _nightRecords = computeNightRecords(historyEvents);
+    const _weeklyDelta = computeWeeklyDelta(historyEvents);
+    const _monthlyDelta = computeMonthlyDelta(historyEvents);
+    const _allTotal = historyEvents.reduce((s, e) => s + e.totals.total, 0);
+    const _avgNight = historyEvents.length > 0 ? Math.round(_allTotal / historyEvents.length) : 0;
+
+    // 5. Smart Insights
+    const _smartInsights = generateInsights(
+      totals,
+      orders,
+      cashSales,
+      _hourlySlots,
+      prevTotals
+    );
+
+    return {
+      maxDrinkQty: _maxDrinkQty,
+      totalDrinkUnits: _totalDrinkUnits,
+      totalOps: _totalOps,
+      avgTicket: _avgTicket,
+      startedAtStr: _startedAtStr,
+      deltaTotal: _deltaTotal,
+      cancellationInfo: _cancellationInfo,
+      digitalConversion: _digitalConversion,
+      productRevenue: _productRevenue,
+      paymentBreakdown: _paymentBreakdown,
+      operationalVelocity: _operationalVelocity,
+      hourlyData: _hourlySlots,
+      maxHourSales: _maxHourSales,
+      peakHour: _peakHour,
+      segmentedTicket: _segmentedTicket,
+      nightEvolution: _nightEvolution,
+      movingAvg: _movingAvg,
+      nightRecords: _nightRecords,
+      weeklyDelta: _weeklyDelta,
+      monthlyDelta: _monthlyDelta,
+      allTotal: _allTotal,
+      avgNight: _avgNight,
+      smartInsights: _smartInsights,
+      webTotal: _webTotal,
+      webCount: _webCount,
+      webPct: _webPct,
+      barraTotal: _barraTotal,
+      barraCount: _barraCount,
+      barraPct: _barraPct,
+      uniqueClients: _uniqueClients,
+      deltaTickets: _deltaTickets,
+      deltaAvgTicket: _deltaAvgTicket,
+      deltaUnits: _deltaUnits,
+      deltaClients: _deltaClients,
+    };
+  }, [totals, eventStartedAt, orders, cashSales, historyEvents]);
+}
+
+export type AdminAnalytics = ReturnType<typeof useAdminAnalytics>;
