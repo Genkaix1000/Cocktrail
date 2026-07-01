@@ -3,16 +3,16 @@ import { toSafeConfig, type AppConfig } from "./config.repository.js";
 
 function makeConfig(overrides?: Partial<AppConfig>): AppConfig {
   return {
-    theme: "normal",
-    brandName: "Cocktrail",
-    logoUrl: "",
+    theme: "bosko",
+    brandName: "Bosko",
+    logoUrl: "/bosko.webp",
     customTheme: null,
     mercadoPago: { publicKey: "pub-123", accessToken: "APP_USR-1234567890abcdef", sandbox: true },
     clubId: "club-1",
     clubName: "Bosko Club",
-    useLogoUrl: false,
-    logoSize: 40,
-    textLogoValue: "Cocktrail",
+    useLogoUrl: true,
+    logoSize: 56,
+    textLogoValue: "Bosko",
     textLogoSize: 26,
     ...overrides,
   };
@@ -41,7 +41,7 @@ describe("toSafeConfig", () => {
     const safe = toSafeConfig(config);
     expect(safe.brandName).toBe("Otro Boliche");
     expect(safe.clubId).toBe("club-42");
-    expect(safe.theme).toBe("normal");
+    expect(safe.theme).toBe("bosko");
   });
 
   it("preserva publicKey y sandbox de mercadoPago sin enmascarar", () => {

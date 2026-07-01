@@ -4,7 +4,7 @@ export type CustomTheme = {
   surfaceColor: string;
   accentColor: string;
 };
-export type Theme = "normal" | "bosko" | "custom";
+export type Theme = "bosko";
 
 export type Drink = {
   id: number;

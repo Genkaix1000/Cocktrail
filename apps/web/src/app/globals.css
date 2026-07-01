@@ -29,113 +29,13 @@
 /* COCKTRAIL · MODO DÍA (por defecto)                        */
 /* ────────────────────────────────────────────────────────── */
 :root {
-  --bg-primary: #f0f2e8;   /* Linen Cloud — fondo de página */
-  --bg-surface: #ffffff;   /* Blanco puro — tarjetas */
-  --text-accent: #5e4074;  /* Plum Wine — texto y acentos */
-  --text-primary: #1c1917; /* Off-black */
-
-  --success: #10b981;
-  --danger:  #ef4444;
-
-  /* ── ESCALA INK (Modo Día: 950=claro → 50=oscuro) ──
-     Estrategia: de 950→900 interpolamos entre bg-primary y surface.
-     De 900→700 usamos tintes muy suaves del acento (4-18%) sobre surface.
-     De 600→50  interpolamos del acento hacia negro puro.          */
-
-  --ink-950: var(--bg-primary);
-  --ink-925: color-mix(in oklab, var(--bg-primary) 60%, var(--bg-surface));
-  --ink-900: var(--bg-surface);
-
-  /* Bordes y surfaces activos — tinte minimal del acento */
-  --ink-850: color-mix(in oklab, var(--bg-surface) 96%, var(--text-accent));
-  --ink-800: color-mix(in oklab, var(--bg-surface) 91%, var(--text-accent));
-  --ink-750: color-mix(in oklab, var(--bg-surface) 85%, var(--text-accent));
-  --ink-700: color-mix(in oklab, var(--bg-surface) 78%, var(--text-accent));
-
-  /* Texto muted */
-  --ink-600: color-mix(in oklab, var(--text-primary) 35%, var(--bg-surface));
-  --ink-500: color-mix(in oklab, var(--text-primary) 50%, var(--bg-surface));
-  --ink-450: color-mix(in oklab, var(--text-primary) 58%, var(--bg-surface));
-  --ink-400: color-mix(in oklab, var(--text-primary) 65%, var(--bg-surface));
-
-  /* Texto fuerte */
-  --ink-300: color-mix(in oklab, var(--text-primary) 80%, var(--bg-surface));
-  --ink-200: color-mix(in oklab, var(--text-primary) 90%, var(--bg-surface));
-  --ink-100: color-mix(in oklab, var(--text-primary) 96%, var(--bg-surface));
-  --ink-50:  var(--text-primary);
-
-  /* Acentos y variantes */
-  --primary-base:  var(--text-accent);
-  --primary-soft:  color-mix(in oklab, var(--text-accent) 10%, transparent);
-  --primary-line:  color-mix(in oklab, var(--text-accent) 20%, transparent);
-
-  --accent-base:   var(--text-accent);
-  --accent-soft:   color-mix(in oklab, var(--text-accent) 10%, transparent);
-  --accent-line:   color-mix(in oklab, var(--text-accent) 20%, transparent);
-  --accent-border: color-mix(in oklab, var(--text-accent) 35%, transparent);
-
-  --success-base: var(--success);
-  --success-soft: color-mix(in oklab, var(--success) 12%, transparent);
-  --success-line: color-mix(in oklab, var(--success) 25%, transparent);
-
-  --danger-base: var(--danger);
-  --danger-soft: color-mix(in oklab, var(--danger) 12%, transparent);
-  --danger-line: color-mix(in oklab, var(--danger) 25%, transparent);
-
-  /* Sombras tarjetas (modo día) */
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
-  --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.07);
-}
-
-/* ────────────────────────────────────────────────────────── */
-/* COCKTRAIL · MODO NOCHE                                    */
-/* ────────────────────────────────────────────────────────── */
-.dark {
-  --bg-primary: #1e1328;   /* Fondo oscuro profundo */
-  --bg-surface: #2d1e3e;   /* Tarjeta — Plum oscuro */
-  --text-accent: #b89fd4;  /* Lila de acento puro en modo noche */
-  --text-primary: #e8e4f0; /* Casi blanco con tinte lila para texto */
-
-  --ink-950: #130d1c;
-  --ink-925: #1e1328;
-  --ink-900: #2d1e3e;
-
-  --ink-850: color-mix(in oklab, #2d1e3e 90%, var(--text-accent));
-  --ink-800: color-mix(in oklab, #2d1e3e 80%, var(--text-accent));
-  --ink-750: color-mix(in oklab, #2d1e3e 68%, var(--text-accent));
-  --ink-700: color-mix(in oklab, #2d1e3e 55%, var(--text-accent));
-
-  --ink-600: color-mix(in oklab, var(--text-primary) 35%, #2d1e3e);
-  --ink-500: color-mix(in oklab, var(--text-primary) 50%, #2d1e3e);
-  --ink-450: color-mix(in oklab, var(--text-primary) 60%, #2d1e3e);
-  --ink-400: color-mix(in oklab, var(--text-primary) 70%, #2d1e3e);
-
-  --ink-300: color-mix(in oklab, var(--text-primary) 85%, #fff);
-  --ink-200: color-mix(in oklab, var(--text-primary) 92%, #fff);
-  --ink-100: color-mix(in oklab, var(--text-primary) 97%, #fff);
-  --ink-50:  var(--text-primary);
-
-  --primary-base:  var(--text-accent);
-  --primary-soft:  color-mix(in oklab, var(--text-accent) 15%, transparent);
-  --primary-line:  color-mix(in oklab, var(--text-accent) 28%, transparent);
-
-  --accent-base:   var(--text-accent);
-  --accent-soft:   color-mix(in oklab, var(--text-accent) 15%, transparent);
-  --accent-line:   color-mix(in oklab, var(--text-accent) 28%, transparent);
-  --accent-border: color-mix(in oklab, var(--text-accent) 45%, transparent);
-
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.30), 0 4px 16px rgba(0,0,0,0.25);
-  --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.40), 0 8px 28px rgba(0,0,0,0.30);
-}
-
-/* ────────────────────────────────────────────────────────── */
-/* BOSKO · MODO DÍA                                          */
-/* ────────────────────────────────────────────────────────── */
-[data-theme="bosko"] {
   --bg-primary: #fffef2;   /* Crema/manteca cálido editorial */
   --bg-surface: #ffffff;   /* Blanco puro para tarjetas */
   --text-accent: #013e37;  /* Verde botella profundo */
   --text-primary: #013e37; /* Verde botella profundo para textos y sidebar */
+
+  --success: #10b981;
+  --danger:  #ef4444;
 
   --ink-950: var(--bg-primary);
   --ink-925: color-mix(in oklab, var(--bg-primary) 92%, var(--text-accent)); /* Sidebar crema oscuro */
@@ -165,14 +65,22 @@
   --accent-line:   color-mix(in oklab, var(--text-accent) 20%, transparent);
   --accent-border: color-mix(in oklab, var(--text-accent) 35%, transparent);
 
+  --success-base: var(--success);
+  --success-soft: color-mix(in oklab, var(--success) 12%, transparent);
+  --success-line: color-mix(in oklab, var(--success) 25%, transparent);
+
+  --danger-base: var(--danger);
+  --danger-soft: color-mix(in oklab, var(--danger) 12%, transparent);
+  --danger-line: color-mix(in oklab, var(--danger) 25%, transparent);
+
   --shadow-card: 0 1px 3px rgba(1,62,55,0.04), 0 4px 12px rgba(1,62,55,0.02);
   --shadow-card-hover: 0 2px 8px rgba(1,62,55,0.08), 0 8px 24px rgba(1,62,55,0.05);
 }
 
 /* ────────────────────────────────────────────────────────── */
-/* BOSKO · MODO NOCHE                                        */
+/* COCKTRAIL · MODO NOCHE                                    */
 /* ────────────────────────────────────────────────────────── */
-.dark[data-theme="bosko"] {
+.dark {
   --bg-primary: #013e37;   /* Verde botella profundo */
   --bg-surface: #012b26;   /* Variante más oscura para tarjetas y sidebar */
   --text-accent: #fffeb3;  /* Color manteca */
@@ -209,6 +117,12 @@
   --shadow-card: 0 1px 3px rgba(0,0,0,0.35), 0 4px 16px rgba(0,0,0,0.22);
   --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.45), 0 8px 28px rgba(0,0,0,0.28);
 }
+
+/* ────────────────────────────────────────────────────────── */
+
+
+/* ────────────────────────────────────────────────────────── */
+
 
 
 /* ────────────────────────────────────────────────────────── */
@@ -305,16 +219,7 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* Lógica de Logo Dinámico multi-skin */
-[data-theme="bosko"] .brand-text {
-  display: none !important;
-}
-[data-theme="bosko"] .brand-image {
-  display: block !important;
-}
-.brand-image {
-  display: none; /* Oculto por defecto en skin Normal */
-}
+
 
 /* ──────────────────────────────────────────────────────────
    Sombras semánticas (clase utilitaria)
@@ -362,7 +267,7 @@ body {
    ────────────────────────────────────────────────────────── */
 
 /* 1. Fondo general de palmeras */
-body[data-theme="bosko"]::before {
+body::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -376,7 +281,7 @@ body[data-theme="bosko"]::before {
 }
 
 /* 1.5 Enredadera lateral derecha (opcional, solo decorativa en desktop/tablet) */
-body[data-theme="bosko"]::after {
+body::after {
   content: "";
   position: fixed;
   top: 0;
@@ -392,7 +297,7 @@ body[data-theme="bosko"]::after {
 }
 
 /* 2. Marcos ornamentales de cobre para tarjetas */
-[data-theme="bosko"] .ct-promo-card {
+.ct-promo-card {
   position: relative;
   border: 1px solid var(--accent-border) !important;
   background: var(--ink-900) !important;
@@ -401,13 +306,13 @@ body[data-theme="bosko"]::after {
 }
 
 /* Variante regular: borde fino cobre */
-[data-theme="bosko"] .ct-regular-card {
+.ct-regular-card {
   border: 1px solid var(--accent-line) !important;
   background: rgba(10, 26, 16, 0.8) !important;
 }
 
 /* 3. Botones metálicos de cobre */
-[data-theme="bosko"] .ct-action-btn {
+.ct-action-btn {
   background: linear-gradient(135deg, #e6b999 0%, #c98a6c 50%, #a86c50 100%) !important;
   border: 1px solid #f2cfbb !important;
   color: #050d07 !important;
@@ -417,7 +322,7 @@ body[data-theme="bosko"]::after {
 }
 
 /* Textura interna del botón (hojas sutiles) */
-[data-theme="bosko"] .ct-action-btn::after {
+.ct-action-btn::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -428,27 +333,27 @@ body[data-theme="bosko"]::after {
 }
 
 /* Botón secundario (minus o empty) en Bosko */
-[data-theme="bosko"] .ct-action-btn-ghost {
+.ct-action-btn-ghost {
   background: rgba(201, 138, 108, 0.1) !important;
   border: 1px solid var(--accent-line) !important;
   color: var(--accent-base) !important;
 }
 
 /* Colores específicos de etiquetas en Bosko */
-[data-theme="bosko"] .ct-tag-promo {
+.ct-tag-promo {
   color: var(--ink-950) !important;
   background: var(--accent-base) !important;
 }
-[data-theme="bosko"] .ct-tag-trend {
+.ct-tag-trend {
   color: var(--primary-base) !important;
   background: var(--primary-soft) !important;
   border: 1px solid var(--primary-line) !important;
 }
 
-[data-theme="bosko"] .ct-price-promo {
+.ct-price-promo {
   color: var(--accent-base) !important;
 }
-[data-theme="bosko"] .ct-price-trend {
+.ct-price-trend {
   color: var(--primary-base) !important;
 }
 
@@ -458,8 +363,8 @@ body[data-theme="bosko"]::after {
    ────────────────────────────────────────────────────────── */
 .ct-checkout-btn {
   background: var(--accent-base);
-  color: var(--ink-950);
-  border: 1px solid color-mix(in oklab, var(--accent-base) 80%, #fff);
+  color: #fffef2;
+  border: 1px solid color-mix(in oklab, var(--accent-base) 70%, #fff);
   transition: filter 0.15s ease, transform 0.1s ease;
 }
 .ct-checkout-btn:hover:not(:disabled) {
@@ -468,30 +373,8 @@ body[data-theme="bosko"]::after {
 .ct-checkout-btn:active:not(:disabled) {
   transform: scale(0.98);
 }
-
-/* Cocktrail dark: accent es lila/azul con texto en superficie oscura */
-.ct-checkout-btn {
-  /* Fallback para temas donde el acento es claro: forzar texto legible */
-  color: var(--ink-950);
-}
-
-/* Bosko dark: acento manteca (#fffeb3) → texto verde oscuro */
-.dark[data-theme="bosko"] .ct-checkout-btn {
+.dark .ct-checkout-btn {
   background: var(--accent-base);
   color: var(--bg-primary);
-  border-color: color-mix(in oklab, var(--accent-base) 70%, #fff);
-}
-
-/* Bosko día: acento verde botella → texto manteca */
-[data-theme="bosko"]:not(.dark) .ct-checkout-btn {
-  background: var(--accent-base);
-  color: #fffef2;
-  border-color: color-mix(in oklab, var(--accent-base) 70%, #fff);
-}
-
-/* Cocktrail oscuro: acento lila → texto muy oscuro */
-.dark:not([data-theme="bosko"]) .ct-checkout-btn {
-  background: var(--accent-base);
-  color: #13091e;
   border-color: color-mix(in oklab, var(--accent-base) 70%, #fff);
 }

@@ -24,7 +24,7 @@ describe("GET/POST /api/config (integración)", () => {
     const cookie = signTestSession("admin-test", "admin");
     const res = await request(app).get("/api/config").set("Cookie", cookie);
     expect(res.status).toBe(200);
-    expect(res.body.brandName).toBe("Cocktrail");
+    expect(res.body.brandName).toBe("Bosko");
     expect(res.body.mercadoPago).not.toHaveProperty("accessToken");
     expect(res.body.mercadoPago.accessTokenMasked).toBe("");
   });

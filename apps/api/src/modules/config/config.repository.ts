@@ -47,9 +47,9 @@ export interface ConfigRepository {
 // ── Default config ──
 
 const DEFAULT_CONFIG: AppConfig = {
-  theme: "normal",
-  brandName: "Cocktrail",
-  logoUrl: "",
+  theme: "bosko",
+  brandName: "Bosko",
+  logoUrl: "/bosko.webp",
   customTheme: null,
   mercadoPago: {
     publicKey: "",
@@ -58,9 +58,9 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   clubId: "cocktrail_club_01",
   clubName: "Bosko Club",
-  useLogoUrl: false,
-  logoSize: 40,
-  textLogoValue: "Cocktrail",
+  useLogoUrl: true,
+  logoSize: 56,
+  textLogoValue: "Bosko",
   textLogoSize: 26,
 };
 

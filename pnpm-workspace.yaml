@@ -7,3 +7,6 @@ allowBuilds:
   msw: false
   sharp: false
   unrs-resolver: false
+
+overrides:
+  rolldown: 1.1.3

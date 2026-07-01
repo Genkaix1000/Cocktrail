@@ -50,7 +50,7 @@ export const CreateCashSaleSchema = z.object({
 
 // 4. Esquema para cambiar tema de la noche
 export const ThemeSchema = z.object({
-  theme: z.enum(["normal", "bosko", "custom"], {
+  theme: z.enum(["bosko"], {
     errorMap: () => ({ message: "Tema inválido" }),
   }),
 });
@@ -142,14 +142,10 @@ export const CreateUserSchema = z.object({
 
 // 10. Esquema para actualizar configuración general
 export const UpdateConfigSchema = z.object({
-  theme: z.enum(["normal", "bosko", "custom"]).optional(),
+  theme: z.enum(["bosko"]).optional(),
   brandName: z.string().max(100).trim().optional(),
   logoUrl: z.string().max(500).optional(),
-  customTheme: z.object({
-    backgroundColor: z.string().max(50),
-    surfaceColor: z.string().max(50),
-    accentColor: z.string().max(50),
-  }).nullable().optional(),
+  customTheme: z.null().optional(),
   mercadoPago: z.object({
     publicKey: z.string().max(200).default(""),
     accessToken: z.string().max(200).default(""),

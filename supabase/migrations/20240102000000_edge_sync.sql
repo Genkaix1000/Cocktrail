@@ -29,16 +29,16 @@ CREATE TABLE IF NOT EXISTS drinks (
 -- app_config
 CREATE TABLE IF NOT EXISTS app_config (
   id TEXT PRIMARY KEY DEFAULT 'default',
-  theme TEXT NOT NULL DEFAULT 'normal',
-  brand_name TEXT NOT NULL DEFAULT 'Cocktrail',
-  logo_url TEXT,
+  theme TEXT NOT NULL DEFAULT 'bosko',
+  brand_name TEXT NOT NULL DEFAULT 'Bosko',
+  logo_url TEXT DEFAULT '/bosko.webp',
   custom_theme JSONB,
   mercado_pago JSONB,
   club_id TEXT NOT NULL,
   club_name TEXT NOT NULL,
-  use_logo_url BOOLEAN NOT NULL DEFAULT FALSE,
-  logo_size INT NOT NULL DEFAULT 40,
-  text_logo_value TEXT NOT NULL DEFAULT 'Cocktrail',
+  use_logo_url BOOLEAN NOT NULL DEFAULT TRUE,
+  logo_size INT NOT NULL DEFAULT 56,
+  text_logo_value TEXT NOT NULL DEFAULT 'Bosko',
   text_logo_size INT NOT NULL DEFAULT 26
 );
 

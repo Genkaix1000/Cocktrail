@@ -18,7 +18,7 @@ import { env } from "../../config/env.js";
 
 export class EventsService {
   private event: NightEvent | null = null;
-  private activeTheme: Theme = "normal";
+  private activeTheme: Theme = "bosko";
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
 
@@ -285,14 +285,14 @@ export class EventsService {
     await this.ensureInitialized();
     const config = this.configRepo ? toSafeConfig(await this.configRepo.get()) : {
       theme: this.activeTheme,
-      brandName: "Cocktrail",
-      logoUrl: "",
+      brandName: "Bosko",
+      logoUrl: "/bosko.webp",
       customTheme: null,
       clubId: "cocktrail_club_01",
       clubName: "Bosko Club",
-      useLogoUrl: false,
-      logoSize: 40,
-      textLogoValue: "Cocktrail",
+      useLogoUrl: true,
+      logoSize: 56,
+      textLogoValue: "Bosko",
       textLogoSize: 26,
     };
     return {

@@ -161,12 +161,7 @@ export default function Ticket({ order }: Props) {
       .catch(() => {});
   }, []);
 
-  const accentColor =
-    theme === "bosko"
-      ? "#1a5c3a"
-      : theme === "custom"
-        ? "var(--primary-base)"
-        : "#0284c7";
+  const accentColor = "#1a5c3a";
 
   return (
     <main className="min-h-screen bg-ink-950 flex flex-col relative font-sans text-ink-50 selection:bg-ink-800">
@@ -247,8 +242,8 @@ export default function Ticket({ order }: Props) {
                         className="shrink-0 px-1.5 h-7 flex items-center justify-center rounded-md font-mono font-black text-xs"
                         style={{
                           color: accentColor,
-                          backgroundColor: theme === "custom" ? "var(--primary-soft)" : `${accentColor}18`,
-                          border: `1px solid ${theme === "custom" ? "var(--primary-line)" : `${accentColor}30`}`
+                          backgroundColor: `${accentColor}18`,
+                          border: `1px solid ${accentColor}30`
                         }}
                       >
                         x{it.qty}
