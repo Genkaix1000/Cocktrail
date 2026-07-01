@@ -4,8 +4,12 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, RedeemTicketSchema } from "../../shared/middleware/validate.js";
 import { ticketLimiter } from "../../shared/middleware/rate-limit.js";
 import { env } from "../../config/env.js";
+import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
-export function createTicketsController(service: TicketsService): Router {
+export function createTicketsController(
+  service: TicketsService,
+  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
+): Router {
   const router = Router();
 
   // POST /api/tickets/redeem — canjear ticket (requiere login)
@@ -26,17 +30,10 @@ export function createTicketsController(service: TicketsService): Router {
           method: resolvedMethod,
         });
 
-        // Audit Logging (who, when, which ticket, bar station, method and from which IP)
-        console.log(
-          JSON.stringify({
-            event: "ticket.redeemed",
-            ticket: code,
-            redeemer,
-            barCode: resolvedBarCode,
-            method: resolvedMethod,
-            ip: req.ip,
-            timestamp: new Date().toISOString(),
-          })
+        await auditLogsService.log(
+          "ticket.redeemed",
+          `Ticket ${code} canjeado en ${resolvedBarCode} (${resolvedMethod})`,
+          redeemer,
         );
 
         res.json({

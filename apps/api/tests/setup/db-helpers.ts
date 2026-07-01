@@ -80,7 +80,15 @@ export function signTestSession(username: string, role: Role): string {
   return `${COOKIE_NAME}=${value}`;
 }
 
-/** Crea una night_event en estado `activo`, para tests de orders/tickets/cash-sales/sync. */
+/**
+ * Inserta una night_event `activo` directo en la DB.
+ *
+ * OJO: `EventsService` cachea la noche activa en memoria (no relee la DB en cada
+ * request) — un insert directo acá NO actualiza ese cache. Sirve para tests que leen
+ * la tabla vía repository/histórico (ej. `events`), pero NO para flujos que crean
+ * pedidos/tickets/cash-sales vía la API real (`orders`, `tickets`, `cash-sales`): para
+ * esos, abrí la noche con `POST /api/events/open` (ver tickets.integration.test.ts).
+ */
 export async function createOpenNightEvent(opts?: {
   keyword?: string;
 }): Promise<{ id: string; keyword?: string }> {
@@ -94,4 +102,30 @@ export async function createOpenNightEvent(opts?: {
   });
   if (error) throw error;
   return { id, keyword: opts?.keyword ?? "test-keyword" };
+}
+
+/** Crea un trago de test disponible, para tests de orders/drinks. */
+export async function createTestDrink(opts?: {
+  id?: number;
+  name?: string;
+  price?: number;
+  available?: boolean;
+}): Promise<{ id: number; name: string; price: number }> {
+  const id = opts?.id ?? Math.floor(Math.random() * 1_000_000) + 1;
+  const name = opts?.name ?? `Trago Test ${id}`;
+  const price = opts?.price ?? 1500;
+  const { error } = await supabase.from("drinks").insert({
+    id,
+    name,
+    price,
+    description: "trago de test",
+    vibe: "test",
+    flavors: [],
+    icon_name: "GlassWater",
+    trending: false,
+    promo: false,
+    available: opts?.available ?? true,
+  });
+  if (error) throw error;
+  return { id, name, price };
 }

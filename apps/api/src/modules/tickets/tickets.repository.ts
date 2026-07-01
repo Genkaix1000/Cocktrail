@@ -22,7 +22,6 @@ export interface TicketsRepository {
     redeemedBy: string,
     meta?: { barCode?: string; method?: "scan" | "manual" },
   ): Promise<Ticket>;
-  clear(): Promise<void>;
 }
 
 function mapRowToTicket(row: any): Ticket {
@@ -141,9 +140,5 @@ export class SupabaseTicketsRepository implements TicketsRepository {
     }
 
     return mapRowToTicket(data);
-  }
-
-  async clear(): Promise<void> {
-    // In SQL context, we preserve records.
   }
 }
