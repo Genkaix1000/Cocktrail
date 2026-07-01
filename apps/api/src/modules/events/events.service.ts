@@ -5,7 +5,6 @@ import type {
   NightEvent,
   Theme,
 } from "@cocktrail/shared";
-import { supabase } from "../../shared/supabase.js";
 import type { EventsRepository } from "./events.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
@@ -239,9 +238,8 @@ export class EventsService {
       if (totals.total === 0) {
         console.log(`[EventsService] Night event ${ev.id} has $0 total. Automatically deleting from database...`);
         try {
-          await supabase.from("night_events").delete().eq("id", ev.id);
-          await supabase.from("orders").delete().eq("event_id", ev.id);
-          await supabase.from("cash_sales").delete().eq("event_id", ev.id);
+          // orders/tickets/cash_sales cascadean solos (ON DELETE CASCADE en night_events).
+          await this.eventsRepo.delete(ev.id);
         } catch (dbErr) {
           console.error(`[EventsService] Failed to delete $0 event ${ev.id} from Supabase:`, dbErr);
         }

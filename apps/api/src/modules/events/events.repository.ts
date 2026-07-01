@@ -9,6 +9,31 @@ export interface EventsRepository {
   listClosed(): Promise<NightEvent[]>;
   updateSyncStatus(id: string, syncStatus: "pending" | "synced" | "failed", syncedAt?: number): Promise<void>;
   getPendingSync(): Promise<(NightEvent & { sync_status: string })[]>;
+  /** Borra la night_event — cascadea a orders/tickets/cash_sales (ON DELETE CASCADE). */
+  delete(id: string): Promise<void>;
+}
+
+type NightEventRow = {
+  id: string;
+  status: NightEvent["status"];
+  started_at: string;
+  closed_at: string | null;
+  order_counter: number;
+  closed_by: string | null;
+  keyword: string | null;
+  sync_status?: string;
+};
+
+function mapRowToEvent(row: NightEventRow): NightEvent {
+  return {
+    id: row.id,
+    status: row.status,
+    startedAt: new Date(row.started_at).getTime(),
+    closedAt: row.closed_at ? new Date(row.closed_at).getTime() : undefined,
+    orderCounter: row.order_counter,
+    closedBy: row.closed_by || undefined,
+    keyword: row.keyword || undefined,
+  };
 }
 
 export class SupabaseEventsRepository implements EventsRepository {
@@ -24,17 +49,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       throw error;
     }
 
-    if (!data) return null;
-
-    return {
-      id: data.id,
-      status: data.status,
-      startedAt: new Date(data.started_at).getTime(),
-      closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
-      orderCounter: data.order_counter,
-      closedBy: data.closed_by || undefined,
-      keyword: data.keyword || undefined,
-    };
+    return data ? mapRowToEvent(data) : null;
   }
 
   async create(event: NightEvent): Promise<NightEvent> {
@@ -58,19 +73,11 @@ export class SupabaseEventsRepository implements EventsRepository {
       throw error;
     }
 
-    return {
-      id: data.id,
-      status: data.status,
-      startedAt: new Date(data.started_at).getTime(),
-      closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
-      orderCounter: data.order_counter,
-      closedBy: data.closed_by || undefined,
-      keyword: data.keyword || undefined,
-    };
+    return mapRowToEvent(data);
   }
 
   async update(id: string, updates: Partial<NightEvent>): Promise<NightEvent> {
-    const dbUpdates: any = {};
+    const dbUpdates: Partial<Omit<NightEventRow, "id">> = {};
     if (updates.status) dbUpdates.status = updates.status;
     if (updates.startedAt !== undefined) {
       dbUpdates.started_at = new Date(updates.startedAt).toISOString();
@@ -100,15 +107,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       throw error;
     }
 
-    return {
-      id: data.id,
-      status: data.status,
-      startedAt: new Date(data.started_at).getTime(),
-      closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
-      orderCounter: data.order_counter,
-      closedBy: data.closed_by || undefined,
-      keyword: data.keyword || undefined,
-    };
+    return mapRowToEvent(data);
   }
 
   async findById(id: string): Promise<NightEvent | null> {
@@ -123,17 +122,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       throw error;
     }
 
-    if (!data) return null;
-
-    return {
-      id: data.id,
-      status: data.status,
-      startedAt: new Date(data.started_at).getTime(),
-      closedAt: data.closed_at ? new Date(data.closed_at).getTime() : undefined,
-      orderCounter: data.order_counter,
-      closedBy: data.closed_by || undefined,
-      keyword: data.keyword || undefined,
-    };
+    return data ? mapRowToEvent(data) : null;
   }
 
   async listClosed(): Promise<NightEvent[]> {
@@ -148,15 +137,7 @@ export class SupabaseEventsRepository implements EventsRepository {
       throw error;
     }
 
-    return data.map((item: any) => ({
-      id: item.id,
-      status: item.status,
-      startedAt: new Date(item.started_at).getTime(),
-      closedAt: item.closed_at ? new Date(item.closed_at).getTime() : undefined,
-      orderCounter: item.order_counter,
-      closedBy: item.closed_by || undefined,
-      keyword: item.keyword || undefined,
-    }));
+    return data.map(mapRowToEvent);
   }
 
   async updateSyncStatus(id: string, syncStatus: "pending" | "synced" | "failed", syncedAt?: number): Promise<void> {
@@ -186,15 +167,17 @@ export class SupabaseEventsRepository implements EventsRepository {
       throw error;
     }
 
-    return data.map((item: any) => ({
-      id: item.id,
-      status: item.status,
-      startedAt: new Date(item.started_at).getTime(),
-      closedAt: item.closed_at ? new Date(item.closed_at).getTime() : undefined,
-      orderCounter: item.order_counter,
-      closedBy: item.closed_by || undefined,
-      keyword: item.keyword || undefined,
-      sync_status: item.sync_status,
+    return data.map((item: NightEventRow) => ({
+      ...mapRowToEvent(item),
+      sync_status: item.sync_status as string,
     }));
+  }
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase.from("night_events").delete().eq("id", id);
+    if (error) {
+      console.error("[SupabaseEventsRepository] Error deleting event:", error);
+      throw error;
+    }
   }
 }

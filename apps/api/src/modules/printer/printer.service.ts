@@ -24,6 +24,11 @@ export type PrintResult = {
 
 export class PrinterService {
   private findDevice(): string | null {
+    // En test (NODE_ENV=test) nunca se debe escribir a la impresora física real —
+    // los tests de integración de orders/tickets crean ventas de staff, que disparan
+    // impresión automática. Sin este guard, cada corrida de la suite manda tickets
+    // reales al hardware conectado.
+    if (process.env.NODE_ENV === "test") return null;
     try {
       const usbDir = "/dev/usb";
       if (!existsSync(usbDir)) return null;
