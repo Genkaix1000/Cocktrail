@@ -12,7 +12,6 @@ import {
   Users,
   ChevronDown,
   ChevronRight,
-  Printer,
   CalendarDays,
   FileText,
   X,
@@ -40,7 +39,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useEffect } from "react";
-import { QRCodeSVG } from "qrcode.react";
 
 import CashSaleModal from "@/components/CashSaleModal";
 import CloseNightModal from "@/components/CloseNightModal";
@@ -69,6 +67,7 @@ import type { AuditLogEntry } from "@/components/admin/DashboardSection";
 import EstadisticasSection from "@/components/admin/EstadisticasSection";
 import HistorialSection from "@/components/admin/HistorialSection";
 import LogsSection from "@/components/admin/LogsSection";
+import QrSection from "@/components/admin/QrSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 
 import type {
@@ -182,10 +181,6 @@ export default function AdminClient({
     }
   }, []);
 
-  // QR print page state
-  const ENV_HOST = process.env.NEXT_PUBLIC_LAN_HOST;
-  const [qrUrl, setQrUrl] = useState<string>("");
-
   // Fetch current user details
   useEffect(() => {
     authService.getMe().then((u) => {
@@ -236,13 +231,6 @@ export default function AdminClient({
       .catch(() => {});
   }, []);
 
-  // QR code url resolver
-  useEffect(() => {
-    const host = ENV_HOST?.trim() || (typeof window !== "undefined" ? window.location.origin : "");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQrUrl(`${host.replace(/\/$/, "")}/carta`);
-  }, [ENV_HOST]);
-
   const handleTabChange = (tab: string) => {
     const needsSkeleton = 
       (tab === "monitoreo" && isFirstLoad) || 
@@ -262,11 +250,6 @@ export default function AdminClient({
       url.searchParams.set("tab", tab);
       window.history.pushState({}, "", url.toString());
     }
-  };
-
-  const handleQrPrint = () => {
-    if (!qrUrl) return;
-    window.print();
   };
 
   const totals = useMemo(
@@ -780,55 +763,8 @@ export default function AdminClient({
             />
           )}
 
-          {/* TAB 4: QR PRINT (qr page layout directly inside admin view) */}
-          {activeTab === "qr" && (
-            <div key={activeTab} className="space-y-6 max-w-xl mx-auto text-center py-6 animate-dashboard-in">
-              <div className="flex flex-col gap-1 items-center">
-                <h1 className="font-serif-italic text-[30px] text-ink-50">QR para la Carta</h1>
-                <p className="text-[12px] text-ink-400">
-                  Imprimí este código QR para que los clientes escaneen y hagan pedidos desde la mesa.
-                </p>
-              </div>
-
-              {/* QR Block container */}
-              <div className="bg-white rounded-[24px] p-8 max-w-sm mx-auto shadow-2xl border border-white/5 flex flex-col items-center">
-                {qrUrl ? (
-                  <QRCodeSVG value={qrUrl} size={280} level="M" marginSize={2} />
-                ) : (
-                  <div className="w-[280px] h-[280px] flex items-center justify-center text-ink-400">
-                    Cargando URL…
-                  </div>
-                )}
-                
-                {/* Print watermark decoration */}
-                <div className="mt-4 text-center text-black/40 text-[10px] font-bold uppercase tracking-wider hidden print:block">
-                  Escaneá y pedí tu trago
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <ul className="text-left text-[12px] text-ink-300 space-y-2.5 max-w-sm mx-auto pt-2 print:hidden">
-                <li className="flex gap-2">
-                  <span className={`font-mono font-bold ${accentColorClass}`}>1.</span>
-                  <span>Imprimí esta pantalla o guardala como PDF. Pegá el QR en las mesas, barras y accesos.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className={`font-mono font-bold ${accentColorClass}`}>2.</span>
-                  <span>Verificá que el router WiFi y el servidor estén en la misma red local (LAN).</span>
-                </li>
-              </ul>
-
-              {/* Trigger Button */}
-              <button
-                type="button"
-                onClick={handleQrPrint}
-                className={`h-11 px-6 rounded-xl text-ink-950 text-[11px] font-bold uppercase tracking-[0.14em] hover:brightness-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 mx-auto print:hidden ${isBosko ? "bg-[#4ade80]" : "bg-blue"}`}
-              >
-                <Printer size={15} />
-                Imprimir QR
-              </button>
-            </div>
-          )}
+          {/* TAB 4: QR PRINT */}
+          {activeTab === "qr" && <QrSection isBosko={isBosko} />}
 
           {/* TAB 4.5: AUDITORIA DE LOGS */}
           {activeTab === "logs" && (
