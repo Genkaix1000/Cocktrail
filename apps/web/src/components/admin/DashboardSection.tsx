@@ -51,9 +51,6 @@ type PaymentBreakdownEntry = {
 
 type Props = {
   analytics: AdminAnalytics;
-  event: NightEvent | null;
-  orders: Order[];
-  cashSales: CashSale[];
   totals: EventTotals;
   historyEvents: EventSummary[];
   systemLogs: AuditLogEntry[];
@@ -77,9 +74,6 @@ type Props = {
  */
 export default function DashboardSection({
   analytics,
-  event,
-  orders,
-  cashSales,
   totals,
   historyEvents,
   systemLogs,
@@ -407,7 +401,7 @@ export default function DashboardSection({
             </div>
 
             {/* Productos Más Vendidos */}
-            <TopProductsList products={productRevenue} isBosko={isBosko} />
+            <TopProductsList products={productRevenue} />
 
             {/* Métodos de Pago */}
             <PaymentDonut breakdown={customPaymentBreakdown} total={totals.total} isBosko={isBosko} />
@@ -569,7 +563,7 @@ export default function DashboardSection({
   );
 }
 
-function TopProductsList({ products, isBosko }: { products: any[]; isBosko: boolean }) {
+function TopProductsList({ products }: { products: any[] }) {
   return (
     <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between min-w-0 h-[380px] shadow-lg">
       <div className="flex justify-between items-center">

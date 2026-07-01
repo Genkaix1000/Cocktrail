@@ -25,24 +25,6 @@ export function useTheme() {
   return context;
 }
 
-/** Parse a hex color to [r,g,b] */
-const hexToRgb = (hex: string): [number, number, number] => {
-  const h = hex.replace("#", "");
-  return [
-    parseInt(h.substring(0, 2), 16),
-    parseInt(h.substring(2, 4), 16),
-    parseInt(h.substring(4, 6), 16),
-  ];
-};
-
-/** Interpolate between two [r,g,b] at t (0→1) and return hex */
-const lerpColor = (a: [number, number, number], b: [number, number, number], t: number): string => {
-  const r = Math.round(a[0] + (b[0] - a[0]) * t);
-  const g = Math.round(a[1] + (b[1] - a[1]) * t);
-  const bl = Math.round(a[2] + (b[2] - a[2]) * t);
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
-};
-
 /** All CSS custom properties that we manage */
 const MANAGED_VARS = [
   "--bg-primary", "--bg-surface", "--text-accent", "--text-primary",
@@ -60,7 +42,7 @@ const clearCustomVars = () => {
   }
 };
 
-const applyThemeColors = (theme: Theme, customTheme: CustomTheme | null, isDark: boolean) => {
+const applyThemeColors = () => {
   document.documentElement.setAttribute("data-theme", "bosko");
   clearCustomVars();
 };
@@ -78,10 +60,8 @@ const getIsDarkKey = () => {
 
 export function ThemeProvider({
   children,
-  initialTheme
 }: {
   children: React.ReactNode;
-  initialTheme: Theme;
 }) {
   const [theme, setTheme] = useState<Theme>("bosko");
   const [customTheme, setCustomTheme] = useState<CustomTheme | null>(null);
@@ -106,7 +86,7 @@ export function ThemeProvider({
 
   // Re-run whenever theme, customTheme or isDark changes
   useEffect(() => {
-    applyThemeColors(theme, customTheme, isDark);
+    applyThemeColors();
   }, [theme, customTheme, isDark]);
 
   // Cargar localmente al montar para evitar delay y consultar al backend

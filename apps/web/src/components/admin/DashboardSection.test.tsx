@@ -45,18 +45,32 @@ const baseEvent: NightEvent = {
   orderCounter: 0,
 };
 
-function makeProps(overrides: Partial<Parameters<typeof DashboardSection>[0]> = {}) {
+function makeProps(overrides: {
+  event?: NightEvent | null;
+  orders?: Order[];
+  cashSales?: CashSale[];
+  totals?: EventTotals;
+  historyEvents?: EventSummary[];
+  systemLogs?: any[];
+  customPaymentBreakdown?: any[];
+  isFirstLoad?: boolean;
+  isTabTransitioning?: boolean;
+  activeTab?: string;
+  chartMetric?: "sales" | "glasses";
+  setChartMetric?: (metric: "sales" | "glasses") => void;
+  isBosko?: boolean;
+  barColorClass?: string;
+} = {}) {
   const event = overrides.event !== undefined ? overrides.event : baseEvent;
   const orders = (overrides.orders ?? []) as Order[];
   const cashSales = (overrides.cashSales ?? []) as CashSale[];
   const totals = overrides.totals ?? emptyTotals;
   const historyEvents = overrides.historyEvents ?? [];
 
+  const { event: _, orders: __, cashSales: ___, ...componentProps } = overrides;
+
   return {
     analytics: computeAnalytics(totals, event, orders, cashSales, historyEvents),
-    event,
-    orders,
-    cashSales,
     totals,
     historyEvents,
     systemLogs: [],
@@ -68,7 +82,7 @@ function makeProps(overrides: Partial<Parameters<typeof DashboardSection>[0]> = 
     setChartMetric: vi.fn(),
     isBosko: false,
     barColorClass: "from-blue/15 to-blue",
-    ...overrides,
+    ...componentProps,
   };
 }
 

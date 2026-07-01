@@ -637,9 +637,6 @@ export default function AdminClient({
           {activeTab === "monitoreo" && (
             <DashboardSection
               analytics={analytics}
-              event={event}
-              orders={orders}
-              cashSales={cashSales}
               totals={totals}
               historyEvents={historyEvents}
               systemLogs={systemLogs}

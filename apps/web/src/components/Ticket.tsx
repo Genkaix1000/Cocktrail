@@ -143,7 +143,7 @@ type Props = { order: Order };
 
 export default function Ticket({ order }: Props) {
   const [drinks, setDrinks] = useState<import("@cocktrail/shared").Drink[]>([]);
-  const { theme } = useTheme();
+  useTheme();
   
   const isDelivered = order.status === "entregado";
   const isCancelled = order.status === "cancelado";

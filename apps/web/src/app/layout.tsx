@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import type { Theme } from "@cocktrail/shared";
 
 // Inter para toda la UI — pesos 400-700.
 const inter = Inter({
@@ -22,7 +21,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   // Tema por defecto. El ThemeProvider se sincroniza vía SSE.
-  const initialTheme: Theme = "bosko";
 
   return (
     <html
@@ -59,7 +57,7 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased bg-ink-950 text-ink-50">
-        <ThemeProvider initialTheme={initialTheme}>
+        <ThemeProvider>
           {/* Ambient Glow for Glassmorphism */}
           <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
             <div className="absolute top-[-10%] left-[-10%] w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] rounded-full bg-accent opacity-10 blur-[100px]" />

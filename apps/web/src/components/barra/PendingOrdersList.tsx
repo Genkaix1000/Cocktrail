@@ -45,7 +45,6 @@ export default function PendingOrdersList({
           {notifications.map((n) => (
             <ToastItem
               key={n.id}
-              id={n.id}
               displayNumber={n.displayNumber}
               text={n.text}
               onClose={() => onDismissNotification(n.id)}
@@ -146,12 +145,10 @@ export default function PendingOrdersList({
 }
 
 function ToastItem({
-  id,
   displayNumber,
   text,
   onClose,
 }: {
-  id: string;
   displayNumber: number;
   text: string;
   onClose: () => void;

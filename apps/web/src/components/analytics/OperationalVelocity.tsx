@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, ArrowRight, ChefHat, Package, CreditCard } from "lucide-react";
+import { Clock, ArrowRight, CreditCard } from "lucide-react";
 import type { OperationalVelocity as OperationalVelocityType } from "@/lib/analytics";
 import { formatDuration } from "@/lib/analytics";
 

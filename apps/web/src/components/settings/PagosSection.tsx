@@ -6,7 +6,7 @@ import { configService, type SafeConfig } from "@/services/config.service";
 import { useTheme } from "@/components/ThemeProvider";
 
 export default function PagosSection() {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const [config, setConfig] = useState<SafeConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, LogIn, Shield, Wallet, Scan } from "lucide-react";
+import { Lock, LogIn, Shield, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";

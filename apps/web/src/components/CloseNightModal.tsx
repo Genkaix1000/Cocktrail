@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   CreditCard,
   Loader2,
-  Power,
   X,
   QrCode,
   Clock,
@@ -247,7 +246,6 @@ export default function CloseNightModal({
             summary={summary!} 
             onClose={onClose} 
             startedAt={startedAt} 
-            onCloseAndShutdown={onCloseAndShutdown} 
           />
         ) : (
           <ConfirmView
@@ -411,12 +409,10 @@ function SummaryView({
   summary,
   onClose,
   startedAt,
-  onCloseAndShutdown,
 }: {
   summary: EventSummary;
   onClose: () => void;
   startedAt: number;
-  onCloseAndShutdown?: () => void;
 }) {
   const duration =
     summary.closedAt && summary.startedAt
