@@ -411,13 +411,22 @@ módulo, incluye la tarea 7). 2 vistas extraídas + tests, typecheck+lint+test+b
 
 ### 9. `BarraClient.tsx` — extraer `useOfflineScanQueue` (bloque de mayor riesgo)
 
-- [ ] Extraer `hooks/useOfflineScanQueue.ts` como unidad atómica: estado de la cola (hoy L93),
+- [x] Extraer `hooks/useOfflineScanQueue.ts` como unidad atómica: estado de la cola (hoy L93),
   carga inicial desde `localStorage` (L120-139), `handleScan` completo (L219-315),
   `useScannerInput` (L317-320), sincronización al reconectar (`setInterval`, L321-379).
   **No descomponer en piezas más chicas.**
-- [ ] Test de caracterización del hook (mock de `localStorage`, `navigator.onLine`,
+- [x] Test de caracterización del hook (mock de `localStorage`, `navigator.onLine`,
   `ticketsService.redeem`) **antes** de extraer el resto de `BarraClient`.
-- [ ] Typecheck + build en verde. Commit (solo este hook, aparte del resto de la vista).
+- [x] Typecheck + build en verde. Commit (solo este hook, aparte del resto de la vista).
+
+  `recentScans`/`deliveredCount` son mutados también por los handlers SSE (`order.updated`,
+  `event.closed`) que quedan en el shell hasta la tarea 10 — no se movieron al hook. En vez de
+  eso, `useOfflineScanQueue` expone un callback `onRedeemed(order)` que el shell le pasa; el shell
+  centraliza la escritura a localStorage en dos funciones compartidas (`appendRecentScan` y
+  `bumpDeliveredCount`) que usan tanto `onRedeemed` (canje directo/manual) como el handler SSE
+  `order.updated` con status `entregado`, eliminando la duplicación que existía antes entre el
+  `handleScan` inline y el handler SSE. `barCode` quedó fuera del hook (identidad de la estación,
+  no de la cola offline): el shell lo sigue cargando/guardando y se lo pasa al hook como parámetro.
 
 ### 10. `BarraClient.tsx` — extraer el resto de las secciones
 

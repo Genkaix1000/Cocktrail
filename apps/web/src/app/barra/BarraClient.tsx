@@ -25,8 +25,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { useSSE } from "@/lib/useSSE";
 import { ordersService } from "@/services/orders.service";
 import { authService } from "@/services/auth.service";
-import { useScannerInput } from "@/hooks/useScannerInput";
-import { ticketsService } from "@/services/tickets.service";
+import { useOfflineScanQueue } from "@/hooks/useOfflineScanQueue";
 import { eventsService } from "@/services/events.service";
 import type { Order, NightEvent } from "@cocktrail/shared";
 
@@ -89,9 +88,6 @@ export default function BarraClient() {
   const [manualRedeemOrder, setManualRedeemOrder] = useState<Order | null>(null);
   const [manualRedeeming, setManualRedeeming] = useState(false);
 
-  // Offline queue state
-  const [offlineQueue, setOfflineQueue] = useState<string[]>([]);
-
   // Authenticated user state
   const [currentUser, setCurrentUser] = useState<{ role: string; username: string; permissions: any } | null>(null);
 
@@ -116,19 +112,13 @@ export default function BarraClient() {
     setEventState(ev);
   };
 
-  // Load offline queue, bar code and recent scans on mount
+  // Load bar code and delivered count on mount (la cola offline la carga useOfflineScanQueue)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedQueue = localStorage.getItem("cocktrail_offline_scans");
       const savedDelivered = localStorage.getItem("cocktrail_delivered_count");
       const savedBarCode = localStorage.getItem("cocktrail_bar_code");
 
       setTimeout(() => {
-        if (savedQueue) {
-          try {
-            setOfflineQueue(JSON.parse(savedQueue));
-          } catch {}
-        }
         if (savedDelivered) {
           setDeliveredCount(Number(savedDelivered));
         }
@@ -202,6 +192,9 @@ export default function BarraClient() {
     setBarCodeEditing(false);
   }, []);
 
+  // Escribe recentScans a localStorage recortado al límite, filtrado por la noche activa.
+  // Compartido entre el canje directo (useOfflineScanQueue) y el handler SSE de
+  // "order.updated" (status entregado) para no duplicar esta lógica.
   const appendRecentScan = useCallback((order: Order) => {
     setRecentScans((prev) => {
       const exists = prev.some((o) => o.id === order.id);
@@ -215,172 +208,28 @@ export default function BarraClient() {
     });
   }, []);
 
-  // Scan processor handler with offline support
-  const handleScan = useCallback(async (code: string, method: "scan" | "manual" = "scan"): Promise<boolean> => {
-    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+  // Incrementa deliveredCount y persiste — mismo motivo que appendRecentScan.
+  const bumpDeliveredCount = useCallback(() => {
+    setDeliveredCount((prev) => {
+      const nextCount = prev + 1;
+      localStorage.setItem("cocktrail_delivered_count", String(nextCount));
+      return nextCount;
+    });
+  }, []);
 
-    if (isOffline) {
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        navigator.vibrate([100, 50, 100]);
-      }
-      triggerFlash({
-        type: "duplicate",
-        message: "Offline: Guardado en la cola local de pendientes.",
-      });
+  // Reporta un canje exitoso (directo o manual) para actualizar el estado
+  // compartido con los handlers de SSE.
+  const handleRedeemed = useCallback((order: Order) => {
+    bumpDeliveredCount();
+    appendRecentScan(order);
+  }, [bumpDeliveredCount, appendRecentScan]);
 
-      setOfflineQueue((prev) => {
-        if (prev.includes(code)) return prev;
-        const next = [...prev, code];
-        localStorage.setItem("cocktrail_offline_scans", JSON.stringify(next));
-        return next;
-      });
-      return false;
-    }
-
-    try {
-      const res = await ticketsService.redeem(code, { barCode, method });
-      if (res.success) {
-        if (typeof navigator !== "undefined" && navigator.vibrate) {
-          navigator.vibrate(200);
-        }
-        const methodLabel = method === "manual" ? " (manual)" : "";
-        triggerFlash({
-          type: "success",
-          message: `¡Pedido #${res.order.displayNumber} entregado con éxito${methodLabel}!`,
-          displayNumber: res.order.displayNumber,
-          items: res.order.items,
-        });
-
-        setDeliveredCount((prev) => {
-          const nextCount = prev + 1;
-          localStorage.setItem("cocktrail_delivered_count", String(nextCount));
-          return nextCount;
-        });
-
-        appendRecentScan(res.order);
-        fetchPendingOrders();
-        return true;
-      }
-      return false;
-    } catch (err) {
-      const isNetworkError =
-        err instanceof TypeError ||
-        (err instanceof Error &&
-          (err.message.includes("Failed to fetch") ||
-            err.message.includes("NetworkError") ||
-            err.message.includes("network")));
-
-      if (isNetworkError) {
-        if (typeof navigator !== "undefined" && navigator.vibrate) {
-          navigator.vibrate([100, 50, 100]);
-        }
-        triggerFlash({
-          type: "duplicate",
-          message: "Red inestable: guardado en la cola local de pendientes.",
-        });
-
-        setOfflineQueue((prev) => {
-          if (prev.includes(code)) return prev;
-          const next = [...prev, code];
-          localStorage.setItem("cocktrail_offline_scans", JSON.stringify(next));
-          return next;
-        });
-        return false;
-      }
-
-      let msg = "Error al procesar ticket";
-      let type: "error" | "duplicate" = "error";
-      let vibratePattern = 400;
-
-      if (err instanceof Error) {
-        msg = err.message;
-        if (err.message.toLowerCase().includes("canjeado")) {
-          type = "duplicate";
-          vibratePattern = 100;
-        }
-      }
-
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        if (type === "duplicate") {
-          navigator.vibrate([100, 50, 100]);
-        } else {
-          navigator.vibrate(vibratePattern);
-        }
-      }
-
-      triggerFlash({ type, message: msg });
-      return false;
-    }
-  }, [barCode, fetchPendingOrders, triggerFlash, appendRecentScan]);
-
-  // Hook to capture barcode gun scanner input
-  useScannerInput({
-    onScan: handleScan,
+  const { offlineQueue, handleScan } = useOfflineScanQueue({
+    barCode,
+    triggerFlash,
+    fetchPendingOrders,
+    onRedeemed: handleRedeemed,
   });
-
-  // Auto-sync offline scans when connection is restored
-  useEffect(() => {
-    let active = true;
-
-    const syncQueue = async () => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
-
-      const saved = localStorage.getItem("cocktrail_offline_scans");
-      if (!saved) return;
-
-      let queue: string[] = [];
-      try {
-        queue = JSON.parse(saved);
-      } catch {
-        return;
-      }
-
-      if (queue.length === 0) return;
-
-      console.log(`[sync] Sincronizando ${queue.length} canjes offline...`);
-      const remaining: string[] = [];
-
-      for (const code of queue) {
-        if (!active) return;
-        try {
-          await ticketsService.redeem(code);
-        } catch (err) {
-          const isNetworkError =
-            err instanceof TypeError ||
-            (err instanceof Error &&
-              (err.message.includes("Failed to fetch") ||
-                err.message.includes("NetworkError") ||
-                err.message.includes("network")));
-
-          if (isNetworkError) {
-            remaining.push(code);
-          }
-        }
-      }
-
-      if (active) {
-        setOfflineQueue(remaining);
-        localStorage.setItem("cocktrail_offline_scans", JSON.stringify(remaining));
-        if (remaining.length === 0 && queue.length > 0) {
-          triggerFlash({
-            type: "success",
-            message: "Sincronizados con éxito todos los canjes offline.",
-          });
-          fetchPendingOrders();
-        }
-      }
-    };
-
-    window.addEventListener("online", syncQueue);
-    const interval = setInterval(syncQueue, 10000);
-    syncQueue();
-
-    return () => {
-      active = false;
-      window.removeEventListener("online", syncQueue);
-      clearInterval(interval);
-    };
-  }, [fetchPendingOrders]);
 
   useSSE(
     {
@@ -410,21 +259,8 @@ export default function BarraClient() {
       },
       "order.updated": ({ order }) => {
         if (order.status === "entregado") {
-          setDeliveredCount((prev) => {
-            const nextCount = prev + 1;
-            localStorage.setItem("cocktrail_delivered_count", String(nextCount));
-            return nextCount;
-          });
-          setRecentScans((prev) => {
-            const exists = prev.some((o) => o.id === order.id);
-            if (exists) return prev;
-            const next = [order, ...prev];
-            const currentEvent = eventRef.current;
-            const filtered = currentEvent ? next.filter((o) => o.createdAt >= currentEvent.startedAt) : next;
-            const limited = filtered.slice(0, RECENT_SCANS_LIMIT);
-            localStorage.setItem("cocktrail_recent_scans", JSON.stringify(limited));
-            return limited;
-          });
+          bumpDeliveredCount();
+          appendRecentScan(order);
         }
 
         if (order.status === "cancelado") {
