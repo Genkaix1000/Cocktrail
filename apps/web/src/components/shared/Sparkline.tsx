@@ -4,7 +4,7 @@ export default function Sparkline({ data, color }: { data: number[]; color: stri
   const min = Math.min(...pointsData, 0);
   const range = max - min || 1;
   const width = 140;
-  const height = 24;
+  const height = 36;
   const points = pointsData.map((val, idx) => {
     const x = (idx / (pointsData.length - 1)) * width;
     const y = height - ((val - min) / range) * (height - 6) - 3;
@@ -14,7 +14,7 @@ export default function Sparkline({ data, color }: { data: number[]; color: stri
   const gradId = `spark-grad-${Math.floor(Math.random() * 1000000)}`;
 
   return (
-    <svg className="w-full h-8 overflow-visible mt-2 block opacity-85" viewBox={`0 0 ${width} ${height}`}>
+    <svg className="w-full h-full overflow-visible block" viewBox={`0 0 ${width} ${height}`}>
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.25" />

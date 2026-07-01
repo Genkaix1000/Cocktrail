@@ -224,7 +224,7 @@ export default function HistorialSection({
   };
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 w-full">
       {!historyLoaded || isTabTransitioning ? (
         <div className="space-y-6 animate-dashboard-in">
           {/* Title Skeleton */}

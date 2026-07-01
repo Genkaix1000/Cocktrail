@@ -280,21 +280,7 @@ body::before {
   pointer-events: none;
 }
 
-/* 1.5 Enredadera lateral derecha (opcional, solo decorativa en desktop/tablet) */
-body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 20px;
-  background-image: url("data:image/svg+xml,%3Csvg width='20' height='200' viewBox='0 0 20 200' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 0Q5 50 15 100T10 200' stroke='%23c98a6c' stroke-width='1.5'/%3E%3Cpath d='M10 30C15 25 18 35 10 40M12 70C17 65 20 75 12 80M8 120C3 115 0 125 8 130M10 170C5 165 2 175 10 180' stroke='%23c98a6c' stroke-width='1'/%3E%3C/svg%3E");
-  background-repeat: repeat-y;
-  background-position: right center;
-  pointer-events: none;
-  z-index: 50;
-  opacity: 0.7;
-}
+
 
 /* 2. Marcos ornamentales de cobre para tarjetas */
 .ct-promo-card {
