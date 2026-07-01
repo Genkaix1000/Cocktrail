@@ -170,6 +170,7 @@ export default function BarraClient() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPendingOrders();
   }, [fetchPendingOrders]);
 

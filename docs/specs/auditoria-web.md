@@ -1,6 +1,6 @@
 # Auditoría de apps/web — modularización de god-components + tests (Fase 3)
 
-**Estado**: approved
+**Estado**: done
 **Fecha**: 2026-07-01
 
 > Fase 3 de la iniciativa de auditoría (ver `docs/ROADMAP.md`): **API** (Fase 2, completa,
@@ -489,14 +489,19 @@ Hallazgos estructurales dejados sin resolver a propósito (fuera de alcance de e
 
 ### 11. Cierre de la fase
 
-- [ ] Correr `pnpm --filter cocktrail-app exec tsc --noEmit` y `pnpm --filter cocktrail-app build`
-  una vez más de punta a punta.
-- [ ] Correr `pnpm --filter cocktrail-app test` completo.
-- [ ] Actualizar `docs/ROADMAP.md`: marcar Fase 3 (auditoría Web) completa, agregar Fase 4 (E2E
-  post-refactor) como próximo paso explícito, y dejar anotados los hallazgos estructurales no
-  resueltos (`useSSE` centralizado en los 3 componentes, `activeTab === "estadisticas"`
-  inalcanzable desde la UI).
-- [ ] Cambiar el estado de esta spec (`docs/specs/auditoria-web.md`) de `approved` a `done`.
+- [x] Correr `pnpm --filter cocktrail-app exec tsc --noEmit` y `pnpm --filter cocktrail-app build`
+  una vez más de punta a punta. En verde. De paso se corrigió un error de lint preexistente
+  detectado en `BarraClient.tsx` (`react-hooks/set-state-in-effect` en el efecto de
+  `fetchPendingOrders`, no introducido por esta fase) suprimiéndolo con el mismo patrón ya usado en
+  otros 7 lugares del código (fetch-on-mount async, la regla no distingue `setState` detrás de un
+  `await`).
+- [x] Correr `pnpm --filter cocktrail-app test` completo. 52/52 en verde.
+- [x] Actualizar `docs/ROADMAP.md`: marcar Fase 3 (auditoría Web) completa, con Fase 4 (E2E
+  post-refactor) como próximo paso explícito, y los hallazgos estructurales no resueltos anotados
+  (`useSSE` centralizado en los 3 componentes, `activeTab === "estadisticas"` inalcanzable desde la
+  UI, `dynamicAlerts` sin usar en `DashboardSection`, `ToastItem` con timer que se resetea,
+  `renderSidebar` sin extraer a componente en Caja/Barra).
+- [x] Cambiar el estado de esta spec (`docs/specs/auditoria-web.md`) de `approved` a `done`.
 
 ---
 

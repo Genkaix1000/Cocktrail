@@ -127,14 +127,14 @@ code, módulo por módulo, antes de tocar el frontend. Ver `docs/specs/auditoria
 
 ---
 
-## Fase 3 — Auditoría Web 🎨 *(en progreso — `AdminClient.tsx` completo, faltan Caja/Barra)*
+## Fase 3 — Auditoría Web 🎨 *(completa)*
 
-**Objetivo**: mismo tratamiento que la Fase 2 pero para `apps/web` — el problema principal son los
+**Objetivo**: mismo tratamiento que la Fase 2 pero para `apps/web` — el problema principal eran los
 god-components: `AdminClient.tsx` (3425 líneas), `CajaClient.tsx` (2186), `BarraClient.tsx` (1517).
 Modularizar (hooks, subcomponentes, separar lógica de negocio de presentación), auditar contra
 SOLID/clean code con `architect-reviewer` + `expert-react-frontend-engineer` +
 `expert-nextjs-developer`, y agregar tests donde corresponda. Spec completa (problema, objetivo,
-plan técnico, tareas) en `docs/specs/auditoria-web.md`, rama `refactor/auditoria-web`.
+plan técnico, tareas) en `docs/specs/auditoria-web.md` (estado `done`), rama `refactor/auditoria-web`.
 
 - [x] Setup: Vitest + React Testing Library + jsdom instalado en `apps/web` (no había nada antes).
 - [x] **`AdminClient.tsx` completo**: 3418 → 724 líneas (-79%). Las 5 vistas que seguían inline
@@ -149,21 +149,38 @@ plan técnico, tareas) en `docs/specs/auditoria-web.md`, rama `refactor/auditori
   resultado se pasa por prop a las vistas.
 - [x] Limpieza de lint post-extracción: 43 problemas sueltos en `AdminClient.tsx` (1 error real de
   `react-hooks/set-state-in-effect`, 42 imports/estado/funciones muertas) — `eslint` en 0.
-- [ ] **`CajaClient.tsx`** (2182 líneas) — pendiente: extraer Venta+checkout, Historial, Métricas.
-- [ ] **`BarraClient.tsx`** (1517 líneas) — pendiente, incluye el bloque de mayor riesgo de toda la
-  fase: la cola offline de escaneos + lector de código de barras físico (`localStorage`,
-  `navigator.onLine`, reintentos con `setInterval`), a extraer como unidad atómica con test antes
-  de tocar el resto de la pantalla.
-- [ ] Cierre de fase: typecheck+build+test de punta a punta, `docs/ROADMAP.md` marcando Fase 3
-  completa y Fase 4 (E2E post-refactor) como próximo paso, spec a `done`.
+- [x] **`CajaClient.tsx` completo**: 2182 → 447 líneas (-80%). `VentaSection.tsx` (grid + carrito +
+  checkout Posnet, con `hooks/useCheckout.ts` y `hooks/usePrinterStatus.ts`),
+  `HistorialSection.tsx` (filtro por día + búsqueda + scroll infinito + popup de detalle/reimpresión)
+  y `MetricasSection.tsx` (gráfico horario + widgets), cada una con tests de caracterización.
+  Código muerto eliminado: `confirmOrderWithMethod`, `mapStatus`, `getPaginationRange`.
+- [x] **`BarraClient.tsx` completo**: 1517 → 863 líneas (-43%). `hooks/useOfflineScanQueue.ts`
+  extraído primero como unidad atómica (el bloque de mayor riesgo de toda la fase: cola offline +
+  `localStorage` + `navigator.onLine` + reintentos con `setInterval`), con test de caracterización
+  antes de tocar el resto de la pantalla. Después: `components/barra/PendingOrdersList.tsx`,
+  `ManualRedeemModal.tsx`, `CancelOrderModal.tsx`, `DevPanel.tsx` (sin test, no corre en producción)
+  y componentes genéricos (`SectionTitle`/`Stat`/`Sep`) migrados a `components/shared/`. Estado
+  muerto eliminado: `customReason`.
+- [x] Cierre de fase: `tsc --noEmit` + `eslint` + `vitest run` (52/52) + `next build` de punta a
+  punta en verde. Fix mecánico pendiente encontrado durante el cierre: `react-hooks/set-state-in-effect`
+  en el `useEffect` de `fetchPendingOrders` de `BarraClient.tsx` (mismo patrón preexistente ya
+  suprimido en otros 7 lugares del código — fetch-on-mount async, no es un bug real, la regla no
+  distingue `setState` detrás de un `await`).
 
-**Hallazgos documentados, no resueltos en las tareas hechas hasta ahora** (deuda a considerar en
-una fase futura, no bloquean nada hoy): `useSSE` centralizado en `AdminClient` (los handlers de un
-solo callback tocan estado de varias vistas a la vez, no se descompuso — alto riesgo sin tests de
-integración real de SSE); `activeTab === "estadisticas"` sigue sin ningún botón/link que la
-active en la UI (solo se llega con `?tab=estadisticas`); `dynamicAlerts` en `DashboardSection`
-reimplementa reglas que ya cubre `generateInsights()`/`smartInsights` (calculado pero sin usar,
-swapearlos cambiaría qué se ve en pantalla).
+**Hallazgos documentados, no resueltos en la fase** (deuda a considerar más adelante, no bloquean
+nada hoy):
+- `useSSE` centralizado en los 3 shells (`AdminClient`/`CajaClient`/`BarraClient`) — los handlers de
+  un solo callback tocan estado de varias vistas a la vez, no se descompuso (alto riesgo sin tests
+  de integración real de SSE).
+- `activeTab === "estadisticas"` en `AdminClient` sigue sin ningún botón/link que la active en la UI
+  (solo se llega con `?tab=estadisticas`).
+- `dynamicAlerts` en `DashboardSection` reimplementa reglas que ya cubre
+  `generateInsights()`/`smartInsights` (calculado pero sin usar, swapearlos cambiaría qué se ve en
+  pantalla).
+- `ToastItem` (Barra) resetea su timer de dismiss en cada re-render del padre por un `onClose`
+  inline nuevo cada vez (bug preexistente, no introducido por el refactor).
+- `renderSidebar` en `CajaClient`/`BarraClient` sigue siendo una función que renderiza JSX inline en
+  el shell, no un componente separado — mismo patrón ya aceptado en `AdminClient`.
 
 ---
 
