@@ -74,6 +74,11 @@ import OperationalVelocity from "@/components/analytics/OperationalVelocity";
 import SmartInsights from "@/components/analytics/SmartInsights";
 import NightComparator from "@/components/analytics/NightComparator";
 
+import Sparkline from "@/components/shared/Sparkline";
+import AnimatedNumber from "@/components/shared/AnimatedNumber";
+import MetricCard from "@/components/shared/MetricCard";
+import EmptyCard from "@/components/shared/EmptyCard";
+
 import {
   computeDelta,
   getLastNightTotals,
@@ -2013,7 +2018,7 @@ export default function AdminClient({
                   label="Total Archivado"
                   value={allTotal}
                   isCurrency
-                  delta={{ label: `${historyEvents.length} noches`, direction: "up" }}
+                  delta={{ label: `${historyEvents.length} noches`, direction: "up", value: 0, pct: 0 }}
                   icon={History}
                   color="#a855f7"
                   sparklineData={historyEvents.slice().reverse().map(e => e.totals.total)}
@@ -2023,7 +2028,7 @@ export default function AdminClient({
                   label="Promedio Noche"
                   value={avgNight}
                   isCurrency
-                  delta={{ label: "Promedio", direction: "up" }}
+                  delta={{ label: "Promedio", direction: "up", value: 0, pct: 0 }}
                   icon={DollarSign}
                   color="#f97316"
                   sparklineData={historyEvents.slice().reverse().map(e => e.totals.total)}
@@ -3078,147 +3083,6 @@ export default function AdminClient({
   );
 }
 
-function Sparkline({ data, color }: { data: number[]; color: string }) {
-  const pointsData = (!data || data.length < 2) ? [10, 15, 8, 20, 12, 18] : data;
-  const max = Math.max(...pointsData, 1);
-  const min = Math.min(...pointsData, 0);
-  const range = max - min || 1;
-  const width = 140;
-  const height = 24;
-  const points = pointsData.map((val, idx) => {
-    const x = (idx / (pointsData.length - 1)) * width;
-    const y = height - ((val - min) / range) * (height - 6) - 3;
-    return `${x},${y}`;
-  });
-  const pathData = `M ${points.join(" L ")}`;
-  const gradId = `spark-grad-${Math.floor(Math.random() * 1000000)}`;
-
-  return (
-    <svg className="w-full h-8 overflow-visible mt-2 block opacity-85" viewBox={`0 0 ${width} ${height}`}>
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path
-        d={`${pathData} L ${width},${height} L 0,${height} Z`}
-        fill={`url(#${gradId})`}
-      />
-      <path
-        d={pathData}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function AnimatedNumber({ value, isCurrency = false }: { value: number; isCurrency?: boolean }) {
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    const end = value;
-    if (end === 0) {
-      setDisplayValue(0);
-      return;
-    }
-
-    const totalDuration = 700; // ms
-    const frameDuration = 1000 / 60; // 60 fps
-    const totalFrames = Math.round(totalDuration / frameDuration);
-    let frame = 0;
-
-    const counter = setInterval(() => {
-      frame++;
-      const progress = Math.min(1, frame / totalFrames);
-      // Ease out cubic
-      const easeProgress = 1 - Math.pow(1 - progress, 3);
-      const currentVal = Math.round(end * easeProgress);
-
-      setDisplayValue(currentVal);
-
-      if (frame >= totalFrames) {
-        setDisplayValue(end);
-        clearInterval(counter);
-      }
-    }, frameDuration);
-
-    return () => clearInterval(counter);
-  }, [value]);
-
-  return (
-    <>
-      {isCurrency && <span className="text-ink-500 text-[0.7em] mr-0.5">$</span>}
-      {displayValue.toLocaleString("es-AR")}
-    </>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  isCurrency,
-  delta,
-  icon: Icon,
-  color,
-  sparklineData,
-  subtitle = "vs. ayer"
-}: {
-  label: string;
-  value: number;
-  isCurrency?: boolean;
-  delta: any;
-  icon: any;
-  color: string;
-  sparklineData: number[];
-  subtitle?: string;
-}) {
-  const deltaTone = delta?.direction === "down" ? "down" : "up";
-  return (
-    <div className="bg-ink-900 border border-ink-800/80 rounded-2xl p-5 flex justify-between min-w-0 shadow-lg hover:border-accent/20 transition-all duration-200 group relative overflow-hidden h-[125px]">
-      <div className="flex flex-col justify-between h-full pr-12 flex-1 min-w-0">
-        <div className="space-y-1">
-          <span className="text-[12px] font-medium text-ink-400 block truncate">
-            {label}
-          </span>
-          <div className="text-[26px] font-black text-ink-50 leading-none tracking-tight font-mono tabular">
-            <AnimatedNumber value={value} isCurrency={isCurrency} />
-          </div>
-        </div>
-        {delta ? (
-          <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${deltaTone === "up" ? "text-green" : "text-danger"}`}>
-            {deltaTone === "up" ? "↑" : "↓"} {delta.label} <span className="text-ink-500 font-normal">{subtitle}</span>
-          </span>
-        ) : (
-          <span className="text-[11px] text-ink-500 font-normal">EN VIVO</span>
-        )}
-      </div>
-      
-      <div className="flex flex-col items-end shrink-0 z-10">
-        <div 
-          className="w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-300"
-          style={{ 
-            backgroundColor: `${color}12`, 
-            borderColor: `${color}25`,
-            color: color
-          }}
-        >
-          <Icon size={18} strokeWidth={2} />
-        </div>
-      </div>
-
-      {/* Sparkline positioned absolutely in the background at the bottom-right */}
-      <div className="absolute right-3.5 bottom-2.5 w-[85px] h-6 overflow-hidden select-none pointer-events-none opacity-60">
-        <Sparkline data={sparklineData} color={color} />
-      </div>
-    </div>
-  );
-}
-
 function TopProductsList({ products, isBosko }: { products: any[]; isBosko: boolean }) {
   return (
     <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between min-w-0 h-[380px] shadow-lg">
@@ -3304,14 +3168,6 @@ function ComparisonRow({
   );
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 0) ms = 0;
-  const secs = Math.floor(ms / 1000);
-  const mins = Math.floor(secs / 60);
-  const hrs = Math.floor(mins / 60);
-  return `${hrs}h ${mins % 60}m`;
-}
-
 function formatRelativeTime(ts: number | string): string {
   const ms = Date.now() - new Date(ts).getTime();
   const secs = Math.round(ms / 1000);
@@ -3324,95 +3180,3 @@ function formatRelativeTime(ts: number | string): string {
   return `Hace ${days} d`;
 }
 
-// ───────────────────────────── Internal Helpers ─────────────────────────────
-
-function Kpi({
-  label,
-  value,
-  sub,
-  isCurrency,
-  deltaTone,
-  deltaText,
-}: {
-  label: string;
-  value: number;
-  sub: string;
-  isCurrency?: boolean;
-  deltaTone: "up" | "neutral";
-  deltaText: string;
-}) {
-  return (
-    <div className="bg-ink-900 border border-ink-800/60 rounded-xl p-5 flex flex-col gap-3 min-w-0 shadow-sm transition-all hover:border-accent/15 duration-200">
-      <div className="flex justify-between items-center gap-2">
-        <span className="text-[13px] font-semibold text-ink-100 block truncate">
-          {label}
-        </span>
-        <span
-          className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded-md tabular leading-none shrink-0 ${
-            deltaTone === "up"
-              ? "bg-green-soft text-green"
-              : "bg-ink-800 text-ink-300"
-          }`}
-        >
-          {deltaText}
-        </span>
-      </div>
-      <div
-        className="text-[28px] font-black text-ink-50 leading-none tabular tracking-tight"
-      >
-        {isCurrency && (
-          <span className="text-ink-450 text-[0.7em] mr-0.5 font-sans font-bold">$</span>
-        )}
-        {value.toLocaleString("es-AR")}
-      </div>
-      <span className="text-[12px] text-ink-400/85">{sub}</span>
-    </div>
-  );
-}
-
-function OrderRow({ order }: { order: Order }) {
-  const stateClass = statusToBadge(order.status);
-  const itemsCount = order.items.length;
-  return (
-    <div className="grid grid-cols-[44px_80px_1fr_60px_80px] gap-4 items-center px-5 py-4 rounded-xl hover:bg-ink-850/50 transition-colors border border-transparent hover:border-ink-800/40">
-      <span className="font-mono text-[14px] text-ink-50 font-black tabular">
-        #{order.displayNumber}
-      </span>
-      <span
-        className={`text-[9px] font-bold uppercase tracking-[0.14em] py-0.5 rounded text-center leading-normal ${stateClass}`}
-      >
-        {STATUS_META[order.status].short}
-      </span>
-      <span className="font-mono text-[12px] text-ink-400 tabular">
-        {formatHm(order.createdAt)} hs
-      </span>
-      <span className="text-[12px] text-ink-450 text-right">
-        {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
-      </span>
-      <span className="font-mono text-[14px] text-ink-100 text-right font-bold tabular">
-        ${order.total.toLocaleString("es-AR")}
-      </span>
-    </div>
-  );
-}
-
-function statusToBadge(status: OrderStatus): string {
-  switch (status) {
-    case "pendiente":
-      return "bg-blue-soft text-blue";
-    case "entregado":
-      return "bg-green-soft text-green";
-    case "cancelado":
-      return "bg-danger-soft text-danger";
-    default:
-      return "bg-ink-800 text-ink-300";
-  }
-}
-
-function EmptyCard({ text }: { text: string }) {
-  return (
-    <div className="bg-ink-925/50 border border-dashed border-ink-800/60 rounded-xl p-6 text-center text-[13px] text-ink-400/80">
-      {text}
-    </div>
-  );
-}
