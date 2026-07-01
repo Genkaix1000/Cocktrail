@@ -1,9 +1,47 @@
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
-import type { NightEvent } from "@cocktrail/shared";
+import type { EventTotals, NightEvent } from "@cocktrail/shared";
 
 export class SyncService {
+  /** Siembra el admin por defecto en la DB local si no hay ninguno todavía. */
+  private async seedDefaultAdminIfMissing(): Promise<void> {
+    const { randomUUID, createHash } = await import("node:crypto");
+    const { env } = await import("../../config/env.js");
+    const passHash = createHash("sha256").update(env.ADMIN_PASS).digest("hex");
+    await supabase.from("users").insert({
+      id: randomUUID(),
+      username: env.ADMIN_USER,
+      password_hash: passHash,
+      role: "admin",
+      permissions: {
+        closeNight: true, modifyCarta: true, manageUsers: true, monitoreo: true,
+        metricas: true, historial: true, general: true, carta: true, pagos: true,
+        staff: true, cancelarTickets: true
+      },
+      created_at: new Date().toISOString()
+    });
+  }
+
+  /** Siembra la carta de tragos por defecto en la DB local si está vacía. */
+  private async seedDefaultDrinksIfMissing(): Promise<void> {
+    const { SEED_DRINKS } = await import("../../data/drinks.js");
+    const drinksToInsert = SEED_DRINKS.map(d => ({
+      id: d.id,
+      name: d.name,
+      price: d.price,
+      description: d.description,
+      vibe: d.vibe,
+      flavors: d.flavors,
+      icon_name: d.iconName,
+      image: d.image || null,
+      trending: d.trending,
+      promo: d.promo || false,
+      available: d.available
+    }));
+    await supabase.from("drinks").insert(drinksToInsert);
+  }
+
   /**
    * Descarga la "Fuente de la Verdad" (usuarios, tragos, config) desde la Nube
    * y la guarda en la base local (Mini-PC).
@@ -29,21 +67,7 @@ export class SyncService {
         const { data: localUsers } = await supabase.from("users").select("id").limit(1);
         if (!localUsers || localUsers.length === 0) {
           console.log("[SyncService] No users found anywhere. Seeding default admin locally.");
-          const { randomUUID, createHash } = await import("node:crypto");
-          const { env } = await import("../../config/env.js");
-          const passHash = createHash("sha256").update(env.ADMIN_PASS).digest("hex");
-          await supabase.from("users").insert({
-            id: randomUUID(),
-            username: env.ADMIN_USER,
-            password_hash: passHash,
-            role: "admin",
-            permissions: {
-              closeNight: true, modifyCarta: true, manageUsers: true, monitoreo: true, 
-              metricas: true, historial: true, general: true, carta: true, pagos: true, 
-              staff: true, cancelarTickets: true
-            },
-            created_at: new Date().toISOString()
-          });
+          await this.seedDefaultAdminIfMissing();
         }
       }
 
@@ -59,21 +83,7 @@ export class SyncService {
         const { data: localDrinks } = await supabase.from("drinks").select("id").limit(1);
         if (!localDrinks || localDrinks.length === 0) {
           console.log("[SyncService] No drinks found anywhere. Seeding default drinks locally.");
-          const { SEED_DRINKS } = await import("../../data/drinks.js");
-          const drinksToInsert = SEED_DRINKS.map(d => ({
-            id: d.id,
-            name: d.name,
-            price: d.price,
-            description: d.description,
-            vibe: d.vibe,
-            flavors: d.flavors,
-            icon_name: d.iconName,
-            image: d.image || null,
-            trending: d.trending,
-            promo: d.promo || false,
-            available: d.available
-          }));
-          await supabase.from("drinks").insert(drinksToInsert);
+          await this.seedDefaultDrinksIfMissing();
         }
       }
 
@@ -95,21 +105,7 @@ export class SyncService {
       const { data: localUsers, error: errUsers } = await supabase.from("users").select("id").limit(1);
       if (!errUsers && (!localUsers || localUsers.length === 0)) {
         console.log("[SyncService] No users found locally. Seeding default admin...");
-        const { randomUUID, createHash } = await import("node:crypto");
-        const { env } = await import("../../config/env.js");
-        const passHash = createHash("sha256").update(env.ADMIN_PASS).digest("hex");
-        await supabase.from("users").insert({
-          id: randomUUID(),
-          username: env.ADMIN_USER,
-          password_hash: passHash,
-          role: "admin",
-          permissions: {
-            closeNight: true, modifyCarta: true, manageUsers: true, monitoreo: true, 
-            metricas: true, historial: true, general: true, carta: true, pagos: true, 
-            staff: true, cancelarTickets: true
-          },
-          created_at: new Date().toISOString()
-        });
+        await this.seedDefaultAdminIfMissing();
         console.log("[SyncService] Default admin seeded locally.");
       }
 
@@ -117,21 +113,7 @@ export class SyncService {
       const { data: localDrinks, error: errDrinks } = await supabase.from("drinks").select("id").limit(1);
       if (!errDrinks && (!localDrinks || localDrinks.length === 0)) {
         console.log("[SyncService] No drinks found locally. Seeding default drinks...");
-        const { SEED_DRINKS } = await import("../../data/drinks.js");
-        const drinksToInsert = SEED_DRINKS.map(d => ({
-          id: d.id,
-          name: d.name,
-          price: d.price,
-          description: d.description,
-          vibe: d.vibe,
-          flavors: d.flavors,
-          icon_name: d.iconName,
-          image: d.image || null,
-          trending: d.trending,
-          promo: d.promo || false,
-          available: d.available
-        }));
-        await supabase.from("drinks").insert(drinksToInsert);
+        await this.seedDefaultDrinksIfMissing();
         console.log("[SyncService] Default drinks seeded locally.");
       }
     } catch (err: any) {
@@ -143,7 +125,7 @@ export class SyncService {
    * Sube toda la información transaccional de una noche desde la caja local a la Nube.
    * Incluye el evento en sí, todos los pedidos, tickets y cierres parciales de caja.
    */
-  async pushEventData(eventId: string, event: NightEvent, eventTotals: any): Promise<void> {
+  async pushEventData(eventId: string, event: NightEvent, eventTotals: EventTotals): Promise<void> {
     if (!supabaseCloud) {
       console.log("[SyncService] No hay conexión a Supabase Cloud configurada. Saltando Push...");
       return;
