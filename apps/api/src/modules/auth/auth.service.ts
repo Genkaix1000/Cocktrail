@@ -11,7 +11,6 @@ const USERS: Record<string, { password: string; role: Role }> = {
   [env.ADMIN_USER]: { password: env.ADMIN_PASS, role: "admin" },
   [env.CAJA_USER]: { password: env.CAJA_PASS, role: "caja" },
   [env.BARMAN_USER]: { password: env.BARMAN_PASS, role: "barman" },
-  cajavip: { password: "cajavip", role: "caja" },
 };
 
 export type AuthenticatedUser = {
