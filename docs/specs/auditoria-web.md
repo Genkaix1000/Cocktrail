@@ -341,13 +341,30 @@ lint en verde.
 
 ### 7. `CajaClient.tsx` — extraer `VentaSection` + checkout
 
-- [ ] Crear `hooks/useCheckout.ts` (estado de checkout/pagos/Posnet, hoy L319-336 y L582-723) y
-  `hooks/usePrinterStatus.ts` (polling de impresora, hoy L333-379).
-- [ ] Crear `components/caja/VentaSection.tsx` (grid de productos + carrito, hoy ~L1114-1298 y
-  L1550-2094), migrando `CompactDrinkCard` junto con ella.
-- [ ] Test de caracterización (incluye flujo de checkout con `mercadopagoService` mockeado).
-- [ ] Auditoría (`architect-reviewer` + `expert-react-frontend-engineer`) + fixes chicos.
-- [ ] Typecheck + build en verde. Commit.
+- [x] Crear `hooks/useCheckout.ts` (estado de checkout/pagos/Posnet, hoy L319-336 y L582-723) y
+  `hooks/usePrinterStatus.ts` (polling de impresora, hoy L333-379). **Nota de implementación**:
+  `reprintTicket`/`printError`/`reprinting` se agruparon en `usePrinterStatus` (no en `useCheckout`
+  como sugería el enumerado original) porque el popup de detalle de Historial —que todavía vive en
+  el shell, tarea 8— también los necesita para reimprimir tickets; agruparlos en un hook de
+  "impresora" instanciado una sola vez en el shell evita duplicar ese estado entre `CajaClient` y
+  `VentaSection`. Se confirmó con grep que `confirmOrderWithMethod` no tenía callers en el archivo
+  original y no se migró (código muerto).
+- [x] Crear `components/caja/VentaSection.tsx` (grid de productos + carrito, hoy ~L1114-1298 y
+  L1550-2094), migrando `CompactDrinkCard`/`DrinkSkeleton`/`CompactDrinkSkeleton` junto con ella. El
+  estado del carrito (`cart`, `cartEntries`, `totalPrice`, `totalItems`) también se movió a
+  `VentaSection` (era exclusivo de esta vista) e instancia `useCheckout` internamente;
+  `usePrinterStatus` se instancia en el shell y se pasa por prop porque el sidebar y el popup de
+  Historial también lo consumen.
+- [x] Test de caracterización (`VentaSection.test.tsx`): render del grid, agregar/quitar del
+  carrito, apertura de checkout, pago en efectivo exitoso y arranque de un pago Posnet, con
+  `mercadopagoService` y `ordersService` mockeados.
+- [x] Auditoría (`expert-react-frontend-engineer`) + fix chico aplicado: se memoizó con `useMemo` el
+  objeto `printer` que el shell pasa a `VentaSection` para evitar recrearlo en cada render. Hallazgo
+  estructural documentado sin resolver: `VentaSection.tsx` quedó en ~1030 líneas (sobre todo por el
+  modal de checkout con sus múltiples estados visuales de Posnet) — podría descomponerse en
+  sub-componentes (`PaymentMethodSelector`, `PosnetStatusView`, `CheckoutSuccessView`), pero no se
+  hizo en esta tarea para no ampliar el alcance del refactor ya extenso.
+- [x] Typecheck + build en verde. Commit.
 
 ### 8. `CajaClient.tsx` — extraer `HistorialSection` y `MetricasSection`
 
