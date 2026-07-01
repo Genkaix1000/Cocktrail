@@ -24,7 +24,6 @@ type Props = {
   summary: EventSummary | null;
   onConfirm: (password: string) => Promise<void>;
   onClose: () => void;
-  cashierName?: string;
   onCloseAndShutdown?: () => void;
 };
 
@@ -119,7 +118,6 @@ export default function CloseNightModal({
   summary,
   onConfirm,
   onClose,
-  cashierName,
   onCloseAndShutdown,
 }: Props) {
   const [submitting, setSubmitting] = useState(false);
@@ -154,7 +152,6 @@ export default function CloseNightModal({
   if (!open) return null;
 
   const isSummary = summary !== null;
-  const isVip = cashierName === "cajavip";
 
   async function handleConfirm(password: string) {
     if (submitting || fakeLoading) return;
@@ -223,14 +220,10 @@ export default function CloseNightModal({
               </div>
               <div>
                 <h2 className="font-serif-italic text-[22px] text-ink-50 leading-none">
-                  {isSummary 
-                    ? (isVip ? "Cierre VIP archivado" : "Noche cerrada") 
-                    : (isVip ? "Cerrar caja VIP" : "Cerrar noche")}
+                  {isSummary ? "Noche cerrada" : "Cerrar noche"}
                 </h2>
                 <p className="text-[10px] text-ink-400 uppercase tracking-[0.18em] font-medium mt-1.5">
-                  {isSummary 
-                    ? "Resumen archivado" 
-                    : (isVip ? "Acción irreversible - Barra VIP" : "Acción irreversible")}
+                  {isSummary ? "Resumen archivado" : "Acción irreversible"}
                 </p>
               </div>
             </div>
@@ -263,7 +256,6 @@ export default function CloseNightModal({
             startedAt={startedAt}
             submitting={submitting}
             error={error}
-            isVip={isVip}
             onCancel={onClose}
             onConfirm={handleConfirm}
           />
@@ -309,7 +301,6 @@ function ConfirmView({
   startedAt,
   submitting,
   error,
-  isVip,
   onCancel,
   onConfirm,
 }: {
@@ -318,7 +309,6 @@ function ConfirmView({
   startedAt: number;
   submitting: boolean;
   error: string | null;
-  isVip: boolean;
   onCancel: () => void;
   onConfirm: (password: string) => void;
 }) {
@@ -330,13 +320,11 @@ function ConfirmView({
   return (
     <>
       <p className="text-sm text-ink-300 mb-4 leading-relaxed">
-        {isVip 
-          ? "Vas a archivar el evento y cerrar los números de la caja VIP. El servicio se inició a las "
-          : "Vas a archivar el evento iniciado a las "}
+        Vas a archivar el evento iniciado a las{" "}
         <span className="text-ink-50 font-mono tabular font-bold">
           {formatHm(startedAt)}
         </span>
-        {isVip ? " hs en la barra VIP. Esta acción es definitiva." : " hs. Esta acción es definitiva."}
+        {" "}hs. Esta acción es definitiva.
       </p>
 
       {/* Details Box */}

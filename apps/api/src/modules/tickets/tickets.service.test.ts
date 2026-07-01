@@ -15,7 +15,7 @@ function makeOrder(overrides?: Partial<Order>): Order {
     items: [],
     total: 1000,
     paymentMethod: "efectivo",
-    status: "pagado",
+    status: "pendiente",
     createdAt: Date.now(),
     ...overrides,
   };
@@ -93,38 +93,22 @@ describe("TicketsService.redeemTicket", () => {
     await expect(service.redeemTicket(ticket.code, "barman1")).rejects.toThrow(/Pedido asociado no encontrado/);
   });
 
-  it("con pedido en 'pagado', avanza la máquina de estados hasta 'entregado' y marca el ticket canjeado", async () => {
+  it("con pedido en 'pendiente', pasa directo a 'entregado' y marca el ticket canjeado", async () => {
     const ticket = makeTicket();
-    const order = makeOrder({ status: "pagado" });
+    const order = makeOrder({ status: "pendiente" });
     vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
     vi.mocked(ordersService.getOrder).mockResolvedValue(order);
-    vi.mocked(ordersService.updateOrderStatus)
-      .mockResolvedValueOnce({ ...order, status: "preparando" })
-      .mockResolvedValueOnce({ ...order, status: "listo" })
-      .mockResolvedValueOnce({ ...order, status: "entregado" });
+    vi.mocked(ordersService.updateOrderStatus).mockResolvedValueOnce({ ...order, status: "entregado" });
 
     const result = await service.redeemTicket(ticket.code, "barman1", { method: "scan" });
 
-    expect(ordersService.updateOrderStatus).toHaveBeenCalledTimes(3);
+    expect(ordersService.updateOrderStatus).toHaveBeenCalledTimes(1);
     expect(result.status).toBe("entregado");
     expect(ticketsRepo.updateRedemption).toHaveBeenCalledWith(
       ticket.code,
       "barman1",
       expect.objectContaining({ method: "scan" }),
     );
-  });
-
-  it("con pedido ya 'listo', solo hace la última transición a 'entregado'", async () => {
-    const ticket = makeTicket();
-    const order = makeOrder({ status: "listo" });
-    vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
-    vi.mocked(ordersService.getOrder).mockResolvedValue(order);
-    vi.mocked(ordersService.updateOrderStatus).mockResolvedValueOnce({ ...order, status: "entregado" });
-
-    const result = await service.redeemTicket(ticket.code, "barman1");
-
-    expect(ordersService.updateOrderStatus).toHaveBeenCalledTimes(1);
-    expect(result.status).toBe("entregado");
   });
 
   it("tira Conflict si el pedido está 'cancelado' (no se puede entregar)", async () => {
@@ -141,7 +125,7 @@ describe("TicketsService.redeemTicket", () => {
     const ticket = makeTicket();
     const readable = ticket.code.split("-")[0];
     vi.mocked(ticketsRepo.findByReadable).mockResolvedValue(ticket);
-    vi.mocked(ordersService.getOrder).mockResolvedValue(makeOrder({ status: "listo" }));
+    vi.mocked(ordersService.getOrder).mockResolvedValue(makeOrder({ status: "pendiente" }));
     vi.mocked(ordersService.updateOrderStatus).mockResolvedValueOnce(makeOrder({ status: "entregado" }));
 
     await service.redeemTicket(readable, "barman1");

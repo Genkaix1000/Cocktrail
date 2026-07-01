@@ -56,7 +56,7 @@ function makeOrder(overrides?: Partial<Order>): Order {
     items: [],
     total: 2000,
     paymentMethod: "efectivo",
-    status: "pagado",
+    status: "pendiente",
     createdAt: Date.now(),
     ...overrides,
   };
@@ -157,16 +157,12 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
 
   it("tira NotFound si el pedido no existe", async () => {
     vi.mocked(ordersRepo.findById).mockResolvedValue(undefined);
-    await expect(service.updateOrderStatus("no-existe", "preparando")).rejects.toThrow(/no existe/);
+    await expect(service.updateOrderStatus("no-existe", "entregado")).rejects.toThrow(/no existe/);
   });
 
   it.each([
-    ["pagado", "preparando"],
-    ["pagado", "cancelado"],
-    ["preparando", "listo"],
-    ["preparando", "cancelado"],
-    ["listo", "entregado"],
-    ["listo", "cancelado"],
+    ["pendiente", "entregado"],
+    ["pendiente", "cancelado"],
   ] as const)("permite la transición %s -> %s", async (from, to) => {
     vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: from }));
     vi.mocked(ordersRepo.updateStatus).mockResolvedValue(makeOrder({ status: to }));
@@ -175,17 +171,16 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
   });
 
   it.each([
-    ["entregado", "preparando"],
-    ["cancelado", "listo"],
-    ["pagado", "listo"],
-    ["preparando", "entregado"],
+    ["entregado", "pendiente"],
+    ["cancelado", "entregado"],
+    ["entregado", "cancelado"],
   ] as const)("rechaza la transición inválida %s -> %s", async (from, to) => {
     vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: from }));
     await expect(service.updateOrderStatus("order-1", to)).rejects.toThrow(/Transición inválida/);
   });
 
   it("al pasar a 'entregado' registra deliveredBy y deliveredByBar/redeemMethod", async () => {
-    vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: "listo" }));
+    vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: "pendiente" }));
     vi.mocked(ordersRepo.updateStatus).mockResolvedValue(makeOrder({ status: "entregado" }));
 
     await service.updateOrderStatus("order-1", "entregado", "barman1", { deliveredByBar: "BARRA-01", redeemMethod: "manual" });
@@ -198,7 +193,7 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
   });
 
   it("al cancelar registra cancelledBy con 'desconocido' si no se pasa operator", async () => {
-    vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: "pagado" }));
+    vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: "pendiente" }));
     vi.mocked(ordersRepo.updateStatus).mockResolvedValue(makeOrder({ status: "cancelado" }));
 
     await service.updateOrderStatus("order-1", "cancelado");

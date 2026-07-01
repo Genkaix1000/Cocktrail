@@ -91,22 +91,13 @@ export class TicketsService {
       throw new NotFound("Pedido asociado no encontrado");
     }
 
-    // Transition order state sequentially to entregado
-    let updatedOrder = order;
-    if (order.status === "pagado") {
-      updatedOrder = await this.ordersService.updateOrderStatus(order.id, "preparando");
-    }
-    if (updatedOrder.status === "preparando") {
-      updatedOrder = await this.ordersService.updateOrderStatus(order.id, "listo");
-    }
-    if (updatedOrder.status === "listo") {
-      updatedOrder = await this.ordersService.updateOrderStatus(order.id, "entregado", username, {
-        deliveredByBar: options?.barCode,
-        redeemMethod: options?.method ?? "scan",
-      });
-    } else {
+    if (order.status !== "pendiente") {
       throw new Conflict(`El pedido está en un estado (${order.status}) que no se puede entregar.`);
     }
+    const updatedOrder = await this.ordersService.updateOrderStatus(order.id, "entregado", username, {
+      deliveredByBar: options?.barCode,
+      redeemMethod: options?.method ?? "scan",
+    });
 
     // Mark ticket as redeemed
     await this.ticketsRepo.updateRedemption(ticket.code, username, {

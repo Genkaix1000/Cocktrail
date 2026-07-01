@@ -196,11 +196,8 @@ function CompactDrinkSkeleton() {
 
 const mapStatus = (status: Order["status"]) => {
   switch (status) {
-    case "pagado":
-    case "preparando":
+    case "pendiente":
       return { label: "Pendiente", color: "bg-amber-500/10 text-amber-400 border border-amber-500/20" };
-    case "listo":
-      return { label: "A retirar", color: "bg-green-500/10 text-green-400 border border-green-500/20" };
     case "entregado":
       return { label: "Canjeado", color: "bg-ink-500/10 text-ink-400 border border-ink-500/20" };
     case "cancelado":
@@ -762,7 +759,7 @@ export default function CajaClient({ drinks }: Props) {
   );
 
   const pendingDeliveries = useMemo(
-    () => activeNightOrders.filter((o) => o.status === "preparando" || o.status === "listo").length,
+    () => activeNightOrders.filter((o) => o.status === "pendiente").length,
     [activeNightOrders],
   );
 
@@ -1043,7 +1040,6 @@ export default function CajaClient({ drinks }: Props) {
           summary={summary}
           onConfirm={handleCloseConfirm}
           onClose={handleCloseModalClose}
-          cashierName={currentUser?.username}
           onCloseAndShutdown={() => {
             setCloseModalOpen(false);
             window.dispatchEvent(new CustomEvent("cocktrail-trigger-shutdown"));

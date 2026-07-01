@@ -6,9 +6,7 @@ import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.
 import { emit } from "../../shared/sse/sse-manager.js";
 
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pagado: ["preparando", "cancelado"],
-  preparando: ["listo", "cancelado"],
-  listo: ["entregado", "cancelado"],
+  pendiente: ["entregado", "cancelado"],
   entregado: [],
   cancelado: [],
 };
@@ -64,7 +62,7 @@ export class OrdersService {
       items,
       total,
       paymentMethod: input.paymentMethod,
-      status: "pagado",
+      status: "pendiente",
       createdAt: Date.now(),
       createdBy: createdBy || "Cliente",
     };
@@ -109,7 +107,6 @@ export class OrdersService {
     }
 
     const timestamps: {
-      readyAt?: number;
       deliveredAt?: number;
       cancelledAt?: number;
       cancelledBy?: string;
@@ -117,7 +114,6 @@ export class OrdersService {
       deliveredByBar?: string;
       redeemMethod?: "scan" | "manual";
     } = {};
-    if (status === "listo") timestamps.readyAt = Date.now();
     if (status === "entregado") {
       timestamps.deliveredAt = Date.now();
       timestamps.deliveredBy = operator || "desconocido";

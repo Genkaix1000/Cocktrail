@@ -19,8 +19,6 @@ export function createOrdersController(
   const STATUS_AUDIT_ACTION: Partial<Record<OrderStatus, string>> = {
     cancelado: "order.cancelled",
     entregado: "order.delivered",
-    listo: "order.ready",
-    preparando: "order.preparando",
   };
 
   function statusAuditMessage(status: OrderStatus, order: { displayNumber: number; total: number }): string {
@@ -29,10 +27,6 @@ export function createOrdersController(
         return `Devolución procesada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`;
       case "entregado":
         return `Ticket #${order.displayNumber} entregado`;
-      case "listo":
-        return `Ticket #${order.displayNumber} listo para retirar`;
-      case "preparando":
-        return `Ticket #${order.displayNumber} en preparación`;
       default:
         return `Ticket #${order.displayNumber} actualizado a ${status}`;
     }

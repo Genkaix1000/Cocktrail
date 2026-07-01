@@ -234,8 +234,8 @@ export default function UsuariosSection() {
         {/* Users list table */}
         <div className="flex-1 w-full space-y-6 min-w-0">
           {(() => {
-            const systemUsers = users.filter((u) => ["admin", "caja", "barra", "cajavip"].includes(u.username.toLowerCase()));
-            const staffUsers = users.filter((u) => !["admin", "caja", "barra", "cajavip"].includes(u.username.toLowerCase()));
+            const systemUsers = users.filter((u) => ["admin", "caja", "barra"].includes(u.username.toLowerCase()));
+            const staffUsers = users.filter((u) => !["admin", "caja", "barra"].includes(u.username.toLowerCase()));
 
             return (
               <>
@@ -378,7 +378,7 @@ export default function UsuariosSection() {
         {modalOpen && editUser && (
           <div className="w-full lg:w-[480px] shrink-0 bg-ink-900 border border-ink-800 rounded-xl p-6 flex flex-col gap-5 animate-in slide-in-from-right duration-200">
             {(() => {
-              const isEditSystemUser = !!(editUser.username && ["admin", "caja", "barra", "cajavip"].includes(editUser.username.toLowerCase()));
+              const isEditSystemUser = !!(editUser.username && ["admin", "caja", "barra"].includes(editUser.username.toLowerCase()));
               return (
                 <>
                   <div className="flex justify-between items-center pb-3 border-b border-ink-800">

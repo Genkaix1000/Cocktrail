@@ -45,7 +45,7 @@ describe("orders (integración)", () => {
       expect(res.status).toBe(201);
       expect(res.body.createdBy).toBe("Cliente");
       expect(res.body.total).toBe(2000);
-      expect(res.body.status).toBe("pagado");
+      expect(res.body.status).toBe("pendiente");
     });
 
     it("crea un pedido de staff con la cookie de sesión como createdBy", async () => {
@@ -93,20 +93,21 @@ describe("orders (integración)", () => {
   });
 
   describe("PATCH /api/orders/:id", () => {
-    it("avanza un pedido de 'pagado' a 'preparando'", async () => {
-      const drink = await createTestDrink();
-      const created = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo" });
-      const cookie = signTestSession("cajera-test", "caja");
-      const res = await request(app).patch(`/api/orders/${created.body.id}`).set("Cookie", cookie).send({ status: "preparando" });
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe("preparando");
-    });
-
-    it("rechaza una transición inválida (pagado -> entregado) con 409", async () => {
+    it("avanza un pedido de 'pendiente' a 'entregado'", async () => {
       const drink = await createTestDrink();
       const created = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo" });
       const cookie = signTestSession("cajera-test", "caja");
       const res = await request(app).patch(`/api/orders/${created.body.id}`).set("Cookie", cookie).send({ status: "entregado" });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("entregado");
+    });
+
+    it("rechaza una transición inválida (entregado -> pendiente) con 409", async () => {
+      const drink = await createTestDrink();
+      const created = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo" });
+      const cookie = signTestSession("cajera-test", "caja");
+      await request(app).patch(`/api/orders/${created.body.id}`).set("Cookie", cookie).send({ status: "entregado" });
+      const res = await request(app).patch(`/api/orders/${created.body.id}`).set("Cookie", cookie).send({ status: "pendiente" });
       expect(res.status).toBe(409);
     });
 

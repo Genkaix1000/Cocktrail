@@ -57,7 +57,7 @@ export const ThemeSchema = z.object({
 
 // 5. Esquema para actualizar estado de un pedido
 export const UpdateOrderStatusSchema = z.object({
-  status: z.enum(["pagado", "preparando", "listo", "entregado", "cancelado"], {
+  status: z.enum(["pendiente", "entregado", "cancelado"], {
     errorMap: () => ({ message: "Estado de pedido inválido" }),
   }),
 });

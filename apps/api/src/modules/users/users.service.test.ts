@@ -41,11 +41,11 @@ function makeDbUser(overrides?: Partial<StaffUser>): StaffUser {
 }
 
 describe("UsersService.listUsers", () => {
-  it("incluye los 4 usuarios de sistema (admin/caja/cajavip/barra)", async () => {
+  it("incluye los 3 usuarios de sistema (admin/caja/barra)", async () => {
     const service = new UsersService(makeRepo());
     const users = await service.listUsers();
     const usernames = users.map((u) => u.username);
-    expect(usernames).toEqual(expect.arrayContaining(["admin", "caja", "cajavip", "barra"]));
+    expect(usernames).toEqual(expect.arrayContaining(["admin", "caja", "barra"]));
   });
 
   it("filtra usuarios de la DB cuyo username choca con uno de sistema (evita duplicados)", async () => {
@@ -72,7 +72,7 @@ describe("UsersService.createUser", () => {
     service = new UsersService(repo);
   });
 
-  it("rechaza un nombre reservado (admin/caja/barra/cajavip)", async () => {
+  it("rechaza un nombre reservado (admin/caja/barra)", async () => {
     await expect(
       service.createUser({ username: "admin", password: "x", role: "caja", permissions: PERMS }),
     ).rejects.toThrow(/reservado/);

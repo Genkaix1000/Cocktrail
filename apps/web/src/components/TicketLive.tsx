@@ -47,14 +47,16 @@ export default function TicketLive({ initialOrder }: Props) {
     }
   }, []);
 
-  // Vibración + title flash + notificación solo en la TRANSICIÓN a listo
-  // (no al renderear si ya viene listo desde el server).
+  // Vibración + title flash + notificación solo en la TRANSICIÓN a entregado
+  // (no al renderear si ya viene entregado desde el server). El canje en barra
+  // pasa el pedido de pendiente a entregado en un solo paso (sin estado
+  // intermedio "listo"), así que esto confirma la entrega, no la avisa antes.
   useEffect(() => {
-    if (order.status === "listo" && prevStatus.current !== "listo") {
+    if (order.status === "entregado" && prevStatus.current !== "entregado") {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate([200, 100, 200]);
       }
-      document.title = "🟢 Tu trago está listo — Cocktrail";
+      document.title = "🟢 Tu trago fue entregado — Cocktrail";
 
       if (
         typeof window !== "undefined" &&
@@ -62,8 +64,8 @@ export default function TicketLive({ initialOrder }: Props) {
         Notification.permission === "granted"
       ) {
         try {
-          new Notification(`🟢 Tu trago #${order.displayNumber} está listo`, {
-            body: "Retiralo en la barra mostrando esta pantalla.",
+          new Notification(`🟢 Tu trago #${order.displayNumber} fue entregado`, {
+            body: "Gracias por tu compra.",
             tag: `cocktrail-${order.token}`,
           });
         } catch {

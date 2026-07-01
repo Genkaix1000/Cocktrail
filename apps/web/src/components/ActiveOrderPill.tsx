@@ -67,10 +67,9 @@ export default function ActiveOrderPill() {
   const meta = STATUS_META[order.status];
   
   // Mapear colores dinámicos para el ícono según el estado
-  const iconColorClass = 
-    order.status === "pagado" ? "text-[#38bdf8] bg-[#38bdf8]/10" :
-    order.status === "preparando" ? "text-amber bg-amber-soft" :
-    order.status === "listo" || order.status === "entregado" ? "text-green bg-green-soft" :
+  const iconColorClass =
+    order.status === "pendiente" ? "text-[#38bdf8] bg-[#38bdf8]/10" :
+    order.status === "entregado" ? "text-green bg-green-soft" :
     "text-danger bg-danger-soft";
 
   return (

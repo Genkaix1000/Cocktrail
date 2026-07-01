@@ -18,8 +18,6 @@ import {
   BottleWine,
   DropletOff,
   Check,
-  RotateCw,
-  Sparkles,
   CheckCircle2,
   XCircle
 } from "lucide-react";
@@ -122,8 +120,7 @@ function statusFooterLabel(status: Order["status"]): string {
 }
 
 function statusFooterColor(status: Order["status"], accentColor: string): string {
-  if (status === "pagado" || status === "listo" || status === "entregado") return accentColor;
-  if (status === "preparando") return "#b45309";
+  if (status === "pendiente" || status === "entregado") return accentColor;
   if (status === "cancelado") return "#b91c1c";
   return "#1a1a1a";
 }
@@ -131,12 +128,8 @@ function statusFooterColor(status: Order["status"], accentColor: string): string
 function getStatusIcon(status: Order["status"]) {
   const size = 12;
   switch (status) {
-    case "pagado":
+    case "pendiente":
       return <CheckCircle2 size={size} />;
-    case "preparando":
-      return <RotateCw size={size} className="animate-spin" />;
-    case "listo":
-      return <Sparkles size={size} />;
     case "entregado":
       return <Check size={size} />;
     case "cancelado":

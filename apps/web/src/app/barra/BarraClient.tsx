@@ -392,7 +392,7 @@ export default function BarraClient() {
         }
         setPendingOrders((prev) => {
           if (prev.some((o) => o.id === order.id)) return prev;
-          if (order.status === "pagado" || order.status === "preparando" || order.status === "listo") {
+          if (order.status === "pendiente") {
             return [...prev, order];
           }
           return prev;
@@ -452,7 +452,7 @@ export default function BarraClient() {
           if (isTerminal) return prev.filter((o) => o.id !== order.id);
           const idx = prev.findIndex((o) => o.id === order.id);
           if (idx === -1) {
-            if (order.status === "pagado" || order.status === "preparando" || order.status === "listo") {
+            if (order.status === "pendiente") {
               return [...prev, order];
             }
             return prev;
@@ -1398,15 +1398,15 @@ function SectionTitle({
 
 function getPendingStatus(status: Order["status"]) {
   switch (status) {
-    case "listo":
+    case "entregado":
       return {
-        label: "Listo",
+        label: "Entregado",
         className: "bg-green-soft text-green border-green-line",
       };
-    case "preparando":
+    case "cancelado":
       return {
-        label: "Preparando",
-        className: "bg-blue-soft text-blue border-blue-line",
+        label: "Cancelado",
+        className: "bg-danger-soft text-danger border-danger-line",
       };
     default:
       return {

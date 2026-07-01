@@ -699,9 +699,7 @@ export default function AdminClient({
   );
 
   const pendingDeliveries = useMemo(
-    () =>
-      orders.filter((o) => o.status === "preparando" || o.status === "listo")
-        .length,
+    () => orders.filter((o) => o.status === "pendiente").length,
     [orders],
   );
 
@@ -1272,7 +1270,6 @@ export default function AdminClient({
         summary={summary}
         onConfirm={handleCloseConfirm}
         onClose={handleModalClose}
-        cashierName={currentUser?.username}
         onCloseAndShutdown={() => {
           setModalOpen(false);
           window.dispatchEvent(new CustomEvent("cocktrail-trigger-shutdown"));
@@ -3401,12 +3398,8 @@ function OrderRow({ order }: { order: Order }) {
 
 function statusToBadge(status: OrderStatus): string {
   switch (status) {
-    case "pagado":
+    case "pendiente":
       return "bg-blue-soft text-blue";
-    case "preparando":
-      return "bg-amber-soft text-amber";
-    case "listo":
-      return "bg-green-soft text-green";
     case "entregado":
       return "bg-green-soft text-green";
     case "cancelado":

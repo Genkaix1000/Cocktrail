@@ -12,20 +12,10 @@ export const STATUS_META: Record<
   OrderStatus,
   { short: string; long: string; tone: string }
 > = {
-  pagado: {
-    short: "Pagado",
-    long: "Pagado · esperando preparación",
+  pendiente: {
+    short: "Pendiente",
+    long: "Pendiente · retiralo en la barra",
     tone: "text-[#38bdf8]",
-  },
-  preparando: {
-    short: "Preparando",
-    long: "El barman lo está preparando",
-    tone: "text-amber",
-  },
-  listo: {
-    short: "Listo",
-    long: "¡Listo! Retiralo en la barra",
-    tone: "text-green",
   },
   entregado: {
     short: "Entregado",

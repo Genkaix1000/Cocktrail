@@ -496,9 +496,7 @@ export default function CartaPage() {
                           
                           <div className="flex flex-col items-center gap-1.5">
                             <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                              o.status === "listo" ? "bg-green-soft text-green border border-green-line animate-pulse" :
-                              o.status === "preparando" ? "bg-amber-soft text-amber border border-amber-line" :
-                              o.status === "pagado" ? "bg-blue/15 text-blue border border-blue-line" :
+                              o.status === "pendiente" ? "bg-blue/15 text-blue border border-blue-line" :
                               o.status === "entregado" ? "bg-ink-950 text-ink-500 border border-ink-850" :
                               "bg-danger-soft/20 text-danger/60 border border-danger-line/20"
                             }`}>

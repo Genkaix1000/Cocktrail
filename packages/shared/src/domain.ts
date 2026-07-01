@@ -29,9 +29,7 @@ export type OrderItem = {
 };
 
 export type OrderStatus =
-  | "pagado"
-  | "preparando"
-  | "listo"
+  | "pendiente"
   | "entregado"
   | "cancelado";
 

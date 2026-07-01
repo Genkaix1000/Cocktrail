@@ -49,25 +49,6 @@ const SYSTEM_USERS: SafeUser[] = [
     createdAt: 1782229602710,
   },
   {
-    id: "system-cajavip",
-    username: "cajavip",
-    role: "caja",
-    permissions: {
-      closeNight: true,
-      modifyCarta: false,
-      manageUsers: false,
-      monitoreo: false,
-      metricas: true,
-      historial: true,
-      general: false,
-      carta: false,
-      pagos: false,
-      staff: false,
-      cancelarTickets: true,
-    },
-    createdAt: 1782229602710,
-  },
-  {
     id: "system-barra",
     username: "barra",
     role: "barman",
@@ -88,7 +69,7 @@ const SYSTEM_USERS: SafeUser[] = [
   },
 ];
 
-const RESERVED_NAMES = ["admin", "caja", "barra", "cajavip"];
+const RESERVED_NAMES = ["admin", "caja", "barra"];
 
 export class UsersService {
   constructor(private repo: UsersRepository) {}
