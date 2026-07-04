@@ -138,6 +138,7 @@ export default function PagosSection() {
             <button
               type="button"
               onClick={() => setShowToken(!showToken)}
+              aria-label={showToken ? "Ocultar token" : "Mostrar token"}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-500 hover:text-ink-300 transition-colors"
             >
               {showToken ? <EyeOff size={16} /> : <Eye size={16} />}

@@ -32,7 +32,10 @@ import SafeDeleteModal from "@/components/SafeDeleteModal";
 
 type DrinkForm = Omit<Drink, "id"> & { id?: number };
 
-const EMPTY_FORM: DrinkForm = {
+// Función en vez de constante: `flavors` es un array y si fuera un objeto
+// módulo-level compartido, todas las aperturas de "Nuevo Trago" mutarían la
+// misma referencia. Hoy no hay UI para editar `flavors`, pero evita la trampa.
+const makeEmptyForm = (): DrinkForm => ({
   name: "",
   price: 0,
   description: "",
@@ -42,7 +45,7 @@ const EMPTY_FORM: DrinkForm = {
   trending: false,
   promo: false,
   available: true,
-};
+});
 
 const ICONS_LIST = [
   { id: "glass-water", label: "Trago", icon: GlassWater },
@@ -59,6 +62,7 @@ const ICONS_LIST = [
 export default function CartaSection() {
   const [drinks, setDrinks] = useState<Drink[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false); // Controls side-drawer visibility
   const [editDrink, setEditDrink] = useState<DrinkForm | null>(null);
@@ -74,11 +78,15 @@ export default function CartaSection() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const loadDrinks = useCallback(async () => {
+    setLoadError(false);
     try {
       const data = await drinksService.list();
       setDrinks(data);
     } catch (err) {
       console.error("Error loading drinks:", err);
+      // Sin esto, un error de red se ve idéntico a "carta vacía" y el dueño
+      // del boliche puede pensar que borró todos los tragos.
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -97,16 +105,11 @@ export default function CartaSection() {
     }
     
     list.sort((a, b) => {
-      let valA: any = "";
-      let valB: any = "";
-      if (sortField === "name") {
-        valA = a.name.toLowerCase();
-        valB = b.name.toLowerCase();
-      } else if (sortField === "price") {
-        valA = a.price;
-        valB = b.price;
-      }
-      
+      const [valA, valB]: [string | number, string | number] =
+        sortField === "name"
+          ? [a.name.toLowerCase(), b.name.toLowerCase()]
+          : [a.price, b.price];
+
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       return 0;
@@ -125,7 +128,7 @@ export default function CartaSection() {
   };
 
   const openCreate = useCallback(() => {
-    setEditDrink({ ...EMPTY_FORM });
+    setEditDrink(makeEmptyForm());
     setImageUrlInput("");
     setImgPreview("");
     setIconSearch("");
@@ -298,7 +301,18 @@ export default function CartaSection() {
               </div>
             </div>
 
-            {sortedAndFiltered.length === 0 ? (
+            {loadError ? (
+              <div className="px-5 py-10 flex flex-col items-center gap-2 text-center text-[12px] text-danger">
+                <span>No se pudo cargar la carta. Revisá tu conexión.</span>
+                <button
+                  type="button"
+                  onClick={loadDrinks}
+                  className="text-[11px] font-bold uppercase tracking-wider underline underline-offset-2 cursor-pointer"
+                >
+                  Reintentar
+                </button>
+              </div>
+            ) : sortedAndFiltered.length === 0 ? (
               <div className="px-5 py-10 text-center text-[12px] text-ink-500">
                 {search ? "Sin resultados para tu búsqueda" : "No hay tragos registrados"}
               </div>

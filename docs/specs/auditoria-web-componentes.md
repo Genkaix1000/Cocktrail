@@ -293,22 +293,38 @@ shells desde Fase 3. No se agregan eventos SSE nuevos ni se modifica `sse-manage
 
 ### 3. Bloque C — `components/settings/*`
 
-- [ ] `GeneralSection.tsx`: test de caracterización **sobre el estado ya mergeado de
-  `origin/develop`** (skin fijo a "Bosko", sin selector de tema). Auditoría
-  (`expert-react-frontend-engineer` + `expert-nextjs-developer` si hay dudas de Server/Client
-  Components). Mockear `configService`.
-- [ ] `PagosSection.tsx`: test de caracterización con `SafeConfig` mockeado — confirmar
-  explícitamente en el test que ningún token de Mercado Pago en claro se renderiza (solo el
-  enmascarado que ya expone `configService`).
-- [ ] `UsuariosSection.tsx`: tests de caracterización — listar, crear, editar (incluyendo mapeo de
-  checkboxes a `UserPermissions`), borrar, con `usersService` mockeado. Camino feliz primero, edge
-  cases (error de red, validación) después.
-- [ ] `CartaSection.tsx`: tests de caracterización — listar, crear, editar, borrar trago, con
-  `drinksService` mockeado.
-- [ ] `architect-reviewer` audita el bloque completo (foco en duplicación entre las 4 secciones y
-  prop drilling). Fixes de bajo riesgo si aparecen.
-- [ ] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` en verde. Commit del
-  bloque C.
+- [x] `GeneralSection.tsx`: test de caracterización (carga inicial + guardar cambios) **sobre el
+  estado ya mergeado de `origin/develop`** (skin fijo a "Bosko"). **Fix real aplicado**:
+  `initialConfig` tipado `any` → `SafeConfig | null`. Confirmado con grep que no quedó código muerto
+  del merge reciente (`ThemeSwitcher`/`activeTheme`/`customColors`/etc. no aparecen).
+- [x] `PagosSection.tsx`: 4 tests (sin vincular, vinculado con token enmascarado, guardar, y **test
+  de seguridad explícito**: un token crudo de prueba nunca aparece en `container.innerHTML`). **Fix
+  real aplicado**: botón mostrar/ocultar Access Token (ícono `Eye`/`EyeOff`) sin `aria-label`.
+- [x] `UsuariosSection.tsx`: 7 tests (listar, crear con mapeo de permisos, editar, borrar vía
+  `SafeDeleteModal`, botón de borrado deshabilitado para cuentas de sistema, error de red,
+  validación de campos). **Fix real aplicado**: el flujo de creación no hacía `.trim()` en
+  username/password antes de mandarlos a `usersService.create` (sí lo hacía edición) — permitía
+  crear cuentas "duplicadas" invisibles con espacios extra. Unificado con `.trim()` en ambos flujos.
+- [x] `CartaSection.tsx`: 7 tests (listar, crear, editar, borrar, toggle de disponibilidad sin abrir
+  el panel, filtro de búsqueda, error de red distinguible de "carta vacía"). **3 fixes reales
+  aplicados**: (1) error de carga tragado con solo `console.error`, indistinguible de "0 tragos" —
+  se agregó estado de error + botón de reintento; (2) `EMPTY_FORM` era un objeto de módulo con
+  `flavors: []` compartido por referencia entre aperturas del panel — convertido a
+  `makeEmptyForm()` que devuelve un objeto fresco; (3) comparador de sort tipado `any` → tupla
+  `[string | number, string | number]`.
+- [x] Auditoría (`expert-react-frontend-engineer`, 3 agentes en paralelo por componente/par).
+  **Hallazgos estructurales documentados sin resolver**: `Drink.vibe` es un campo obligatorio del
+  dominio (`packages/shared/src/domain.ts`) que `CartaSection` fija siempre en `""` sin ningún
+  control de UI para editarlo — confirma la sospecha del Bloque A (`DrinkCard.vibe` no se lee);
+  sacarlo del contrato toca API y otros consumidores, queda para limpieza de dominio futura. Ambos
+  `GeneralSection`/`PagosSection` tragan errores solo con `console.error` sin feedback visual (mismo
+  patrón que se corrigió puntualmente en `CartaSection`, pero no se generalizó acá). `warning`
+  preexistente de `react-hooks/exhaustive-deps` en `GeneralSection.tsx` (`hasChanges` faltante en
+  deps de `saveAllConfig`), no bloqueante. `UsuariosSection`/`CartaSection` con mezcla de
+  vista+lógica en un solo archivo (600+ líneas) — candidatos a extracción de sub-componentes en un
+  futuro bloque de refactor, no en esta pasada de tests+fixes puntuales.
+- [x] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` en verde (20/20). Commit
+  del bloque C.
 
 ### 4. Bloque D — modales y flujos críticos (uno por uno)
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Image as ImageIcon, Type, Sparkles, Plus, Settings } from "lucide-react";
-import { configService } from "@/services/config.service";
+import { configService, type SafeConfig } from "@/services/config.service";
 import { useTheme } from "@/components/ThemeProvider";
 
 export default function GeneralSection() {
@@ -12,7 +12,7 @@ export default function GeneralSection() {
   const { isDark } = useTheme();
 
   // Initial loaded configuration state to compare changes
-  const [initialConfig, setInitialConfig] = useState<any>(null);
+  const [initialConfig, setInitialConfig] = useState<SafeConfig | null>(null);
 
   // Branding states
   const [clubId, setClubId] = useState("cocktrail_club_01");

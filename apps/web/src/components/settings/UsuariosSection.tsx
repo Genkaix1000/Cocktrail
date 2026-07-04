@@ -133,8 +133,16 @@ export default function UsuariosSection() {
         const updated = await usersService.update(editUser.id, payload);
         setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       } else {
-        // Create
-        const created = await usersService.create(editUser as CreateUserInput);
+        // Create: a diferencia del update, acá no había trim de username/password
+        // antes de mandarlos al backend (bug: permitía crear usuarios con espacios
+        // al inicio/final, generando cuentas "duplicadas" invisibles).
+        const payload: CreateUserInput = {
+          username: editUser.username.trim(),
+          password: (editUser.password ?? "").trim(),
+          role: (editUser.role ?? "barman") as Role,
+          permissions: editUser.permissions as UserPermissions,
+        };
+        const created = await usersService.create(payload);
         setUsers((prev) => [...prev, created]);
       }
       closeModal();
