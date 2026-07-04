@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import type { NightPoint } from "@/lib/analytics";
 
@@ -16,6 +16,14 @@ export default function NightEvolutionChart({
   isBosko,
 }: Props) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  // IDs únicos por instancia: los ids de gradiente eran fijos ("barGrad"), lo que
+  // colisiona si el componente se renderiza más de una vez en la misma página
+  // (los <linearGradient> con id duplicado hacen que todas las instancias usen
+  // el primero que aparece en el DOM). useId() incluye ":" que no es válido en
+  // referencias url(#id) de SVG, por eso se lo saca.
+  const uid = useId().replace(/:/g, "");
+  const barGradId = `barGrad-${uid}`;
+  const barGradHoverId = `barGradHover-${uid}`;
 
   if (points.length === 0) {
     return (
@@ -129,13 +137,15 @@ export default function NightEvolutionChart({
           height={chartHeight}
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
           className="select-none"
+          role="img"
+          aria-label={`Evolución de facturación de las últimas ${points.length} noches, con media móvil`}
         >
           <defs>
-            <linearGradient id="barGrad" x1="0" y1="1" x2="0" y2="0">
+            <linearGradient id={barGradId} x1="0" y1="1" x2="0" y2="0">
               <stop offset="0%" stopColor={barGradientStart} />
               <stop offset="100%" stopColor={barGradientEnd} />
             </linearGradient>
-            <linearGradient id="barGradHover" x1="0" y1="1" x2="0" y2="0">
+            <linearGradient id={barGradHoverId} x1="0" y1="1" x2="0" y2="0">
               <stop offset="0%" stopColor={barHoverGlow} />
               <stop offset="100%" stopColor={barGradientEnd} />
             </linearGradient>
@@ -196,7 +206,7 @@ export default function NightEvolutionChart({
                   width={barWidth}
                   height={Math.max(2, barH)}
                   rx={3}
-                  fill={isHovered ? "url(#barGradHover)" : "url(#barGrad)"}
+                  fill={isHovered ? `url(#${barGradHoverId})` : `url(#${barGradId})`}
                   className="transition-all duration-200"
                 />
                 {/* Hover glow */}

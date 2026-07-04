@@ -24,18 +24,16 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
   const circumference = 2 * Math.PI * radius;
   const center = size / 2;
 
-  // Build segments
-  let cumulativeOffset = 0;
-  const segments = breakdown.map((b) => {
+  // Build segments (offset acumulado sin mutar variables externas)
+  const segments = breakdown.reduce<
+    Array<PaymentBreakdown & { segmentLength: number; dashOffset: number }>
+  >((acc, b) => {
+    const cumulativeOffset = acc.reduce((sum, s) => sum + s.segmentLength, 0);
     const segmentLength = (b.pct / 100) * circumference;
     const dashOffset = circumference - cumulativeOffset;
-    cumulativeOffset += segmentLength;
-    return {
-      ...b,
-      segmentLength,
-      dashOffset,
-    };
-  });
+    acc.push({ ...b, segmentLength, dashOffset });
+    return acc;
+  }, []);
 
   const accentColor = isBosko ? "#4ade80" : "#6db3f2";
 
@@ -62,6 +60,8 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
             height={size}
             viewBox={`0 0 ${size} ${size}`}
             className="-rotate-90"
+            role="img"
+            aria-label={`Distribución de pagos por canal, total $${total.toLocaleString("es-AR")}`}
           >
             {/* Background ring */}
             <circle

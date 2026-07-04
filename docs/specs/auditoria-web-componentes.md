@@ -261,19 +261,35 @@ shells desde Fase 3. No se agregan eventos SSE nuevos ni se modifica `sse-manage
 
 ### 2. Bloque B — `components/analytics/*` (paralelizable)
 
-- [ ] `NightRecords.tsx`: test con `NightRecord[]` de fixture.
-- [ ] `SmartInsights.tsx`: test con `SmartInsight[]` de fixture.
-- [ ] `RevenueByProduct.tsx`: test con `ProductRevenue[]` de fixture.
-- [ ] `OperationalVelocity.tsx`: test con `OperationalVelocityType` de fixture (incluye
+- [x] `NightRecords.tsx`: test con `NightRecord[]` de fixture.
+- [x] `SmartInsights.tsx`: test con `SmartInsight[]` de fixture.
+- [x] `RevenueByProduct.tsx`: test con `ProductRevenue[]` de fixture.
+- [x] `OperationalVelocity.tsx`: test con `OperationalVelocityType` de fixture (incluye
   `formatDuration`).
-- [ ] `PaymentDonut.tsx`: test con `PaymentBreakdown` de fixture.
-- [ ] `NightEvolutionChart.tsx`: test con `NightPoint[]` de fixture.
-- [ ] `NightComparator.tsx`: test de caracterización (revisar sus props exactas, no importa ningún
-  tipo de `@/lib/analytics` a diferencia de los otros 6 — confirmar de dónde saca los datos).
-- [ ] `architect-reviewer` + `expert-react-frontend-engineer` auditan el bloque completo (7
-  componentes chicos, revisión conjunta). Fixes de bajo riesgo si aparecen.
-- [ ] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` en verde. Commit del
-  bloque B.
+- [x] `PaymentDonut.tsx`: test con `PaymentBreakdown` de fixture. **Fix real aplicado**: el cálculo
+  de segmentos del donut mutaba una variable `cumulativeOffset` externa dentro de un `.map`
+  (`react-hooks/immutability`, error real de ESLint — reasignar una variable capturada durante el
+  render puede dar resultados inconsistentes entre renders). Reescrito como `reduce` puro sin
+  mutación externa. Además se agregó `role="img"`/`aria-label` al SVG (sin nombre accesible).
+- [x] `NightEvolutionChart.tsx`: test con `NightPoint[]` de fixture. **Fix real aplicado**: los
+  `<linearGradient>` usaban IDs fijos (`barGrad`/`barGradHover`) — si el componente se monta más de
+  una vez en la misma página, todas las instancias resuelven `url(#id)` contra el primer gradiente
+  del DOM, rompiendo los colores de las demás. Se generan IDs únicos por instancia con `useId()`.
+  Se agregó también `aria-label` al SVG.
+- [x] `NightComparator.tsx`: test de caracterización (no importa tipos de `@/lib/analytics` a
+  diferencia de los otros 6 — recibe `EventSummary[]` de `@cocktrail/shared` y calcula sus propias
+  filas de comparación). **Fixes reales aplicados**: `key={n.id || (n as any).dateKey || idx}` tenía
+  un cast `any` muerto (`dateKey` no existe en `EventSummary`/`NightEvent`, `id` es `string`
+  requerido) — simplificado a `key={n.id}`; selects sin `<label>` asociado — se agregó `useId()` +
+  `<label htmlFor>` en `NightSelector`.
+- [x] `architect-reviewer` + `expert-react-frontend-engineer` auditan el bloque completo (7
+  componentes chicos, revisión conjunta). **Hallazgos documentados sin resolver** (para no ampliar
+  el alcance ya extenso de esta fase): (1) duplicación del patrón `accentColor`/`accentBg`/
+  `accentBorder` según `isBosko` repetido literal en los 7 componentes — candidato a un hook
+  compartido `useAccentColors(isBosko)`; (2) duplicación del estado-vacío con emoji en
+  `NightRecords`/`RevenueByProduct`/`NightEvolutionChart` — candidato a `<EmptyState>` compartido.
+- [x] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` en verde (15/15). Commit
+  del bloque B.
 
 ### 3. Bloque C — `components/settings/*`
 

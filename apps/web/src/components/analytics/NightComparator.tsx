@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useId, useState, useMemo } from "react";
 import { GitCompareArrows, ChevronDown } from "lucide-react";
 import type { EventSummary } from "@cocktrail/shared";
 
@@ -328,21 +328,25 @@ function NightSelector({
   onChange: (idx: number) => void;
   accentColor: string;
 }) {
+  const selectId = useId();
+
   return (
     <div className="flex flex-col gap-1.5">
-      <span
+      <label
+        htmlFor={selectId}
         className={`text-[9px] font-bold uppercase tracking-[0.2em] ${accentColor}`}
       >
         {label}
-      </span>
+      </label>
       <div className="relative">
         <select
+          id={selectId}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           className="w-full appearance-none bg-ink-850 border border-ink-700 rounded-xl px-3 py-2 pr-8 text-ink-50 text-[12px] font-medium cursor-pointer focus:outline-none focus:border-ink-600 transition-colors"
         >
           {nights.map((n, idx) => (
-            <option key={n.id || (n as any).dateKey || idx} value={idx}>
+            <option key={n.id} value={idx}>
               {formatNightDate(n.closedAt ?? n.startedAt)} —{" "}
               {formatMoney(n.totals.total)}
             </option>
