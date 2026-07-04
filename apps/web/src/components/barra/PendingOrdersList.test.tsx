@@ -149,4 +149,45 @@ describe("PendingOrdersList", () => {
     await user.click(closeButtons[closeButtons.length - 1]);
     expect(onDismissNotification).toHaveBeenCalledWith("n1");
   });
+
+  it("el timer de dismiss del toast no se reinicia si el padre re-renderiza (bug de Fase 3)", () => {
+    vi.useFakeTimers();
+    try {
+      const onDismissNotification = vi.fn();
+      const notifications = [{ id: "n1", displayNumber: 12, text: "x1 Fernet", duration: 5000 }];
+
+      const { rerender } = render(
+        <PendingOrdersList
+          pendingOrders={[]}
+          notifications={notifications}
+          currentUser={adminUser}
+          onSelectOrder={vi.fn()}
+          onCancelClick={vi.fn()}
+          onDismissNotification={onDismissNotification}
+        />,
+      );
+
+      // Avanza 4s (todavía no debería dispararse) y simula un re-render del
+      // padre con un `onDismissNotification` de identidad distinta (mismo
+      // patrón que un handler SSE re-creado en cada render del shell).
+      vi.advanceTimersByTime(4000);
+      rerender(
+        <PendingOrdersList
+          pendingOrders={[]}
+          notifications={notifications}
+          currentUser={adminUser}
+          onSelectOrder={vi.fn()}
+          onCancelClick={vi.fn()}
+          onDismissNotification={(id) => onDismissNotification(id)}
+        />,
+      );
+
+      // Si el timer se hubiera reiniciado por el re-render, a los 5s desde
+      // el re-render (9s totales) todavía no se habría disparado.
+      vi.advanceTimersByTime(1000);
+      expect(onDismissNotification).toHaveBeenCalledWith("n1");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

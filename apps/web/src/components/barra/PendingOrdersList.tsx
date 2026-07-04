@@ -1,7 +1,7 @@
 "use client";
 
 import { Inbox, Package, X } from "lucide-react";
-import { useEffect, type MouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 
 import { getPendingStatus } from "./orderStatus";
 import type { CurrentUser } from "./types";
@@ -153,12 +153,20 @@ function ToastItem({
   text: string;
   onClose: () => void;
 }) {
+  // `onClose` se recrea en cada render del padre (arrow inline en el
+  // `.map` de PendingOrdersList) — si el efecto dependiera de `onClose`
+  // directamente, cualquier re-render (ej. un evento SSE) reiniciaría el
+  // timer de dismiss. Se guarda en un ref para que el timer sobreviva a
+  // esos re-renders y solo se dispare/limpie una vez, al montar/desmontar.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      onClose();
+      onCloseRef.current();
     }, 5000);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, []);
 
   return (
     <div

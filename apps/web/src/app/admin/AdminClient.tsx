@@ -11,6 +11,7 @@ import {
   ChevronRight,
   FileText,
   KeyRound,
+  TrendingUp,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useEffect } from "react";
@@ -446,6 +447,16 @@ export default function AdminClient({
                     <History size={13} strokeWidth={1.8} />
                   </div>
                   <span className={`text-[13.5px] ${navLabelClass("historial")}`}>Historial de Noches</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("estadisticas")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-200 cursor-pointer ${navBtnClass("estadisticas")}`}
+                >
+                  <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 ${navIconClass("estadisticas")}`}>
+                    <TrendingUp size={13} strokeWidth={1.8} />
+                  </div>
+                  <span className={`text-[13.5px] ${navLabelClass("estadisticas")}`}>Estadísticas</span>
                 </button>
                 <button
                   type="button"

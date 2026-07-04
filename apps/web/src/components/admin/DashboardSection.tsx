@@ -7,7 +7,6 @@ import {
   Tag,
   DollarSign,
   Activity,
-  Bell,
   CalendarDays,
   Download,
   CheckCircle,
@@ -17,20 +16,17 @@ import {
 } from "lucide-react";
 
 import PaymentDonut from "@/components/analytics/PaymentDonut";
+import SmartInsights from "@/components/analytics/SmartInsights";
 import Sparkline from "@/components/shared/Sparkline";
 import MetricCard from "@/components/shared/MetricCard";
 import EmptyCard from "@/components/shared/EmptyCard";
 
 import { exportHistoryCSV, downloadCSV } from "@/lib/analytics";
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
+import type { DeltaInfo, ProductRevenue } from "@/lib/analytics";
+import type { LucideIcon } from "lucide-react";
 
-import type {
-  CashSale,
-  EventSummary,
-  EventTotals,
-  NightEvent,
-  Order,
-} from "@cocktrail/shared";
+import type { EventSummary, EventTotals } from "@cocktrail/shared";
 
 export type AuditLogEntry = {
   id: string;
@@ -92,60 +88,15 @@ export default function DashboardSection({
     deltaTotal,
     productRevenue,
     hourlyData,
-    peakHour,
     totalOps,
     totalDrinkUnits,
     deltaTickets,
     deltaAvgTicket,
     deltaUnits,
+    smartInsights,
   } = analytics;
 
-  // 1. Dynamic Alerts calculation based on active event stats
-  const dynamicAlerts = (() => {
-    const list: { id: string; text: string; time: string; color: string; dotColor: string }[] = [];
-    if (productRevenue.length > 0) {
-      const topProd = productRevenue[0];
-      if (topProd.qty >= 2) {
-        list.push({
-          id: "demand-1",
-          text: `Alta demanda: ${topProd.name} lidera la carta con ${topProd.qty} unidades vendidas`,
-          time: "En vivo",
-          color: "bg-blue-soft/10 border-blue-soft/20 text-blue",
-          dotColor: "bg-blue"
-        });
-      }
-    }
-    if (avgTicket > 8000) {
-      list.push({
-        id: "ticket-high",
-        text: `Ticket Elevado: Promedio de consumo actual supera los $${avgTicket.toLocaleString("es-AR")}`,
-        time: "Hace unos minutos",
-        color: "bg-amber-soft/10 border-amber-soft/20 text-amber",
-        dotColor: "bg-amber"
-      });
-    }
-    if (peakHour && peakHour !== "—") {
-      list.push({
-        id: "peak-1",
-        text: `Pico registrado: Franja de mayor flujo en transacciones a las ${peakHour}`,
-        time: "Actualizado",
-        color: "bg-purple-soft/10 border-purple-soft/20 text-purple",
-        dotColor: "bg-purple"
-      });
-    }
-    if (list.length === 0) {
-      list.push({
-        id: "status-ok",
-        text: "Operación estable: Ritmo de preparación y pedidos normal en todas las terminales",
-        time: "En vivo",
-        color: "bg-green-soft/10 border-green-soft/20 text-green",
-        dotColor: "bg-green"
-      });
-    }
-    return list;
-  })();
-
-  // 2. Comparison sparklines history from previous nights
+  // Comparison sparklines history from previous nights
   function buildComparativeSparkline(
     extract: (e: EventSummary) => number,
     fallback: number,
@@ -409,25 +360,11 @@ export default function DashboardSection({
 
           {/* Row 3: Alerts & Comparison (Height Unified to h-[300px]) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Alertas y Notificaciones */}
-            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between h-[300px] shadow-lg">
-              <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 shrink-0 select-none">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-                  <Bell size={13} />
-                </div>
-                <span>Alertas y Notificaciones</span>
-              </h3>
-              <div className="flex flex-col gap-3 overflow-y-auto no-scrollbar flex-1 my-3">
-                {dynamicAlerts.map((alert) => (
-                  <div key={alert.id} className={`flex items-start gap-3 p-2.5 rounded-xl border shrink-0 ${alert.color}`}>
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${alert.dotColor}`} />
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-semibold">{alert.text}</span>
-                      <span className="text-[9px] font-mono opacity-80">{alert.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {/* Insights (reemplaza las antiguas "Alertas y Notificaciones" —
+                dynamicAlerts reimplementaba reglas más simples que ya cubría
+                generateInsights()/smartInsights, calculado pero sin usar) */}
+            <div className="h-[300px] overflow-y-auto no-scrollbar">
+              <SmartInsights insights={smartInsights} isBosko={isBosko} />
             </div>
 
             {/* Comparativa */}
@@ -563,7 +500,7 @@ export default function DashboardSection({
   );
 }
 
-function TopProductsList({ products }: { products: any[] }) {
+function TopProductsList({ products }: { products: ProductRevenue[] }) {
   return (
     <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between min-w-0 h-[380px] shadow-lg">
       <div className="flex justify-between items-center">
@@ -614,9 +551,9 @@ function ComparisonRow({
   isCurrency
 }: {
   label: string;
-  icon: any;
+  icon: LucideIcon;
   currentVal: number;
-  delta: any;
+  delta: DeltaInfo | null;
   sparklineData: number[];
   color: string;
   isCurrency?: boolean;

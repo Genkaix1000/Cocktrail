@@ -396,21 +396,33 @@ shells desde Fase 3. No se agregan eventos SSE nuevos ni se modifica `sse-manage
 
 ### 5. Deuda de Fase 3 (documentada en `docs/ROADMAP.md`)
 
-- [ ] `components/barra/PendingOrdersList.tsx`: fix del bug real de `ToastItem` (timer de dismiss se
-  resetea en cada re-render por `onClose` inline nuevo) — memoizar con `useCallback` en el padre o
-  mover el callback a un `ref` interno del propio `ToastItem`. Ajustar/agregar test que cubra que el
-  timer no se reinicia entre renders.
-- [ ] `components/admin/DashboardSection.tsx`: resolver la duplicación `dynamicAlerts` vs
-  `generateInsights()`/`smartInsights` — usar una sola fuente, o documentar explícitamente en el
-  código por qué coexisten si aparece una razón de producto real.
-- [ ] `app/admin/AdminClient.tsx`: agregar acceso en la UI a `activeTab === "estadisticas"` (botón o
-  link) o documentar explícitamente por qué se mantiene inalcanzable — es una decisión de producto,
-  no puramente técnica; confirmar con el usuario antes de exponerla si hay dudas.
-- [ ] `app/caja/CajaClient.tsx` / `app/barra/BarraClient.tsx`: evaluar extraer `renderSidebar` a un
-  componente propio (mismo patrón ya usado para las demás secciones en Fase 3). Si el fix resulta de
-  alcance mayor al esperado, re-documentar como deuda en vez de forzarlo.
-- [ ] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` + `build` en verde. Commit
-  de este bloque.
+- [x] `components/barra/PendingOrdersList.tsx`: fix del bug real de `ToastItem` (timer de dismiss se
+  reseteaba en cada re-render por `onClose` inline nuevo) — el `onClose` se guarda en un `ref`
+  (`onCloseRef`) actualizado en cada render, y el `useEffect` del timer pasa a depender de `[]` en
+  vez de `[onClose]`, así el timer sobrevive a re-renders del padre (ej. eventos SSE). Test nuevo
+  con fake timers que reproduce el bug (avanza 4s, re-renderiza con un `onDismissNotification` de
+  identidad distinta, confirma que igual dispara a los 5s totales).
+- [x] `components/admin/DashboardSection.tsx`: resuelta la duplicación — **confirmado con el
+  usuario** reemplazar el bloque "Alertas y Notificaciones" (`dynamicAlerts`, reglas simples) por el
+  componente `<SmartInsights>` ya auditado en el Bloque B, alimentado con `analytics.smartInsights`
+  (más rico: delta vs. noche anterior, hora pico, tasa de conversión web — antes calculado pero
+  nunca mostrado en ningún lado). Se eliminó `dynamicAlerts` y el ícono `Bell` que quedó sin uso. De
+  paso, aprovechando que se tocaba el archivo: se tipó `TopProductsList`/`ComparisonRow`
+  (`any`→`ProductRevenue[]`/`LucideIcon`/`DeltaInfo | null`) y se sacaron 3 imports de tipo sin uso
+  (`CashSale`/`NightEvent`/`Order`) — lint preexistente, confirmado con `git stash` que no lo
+  introdujo este bloque.
+- [x] `app/admin/AdminClient.tsx`: **confirmado con el usuario** agregar el botón "Estadísticas" al
+  sidebar (sección Operación, mismo estilo que Historial/Auditoría de Tickets), usando el ícono
+  `TrendingUp`. La vista ya existía y tenía test desde la Fase 3 — solo faltaba el acceso visible.
+- [x] `app/caja/CajaClient.tsx`: extraído `renderSidebar` (171 líneas inline) a
+  `components/caja/Sidebar.tsx` (`CajaSidebar`), con los ~12 valores que capturaba por closure ahora
+  como props explícitas — extracción pura, sin cambios de comportamiento/estilo, mismo criterio que
+  el resto de la Fase 3. Test de caracterización nuevo (`Sidebar.test.tsx`). **Nota**: sólo
+  `CajaClient.tsx` tenía este patrón — al revisar `BarraClient.tsx` no existe una función
+  `renderSidebar` equivalente (el ROADMAP la mencionaba para ambos shells, pero en Barra el panel
+  lateral es `PendingOrdersList`, ya extraído a componente propio en Fase 3).
+- [x] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` en verde. Commit de este
+  bloque (`build` completo se corre en el cierre de la fase).
 
 ### 6. Cierre de la fase
 
