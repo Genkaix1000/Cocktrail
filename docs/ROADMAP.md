@@ -2,7 +2,7 @@
 
 > Estado y plan de trabajo. La arquitectura vigente está en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 > Convención: `[x]` hecho · `[~]` parcial/a verificar · `[ ]` pendiente.
-> Última actualización: 2026-07-01.
+> Última actualización: 2026-07-04.
 
 ---
 
@@ -167,20 +167,60 @@ plan técnico, tareas) en `docs/specs/auditoria-web.md` (estado `done`), rama `r
   suprimido en otros 7 lugares del código — fetch-on-mount async, no es un bug real, la regla no
   distingue `setState` detrás de un `await`).
 
-**Hallazgos documentados, no resueltos en la fase** (deuda a considerar más adelante, no bloquean
-nada hoy):
-- `useSSE` centralizado en los 3 shells (`AdminClient`/`CajaClient`/`BarraClient`) — los handlers de
-  un solo callback tocan estado de varias vistas a la vez, no se descompuso (alto riesgo sin tests
-  de integración real de SSE).
-- `activeTab === "estadisticas"` en `AdminClient` sigue sin ningún botón/link que la active en la UI
-  (solo se llega con `?tab=estadisticas`).
-- `dynamicAlerts` en `DashboardSection` reimplementa reglas que ya cubre
-  `generateInsights()`/`smartInsights` (calculado pero sin usar, swapearlos cambiaría qué se ve en
-  pantalla).
-- `ToastItem` (Barra) resetea su timer de dismiss en cada re-render del padre por un `onClose`
-  inline nuevo cada vez (bug preexistente, no introducido por el refactor).
-- `renderSidebar` en `CajaClient`/`BarraClient` sigue siendo una función que renderiza JSX inline en
-  el shell, no un componente separado — mismo patrón ya aceptado en `AdminClient`.
+**Hallazgos documentados al cierre de esta fase** — **todos resueltos en la Fase 3B** (ver abajo):
+`useSSE` centralizado sigue sin descomponerse (deuda que se mantiene, alto riesgo sin tests de
+integración SSE real); `activeTab === "estadisticas"` sin link (resuelto), `dynamicAlerts` duplicado
+con `smartInsights` (resuelto), `ToastItem` con timer que se resetea (resuelto), `renderSidebar` sin
+extraer (resuelto, solo existía en `CajaClient`).
+
+---
+
+## Fase 3B — Auditoría Web: componentes sueltos + deuda de Fase 3 🎨 *(completa)*
+
+**Objetivo**: la Fase 3 dejó ~22 componentes de `apps/web/src/components/` (los que ya existían
+antes de esa auditoría) sin test ni revisión SOLID, y 5 hallazgos documentados sin resolver. Mismo
+tratamiento que Fases 2/3: tests de caracterización + auditoría (`architect-reviewer` +
+`expert-react-frontend-engineer`) + fixes de bajo riesgo. Spec completa en
+`docs/specs/auditoria-web-componentes.md` (estado `done`), rama `refactor/auditoria-web-componentes`.
+
+- [x] **22 componentes auditados en 4 bloques** por riesgo/paralelizabilidad: triviales
+  (`BrandLogo`/`DrinkSkeleton`/`OSHeadbar`/`SafeDeleteModal`/`DrinkCard`), `analytics/*` (7,
+  presentacionales), `settings/*` (4, tocan servicios reales), y modales/flujos críticos uno por uno
+  (`ThemeProvider`/`OpenNightModal`/`CloseNightModal`/`CashSaleModal`/`Ticket`/`TicketLive`;
+  `barra/DevPanel` sin test a propósito, no corre en producción). 90 tests nuevos (52 → 142 en
+  `apps/web`, más los agregados en el cierre).
+- [x] **Bug real más serio de la fase**: en `CloseNightModal.tsx` los 4 `setTimeout` de la secuencia
+  de "carga ficticia" (3.2s) nunca se cancelaban — si el modal se desmontaba a mitad de camino, el
+  timer final igual disparaba `onConfirm` (el cierre de noche real + sync a cloud) sobre un
+  componente ya desmontado. Corregido con `isMounted`/`pendingTimers` (refs) + cleanup.
+- [x] Mismo patrón de bug ("modal montado permanentemente, solo `return null`" sin resincronizar
+  estado al reabrir) encontrado también en `OpenNightModal` (podía mostrar la palabra clave vieja de
+  la noche — dato impreso en cada ticket físico) y `CashSaleModal` (dejaba un monto "borrador"
+  pegado). Corregidos con el patrón de React "ajustar estado durante el render".
+- [x] **Los 5 hallazgos documentados en la Fase 3 quedaron resueltos**: `ToastItem` (timer movido a
+  un `ref`, ya no se resetea con cada re-render del padre); `dynamicAlerts` reemplazado por
+  `<SmartInsights>` con los datos de `analytics.smartInsights` (antes calculados pero nunca
+  mostrados) — confirmado con el usuario, cambia lo que ve el admin en el Dashboard; se agregó el
+  link "Estadísticas" al sidebar — confirmado con el usuario; `renderSidebar` extraído a
+  `components/caja/Sidebar.tsx` (`CajaSidebar`) — solo existía en `CajaClient`, `BarraClient` nunca
+  tuvo ese patrón (su panel lateral ya era `PendingOrdersList`, un componente propio desde la Fase 3).
+- [x] Regresión real encontrada y corregida durante la propia fase: el fix de accesibilidad de
+  `DrinkCard.tsx` (Bloque A, `aria-label` en los botones +/-) rompió un test existente de Fase 3
+  (`VentaSection.test.tsx`) que asumía un solo botón "Agregar" en el DOM.
+- [x] Cierre de fase: `tsc --noEmit` + `eslint` + `vitest run` (161/161) + `next build` de punta a
+  punta en verde.
+
+**Hallazgo adicional, documentado pero no ejecutado en esta fase** (ver detalle en la spec): los 11
+componentes sueltos en la raíz de `components/` (`BrandLogo`, `CashSaleModal`, `CloseNightModal`,
+`DrinkCard`, `DrinkSkeleton`, `OpenNightModal`, `OSHeadbar`, `SafeDeleteModal`, `ThemeProvider`,
+`Ticket`, `TicketLive`) rompen la convención de organizar por dominio que ya sigue el resto del árbol
+(`admin/`, `caja/`, `barra/`, `analytics/`, `settings/`, `shared/`). Hay una propuesta de a dónde
+movería cada uno (mayoría a `shared/` por ser cross-cutting, `CashSaleModal`/`OpenNightModal` a
+`admin/`, `Ticket`/`TicketLive` a una `carta/` nueva) — no ejecutada porque implica actualizar
+imports en ~15 archivos, fuera del plan técnico original de esta spec. Ver R10 en la tabla de riesgos.
+
+**Deuda que se mantiene sin resolver** (igual que en la Fase 3): `useSSE` centralizado en los 3
+shells — alto riesgo sin tests de integración SSE real, no se tocó.
 
 ---
 
@@ -264,6 +304,7 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 | R6 | `next-env.d.ts` y `apps/api/src/data/*.json` aparecen como modificados en runtime. | Ruido en git. | Considerar `.gitignore` |
 | R7 | `supabase/docker/kong.yml` usa las **demo keys públicas** de Supabase (JWT secret demo incluido), hardcodeadas. Kong DB-less **no** interpola env vars en el campo `key` de key-auth (ni `${{}}` de decK ni vault refs), así que no se pueden mover a `.env`. | Para LAN aceptable; si se expone `:54321` a internet = takeover de la DB (secret público). | Abierto — rotar las 3 llaves + JWT_SECRET antes de exponer fuera de LAN; alternativa: render con `envsubst` (la imagen de Kong no lo trae). |
 | R8 | La impresora térmica **no reporta "sin papel"** — verificado en vivo: con el rollo vacío/sin papel, `GET /api/printer/status` sigue devolviendo `connected: true` y la venta marca `printed: true` aunque no salió nada. La impresora no expone protocolo bidireccional confiable (por eso se evitó CUPS), así que el software solo confirma que el device node existe y acepta la escritura, no que el papel esté presente. | La cajera puede creer que el ticket salió cuando en realidad no imprimió nada (papel agotado). | Abierto — mitigación operativa por ahora: revisar visualmente el rollo antes de empezar el turno. Una detección real requeriría lectura de estado bidireccional (fuera de alcance, ver plan técnico de `docs/specs/impresora-termica.md`). |
+| R10 | 11 componentes de `apps/web/src/components/` (`BrandLogo`, `CashSaleModal`, `CloseNightModal`, `DrinkCard`, `DrinkSkeleton`, `OpenNightModal`, `OSHeadbar`, `SafeDeleteModal`, `ThemeProvider`, `Ticket`, `TicketLive`) están sueltos en la raíz en vez de organizados por dominio como el resto del árbol (`admin/`, `caja/`, `barra/`, `analytics/`, `settings/`, `shared/`). | Ninguno funcional — solo hace más difícil ubicar un componente por convención de carpetas. | Abierto — propuesta documentada en `docs/specs/auditoria-web-componentes.md` (sección "Hallazgo adicional"): la mayoría a `shared/` (cross-cutting), `CashSaleModal`/`OpenNightModal` a `admin/`, `Ticket`/`TicketLive` a una `carta/` nueva. No ejecutado (toca imports en ~15 archivos), a decidir en una tarea aparte. |
 
 ---
 

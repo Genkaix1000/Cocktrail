@@ -1,6 +1,6 @@
 # Auditoría de apps/web — componentes sueltos + deuda de Fase 3
 
-**Estado**: draft
+**Estado**: done
 **Fecha**: 2026-07-04
 
 > Continuación de la Fase 3 (`docs/specs/auditoria-web.md`, estado `done`, rama
@@ -426,15 +426,47 @@ shells desde Fase 3. No se agregan eventos SSE nuevos ni se modifica `sse-manage
 
 ### 6. Cierre de la fase
 
-- [ ] Correr `pnpm --filter cocktrail-app test` completo (todos los bloques) — confirmar conteo
-  final de tests.
-- [ ] Correr `pnpm typecheck` (api + web) y `pnpm --filter cocktrail-app build` de punta a punta.
-- [ ] Actualizar `docs/ROADMAP.md`: marcar esta fase como completa, remover de "Hallazgos
-  documentados" (Fase 3) los puntos resueltos en la tarea 5, y dejar anotado cualquier hallazgo
-  nuevo que haya quedado sin resolver (ej. si `useSSE` centralizado sigue sin tocarse, o si
-  `apps/web/src/services/*.ts` queda pendiente de auditoría como se anotó en "Preguntas abiertas").
-- [ ] Cambiar el estado de esta spec (`docs/specs/auditoria-web-componentes.md`) de `draft`/
-  `approved` a `done`.
+- [x] Correr `pnpm --filter cocktrail-app test` completo (todos los bloques). **161 tests, 35
+  archivos, todos en verde** (arrancamos en 52 antes de esta fase).
+- [x] Correr `pnpm typecheck` (api + web) y `pnpm --filter cocktrail-app build` de punta a punta. Los
+  3 en verde.
+- [x] Actualizar `docs/ROADMAP.md`: fase marcada completa, hallazgos de Fase 3 resueltos removidos,
+  hallazgos nuevos documentados.
+- [x] Cambiar el estado de esta spec a `done`.
+
+### Hallazgo adicional (fuera del plan original): componentes sueltos sin organizar por dominio
+
+Durante el cierre, el usuario pidió analizar algo que no estaba en el plan técnico original: por qué
+`apps/web/src/components/` tiene 11 archivos sueltos en la raíz (`BrandLogo`, `CashSaleModal`,
+`CloseNightModal`, `DrinkCard`, `DrinkSkeleton`, `OpenNightModal`, `OSHeadbar`, `SafeDeleteModal`,
+`ThemeProvider`, `Ticket`, `TicketLive`) mientras el resto del árbol ya está organizado por dominio
+(`admin/`, `caja/`, `barra/`, `analytics/`, `settings/`, `shared/`). Es la misma inconsistencia
+estructural que motivó extraer `renderSidebar` — quedaron así porque son componentes que **existían
+antes** de la Fase 3 y nunca se tocó su ubicación, solo su contenido en esta fase.
+
+Se mapeó quién importa cada uno (`grep` de `from "@/components/X"` en todo `apps/web/src`) para
+proponer dónde debería vivir cada uno:
+
+| Componente | Lo usan | Destino propuesto |
+|---|---|---|
+| `BrandLogo.tsx` | admin, barra, carta, login, caja/Sidebar | `shared/` (cross-cutting real, usado en 5 lugares distintos) |
+| `OSHeadbar.tsx` | admin, caja, login, caja/Sidebar | `shared/` (header de staff, cross-cutting) |
+| `ThemeProvider.tsx` | `layout.tsx` (root) + casi todo el árbol | Se queda en la raíz de `components/` (o una carpeta `providers/` si se prefiere) — no es "de un dominio", envuelve toda la app |
+| `DrinkCard.tsx` | `carta/page.tsx` (cliente) y `caja/VentaSection.tsx` (staff) | `shared/` (cross-cutting entre carta y caja) |
+| `DrinkSkeleton.tsx` | `carta/page.tsx` y `caja/VentaSection.tsx` | `shared/` (mismo caso que `DrinkCard`) |
+| `SafeDeleteModal.tsx` | `settings/CartaSection.tsx`, `settings/UsuariosSection.tsx` | `shared/` (genérico por diseño, confirmado en el Bloque A; hoy lo usan 2 componentes de `settings/` pero no es exclusivo de esa área) |
+| `CloseNightModal.tsx` | `admin/AdminClient.tsx` **y** `caja/CajaClient.tsx` | `shared/` (cross-cutting entre los 2 shells que cierran noche) |
+| `CashSaleModal.tsx` | solo `admin/AdminClient.tsx` | `admin/` |
+| `OpenNightModal.tsx` | solo `admin/AdminClient.tsx` | `admin/` |
+| `Ticket.tsx` | solo `TicketLive.tsx` | nueva carpeta `carta/` (junto con `TicketLive`) |
+| `TicketLive.tsx` | solo `app/pedido/[token]/page.tsx` | nueva carpeta `carta/` |
+
+**No se ejecutó este reordenamiento en esta fase** — mover 11 archivos implica actualizar imports en
+~15 archivos distintos (incluidos todos sus `.test.tsx`), es un cambio mecánico pero de alcance
+amplio y con riesgo de romper algo por un import mal actualizado; no estaba en el plan técnico
+original de esta spec y el usuario pidió tratarlo como un hallazgo a documentar, no a resolver ya.
+Queda anotado como candidato de limpieza en `docs/ROADMAP.md` (ver sección de riesgos/deuda) para
+decidir en una fase o tarea aparte si se ejecuta.
 
 > **Nota de implementación**: igual que en Fases 2 y 3, conviene implementar con **Plan Mode**,
 > bloque por bloque (A → B → C → D → deuda de Fase 3), tildando `- [x]` a medida que cada bloque
