@@ -328,8 +328,19 @@ shells desde Fase 3. No se agregan eventos SSE nuevos ni se modifica `sse-manage
 
 ### 4. Bloque D — modales y flujos críticos (uno por uno)
 
-- [ ] `ThemeProvider.tsx`: test de caracterización con `useSSE` mockeado (evento `theme.changed`).
-  Verificación manual en navegador además del test (blast radius global, envuelve `layout.tsx`).
+- [x] `ThemeProvider.tsx`: test de caracterización (4 tests) con `useSSE` mockeado (evento
+  `theme.changed`), theme por default, `toggleDark`, y `useTheme()` fuera de un provider. **Fix
+  real aplicado**: resuelto el lint `react-hooks/set-state-in-effect` preexistente que había
+  quedado documentado en el Bloque A — `setTheme(cached)` dentro de un `if` en el efecto de carga
+  inicial, mismo patrón de "fetch-on-mount async" ya suprimido 7 veces en el repo, se agregó el
+  disable-comment correspondiente.
+  **Regresión real encontrada y corregida** (no de este bloque, sino causada por el fix de
+  accesibilidad del Bloque A en `DrinkCard.tsx`): `components/caja/VentaSection.test.tsx` (Fase 3)
+  buscaba `getByRole("button", { name: /agregar/i })` asumiendo un solo match — el shell renderiza a
+  la vez el grid mobile (`DrinkCard`, ahora con `aria-label="Agregar al pedido"`) y el desktop
+  (`CompactDrinkCard`, ya tenía "Agregar" en su texto) sin que jsdom filtre por media query, así que
+  ahora matcheaban los dos. Se corrigió a `getAllByRole(...)[0]` (cualquiera de los dos botones
+  llama al mismo `addToCart(d.id)`).
 - [ ] `OpenNightModal.tsx`: test de caracterización (apertura con palabra clave, `eventsService.open`
   mockeado, casos de error).
 - [ ] `CloseNightModal.tsx`: test de caracterización del contrato completo (`onConfirm`, estados de

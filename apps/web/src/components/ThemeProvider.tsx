@@ -116,6 +116,7 @@ export function ThemeProvider({
     const cachedIsDark = localStorage.getItem(key) !== "false"; // Default true
 
     if (cached) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial desde localStorage (fetch-on-mount), mismo patrón ya usado en el resto del repo
       setTheme(cached);
     }
     if (customThemeVal) {

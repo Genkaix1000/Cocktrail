@@ -71,14 +71,17 @@ beforeEach(() => {
 
 async function waitForProductsGrid() {
   // El grid tiene un skeleton simulado de 800ms antes de mostrar productos.
-  await screen.findByRole("button", { name: /agregar/i }, { timeout: 3000 });
+  await screen.findAllByRole("button", { name: /agregar/i }, { timeout: 3000 });
 }
 
 async function addFirstDrinkToCart() {
   const user = userEvent.setup();
   await waitForProductsGrid();
-  const addButton = screen.getByRole("button", { name: /agregar/i });
-  await user.click(addButton);
+  // El shell renderiza a la vez el grid mobile (DrinkCard) y el desktop
+  // (CompactDrinkCard) — jsdom no filtra por media query, así que ambos
+  // matchean "Agregar"; cualquiera de los dos llama a addToCart(d.id).
+  const [addButton] = screen.getAllByRole("button", { name: /agregar/i });
+  await user.click(addButton!);
   return user;
 }
 
