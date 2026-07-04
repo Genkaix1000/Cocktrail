@@ -1,4 +1,4 @@
-import { useTheme } from "./ThemeProvider";
+import { useThemeSafe } from "./ThemeProvider";
 
 type BrandSize = "sm" | "md" | "lg" | "xl" | "hero";
 
@@ -10,26 +10,26 @@ const SCALE: Record<BrandSize, number> = {
   hero: 1.5,
 };
 
+const FALLBACK_THEME_PROPS = {
+  theme: "normal",
+  useLogoUrl: false,
+  logoUrl: "",
+  logoSize: 40,
+  textLogoValue: "Cocktrail",
+  textLogoSize: 26,
+  isDark: true,
+};
+
 type Props = {
   size?: BrandSize;
   className?: string;
 };
 
 export function BrandLogo({ size = "md", className = "" }: Props) {
-  let themeProps;
-  try {
-    themeProps = useTheme();
-  } catch (e) {
-    themeProps = {
-      theme: "normal",
-      useLogoUrl: false,
-      logoUrl: "",
-      logoSize: 40,
-      textLogoValue: "Cocktrail",
-      textLogoSize: 26,
-      isDark: true,
-    };
-  }
+  // useThemeSafe() no tira si no hay ThemeProvider en el árbol (a diferencia de
+  // useTheme()) — evita envolver un hook en try/catch, que viola
+  // react-hooks/rules-of-hooks al tratarse como una llamada condicional.
+  const themeProps = useThemeSafe() ?? FALLBACK_THEME_PROPS;
 
   const { useLogoUrl, logoUrl, logoSize, textLogoValue, textLogoSize } = themeProps;
   const scale = SCALE[size];

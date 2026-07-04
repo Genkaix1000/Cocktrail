@@ -48,6 +48,7 @@ function ActionButtons({ quantity, onAdd, onRemove }: ActionButtonsProps) {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+            aria-label="Quitar del pedido"
             className="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
           >
             <Minus size={18} strokeWidth={3} />
@@ -60,6 +61,7 @@ function ActionButtons({ quantity, onAdd, onRemove }: ActionButtonsProps) {
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
+        aria-label="Agregar al pedido"
         className="w-10 h-10 rounded-xl bg-green text-black flex items-center justify-center active:scale-95 transition-transform hover:brightness-110"
       >
         <Plus size={20} strokeWidth={3} className="font-bold" />

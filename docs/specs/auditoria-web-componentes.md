@@ -228,24 +228,36 @@ shells desde Fase 3. No se agregan eventos SSE nuevos ni se modifica `sse-manage
 
 ### 0. Setup
 
-- [ ] Crear rama `refactor/auditoria-web-componentes` desde el estado actual de
+- [x] Crear rama `refactor/auditoria-web-componentes` desde el estado actual de
   `refactor/auditoria-web` (ya tiene mergeado `origin/develop`, commit `b567701`).
-- [ ] Confirmar que `pnpm --filter cocktrail-app test` sigue corriendo los 52 tests existentes en
+- [x] Confirmar que `pnpm --filter cocktrail-app test` sigue corriendo los 52 tests existentes en
   verde antes de agregar ninguno nuevo (baseline).
 
 ### 1. Bloque A — triviales/presentacionales sin servicio
 
-- [ ] `BrandLogo.tsx`: test de caracterización (render con distintos props de tamaño/tema si los
-  tiene) + revisión rápida (`expert-react-frontend-engineer`). Fix chico si aparece.
-- [ ] `DrinkSkeleton.tsx`: test de render básico.
-- [ ] `OSHeadbar.tsx`: test de caracterización + revisión de accesibilidad básica
-  (`expert-react-frontend-engineer`).
-- [ ] `SafeDeleteModal.tsx`: test de caracterización (confirmar/cancelar) + confirmar que es
-  genérico (sin acoplamiento oculto a un dominio particular, como sugiere el plan).
-- [ ] `DrinkCard.tsx`: test de caracterización con un `Drink` de fixture (promo, trending,
-  disponible/agotado).
-- [ ] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` en verde. Commit del
-  bloque A.
+- [x] `BrandLogo.tsx`: test de caracterización + revisión (`expert-react-frontend-engineer`).
+  **Fix real aplicado**: `useTheme()` se llamaba dentro de un `try/catch` (hook condicional, error
+  real de `react-hooks/rules-of-hooks`) — se agregó `useThemeSafe()` en `ThemeProvider.tsx`
+  (devuelve `undefined` en vez de tirar) y `BrandLogo` ahora usa `useThemeSafe() ?? FALLBACK`.
+- [x] `DrinkSkeleton.tsx`: test de render básico. Sin hallazgos (presentacional puro).
+- [x] `OSHeadbar.tsx`: test de caracterización (`OSHeadbar` + `OSProfileFooter`) + revisión.
+  **Hallazgo documentado sin resolver**: el archivo mezcla dos componentes sin relación fuerte
+  (SRP de archivo) — separarlos tocaría imports en `CajaClient.tsx`/`AdminClient.tsx` (Fase 3, fuera
+  de alcance), no se fuerza.
+- [x] `SafeDeleteModal.tsx`: test de caracterización (confirmar/cancelar/reset). **Fix real
+  aplicado**: `setState` síncrono dentro de un `useEffect` de reset (`react-hooks/set-state-in-effect`)
+  — se extrajo un subcomponente `ConfirmForm` montado solo con `isOpen`, `key={expectedText}`, el
+  reset ahora es gratis por mount/unmount. De paso se sacó un copy desactualizado ("registros
+  in-memory", el sistema usa Supabase Postgres).
+- [x] `DrinkCard.tsx`: test de caracterización (regular/promo/trending, cantidad, callbacks). **Fix
+  real aplicado**: botones +/- sin `aria-label` (inaccesibles para lectores de pantalla) — se
+  agregaron. **Hallazgo documentado sin resolver**: prop `vibe` nunca se lee dentro del componente
+  (dead code, su origen real es el modelo `Drink` de `CartaSection.tsx` — se revisa en Bloque C).
+- [x] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` (BrandLogo/DrinkSkeleton/OSHeadbar/
+  SafeDeleteModal/DrinkCard) + `test` en verde (21/21). **Nota**: `eslint` sobre `ThemeProvider.tsx`
+  sigue marcando un `set-state-in-effect` preexistente (mismo patrón que se corrigió en
+  `SafeDeleteModal`, pero en el efecto de sync de tema vía SSE) — queda para el Bloque D, donde ese
+  archivo se audita completo. Commit del bloque A.
 
 ### 2. Bloque B — `components/analytics/*` (paralelizable)
 

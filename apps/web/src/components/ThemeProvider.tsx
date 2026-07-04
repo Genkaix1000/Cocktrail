@@ -25,6 +25,16 @@ export function useTheme() {
   return context;
 }
 
+/**
+ * Variante que no explota si no hay ThemeProvider en el árbol (devuelve
+ * `undefined` en vez de tirar). Pensada para componentes que necesitan un
+ * fallback gracioso (ej. BrandLogo fuera del layout raíz) sin violar
+ * react-hooks/rules-of-hooks con un try/catch alrededor de un hook.
+ */
+export function useThemeSafe() {
+  return useContext(ThemeContext);
+}
+
 /** All CSS custom properties that we manage */
 const MANAGED_VARS = [
   "--bg-primary", "--bg-surface", "--text-accent", "--text-primary",

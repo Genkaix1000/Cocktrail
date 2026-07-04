@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Trash2, X } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 
 type Props = {
   isOpen: boolean;
@@ -12,25 +12,34 @@ type Props = {
   typeLabel: string; // e.g. "el trago" o "el usuario"
 };
 
-export default function SafeDeleteModal({
-  isOpen,
+export default function SafeDeleteModal({ isOpen, onClose, onConfirm, title, expectedText, typeLabel }: Props) {
+  if (!isOpen) return null;
+
+  // key={expectedText} remonta el formulario (y resetea su input) cada vez que
+  // cambia el registro a borrar, sin necesidad de un useEffect que llame
+  // setState — el padre mantiene este componente siempre montado y solo
+  // alterna `isOpen`, así que el reset por "isOpen" ya lo da el unmount de
+  // este bloque cuando isOpen pasa a false.
+  return (
+    <ConfirmForm
+      key={expectedText}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      title={title}
+      expectedText={expectedText}
+      typeLabel={typeLabel}
+    />
+  );
+}
+
+function ConfirmForm({
   onClose,
   onConfirm,
   title,
   expectedText,
   typeLabel,
-}: Props) {
+}: Omit<Props, "isOpen">) {
   const [inputText, setInputText] = useState("");
-
-  // Reset input when modal opens or expectedText changes
-  useEffect(() => {
-    if (isOpen) {
-      setInputText("");
-    }
-  }, [isOpen, expectedText]);
-
-  if (!isOpen) return null;
-
   const isMatched = inputText === expectedText;
 
   function handleSubmit(e: FormEvent) {
@@ -70,7 +79,7 @@ export default function SafeDeleteModal({
 
         {/* Warning Message */}
         <div className="mb-5 bg-danger-soft/30 border border-danger-line/20 rounded-xl p-3.5 text-xs text-ink-200 leading-relaxed">
-          Estás a punto de eliminar permanentemente {typeLabel} <strong className="text-danger font-semibold">{expectedText}</strong>. Esta acción no se puede deshacer y afectará los registros in-memory.
+          Estás a punto de eliminar permanentemente {typeLabel} <strong className="text-danger font-semibold">{expectedText}</strong>. Esta acción no se puede deshacer.
         </div>
 
         {/* Confirmation Form */}
