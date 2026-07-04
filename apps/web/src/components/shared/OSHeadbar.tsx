@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LogOut, Sun, Moon, X, Check } from "lucide-react";
-import { useTheme } from "./ThemeProvider";
+import { useTheme } from "@/components/ThemeProvider";
 
 type OSHeadbarProps = {
   activeScreen: string;

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Order, OrderItem } from "@cocktrail/shared";
-import { BrandLogo } from "./BrandLogo";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 import { STATUS_META } from "@/lib/orderStatus";
 import { drinksService } from "@/services/drinks.service";
 

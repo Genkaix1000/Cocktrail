@@ -10,7 +10,7 @@ import {
 } from "@/services/users.service";
 import type { Role } from "@cocktrail/shared";
 import { useTheme } from "@/components/ThemeProvider";
-import SafeDeleteModal from "@/components/SafeDeleteModal";
+import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 
 const ROLE_META: Record<Role, { label: string; color: string; bg: string }> = {
   admin: { label: "Administrador", color: "text-blue", bg: "bg-blue-soft" },

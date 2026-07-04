@@ -23,7 +23,7 @@ import {
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { gsap } from "gsap";
 
-import DrinkCard from "@/components/DrinkCard";
+import DrinkCard from "@/components/shared/DrinkCard";
 import { drinkIcon } from "@/lib/icons";
 import { ApiError } from "@/services/api-client";
 import { mercadopagoService } from "@/services/mercadopago.service";

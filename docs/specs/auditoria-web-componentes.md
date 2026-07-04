@@ -468,6 +468,18 @@ original de esta spec y el usuario pidió tratarlo como un hallazgo a documentar
 Queda anotado como candidato de limpieza en `docs/ROADMAP.md` (ver sección de riesgos/deuda) para
 decidir en una fase o tarea aparte si se ejecuta.
 
+**Actualización — ejecutado en `refactor/reorganizar-componentes-web`** (rama aparte, partiendo de
+esta spec ya cerrada): se movieron los 11 archivos + sus `.test.tsx` exactamente según la tabla de
+arriba (`git mv`, preservando historial), y se actualizaron los imports en los ~15 archivos
+consumidores (`AdminClient`/`CajaClient`/`BarraClient`, `app/carta/page.tsx`, `app/login/page.tsx`,
+`app/pedido/[token]/page.tsx`, `caja/Sidebar.tsx`, `caja/VentaSection.tsx`,
+`settings/{CartaSection,UsuariosSection}.tsx`) más 2 imports relativos internos que quedaron rotos al
+mover (`BrandLogo.tsx`/`OSHeadbar.tsx` importaban `./ThemeProvider` con ruta relativa — `ThemeProvider`
+no se movió, sigue en la raíz de `components/` por ser cross-cutting real; y `Ticket.tsx` importaba
+`./BrandLogo` relativo). `tsc --noEmit` + `eslint` (0 regresiones nuevas, confirmado con `git stash`
+que los 3 errores preexistentes de `app/carta/page.tsx` no los introdujo este cambio) + `vitest run`
+(161/161) + `next build` — los 4 en verde.
+
 > **Nota de implementación**: igual que en Fases 2 y 3, conviene implementar con **Plan Mode**,
 > bloque por bloque (A → B → C → D → deuda de Fase 3), tildando `- [x]` a medida que cada bloque
 > corre en verde antes de pasar al siguiente. El bloque B (`analytics/*`) es el único candidato

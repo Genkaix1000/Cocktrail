@@ -1,4 +1,4 @@
-import { useThemeSafe } from "./ThemeProvider";
+import { useThemeSafe } from "@/components/ThemeProvider";
 
 type BrandSize = "sm" | "md" | "lg" | "xl" | "hero";
 

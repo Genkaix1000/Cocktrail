@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import TicketLive from "@/components/TicketLive";
+import TicketLive from "@/components/carta/TicketLive";
 import { ordersService } from "@/services/orders.service";
 import type { Order } from "@cocktrail/shared";
 

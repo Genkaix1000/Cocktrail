@@ -16,12 +16,12 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useEffect } from "react";
 
-import CashSaleModal from "@/components/CashSaleModal";
-import CloseNightModal from "@/components/CloseNightModal";
-import OpenNightModal from "@/components/OpenNightModal";
-import { BrandLogo } from "@/components/BrandLogo";
+import CashSaleModal from "@/components/admin/CashSaleModal";
+import CloseNightModal from "@/components/shared/CloseNightModal";
+import OpenNightModal from "@/components/admin/OpenNightModal";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
-import { OSHeadbar, OSProfileFooter } from "@/components/OSHeadbar";
+import { OSHeadbar, OSProfileFooter } from "@/components/shared/OSHeadbar";
 
 import { computeTotals } from "@/lib/totals";
 import { useSSE } from "@/lib/useSSE";

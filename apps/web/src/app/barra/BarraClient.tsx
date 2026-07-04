@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useRef, type FormEvent, type MouseEvent } from "react";
-import { BrandLogo } from "@/components/BrandLogo";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useSSE } from "@/lib/useSSE";
 import { ordersService } from "@/services/orders.service";
 import { authService } from "@/services/auth.service";

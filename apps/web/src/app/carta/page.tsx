@@ -3,9 +3,9 @@
 import { Minus, Plus, X, Clock, CheckCircle2, Banknote, QrCode, CreditCard, Sparkles, TrendingUp, GlassWater } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import DrinkCard from "../../components/DrinkCard";
-import DrinkSkeleton from "../../components/DrinkSkeleton";
-import { BrandLogo } from "@/components/BrandLogo";
+import DrinkCard from "@/components/shared/DrinkCard";
+import DrinkSkeleton from "@/components/shared/DrinkSkeleton";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 import { saveActiveOrder } from "@/lib/activeOrder";
 import { drinksService } from "@/services/drinks.service";
 import { ordersService } from "@/services/orders.service";

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 import { BrandLogo } from "./BrandLogo";
-import { useThemeSafe } from "./ThemeProvider";
+import { useThemeSafe } from "@/components/ThemeProvider";
 
-vi.mock("./ThemeProvider", () => ({
+vi.mock("@/components/ThemeProvider", () => ({
   useThemeSafe: vi.fn(),
 }));
 

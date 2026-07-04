@@ -28,7 +28,7 @@ import {
 import { drinksService } from "@/services/drinks.service";
 import type { Drink } from "@cocktrail/shared";
 import { useTheme } from "@/components/ThemeProvider";
-import SafeDeleteModal from "@/components/SafeDeleteModal";
+import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 
 type DrinkForm = Omit<Drink, "id"> & { id?: number };
 

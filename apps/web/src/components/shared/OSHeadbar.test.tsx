@@ -3,9 +3,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { OSHeadbar, OSProfileFooter } from "./OSHeadbar";
-import { useTheme } from "./ThemeProvider";
+import { useTheme } from "@/components/ThemeProvider";
 
-vi.mock("./ThemeProvider", () => ({
+vi.mock("@/components/ThemeProvider", () => ({
   useTheme: vi.fn(),
 }));
 

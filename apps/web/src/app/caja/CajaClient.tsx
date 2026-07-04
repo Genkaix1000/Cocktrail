@@ -2,13 +2,13 @@
 
 import { Sun, Moon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { OSHeadbar } from "@/components/OSHeadbar";
+import { OSHeadbar } from "@/components/shared/OSHeadbar";
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { useSSE } from "@/lib/useSSE";
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
 import { useTheme } from "@/components/ThemeProvider";
-import CloseNightModal from "@/components/CloseNightModal";
+import CloseNightModal from "@/components/shared/CloseNightModal";
 import { computeTotals } from "@/lib/totals";
 import { usePrinterStatus } from "@/hooks/usePrinterStatus";
 import VentaSection from "@/components/caja/VentaSection";

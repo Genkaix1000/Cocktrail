@@ -3,11 +3,11 @@
 import { Lock, LogIn, Shield, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BrandLogo } from "@/components/BrandLogo";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
 import { authService } from "@/services/auth.service";
 import { ApiError } from "@/services/api-client";
-import { OSHeadbar } from "@/components/OSHeadbar";
+import { OSHeadbar } from "@/components/shared/OSHeadbar";
 
 export default function LoginPage() {
   const router = useRouter();
