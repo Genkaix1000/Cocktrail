@@ -187,8 +187,8 @@ tratamiento que Fases 2/3: tests de caracterización + auditoría (`architect-re
   (`BrandLogo`/`DrinkSkeleton`/`OSHeadbar`/`SafeDeleteModal`/`DrinkCard`), `analytics/*` (7,
   presentacionales), `settings/*` (4, tocan servicios reales), y modales/flujos críticos uno por uno
   (`ThemeProvider`/`OpenNightModal`/`CloseNightModal`/`CashSaleModal`/`Ticket`/`TicketLive`;
-  `barra/DevPanel` sin test a propósito, no corre en producción). 90 tests nuevos (52 → 142 en
-  `apps/web`, más los agregados en el cierre).
+  `barra/DevPanel` sin test a propósito, no corre en producción). 109 tests nuevos (52 → 161 en
+  `apps/web`, incluida la deuda de Fase 3 resuelta).
 - [x] **Bug real más serio de la fase**: en `CloseNightModal.tsx` los 4 `setTimeout` de la secuencia
   de "carga ficticia" (3.2s) nunca se cancelaban — si el modal se desmontaba a mitad de camino, el
   timer final igual disparaba `onConfirm` (el cierre de noche real + sync a cloud) sobre un
@@ -210,17 +210,49 @@ tratamiento que Fases 2/3: tests de caracterización + auditoría (`architect-re
 - [x] Cierre de fase: `tsc --noEmit` + `eslint` + `vitest run` (161/161) + `next build` de punta a
   punta en verde.
 
-**Hallazgo adicional, documentado pero no ejecutado en esta fase** (ver detalle en la spec): los 11
-componentes sueltos en la raíz de `components/` (`BrandLogo`, `CashSaleModal`, `CloseNightModal`,
-`DrinkCard`, `DrinkSkeleton`, `OpenNightModal`, `OSHeadbar`, `SafeDeleteModal`, `ThemeProvider`,
-`Ticket`, `TicketLive`) rompen la convención de organizar por dominio que ya sigue el resto del árbol
-(`admin/`, `caja/`, `barra/`, `analytics/`, `settings/`, `shared/`). Hay una propuesta de a dónde
-movería cada uno (mayoría a `shared/` por ser cross-cutting, `CashSaleModal`/`OpenNightModal` a
-`admin/`, `Ticket`/`TicketLive` a una `carta/` nueva) — no ejecutada porque implica actualizar
-imports en ~15 archivos, fuera del plan técnico original de esta spec. Ver R10 en la tabla de riesgos.
+- [x] **Reorganización por dominio de los 11 componentes sueltos** (hallazgo pedido por el usuario
+  fuera del plan técnico original, ver R10 — ejecutado en rama aparte
+  `refactor/reorganizar-componentes-web`): `BrandLogo`/`OSHeadbar`/`DrinkCard`/`DrinkSkeleton`/
+  `SafeDeleteModal`/`CloseNightModal` → `shared/` (cross-cutting), `CashSaleModal`/`OpenNightModal` →
+  `admin/`, `Ticket`/`TicketLive` → `carta/` (nueva). `ThemeProvider` se queda en la raíz de
+  `components/` (envuelve `layout.tsx`, no es "de un dominio"). `tsc`+`eslint`+`vitest`(161/161)+
+  `build` en verde.
 
-**Deuda que se mantiene sin resolver** (igual que en la Fase 3): `useSSE` centralizado en los 3
-shells — alto riesgo sin tests de integración SSE real, no se tocó.
+**Hallazgos documentados, no resueltos en la fase** (deuda a considerar más adelante, no bloquean
+nada hoy):
+- `useSSE` centralizado en los 3 shells — se mantiene igual que en la Fase 3, alto riesgo sin tests
+  de integración SSE real.
+- **`apps/web/src/services/*.ts` queda sin auditar** — es la capa que llama a la API desde el
+  frontend; ni la Fase 3 ni esta la tocaron (solo se mockea en los tests de componentes). Falta
+  decidir si se le da el mismo tratamiento SOLID/tests que al resto del repo.
+- Patrón **"modal montado permanentemente, solo `return null`"** repetido en varios modales de
+  `AdminClient`/`CajaClient` (no solo los 3 que tuvieron bug real) — sería más prolijo montarlos
+  condicionalmente en el padre (`{open && <Modal .../>}`) en vez del workaround de resincronizar
+  estado en cada uno.
+- `CloseNightModal`: la "carga ficticia" de 3.2s con mensajes que no reflejan trabajo real es una
+  decisión de producto/UX pendiente de revisar, no técnica; el estado `submitting` de `ConfirmView`
+  quedó inalcanzable en la práctica (mientras es `true`, `fakeLoading` también lo es).
+- `Ticket.tsx` duplica el bloque de render de cada `OrderItem` entre "Ticket de Control" y "Recibo
+  de Pago" — candidato a extraer `TicketItemRow`, no se tocó por ser un componente de impresión sin
+  cobertura visual previa.
+- `Drink.vibe` es un campo obligatorio del dominio (`packages/shared/src/domain.ts`) que
+  `CartaSection`/`DrinkCard` nunca exponen en la UI ni leen — candidato a sacarlo del contrato de
+  dominio, toca API y otros consumidores.
+- `GeneralSection`/`PagosSection` (settings) tragan errores de carga/guardado solo con
+  `console.error`, sin feedback visual al usuario — mismo patrón que se corrigió puntualmente en
+  `CartaSection` pero no se generalizó.
+- `UsuariosSection.tsx`/`CartaSection.tsx` mezclan vista + lógica de negocio en un solo archivo
+  (600+ líneas cada uno) — candidatos a extracción de sub-componentes en un futuro bloque de
+  refactor, mismo tratamiento que ya tuvieron los god-components en Fase 3.
+- Duplicación del patrón `accentColor`/`accentBg`/`accentBorder` según `isBosko` repetida literal en
+  los 7 componentes de `analytics/*` — candidato a un hook compartido `useAccentColors(isBosko)`.
+- Duplicación del estado-vacío con emoji en `NightRecords`/`RevenueByProduct`/`NightEvolutionChart`
+  — candidato a un `<EmptyState>` compartido.
+- `OSHeadbar.tsx` mezcla dos componentes sin relación fuerte (`OSHeadbar` + `OSProfileFooter`) en el
+  mismo archivo — separarlos es mecánico pero toca imports en varios shells.
+- `CashSaleModal.tsx`: el branch de validación `parsed <= 0` es en la práctica inalcanzable por
+  teclado (el `<input type="number" min="1">` bloquea el submit antes) — no es un bug, pero queda
+  anotado por si se refactoriza el formulario.
 
 ---
 
@@ -230,7 +262,7 @@ shells — alto riesgo sin tests de integración SSE real, no se tocó.
 `e2e-playwright-tester`) de los flujos completos — reemplaza/amplía la verificación manual que hoy
 se hace del flujo caja→admin (ver nota en la Fase actual).
 
-- [ ] Definir alcance una vez cerrada la Fase 3.
+- [ ] Definir alcance ahora que la Fase 3 y la Fase 3B están cerradas.
 
 ---
 
