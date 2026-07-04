@@ -26,7 +26,6 @@ import type { Order, OrderItem } from "@cocktrail/shared";
 import { BrandLogo } from "./BrandLogo";
 import { STATUS_META } from "@/lib/orderStatus";
 import { drinksService } from "@/services/drinks.service";
-import { useTheme } from "@/components/ThemeProvider";
 
 const CODE39_PATTERNS: Record<string, string> = {
   "0": "101001101101", "1": "110100101011", "2": "101100101011", "3": "110110010101",
@@ -143,8 +142,7 @@ type Props = { order: Order };
 
 export default function Ticket({ order }: Props) {
   const [drinks, setDrinks] = useState<import("@cocktrail/shared").Drink[]>([]);
-  useTheme();
-  
+
   const isDelivered = order.status === "entregado";
   const isCancelled = order.status === "cancelado";
   const isDone = isDelivered || isCancelled;

@@ -341,22 +341,58 @@ shells desde Fase 3. No se agregan eventos SSE nuevos ni se modifica `sse-manage
   (`CompactDrinkCard`, ya tenía "Agregar" en su texto) sin que jsdom filtre por media query, así que
   ahora matcheaban los dos. Se corrigió a `getAllByRole(...)[0]` (cualquiera de los dos botones
   llama al mismo `addToCart(d.id)`).
-- [ ] `OpenNightModal.tsx`: test de caracterización (apertura con palabra clave, `eventsService.open`
-  mockeado, casos de error).
-- [ ] `CloseNightModal.tsx`: test de caracterización del contrato completo (`onConfirm`, estados de
-  loading/error, render de `totals`/`summary`). No requiere mockear servicios (los recibe por prop),
-  pero sí verificar que no duplica el chequeo de permiso `closeNight`.
-- [ ] `CashSaleModal.tsx`: test de caracterización con `cashSalesService` mockeado.
-- [ ] `Ticket.tsx`: test de caracterización con `drinksService` mockeado y los distintos
-  `STATUS_META` (estados del pedido).
-- [ ] `TicketLive.tsx`: test de caracterización con `useSSE`/`eventsService`/`clearActiveOrder`
-  mockeados.
-- [ ] `barra/DevPanel.tsx`: sin test — solo confirmar que sigue condicionado a
-  `NODE_ENV === "development"` y no se coló en ningún bundle de producción.
-- [ ] `architect-reviewer` + `expert-react-frontend-engineer` auditan el bloque (uno por uno, no en
-  conjunto por ser los de mayor riesgo). Fixes de bajo riesgo si aparecen.
-- [ ] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` + `pnpm --filter
-  cocktrail-app build` en verde. Commit del bloque D.
+- [x] `OpenNightModal.tsx`: 8 tests (modo open/edit, validación, error del service, sincronización
+  al reabrir). **Bug real encontrado y corregido**: el modal queda montado permanentemente en
+  `AdminClient.tsx` (el padre solo alterna `open`) — si `event.keyword` cambiaba estando el modal
+  cerrado, al reabrir en modo `edit` mostraba la clave vieja (dato sensible: se imprime en cada
+  ticket físico de la noche). Fix con el patrón oficial de React "ajustar estado durante el render"
+  (comparar contra `prevOpen`), sin `useEffect` (evita el lint `set-state-in-effect`).
+- [x] `CloseNightModal.tsx`: 11 tests (contrato completo de `onConfirm`, loading/error, `totals`/
+  `summary`, doble-submit bloqueado, **confirmado que no duplica el chequeo de permiso
+  `closeNight`**). **Bug real encontrado y corregido** (el más serio de esta fase): los 4
+  `setTimeout` de la secuencia de "carga ficticia" (3.2s) nunca se cancelaban — si el modal se
+  desmontaba a mitad de camino (el padre lo renderiza condicionalmente), el timer final igual
+  llamaba a `onConfirm` (el cierre de noche real) sobre un componente ya desmontado. Fix con
+  `isMounted`/`pendingTimers` (refs) + cleanup en `useEffect(() => {...}, [])`. Fixes de lint
+  adicionales: tipado `Particle` en vez de `any[]` (confetti), `set-state-in-effect` en el trigger
+  de confetti (resuelto con el mismo patrón "ajustar estado durante el render"), y `Date.now()`
+  impuro en el render de `ConfirmView` (fijado con `useState(() => Date.now())`).
+- [x] `CashSaleModal.tsx`: 6 tests (submit feliz, descripción por defecto, validación, error del
+  service, limpieza al reabrir). **Mismo bug real que `OpenNightModal`** (modal montado
+  permanentemente): si el cajero tipeaba un monto y cerraba sin enviar, el borrador quedaba pegado
+  en la próxima apertura — mismo fix de "ajustar estado durante el render".
+- [x] `Ticket.tsx`: 8 tests (código de barras, estados de `STATUS_META`, sello entregado/cancelado,
+  CTA condicional, ícono resuelto vía `drinksService`). **Fix real aplicado**: `useTheme()` se
+  llamaba sin usar su valor de retorno (código muerto) — forzaba un acoplamiento espurio a que
+  `Ticket` solo pudiera renderizarse dentro de un `ThemeProvider`, sin aportar nada (su único hijo
+  que necesita theming, `BrandLogo`, ya usa `useThemeSafe()` con fallback). Eliminado.
+- [x] `TicketLive.tsx`: 5 tests (render inicial, actualización vía SSE `order.updated`, descarte de
+  eventos de otro `token`, refetch en `onOpen`/reconexión, `clearActiveOrder()` en estado terminal).
+  Sin hallazgos.
+- [x] `barra/DevPanel.tsx`: sin test — confirmado que sigue condicionado a
+  `NODE_ENV === "development"` tanto en el propio archivo como en el shell que lo renderiza
+  (`BarraClient.tsx`).
+- [x] `architect-reviewer` + `expert-react-frontend-engineer` auditan el bloque (4 agentes en
+  paralelo, uno de ellos dedicado en exclusiva a `CloseNightModal` por ser el de mayor riesgo).
+  **Hallazgos estructurales documentados sin resolver**: patrón "modal montado permanentemente, solo
+  `return null`" repetido en varios modales de `AdminClient`/`CajaClient` — sería más limpio montarlos
+  condicionalmente en el padre (`{open && <Modal .../>}`), eliminando la necesidad del workaround de
+  sincronización en cada uno; toca un archivo compartido por varios modales, fuera de alcance.
+  `CloseNightModal`: la "carga ficticia" de 3.2s con mensajes que no reflejan trabajo real es una
+  decisión de producto/UX, no técnica, se deja para decidir aparte; el estado `submitting` en
+  `ConfirmView` quedó inalcanzable en la práctica (mientras es `true`, `fakeLoading` también lo es) —
+  señalado, no tocado por ser el componente de mayor riesgo del bloque. `Ticket.tsx` duplica el
+  bloque de render de cada `OrderItem` entre "Ticket de Control" y "Recibo de Pago" — candidato a
+  `TicketItemRow`, no se tocó por ser un componente de impresión sin cobertura visual previa.
+  `CashSaleModal.tsx`: el branch de validación `parsed <= 0` es en la práctica inalcanzable por
+  teclado (el `<input type="number" min="1">` bloquea nativamente el submit antes) — no es un bug,
+  es defensa correcta contra edición programática del DOM, pero vale la pena que quede anotado.
+- [x] **Regresión real encontrada durante este bloque** (no del bloque D en sí, causada por el fix
+  de accesibilidad de `DrinkCard.tsx` en el Bloque A): ver nota en la tarea de `ThemeProvider.tsx`
+  más arriba — corregida en `VentaSection.test.tsx`.
+- [x] `pnpm --filter cocktrail-app exec tsc --noEmit` + `eslint` + `test` en verde (150/150 tests de
+  `apps/web/src/components`). Commit del bloque D (falta `pnpm --filter cocktrail-app build`, se
+  corre en el cierre de la fase junto con el resto).
 
 ### 5. Deuda de Fase 3 (documentada en `docs/ROADMAP.md`)
 

@@ -11,7 +11,7 @@ import {
   Clock,
   Calendar,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { formatHm } from "@/lib/utils";
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
 
@@ -53,7 +53,20 @@ function triggerConfetti() {
   canvas.height = window.innerHeight;
 
   const colors = ["#10b981", "#06b6d4", "#fbbf24", "#ec4899", "#3b82f6"];
-  const particles: any[] = [];
+  type Particle = {
+    x: number;
+    y: number;
+    angle: number;
+    speed: number;
+    size: number;
+    color: string;
+    opacity: number;
+    gravity: number;
+    decay: number;
+    rotation: number;
+    rotationSpeed: number;
+  };
+  const particles: Particle[] = [];
 
   for (let i = 0; i < 90; i++) {
     particles.push({
@@ -128,29 +141,63 @@ export default function CloseNightModal({
   const [wiggle, setWiggle] = useState(false);
   const [confettiTriggered, setConfettiTriggered] = useState(false);
 
-  // Trigger animations on summary load
+  // Timers de la secuencia de "carga ficticia" (ver handleConfirm). Se
+  // trackean para poder cancelarlos si el componente se desmonta a mitad de
+  // camino — de lo contrario el timer final llega a ejecutar onConfirm()
+  // (el cierre de noche real) sobre un modal ya desmontado.
+  const pendingTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const isMounted = useRef(true);
+
   useEffect(() => {
-    if (summary && open && !confettiTriggered) {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      pendingTimers.current.forEach(clearTimeout);
+      pendingTimers.current = [];
+    };
+  }, []);
+
+  // Derivamos si corresponde disparar la animación de éxito a partir de las
+  // props (open/summary), ajustando el estado durante el render en vez de en
+  // un efecto (evita el "cascading render" de un setState síncrono dentro de
+  // un useEffect). `prevTrigger` arranca en `null` a propósito: así la
+  // primera pasada siempre se trata como una transición, igual que un efecto
+  // que corre una vez después del montaje.
+  const hasSummary = summary !== null;
+  const [prevTrigger, setPrevTrigger] = useState<{
+    open: boolean;
+    hasSummary: boolean;
+  } | null>(null);
+  if (!prevTrigger || open !== prevTrigger.open || hasSummary !== prevTrigger.hasSummary) {
+    setPrevTrigger({ open, hasSummary });
+    if (hasSummary && open && !confettiTriggered) {
       setConfettiTriggered(true);
       setWiggle(true);
-      const wTimer = setTimeout(() => setWiggle(false), 700);
-      const cTimer = setTimeout(() => triggerConfetti(), 150);
-      return () => {
-        clearTimeout(wTimer);
-        clearTimeout(cTimer);
-      };
-    } else if (!open || !summary) {
+    } else if (!open || !hasSummary) {
       setConfettiTriggered(false);
       setFakeLoading(false);
       setSubmitting(false);
     }
-  }, [summary, open, confettiTriggered]);
+  }
+
+  // Efecto puro: reacciona al flag `wiggle` para disparar el confetti
+  // (Canvas API) y apagar la animación — separado de la derivación de
+  // estado de arriba, que no toca APIs externas.
+  useEffect(() => {
+    if (!wiggle) return;
+    const wTimer = setTimeout(() => setWiggle(false), 700);
+    const cTimer = setTimeout(() => triggerConfetti(), 150);
+    return () => {
+      clearTimeout(wTimer);
+      clearTimeout(cTimer);
+    };
+  }, [wiggle]);
 
   if (!open) return null;
 
-  const isSummary = summary !== null;
+  const isSummary = hasSummary;
 
-  async function handleConfirm(password: string) {
+  function handleConfirm(password: string) {
     if (submitting || fakeLoading) return;
     setFakeLoading(true);
     setFakeLoadingStep(0);
@@ -162,23 +209,22 @@ export default function CloseNightModal({
     const t3 = setTimeout(() => setFakeLoadingStep(3), 2550);
 
     const t4 = setTimeout(async () => {
+      // Si el modal se desmontó durante la animación (ver efecto de cleanup
+      // más arriba), no disparamos el cierre real de la noche.
+      if (!isMounted.current) return;
       setSubmitting(true);
       try {
         await onConfirm(password);
       } catch (err) {
+        if (!isMounted.current) return;
         setError(err instanceof Error ? err.message : "Error al cerrar");
         setFakeLoading(false);
       } finally {
-        setSubmitting(false);
+        if (isMounted.current) setSubmitting(false);
       }
     }, 3200);
 
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-    };
+    pendingTimers.current = [t1, t2, t3, t4];
   }
 
   return (
@@ -309,8 +355,12 @@ function ConfirmView({
   onConfirm: (password: string) => void;
 }) {
   const [password, setPassword] = useState("");
-  const duration = formatDuration(Date.now() - startedAt);
-  const todaySpanish = new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  // `Date.now()` es impuro (cambia en cada llamada): lo fijamos una sola vez
+  // al montar el diálogo de confirmación para que la duración y la fecha
+  // mostradas no varíen en renders sucesivos (p. ej. al tipear la contraseña).
+  const [now] = useState(() => Date.now());
+  const duration = formatDuration(now - startedAt);
+  const todaySpanish = new Date(now).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
   const capitalizedToday = todaySpanish.charAt(0).toUpperCase() + todaySpanish.slice(1);
 
   return (

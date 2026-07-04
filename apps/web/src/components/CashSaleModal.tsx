@@ -15,6 +15,21 @@ export default function CashSaleModal({ open, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // El modal nunca se desmonta (el padre solo alterna `open`), así que sin esto
+  // un monto/descripción cancelado sin enviar queda pegado como "borrador" la
+  // próxima vez que se abre. Ajustamos el estado durante el render (patrón
+  // recomendado por React) en vez de un useEffect, evitando el render extra
+  // que produciría un setState dentro de un efecto.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setAmount("");
+      setDescription("");
+      setError(null);
+    }
+  }
+
   if (!open) return null;
 
   function reset() {
