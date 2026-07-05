@@ -209,16 +209,16 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
 - [x] `pnpm --filter web typecheck` en verde con el nuevo archivo (sin producción que lo consuma
   todavía). `eslint` en 0.
 
-### Bloque 2 — Tests de caracterización de `useSSE.ts` (hook existente, sin tocar su código)
+### Bloque 2 — Tests de caracterización de `useSSE.ts` (hook existente, sin tocar su código) ✅ *(completo)*
 
-- [ ] `apps/web/src/lib/useSSE.test.ts` (nuevo) usando el doble del Bloque 1 y
-  `vi.stubGlobal("EventSource", FakeEventSource)`:
-  - despacha el handler correcto según el `type` del evento con el `data` ya parseado;
-  - ignora un frame con JSON malformado sin lanzar (ya está en el código, falta el test);
-  - llama `onOpen` en el evento `open` (inicial y una segunda vez simulando reconexión);
-  - al desmontar (`renderHook(...).unmount()`), remueve los listeners y cierra la conexión
-    (verificar con spies sobre la instancia fake).
-- [ ] `pnpm --filter web test src/lib/useSSE.test.ts` en verde.
+- [x] `apps/web/src/lib/useSSE.test.ts` (nuevo) usando el doble del Bloque 1 y
+  `vi.stubGlobal("EventSource", FakeEventSource)`: 5 tests — despacha el handler correcto según
+  el `type` con el `data` ya parseado; no dispara handlers de otros tipos; ignora un frame con
+  JSON malformado sin lanzar (se agregó `emitRaw()` al doble para simularlo limpio); llama
+  `onOpen` en el evento `open` (inicial y reconexión simulada); al desmontar remueve listeners y
+  cierra la conexión.
+- [x] `pnpm --filter web test src/lib/useSSE.test.ts` en verde (5/5). Suite completa: 228/228
+  (antes 223). `tsc --noEmit` + `eslint` en 0.
 
 ### Bloque 3 — `useEventState.ts` (el hook compartido) + sus tests
 

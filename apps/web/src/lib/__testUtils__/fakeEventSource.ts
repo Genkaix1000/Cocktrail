@@ -37,7 +37,12 @@ export class FakeEventSource {
 
   /** Simula un frame `event: <type>\ndata: <json>` llegando del servidor. */
   emit(type: string, data: unknown) {
-    const event = { data: JSON.stringify(data) };
+    this.emitRaw(type, JSON.stringify(data));
+  }
+
+  /** Simula un frame con un `data` crudo (ej. JSON malformado a propósito). */
+  emitRaw(type: string, rawData: string) {
+    const event = { data: rawData };
     this.listeners.get(type)?.forEach((listener) => listener(event));
   }
 
