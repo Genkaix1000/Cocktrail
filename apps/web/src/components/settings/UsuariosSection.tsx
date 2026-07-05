@@ -580,14 +580,15 @@ export default function UsuariosSection() {
       )}
 
       {/* Safe Delete Modal */}
-      <SafeDeleteModal
-        isOpen={deleteConfirm !== null}
-        onClose={() => setDeleteConfirm(null)}
-        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm.id)}
-        title="Eliminar Usuario de Staff"
-        expectedText={deleteConfirm?.username || ""}
-        typeLabel="el usuario"
-      />
+      {deleteConfirm && (
+        <SafeDeleteModal
+          onClose={() => setDeleteConfirm(null)}
+          onConfirm={() => handleDelete(deleteConfirm.id)}
+          title="Eliminar Usuario de Staff"
+          expectedText={deleteConfirm.username}
+          typeLabel="el usuario"
+        />
+      )}
     </div>
   );
 }

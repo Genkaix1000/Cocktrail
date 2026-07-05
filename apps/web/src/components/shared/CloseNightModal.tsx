@@ -16,7 +16,6 @@ import { formatHm } from "@/lib/utils";
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
 
 type Props = {
-  open: boolean;
   totals: EventTotals;
   pendingDeliveries: number;
   startedAt: number;
@@ -122,7 +121,6 @@ function triggerConfetti() {
 }
 
 export default function CloseNightModal({
-  open,
   totals,
   pendingDeliveries,
   startedAt,
@@ -157,27 +155,14 @@ export default function CloseNightModal({
     };
   }, []);
 
-  // Derivamos si corresponde disparar la animación de éxito a partir de las
-  // props (open/summary), ajustando el estado durante el render en vez de en
-  // un efecto (evita el "cascading render" de un setState síncrono dentro de
-  // un useEffect). `prevTrigger` arranca en `null` a propósito: así la
-  // primera pasada siempre se trata como una transición, igual que un efecto
-  // que corre una vez después del montaje.
+  // Dispara la animación de éxito una sola vez por apertura, cuando `summary`
+  // pasa a estar disponible. El padre ahora monta este componente de cero en
+  // cada apertura (montaje condicional), así que no hace falta resetear nada
+  // al cerrar — un mount nuevo ya arranca con `confettiTriggered=false`.
   const hasSummary = summary !== null;
-  const [prevTrigger, setPrevTrigger] = useState<{
-    open: boolean;
-    hasSummary: boolean;
-  } | null>(null);
-  if (!prevTrigger || open !== prevTrigger.open || hasSummary !== prevTrigger.hasSummary) {
-    setPrevTrigger({ open, hasSummary });
-    if (hasSummary && open && !confettiTriggered) {
-      setConfettiTriggered(true);
-      setWiggle(true);
-    } else if (!open || !hasSummary) {
-      setConfettiTriggered(false);
-      setFakeLoading(false);
-      setSubmitting(false);
-    }
+  if (hasSummary && !confettiTriggered) {
+    setConfettiTriggered(true);
+    setWiggle(true);
   }
 
   // Efecto puro: reacciona al flag `wiggle` para disparar el confetti
@@ -192,8 +177,6 @@ export default function CloseNightModal({
       clearTimeout(cTimer);
     };
   }, [wiggle]);
-
-  if (!open) return null;
 
   const isSummary = hasSummary;
 

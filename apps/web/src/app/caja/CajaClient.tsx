@@ -173,9 +173,8 @@ export default function CajaClient({ drinks }: Props) {
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full">
 
       {/* Night close modal */}
-      {event && (
+      {event && closeModalOpen && (
         <CloseNightModal
-          open={closeModalOpen}
           totals={totals}
           pendingDeliveries={pendingDeliveries}
           startedAt={event.startedAt}

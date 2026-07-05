@@ -31,18 +31,13 @@ beforeEach(() => {
 });
 
 describe("CashSaleModal", () => {
-  it("no renderiza nada cuando open es false", () => {
-    const { container } = render(<CashSaleModal open={false} onClose={vi.fn()} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
   it("registra la venta con el monto y la descripción ingresados", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     const sale = makeCashSale({ amount: 3000, description: "2 Fernet" });
     mockedCashSalesService.add.mockResolvedValue(sale);
 
-    render(<CashSaleModal open onClose={onClose} />);
+    render(<CashSaleModal onClose={onClose} />);
 
     await user.type(screen.getByPlaceholderText("5500"), "3000");
     await user.type(screen.getByPlaceholderText("2 Fernet"), "2 Fernet");
@@ -62,7 +57,7 @@ describe("CashSaleModal", () => {
     const onClose = vi.fn();
     mockedCashSalesService.add.mockResolvedValue(makeCashSale());
 
-    render(<CashSaleModal open onClose={onClose} />);
+    render(<CashSaleModal onClose={onClose} />);
 
     await user.type(screen.getByPlaceholderText("5500"), "1000");
     await user.click(screen.getByRole("button", { name: /Registrar venta/i }));
@@ -76,7 +71,7 @@ describe("CashSaleModal", () => {
   });
 
   it("no permite enviar sin un monto", () => {
-    render(<CashSaleModal open onClose={vi.fn()} />);
+    render(<CashSaleModal onClose={vi.fn()} />);
 
     const submitButton = screen.getByRole("button", { name: /Registrar venta/i });
     expect(submitButton).toBeDisabled();
@@ -86,7 +81,7 @@ describe("CashSaleModal", () => {
   it("muestra un error cuando el monto es cero o negativo", async () => {
     const user = userEvent.setup();
 
-    render(<CashSaleModal open onClose={vi.fn()} />);
+    render(<CashSaleModal onClose={vi.fn()} />);
 
     const input = screen.getByPlaceholderText("5500");
     await user.type(input, "-5");
@@ -104,7 +99,7 @@ describe("CashSaleModal", () => {
     const user = userEvent.setup();
     mockedCashSalesService.add.mockRejectedValue(new Error("Sin conexión con la caja"));
 
-    render(<CashSaleModal open onClose={vi.fn()} />);
+    render(<CashSaleModal onClose={vi.fn()} />);
 
     await user.type(screen.getByPlaceholderText("5500"), "1000");
     await user.click(screen.getByRole("button", { name: /Registrar venta/i }));
@@ -112,17 +107,15 @@ describe("CashSaleModal", () => {
     expect(await screen.findByText("Sin conexión con la caja")).toBeInTheDocument();
   });
 
-  it("limpia el formulario al reabrirse tras cerrarse sin enviar", async () => {
+  it("arranca con el formulario vacío en cada apertura (el padre monta el modal de cero)", async () => {
     const user = userEvent.setup();
 
-    const { rerender } = render(<CashSaleModal open onClose={vi.fn()} />);
-
+    const { unmount } = render(<CashSaleModal onClose={vi.fn()} />);
     await user.type(screen.getByPlaceholderText("5500"), "1000");
+    unmount();
 
-    rerender(<CashSaleModal open={false} onClose={vi.fn()} />);
-    rerender(<CashSaleModal open onClose={vi.fn()} />);
-
-    const input = (await screen.findByPlaceholderText("5500")) as HTMLInputElement;
+    render(<CashSaleModal onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText("5500") as HTMLInputElement;
     expect(input.value).toBe("");
   });
 });

@@ -571,23 +571,25 @@ export default function AdminClient({
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-ink-950">
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full">
-      <CashSaleModal open={cashOpen} onClose={() => setCashOpen(false)} />
-      <OpenNightModal
-        mode="edit"
-        open={editKeywordOpen}
-        onClose={() => setEditKeywordOpen(false)}
-        onSubmit={(ev) => setEvent(ev)}
-        currentKeyword={event.keyword}
-      />
-      <CloseNightModal
-        open={modalOpen}
-        totals={totals}
-        pendingDeliveries={pendingDeliveries}
-        startedAt={event.startedAt}
-        summary={summary}
-        onConfirm={handleCloseConfirm}
-        onClose={handleModalClose}
-      />
+      {cashOpen && <CashSaleModal onClose={() => setCashOpen(false)} />}
+      {editKeywordOpen && (
+        <OpenNightModal
+          mode="edit"
+          onClose={() => setEditKeywordOpen(false)}
+          onSubmit={(ev) => setEvent(ev)}
+          currentKeyword={event.keyword}
+        />
+      )}
+      {modalOpen && (
+        <CloseNightModal
+          totals={totals}
+          pendingDeliveries={pendingDeliveries}
+          startedAt={event.startedAt}
+          summary={summary}
+          onConfirm={handleCloseConfirm}
+          onClose={handleModalClose}
+        />
+      )}
 
       {/* Standard Sidebar - Visible on Desktop */}
       {renderSidebar(false)}

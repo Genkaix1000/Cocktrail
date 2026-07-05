@@ -5,26 +5,11 @@ import userEvent from "@testing-library/user-event";
 import SafeDeleteModal from "./SafeDeleteModal";
 
 describe("SafeDeleteModal", () => {
-  it("no renderiza nada cuando isOpen es false", () => {
-    const { container } = render(
-      <SafeDeleteModal
-        isOpen={false}
-        onClose={vi.fn()}
-        onConfirm={vi.fn()}
-        title="Eliminar trago"
-        expectedText="Fernet"
-        typeLabel="el trago"
-      />
-    );
-    expect(container).toBeEmptyDOMElement();
-  });
-
   it("deshabilita el submit hasta que el texto coincide exactamente", async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     render(
       <SafeDeleteModal
-        isOpen
         onClose={vi.fn()}
         onConfirm={onConfirm}
         title="Eliminar trago"
@@ -51,7 +36,6 @@ describe("SafeDeleteModal", () => {
     const onClose = vi.fn();
     render(
       <SafeDeleteModal
-        isOpen
         onClose={onClose}
         onConfirm={vi.fn()}
         title="Eliminar usuario"
@@ -66,10 +50,9 @@ describe("SafeDeleteModal", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it("resetea el input al reabrir con un expectedText distinto", () => {
-    const { rerender } = render(
+  it("cada apertura nueva arranca con el input vacío (el padre monta el modal de cero)", () => {
+    const { unmount } = render(
       <SafeDeleteModal
-        isOpen
         onClose={vi.fn()}
         onConfirm={vi.fn()}
         title="Eliminar trago"
@@ -77,12 +60,10 @@ describe("SafeDeleteModal", () => {
         typeLabel="el trago"
       />
     );
-    const input = screen.getByLabelText(/escribe/i) as HTMLInputElement;
-    input.focus();
+    unmount();
 
-    rerender(
+    render(
       <SafeDeleteModal
-        isOpen
         onClose={vi.fn()}
         onConfirm={vi.fn()}
         title="Eliminar trago"

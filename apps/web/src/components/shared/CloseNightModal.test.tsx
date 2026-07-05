@@ -31,7 +31,6 @@ const summary: EventSummary = {
 
 function baseProps(overrides: Partial<React.ComponentProps<typeof CloseNightModal>> = {}) {
   return {
-    open: true,
     totals,
     pendingDeliveries: 0,
     startedAt: Date.now() - 60 * 60 * 1000,
@@ -60,11 +59,6 @@ describe("CloseNightModal", () => {
 
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it("no renderiza nada cuando open es false", () => {
-    const { container } = render(<CloseNightModal {...baseProps({ open: false })} />);
-    expect(container).toBeEmptyDOMElement();
   });
 
   it("no expone ningún control de permisos: el chequeo de rol vive en el shell que lo abre", () => {

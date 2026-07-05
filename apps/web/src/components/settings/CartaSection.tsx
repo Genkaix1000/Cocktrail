@@ -651,14 +651,15 @@ export default function CartaSection() {
       )}
 
       {/* Safe Delete Modal */}
-      <SafeDeleteModal
-        isOpen={deleteConfirm !== null}
-        onClose={() => setDeleteConfirm(null)}
-        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm.id)}
-        title="Eliminar Trago/Producto"
-        expectedText={deleteConfirm?.name || ""}
-        typeLabel="el trago"
-      />
+      {deleteConfirm && (
+        <SafeDeleteModal
+          onClose={() => setDeleteConfirm(null)}
+          onConfirm={() => handleDelete(deleteConfirm.id)}
+          title="Eliminar Trago/Producto"
+          expectedText={deleteConfirm.name}
+          typeLabel="el trago"
+        />
+      )}
     </div>
   );
 }

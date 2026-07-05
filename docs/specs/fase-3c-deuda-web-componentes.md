@@ -287,25 +287,45 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 
 ### Bloque 4 — Modales a montaje condicional + partición de god-components
 
-- [ ] **Antes de tocar el checkout**: pedir a `mercadopago-integrator` que confirme que el
-  `useEffect` de polling del Posnet en `VentaSection.tsx` corta por su propia lógica de
-  éxito/error/cancelación y no depende implícitamente de que el nodo del modal exista.
-- [ ] `apps/web/src/components/admin/CashSaleModal.tsx` + padre
-  `apps/web/src/app/admin/AdminClient.tsx` — migrar a `{ cashOpen && <CashSaleModal .../> }`,
-  borrar el workaround `prevOpen`.
-- [ ] `apps/web/src/components/admin/OpenNightModal.tsx` + padre `AdminClient.tsx` — ídem, borrar
-  workaround de resync.
-- [ ] `apps/web/src/components/shared/CloseNightModal.tsx` + padres `AdminClient.tsx` y
-  `apps/web/src/app/caja/CajaClient.tsx` — ídem, borrar `isMounted`/`pendingTimers`.
-- [ ] `apps/web/src/components/shared/SafeDeleteModal.tsx` + sus padres (`CartaSection.tsx`,
-  `UsuariosSection.tsx`, `apps/web/src/components/caja/Sidebar.tsx`) — migrar a montaje
-  condicional en cada uno.
-- [ ] `apps/web/src/components/barra/CancelOrderModal.tsx` + padre (vía
-  `PendingOrdersList.tsx`/`BarraClient.tsx`) — migrar a montaje condicional.
-- [ ] `apps/web/src/components/barra/ManualRedeemModal.tsx` + padre — ídem.
-- [ ] `apps/web/src/components/caja/VentaSection.tsx` — Modal 1 (Carrito mobile) y Modal 2
-  (Checkout Posnet) inline: migrar ambos a montaje condicional, verificando que el polling del
-  terminal sigue funcionando igual (ver tarea de `mercadopago-integrator` arriba).
+> **Hallazgo que redujo el alcance real de este bloque**: al auditar los 9 "modales candidatos"
+> antes de tocar nada, 5 de los 9 **ya estaban bien** y no entraron a la migración:
+> - `apps/web/src/components/caja/VentaSection.tsx` (Modal 1 Carrito, Modal 2 Checkout) — ya
+>   usaban `{ isCartOpen && ... }` / `{ isCheckoutOpen && ... }`, confirmado por
+>   `mercadopago-integrator` antes de descartar el ítem (ver hallazgo abajo).
+> - `apps/web/src/components/barra/CancelOrderModal.tsx` y `ManualRedeemModal.tsx` — nunca
+>   tuvieron el patrón "siempre montado + `return null`"; sus padres (`BarraClient.tsx` vía
+>   `PendingOrdersList`) ya los montan condicionalmente (`{cancelOrder && <CancelOrderModal .../>}`,
+>   `{manualRedeemOrder && <ManualRedeemModal .../>}`).
+> Los 4 que sí tenían el bug real y se migraron: `CashSaleModal`, `OpenNightModal` (modo `edit`),
+> `CloseNightModal`, `SafeDeleteModal`. De paso se corrigió el roadmap: `SafeDeleteModal` nunca
+> se usó desde `caja/Sidebar.tsx` (solo `CartaSection.tsx` y `UsuariosSection.tsx` de settings).
+
+- [x] **Antes de tocar el checkout**: `mercadopago-integrator` confirmó que el polling del Posnet
+  en `useCheckout.ts` vive a nivel de `VentaSection` (no del modal) y corta por su propia lógica
+  (`stopPolling()` en éxito/error/cancelación) — nunca dependió del montaje del modal. Al revisar
+  el código de paso se descubrió que `VentaSection.tsx` ya usaba montaje condicional real, así que
+  no había nada que migrar ahí.
+- [x] `apps/web/src/components/admin/CashSaleModal.tsx` + padre
+  `apps/web/src/app/admin/AdminClient.tsx` — migrado a `{ cashOpen && <CashSaleModal .../> }`,
+  borrado el workaround `prevOpen` y el prop `open`.
+- [x] `apps/web/src/components/admin/OpenNightModal.tsx` + padre `AdminClient.tsx` — ídem para el
+  modo `edit` (`{ editKeywordOpen && <OpenNightModal mode="edit" .../> }`); el modo `open` ya
+  estaba condicionado por el propio `if (!event)` del shell, sin cambios ahí.
+- [x] `apps/web/src/components/shared/CloseNightModal.tsx` + padres `AdminClient.tsx` y
+  `apps/web/src/app/caja/CajaClient.tsx` — migrado a `{ modalOpen && <CloseNightModal .../> }` /
+  `{ event && closeModalOpen && <CloseNightModal .../> }`. Se simplificó la derivación de
+  `prevTrigger` (open/hasSummary) a un chequeo directo de `hasSummary` — ya no hace falta
+  resetear nada al cerrar porque el remount de React ya arranca en blanco. `isMounted`/
+  `pendingTimers` se mantienen (protegen contra el desmontaje real, que ahora sí ocurre).
+- [x] `apps/web/src/components/shared/SafeDeleteModal.tsx` + sus padres (`CartaSection.tsx` y
+  `UsuariosSection.tsx` de `settings/`) — simplificado: se eliminó el wrapper `ConfirmForm` +
+  `key={expectedText}` (workaround redundante una vez que el padre monta/desmonta de verdad) y el
+  prop `isOpen`; los padres migraron a `{ deleteConfirm && <SafeDeleteModal .../> }`.
+- [x] Tests actualizados: se sacaron los 4 tests "no renderiza nada cuando open/isOpen es false"
+  (ya no aplican, el prop no existe) y se reescribieron los tests de "resync al reabrir" para
+  reflejar el nuevo comportamiento (unmount + remount en vez de alternar una prop). 218/218 tests
+  (bajó de 222 por los 4 tests eliminados, no por regresión), `pnpm --filter web typecheck` +
+  `eslint` en 0 en todos los archivos tocados.
 - [ ] Test de caracterización antes/después por cada modal migrado: abrir con datos A, cerrar,
   reabrir con datos B, confirmar que no queda estado de A visible.
 - [ ] Extraer `apps/web/src/components/settings/UsersTable.tsx` y

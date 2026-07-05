@@ -7,33 +7,15 @@ import { eventsService } from "@/services/events.service";
 
 type Props = {
   mode: "open" | "edit";
-  open?: boolean;
   onClose?: () => void;
   onSubmit: (event: NightEvent) => void;
   currentKeyword?: string;
 };
 
-export default function OpenNightModal({ mode, open = true, onClose, onSubmit, currentKeyword }: Props) {
+export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword }: Props) {
   const [keyword, setKeyword] = useState(mode === "edit" ? currentKeyword ?? "" : "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // El modal nunca se desmonta (el padre solo alterna `open`), así que sin esto
-  // el campo queda con el valor de la primera apertura para siempre: si
-  // `currentKeyword` cambia mientras el modal está cerrado, al reabrir se vería
-  // la clave vieja en vez de la vigente. Ajustamos el estado durante el render
-  // (patrón recomendado por React) en vez de un useEffect, evitando el render
-  // extra que produciría un setState dentro de un efecto.
-  const [prevOpen, setPrevOpen] = useState(open);
-  if (open !== prevOpen) {
-    setPrevOpen(open);
-    if (open) {
-      setKeyword(mode === "edit" ? currentKeyword ?? "" : "");
-      setError(null);
-    }
-  }
-
-  if (!open) return null;
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

@@ -4,7 +4,6 @@ import { AlertTriangle, Trash2, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type Props = {
-  isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   title: string;
@@ -12,33 +11,7 @@ type Props = {
   typeLabel: string; // e.g. "el trago" o "el usuario"
 };
 
-export default function SafeDeleteModal({ isOpen, onClose, onConfirm, title, expectedText, typeLabel }: Props) {
-  if (!isOpen) return null;
-
-  // key={expectedText} remonta el formulario (y resetea su input) cada vez que
-  // cambia el registro a borrar, sin necesidad de un useEffect que llame
-  // setState — el padre mantiene este componente siempre montado y solo
-  // alterna `isOpen`, así que el reset por "isOpen" ya lo da el unmount de
-  // este bloque cuando isOpen pasa a false.
-  return (
-    <ConfirmForm
-      key={expectedText}
-      onClose={onClose}
-      onConfirm={onConfirm}
-      title={title}
-      expectedText={expectedText}
-      typeLabel={typeLabel}
-    />
-  );
-}
-
-function ConfirmForm({
-  onClose,
-  onConfirm,
-  title,
-  expectedText,
-  typeLabel,
-}: Omit<Props, "isOpen">) {
+export default function SafeDeleteModal({ onClose, onConfirm, title, expectedText, typeLabel }: Props) {
   const [inputText, setInputText] = useState("");
   const isMatched = inputText === expectedText;
 

@@ -108,7 +108,6 @@ describe("OpenNightModal", () => {
       render(
         <OpenNightModal
           mode="edit"
-          open
           onClose={onClose}
           onSubmit={onSubmit}
           currentKeyword="TEQUILA"
@@ -128,47 +127,22 @@ describe("OpenNightModal", () => {
       await waitFor(() => expect(onClose).toHaveBeenCalled());
     });
 
-    it("no renderiza nada cuando open es false", () => {
-      const { container } = render(
-        <OpenNightModal
-          mode="edit"
-          open={false}
-          onClose={vi.fn()}
-          onSubmit={vi.fn()}
-          currentKeyword="TEQUILA"
-        />,
-      );
-
-      expect(container).toBeEmptyDOMElement();
-    });
-
-    it("sincroniza la palabra clave si currentKeyword cambia mientras el modal permanece montado", async () => {
+    it("cada apertura nueva muestra la keyword vigente (el padre monta el modal de cero)", () => {
       const onSubmit = vi.fn();
       const onClose = vi.fn();
 
-      const { rerender } = render(
-        <OpenNightModal
-          mode="edit"
-          open={false}
-          onClose={onClose}
-          onSubmit={onSubmit}
-          currentKeyword="TEQUILA"
-        />,
+      const { unmount } = render(
+        <OpenNightModal mode="edit" onClose={onClose} onSubmit={onSubmit} currentKeyword="TEQUILA" />,
+      );
+      unmount();
+
+      // La palabra clave cambió por fuera (ej: otra pestaña) mientras el modal
+      // estaba cerrado (desmontado) -- la próxima apertura debe traer la vigente.
+      render(
+        <OpenNightModal mode="edit" onClose={onClose} onSubmit={onSubmit} currentKeyword="VODKA" />,
       );
 
-      // La palabra clave cambia por fuera (ej: otra pestaña) mientras el modal
-      // sigue montado y cerrado -- no debe quedar la clave vieja al reabrir.
-      rerender(
-        <OpenNightModal
-          mode="edit"
-          open
-          onClose={onClose}
-          onSubmit={onSubmit}
-          currentKeyword="VODKA"
-        />,
-      );
-
-      const input = (await screen.findByPlaceholderText("ej. TEQUILA")) as HTMLInputElement;
+      const input = screen.getByPlaceholderText("ej. TEQUILA") as HTMLInputElement;
       expect(input.value).toBe("VODKA");
     });
   });
