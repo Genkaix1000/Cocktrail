@@ -3,6 +3,7 @@
 import { useId, useState, useMemo } from "react";
 import { GitCompareArrows, ChevronDown } from "lucide-react";
 import type { EventSummary } from "@cocktrail/shared";
+import { getAccentColors } from "@/lib/accentColors";
 
 type Props = {
   nights: EventSummary[];
@@ -148,9 +149,7 @@ function buildRows(a: EventSummary, b: EventSummary): ComparisonRow[] {
 }
 
 export default function NightComparator({ nights, isBosko }: Props) {
-  const accentColor = isBosko ? "text-[#4ade80]" : "text-blue";
-  const accentBg = isBosko ? "bg-[#4ade80]/10" : "bg-blue/10";
-  const accentBorder = isBosko ? "border-[#4ade80]/20" : "border-blue-line";
+  const { accentColor, accentBg, accentBorder } = getAccentColors(isBosko);
 
   const sortedNights = useMemo(
     () =>

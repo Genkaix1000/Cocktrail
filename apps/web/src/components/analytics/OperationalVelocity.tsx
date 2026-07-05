@@ -3,6 +3,7 @@
 import { Clock, ArrowRight, CreditCard } from "lucide-react";
 import type { OperationalVelocity as OperationalVelocityType } from "@/lib/analytics";
 import { formatDuration } from "@/lib/analytics";
+import { getAccentColors } from "@/lib/accentColors";
 
 type Props = {
   velocity: OperationalVelocityType;
@@ -15,9 +16,7 @@ const STAGES = [
 ] as const;
 
 export default function OperationalVelocity({ velocity, isBosko }: Props) {
-  const accentColor = isBosko ? "text-[#4ade80]" : "text-blue";
-  const accentBg = isBosko ? "bg-[#4ade80]/10" : "bg-blue/10";
-  const accentBorder = isBosko ? "border-[#4ade80]/20" : "border-blue-line";
+  const { accentColor, accentBg, accentBorder } = getAccentColors(isBosko);
 
   const timings = [
     velocity.avgTotalTime,

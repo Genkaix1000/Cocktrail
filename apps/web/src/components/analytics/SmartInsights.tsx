@@ -2,6 +2,7 @@
 
 import { Sparkles } from "lucide-react";
 import type { SmartInsight } from "@/lib/analytics";
+import { getAccentColors } from "@/lib/accentColors";
 
 type Props = {
   insights: SmartInsight[];
@@ -30,9 +31,7 @@ const TONE_STYLES: Record<
 };
 
 export default function SmartInsights({ insights, isBosko }: Props) {
-  const accentColor = isBosko ? "text-[#4ade80]" : "text-blue";
-  const accentBg = isBosko ? "bg-[#4ade80]/10" : "bg-blue/10";
-  const accentBorder = isBosko ? "border-[#4ade80]/20" : "border-blue-line";
+  const { accentColor, accentBg, accentBorder } = getAccentColors(isBosko);
 
   return (
     <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5">

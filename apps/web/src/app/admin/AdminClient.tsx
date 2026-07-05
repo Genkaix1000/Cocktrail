@@ -20,7 +20,8 @@ import CloseNightModal from "@/components/shared/CloseNightModal";
 import OpenNightModal from "@/components/admin/OpenNightModal";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
-import { OSHeadbar, OSProfileFooter } from "@/components/shared/OSHeadbar";
+import { OSHeadbar } from "@/components/shared/OSHeadbar";
+import { OSProfileFooter } from "@/components/shared/OSProfileFooter";
 
 import { computeTotals } from "@/lib/totals";
 import { useSSE } from "@/lib/useSSE";

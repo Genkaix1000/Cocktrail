@@ -1,6 +1,8 @@
 "use client";
 
 import type { NightRecord } from "@/lib/analytics";
+import EmptyState from "@/components/shared/EmptyState";
+import { getAccentColors } from "@/lib/accentColors";
 
 type Props = {
   records: NightRecord[];
@@ -19,18 +21,16 @@ export default function NightRecords({ records, isBosko }: Props) {
   if (records.length === 0) {
     return (
       <div className="bg-ink-900 border border-dashed border-ink-700 rounded-2xl p-10 text-center">
-        <span className="text-[28px] block mb-3">📊</span>
-        <p className="text-[13px] text-ink-400">
-          Aún no hay récords registrados
-        </p>
-        <p className="text-[11px] text-ink-500 mt-1">
-          Cerrá noches para generar estadísticas históricas
-        </p>
+        <EmptyState
+          icon={<span className="text-[28px]">📊</span>}
+          message="Aún no hay récords registrados"
+          subtitle="Cerrá noches para generar estadísticas históricas"
+        />
       </div>
     );
   }
 
-  const accentColor = isBosko ? "text-[#4ade80]" : "text-blue";
+  const { accentColor } = getAccentColors(isBosko);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">

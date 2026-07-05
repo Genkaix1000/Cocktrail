@@ -3,7 +3,7 @@
 import { History, LayoutDashboard, Power, Printer, TrendingUp } from "lucide-react";
 
 import { BrandLogo } from "@/components/shared/BrandLogo";
-import { OSProfileFooter } from "@/components/shared/OSHeadbar";
+import { OSProfileFooter } from "@/components/shared/OSProfileFooter";
 import type { NightEvent, Theme } from "@cocktrail/shared";
 
 type CurrentUser = {

@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import type { NightPoint } from "@/lib/analytics";
+import EmptyState from "@/components/shared/EmptyState";
 
 type Props = {
   points: NightPoint[];
@@ -36,15 +37,12 @@ export default function NightEvolutionChart({
             Últimas noches con media móvil
           </p>
         </div>
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <BarChart3 size={32} className="text-ink-600" />
-          <span className="text-[13px] text-ink-500">
-            Sin datos de noches anteriores
-          </span>
-          <span className="text-[11px] text-ink-600">
-            Cerrá al menos una noche para ver la evolución
-          </span>
-        </div>
+        <EmptyState
+          icon={<BarChart3 size={32} className="text-ink-600" />}
+          message="Sin datos de noches anteriores"
+          subtitle="Cerrá al menos una noche para ver la evolución"
+          className="py-16"
+        />
       </div>
     );
   }

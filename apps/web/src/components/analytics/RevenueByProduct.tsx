@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProductRevenue } from "@/lib/analytics";
+import EmptyState from "@/components/shared/EmptyState";
 
 type Props = {
   products: ProductRevenue[];
@@ -40,12 +41,7 @@ export default function RevenueByProduct({ products, isBosko }: Props) {
 
       {/* Rows */}
       {top8.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10 gap-2">
-          <span className="text-[28px]">📊</span>
-          <span className="text-[13px] text-ink-500">
-            Aún no hay datos de productos
-          </span>
-        </div>
+        <EmptyState icon={<span className="text-[28px]">📊</span>} message="Aún no hay datos de productos" className="py-10" />
       ) : (
         <div className="flex flex-col gap-2 overflow-y-auto max-h-[420px] no-scrollbar">
           {top8.map((p, i) => {
