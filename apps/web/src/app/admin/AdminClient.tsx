@@ -16,7 +16,6 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useEffect } from "react";
 
-import CashSaleModal from "@/components/admin/CashSaleModal";
 import CloseNightModal from "@/components/shared/CloseNightModal";
 import OpenNightModal from "@/components/admin/OpenNightModal";
 import { BrandLogo } from "@/components/shared/BrandLogo";
@@ -70,7 +69,6 @@ export default function AdminClient({
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [cashSales, setCashSales] = useState<CashSale[]>(initialCashSales);
   const [modalOpen, setModalOpen] = useState(false);
-  const [cashOpen, setCashOpen] = useState(false);
   const [editKeywordOpen, setEditKeywordOpen] = useState(false);
   const [summary, setSummary] = useState<EventSummary | null>(null);
 
@@ -571,7 +569,6 @@ export default function AdminClient({
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-ink-950">
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full">
-      {cashOpen && <CashSaleModal onClose={() => setCashOpen(false)} />}
       {editKeywordOpen && (
         <OpenNightModal
           mode="edit"

@@ -296,18 +296,39 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 >   tuvieron el patrón "siempre montado + `return null`"; sus padres (`BarraClient.tsx` vía
 >   `PendingOrdersList`) ya los montan condicionalmente (`{cancelOrder && <CancelOrderModal .../>}`,
 >   `{manualRedeemOrder && <ManualRedeemModal .../>}`).
-> Los 4 que sí tenían el bug real y se migraron: `CashSaleModal`, `OpenNightModal` (modo `edit`),
-> `CloseNightModal`, `SafeDeleteModal`. De paso se corrigió el roadmap: `SafeDeleteModal` nunca
-> se usó desde `caja/Sidebar.tsx` (solo `CartaSection.tsx` y `UsuariosSection.tsx` de settings).
+> Los 4 que sí tenían el bug real (`CashSaleModal`, `OpenNightModal` modo `edit`,
+> `CloseNightModal`, `SafeDeleteModal`) se migraron — pero `CashSaleModal` terminó **eliminado**
+> del todo, no migrado (ver hallazgo siguiente). De paso se corrigió el roadmap: `SafeDeleteModal`
+> nunca se usó desde `caja/Sidebar.tsx` (solo `CartaSection.tsx` y `UsuariosSection.tsx` de
+> settings).
+
+> **Hallazgo mayor: `CashSaleModal` era una feature muerta, no un bug de montaje** — se eliminó
+> por completo en vez de migrarse. La verificación E2E post-migración reveló que el botón que
+> debía abrir el modal (`setCashOpen(true)`) **nunca existió en ningún commit** de todo el
+> historial del repo (`git log -p -S "setCashOpen"` solo encuentra el `setCashOpen(false)` del
+> `onClose`) — el modal era inalcanzable desde el día uno. Al investigar el propósito de la
+> feature antes de simplemente resucitarla con un botón: `apps/web/src/lib/totals.ts` documenta
+> explícitamente que "las ventas en efectivo **del barman** cuentan como efectivo pero no suman
+> tragos" — es decir, la feature se diseñó para que el **barman** cargue un cobro en efectivo sin
+> pasar por el checkout digital, pero el único lugar donde se llegó a montar el trigger fue
+> `/admin` (rol dueño/encargado), y `/caja` (donde sí se opera el cobro real, con
+> efectivo/débito/QR + impresión de ticket vía `VentaSection.tsx`) nunca tuvo ningún control
+> equivalente. Confirmado con el usuario en vivo que no hay un caso de uso real distinto del que
+> ya cubre `VentaSection` — se decidió **eliminar** en vez de reubicar: borrados
+> `apps/web/src/components/admin/CashSaleModal.tsx` (+ su test) y
+> `apps/web/src/services/cash-sales.service.ts` (+ su test), que quedó sin ningún otro
+> consumidor en todo `apps/web` una vez eliminado el modal. Se mantiene intacto el backend
+> (`apps/api/src/modules/cash-sales/`, la tabla `cash_sales`, `computeTotals`) porque sigue siendo
+> necesario para los totales/sync de eventos ya cerrados — la eliminación fue solo del frontend
+> huérfano, no del modelo de dominio.
 
 - [x] **Antes de tocar el checkout**: `mercadopago-integrator` confirmó que el polling del Posnet
   en `useCheckout.ts` vive a nivel de `VentaSection` (no del modal) y corta por su propia lógica
   (`stopPolling()` en éxito/error/cancelación) — nunca dependió del montaje del modal. Al revisar
   el código de paso se descubrió que `VentaSection.tsx` ya usaba montaje condicional real, así que
   no había nada que migrar ahí.
-- [x] `apps/web/src/components/admin/CashSaleModal.tsx` + padre
-  `apps/web/src/app/admin/AdminClient.tsx` — migrado a `{ cashOpen && <CashSaleModal .../> }`,
-  borrado el workaround `prevOpen` y el prop `open`.
+- [x] ~~`apps/web/src/components/admin/CashSaleModal.tsx`~~ — eliminado por completo (ver
+  hallazgo arriba), no migrado.
 - [x] `apps/web/src/components/admin/OpenNightModal.tsx` + padre `AdminClient.tsx` — ídem para el
   modo `edit` (`{ editKeywordOpen && <OpenNightModal mode="edit" .../> }`); el modo `open` ya
   estaba condicionado por el propio `if (!event)` del shell, sin cambios ahí.
@@ -326,19 +347,24 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
   reflejar el nuevo comportamiento (unmount + remount en vez de alternar una prop). 218/218 tests
   (bajó de 222 por los 4 tests eliminados, no por regresión), `pnpm --filter web typecheck` +
   `eslint` en 0 en todos los archivos tocados.
-- [ ] Test de caracterización antes/después por cada modal migrado: abrir con datos A, cerrar,
+- [x] Test de caracterización antes/después por cada modal migrado: abrir con datos A, cerrar,
   reabrir con datos B, confirmar que no queda estado de A visible.
-- [ ] Extraer `apps/web/src/components/settings/UsersTable.tsx` y
-  `apps/web/src/components/settings/UserFormDrawer.tsx` desde `UsuariosSection.tsx`, reusando
-  `SafeDeleteModal` (ya migrado a montaje condicional en la tarea anterior). Tests de
-  caracterización de ambos.
-- [ ] Extraer `apps/web/src/components/settings/DrinksTable.tsx` y
-  `apps/web/src/components/settings/DrinkFormModal.tsx` desde `CartaSection.tsx` (el formulario
-  incluye el input de `vibe` del bloque 2). Tests de caracterización de ambos.
-- [ ] `UsuariosSection.tsx` y `CartaSection.tsx` quedan como shells orquestadores (listado +
+- [x] Extraídos `apps/web/src/components/settings/UsersTable.tsx` y
+  `apps/web/src/components/settings/UserFormDrawer.tsx` desde `UsuariosSection.tsx` (593→265
+  líneas), reusando `SafeDeleteModal` (ya migrado a montaje condicional). Constantes compartidas
+  (`ROLE_META`/`PERMISSION_LABELS`/`PERMISSIONS_BY_ROLE`/`INITIAL_PERMISSIONS`) movidas a
+  `usuariosConstants.ts`. Tests de caracterización de ambos.
+- [x] Extraídos `apps/web/src/components/settings/DrinksTable.tsx` y
+  `apps/web/src/components/settings/DrinkFormModal.tsx` desde `CartaSection.tsx` (658→261
+  líneas) — el formulario incluye el input de `vibe` del bloque 2. `ICONS_LIST` movido a
+  `cartaConstants.ts`. Tests de caracterización de ambos.
+- [x] `UsuariosSection.tsx` y `CartaSection.tsx` quedan como shells orquestadores (listado +
   estado global), sin lógica de formulario/tabla inline.
-- [ ] Verificación visual/E2E de los modales migrados con `e2e-playwright-tester` (foco en el
-  checkout de `VentaSection.tsx` por ser el de mayor riesgo).
+- [x] Verificación visual/E2E de los modales migrados con `e2e-playwright-tester`: 5/6 casos
+  (`OpenNightModal`, `CloseNightModal`, `CartaSection`+`vibe`+`SafeDeleteModal`,
+  `UsuariosSection`, badges de `vibe` en `/carta`) PASS sin regresiones. El 6º caso
+  (`CashSaleModal`) fue el que reveló el hallazgo de la feature muerta de arriba — terminó en
+  eliminación, no en verificación de migración. `pnpm --filter web build` en verde.
 
 ### Cierre de fase
 
@@ -347,9 +373,11 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 - [ ] `pnpm --filter web test` completo en verde (contar total de tests antes/después).
 - [ ] `pnpm --filter web build` en verde.
 - [ ] Actualizar `docs/ROADMAP.md`: marcar Fase 3C como completa, mover los 6 hallazgos resueltos
-  fuera de la lista de deuda de Fase 3B, y resolver los findings mecánicos restantes
-  (`accentColor` en `analytics/*`, `EmptyState` duplicado, `OSHeadbar.tsx`, validación
-  inalcanzable de `CashSaleModal`) directo en la misma rama si no se hicieron antes.
+  fuera de la lista de deuda de Fase 3B, documentar la eliminación de `CashSaleModal`/
+  `cash-sales.service.ts` como decisión de esta fase, y resolver los findings mecánicos
+  restantes (`accentColor` en `analytics/*`, `EmptyState` duplicado, `OSHeadbar.tsx`) directo en
+  la misma rama si no se hicieron antes — el de "validación inalcanzable de `CashSaleModal`" ya
+  no aplica, el archivo no existe más.
 - [ ] Marcar `docs/specs/fase-3c-deuda-web-componentes.md` como `estado: done`.
 - [ ] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
 
