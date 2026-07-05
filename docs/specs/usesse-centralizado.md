@@ -198,16 +198,16 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
 
 ## Tareas
 
-### Bloque 1 — Infraestructura de testing (antes de tocar código de producción)
+### Bloque 1 — Infraestructura de testing (antes de tocar código de producción) ✅ *(completo)*
 
-- [ ] `apps/web/src/lib/__testUtils__/fakeEventSource.ts` — doble de `EventSource`:
+- [x] `apps/web/src/lib/__testUtils__/fakeEventSource.ts` — doble de `EventSource`:
   `addEventListener`/`removeEventListener`/`close` (misma interfaz que usa `useSSE.ts`), más
   `emit(type, data)` (dispara el listener registrado para ese `type` con un `MessageEvent` cuyo
   `data` es `JSON.stringify(data)`) y `emitOpen()` (dispara el listener de `"open"`). Expone una
   lista estática `instances` (o similar) para que el test acceda a la conexión creada dentro del
   hook bajo prueba.
-- [ ] `pnpm --filter web typecheck` en verde con el nuevo archivo (sin producción que lo consuma
-  todavía).
+- [x] `pnpm --filter web typecheck` en verde con el nuevo archivo (sin producción que lo consuma
+  todavía). `eslint` en 0.
 
 ### Bloque 2 — Tests de caracterización de `useSSE.ts` (hook existente, sin tocar su código)
 
