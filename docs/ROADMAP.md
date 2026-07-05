@@ -327,6 +327,63 @@ shell tenía un solo test de integración SSE. Spec completa en
 
 ---
 
+## Feature — Simplificar Dashboard de `/admin` 📊 *(completa)*
+
+**Objetivo**: el Dashboard (Monitoreo) y Estadísticas se solapaban ~70% (mismo gráfico horario,
+mismo donut de pagos, mismo ranking de productos) y entre las dos sumaban 9+ bloques de
+información — una pantalla de entrada abrumadora en vez de un resumen ejecutivo. Spec completa
+en `docs/specs/simplificar-dashboard-admin.md` (estado `done`), implementada directo en
+`develop` (feature de UI, sin cambios de datos/backend).
+
+- [x] **Dashboard fusionado**: Monitoreo + Estadísticas pasan a ser una sola vista. Se elimina
+  `EstadisticasSection.tsx` y su tab del sidebar. El Dashboard queda con 3 `MetricCard`
+  (Ventas/Tickets/Unidades, sin sparkline individual — `Ticket Promedio` se elimina de **todos**
+  lados, incl. de la comparativa y de `NightComparator` en Historial, donde además dividía mal
+  el promedio: total facturado incl. efectivo / solo pedidos digitales), gráfico de Ventas por
+  Hora, Top Productos, Donut de pagos, Hora Pico (portado de Estadísticas) y una Comparativa vs.
+  noche anterior de 3 filas sin sparkline. Se sacan del Dashboard "Actividad Reciente" y "Smart
+  Insights" (duplicaban Auditoría de Tickets / no aportaban una decisión real).
+- [x] **Ventas por Hora simplificado**: se saca el toggle Costo/Vasos (no se entendía la
+  diferencia y quedaba redundante con Hora Pico) — un solo gráfico en pesos, menos líneas de
+  grilla. Se corrige "uds" → "vasos" (a 9px se confundía con "u$s", la abreviatura argentina de
+  dólares) en los 2 lugares donde aparecía.
+- [x] **`CloseNightModal` sin carga ficticia**: se saca la secuencia de 3.2s de mensajes falsos
+  ("Consolidando arqueo...", etc.) antes del cierre real — el botón ya tenía un spinner real
+  (`submitting`) que alcanza.
+- [x] **Código muerto eliminado**: tabs `general`/`qr` sin botón en el sidebar (`GeneralSection`,
+  `QrSection`, + las rutas huérfanas `/admin/qr` y `/admin/settings` que redirigían a esos tabs
+  ya inexistentes — mismo patrón que `CashSaleModal` en Fase 3C). También `RevenueByProduct.tsx`
+  y `SmartInsights.tsx` (sin consumidores tras la fusión), y los campos `avgTicket`/
+  `deltaAvgTicket`/`segmentedTicket`/`smartInsights`/`generateInsights`/`computeSegmentedTicket`
+  de `useAdminAnalytics`/`lib/analytics.ts`.
+- [x] **Hallazgos de datos en Historial de Noches, corregidos durante la verificación manual**
+  (fuera del alcance original de la spec, pedidos por el usuario al revisar el resultado):
+  1. "Esta Semana" ($) podía superar a "Este Mes" — no era un error de cuenta: la semana
+     calendario (lun-dom) puede incluir días del mes anterior que "Este Mes" (desde el día 1) no
+     cuenta. Se agregó el rango de fechas de cada ventana como subtítulo de la card para que la
+     diferencia se entienda de un vistazo.
+  2. "Promedio Noche", Mejor/Peor Noche, Noche Más Larga y Trago Estrella promediaban/rankeaban
+     sobre **todo el historial acumulado** — con meses de uso, esos "récords" quedan viejos y
+     dejan de servir para decidir algo hoy. Se agregó `filterRecentNights()` (ventana de 30 días,
+     con fallback a todo el historial si no hay noches recientes) en `lib/analytics.ts`, usado
+     por `computeNightRecords` y por el cálculo de `avgNight`.
+  3. Warning de React "Each child in a list should have a unique key" en el selector de noches
+     de `NightComparator.tsx` — `key={n.id}` asumía objetos `EventSummary` reales, pero
+     `HistorialSection` le pasa los "días unificados" (agrupados por fecha, sin `.id`) vía un
+     cast `as any[]`. Se cambió la key a `idx` (ya se usaba como `value` del `<option>`).
+- [x] Cierre: `tsc --noEmit` (api+web) + `eslint` sin errores nuevos (los pre-existentes de
+  `HistorialSection`/`LogsSection`/etc. no se tocaron, ver deuda abajo) + `vitest run`
+  (233/233, subió de 232 al cierre de la feature `useSSE centralizado`) + `next build` de punta
+  a punta en verde.
+
+**Deuda documentada, no resuelta en esta feature** (detectada durante el trabajo, no causada por
+él): varios campos de `useAdminAnalytics` (`webTotal`/`webPct`/`barraTotal`/`barraPct`/
+`nightEvolution`/`movingAvg`/`cancellationInfo`/`digitalConversion`/`uniqueClients`/
+`deltaClients`/`operationalVelocity`/`maxDrinkQty`) y el componente `NightEvolutionChart.tsx` no
+tienen ningún consumidor hoy — candidatos a limpieza en una pasada aparte.
+
+---
+
 ## Fase 4 — E2E post-refactor 🧪
 
 **Objetivo**: una vez que API y Web estén auditadas, pruebas E2E (Playwright, agente
