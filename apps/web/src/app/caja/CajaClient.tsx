@@ -3,8 +3,8 @@
 import { Sun, Moon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { OSHeadbar } from "@/components/shared/OSHeadbar";
-import { useMemo, useState, useCallback, useEffect } from "react";
-import { useSSE } from "@/lib/useSSE";
+import { useMemo, useState, useEffect } from "react";
+import { useEventState } from "@/hooks/useEventState";
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
 import { useTheme } from "@/components/ThemeProvider";
@@ -15,7 +15,7 @@ import VentaSection from "@/components/caja/VentaSection";
 import HistorialSection from "@/components/caja/HistorialSection";
 import MetricasSection from "@/components/caja/MetricasSection";
 import CajaSidebar from "@/components/caja/Sidebar";
-import type { Drink, Order, NightEvent, CashSale, EventSummary } from "@cocktrail/shared";
+import type { Drink } from "@cocktrail/shared";
 
 type Props = {
   drinks: Drink[];
@@ -58,10 +58,12 @@ export default function CajaClient({ drinks }: Props) {
     [reprintTicket, printError, reprinting],
   );
 
-  // Data states
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [cashSales, setCashSales] = useState<CashSale[]>([]);
-  const [event, setEvent] = useState<NightEvent | null>(null);
+  // Close night modal state
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
+
+  const { event, orders, cashSales, summary, setSummary, upsertOrder } = useEventState({
+    onEventClosed: () => setCloseModalOpen(true),
+  });
 
   const activeNightOrders = useMemo(() => {
     if (!event) return orders;
@@ -73,64 +75,11 @@ export default function CajaClient({ drinks }: Props) {
     return cashSales.filter((c) => c.createdAt >= event.startedAt);
   }, [cashSales, event]);
 
-  // Close night modal states
-  const [closeModalOpen, setCloseModalOpen] = useState(false);
-  const [summary, setSummary] = useState<EventSummary | null>(null);
-
   // Fetch current user details
   useEffect(() => {
     authService.getMe().then((u) => {
       if (u) setCurrentUser(u as unknown as CurrentUser);
     });
-  }, []);
-
-  // Cargar datos iniciales
-  const refetch = useCallback(async () => {
-    try {
-      const state = await eventsService.getState();
-      setEvent(state.event);
-      setOrders(state.orders ?? []);
-      setCashSales(state.cashSales ?? []);
-    } catch {}
-  }, []);
-
-  // Hook SSE para actualizar en tiempo real
-  useSSE(
-    {
-      "order.created": ({ order }) => {
-        setOrders((prev) =>
-          prev.some((o) => o.id === order.id) ? prev : [...prev, order],
-        );
-      },
-      "order.updated": ({ order }) => {
-        setOrders((prev) => {
-          const idx = prev.findIndex((o) => o.id === order.id);
-          if (idx === -1) return [...prev, order];
-          const next = [...prev];
-          next[idx] = order;
-          return next;
-        });
-      },
-      "cash_sale.added": ({ cashSale }) => {
-        setCashSales((prev) =>
-          prev.some((c) => c.id === cashSale.id) ? prev : [...prev, cashSale],
-        );
-      },
-      "event.closed": ({ summary: s }) => {
-        setSummary(s);
-        setCloseModalOpen(true);
-        refetch();
-      },
-      "event.opened": ({ event: newEvent }) => {
-        setEvent(newEvent);
-        refetch();
-      },
-    },
-    { onOpen: refetch }
-  );
-
-  const handleOrderUpdated = useCallback((updated: Order) => {
-    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
   }, []);
 
   async function handleLogout() {
@@ -286,7 +235,7 @@ export default function CajaClient({ drinks }: Props) {
               orders={activeNightOrders}
               currentUser={currentUser}
               printer={ventaPrinter}
-              onOrderUpdated={handleOrderUpdated}
+              onOrderUpdated={upsertOrder}
             />
           </div>
 

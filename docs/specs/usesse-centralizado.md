@@ -269,15 +269,22 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
 - [x] `pnpm --filter web typecheck` + `eslint` en 0 + `pnpm --filter web test` (242/242) +
   `pnpm --filter web build` en verde.
 
-### Bloque 5 — Migrar `CajaClient.tsx`
+### Bloque 5 — Migrar `CajaClient.tsx` ✅ *(completo)*
 
-- [ ] Mismo tipo de cambio en `apps/web/src/app/caja/CajaClient.tsx` (líneas ~88-130): borrar
-  `useState` locales, `refetch`, y el bloque `useSSE({...}, { onOpen: refetch })`; reemplazar por
-  `useEventState({ onEventClosed: () => setCloseModalOpen(true) })` (sin `onActivity`, Caja no
-  tiene `fetchSystemLogs`).
-- [ ] Confirmar que `handleCloseConfirm`/`handleCloseModalClose` siguen compilando contra los
-  setters del hook.
-- [ ] `pnpm --filter web typecheck` en verde.
+- [x] Mismo tipo de cambio en `apps/web/src/app/caja/CajaClient.tsx`: borrados los `useState`
+  locales de `event`/`orders`/`cashSales`/`summary`, `refetch`, y el bloque `useSSE({...}, {
+  onOpen: refetch })`; reemplazado por `useEventState({ onEventClosed: () =>
+  setCloseModalOpen(true) })` (sin `onActivity`, Caja no tiene `fetchSystemLogs`).
+- [x] **Tercer hallazgo corregido antes de cerrar el bloque**: `CajaClient` tenía
+  `handleOrderUpdated` (pasado a `HistorialSection` como `onOrderUpdated`) que sincronizaba un
+  pedido tras cancelar/reimprimir un ticket vía HTTP directo, sin esperar el eco SSE — no
+  contemplado en el diseño original (ver fix de `upsertOrder` agregado al hook en el commit
+  previo a este bloque). Se reemplazó `handleOrderUpdated` por `upsertOrder` directo.
+- [x] Confirmado que `handleCloseConfirm`/`handleCloseModalClose` siguen compilando contra los
+  setters del hook. Limpiados imports de tipos (`Order`/`NightEvent`/`CashSale`/`EventSummary`)
+  que quedaron sin uso tras la migración.
+- [x] `pnpm --filter web typecheck` + `eslint` en 0 + `pnpm --filter web test` (243/243) +
+  `pnpm --filter web build` en verde.
 
 ### Bloque 6 — `BarraClient.tsx`: confirmar que NO se tocó
 
