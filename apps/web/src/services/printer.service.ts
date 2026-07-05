@@ -2,7 +2,7 @@ import { apiFetch } from "./api-client";
 
 export type PrinterStatus = {
   connected: boolean;
-  configured: true;
+  configured: boolean;
   message: string;
 };
 

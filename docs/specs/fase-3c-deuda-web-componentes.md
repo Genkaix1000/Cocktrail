@@ -215,23 +215,27 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 
 ## Tareas
 
-### Bloque 1 — Tests de `services/*.ts`
+### Bloque 1 — Tests de `services/*.ts` ✅ *(completo)*
 
-- [ ] `apps/web/src/services/api-client.test.ts` — cliente base (headers, manejo de error HTTP).
-- [ ] `apps/web/src/services/auth.service.test.ts`.
-- [ ] `apps/web/src/services/cash-sales.service.test.ts`.
-- [ ] `apps/web/src/services/config.service.test.ts`.
-- [ ] `apps/web/src/services/drinks.service.test.ts`.
-- [ ] `apps/web/src/services/events.service.test.ts`.
-- [ ] `apps/web/src/services/mercadopago.service.test.ts`.
-- [ ] `apps/web/src/services/orders.service.test.ts`.
-- [ ] `apps/web/src/services/printer.service.test.ts`.
-- [ ] `apps/web/src/services/tickets.service.test.ts`.
-- [ ] `apps/web/src/services/users.service.test.ts`.
-- [ ] Revisión SOLID de los 10 servicios con `expert-react-frontend-engineer` (¿responsabilidad
-  única, manejo de error consistente entre ellos?) — corregir lo de bajo riesgo, documentar el
-  resto como hallazgo si no entra en esta fase.
-- [ ] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde antes de pasar al bloque 2.
+- [x] `apps/web/src/services/api-client.test.ts` — cliente base (headers, manejo de error HTTP).
+- [x] `apps/web/src/services/auth.service.test.ts`.
+- [x] `apps/web/src/services/cash-sales.service.test.ts`.
+- [x] `apps/web/src/services/config.service.test.ts`.
+- [x] `apps/web/src/services/drinks.service.test.ts`.
+- [x] `apps/web/src/services/events.service.test.ts`.
+- [x] `apps/web/src/services/mercadopago.service.test.ts`.
+- [x] `apps/web/src/services/orders.service.test.ts`.
+- [x] `apps/web/src/services/printer.service.test.ts`.
+- [x] `apps/web/src/services/tickets.service.test.ts`.
+- [x] `apps/web/src/services/users.service.test.ts`.
+- [x] Revisión SOLID de los 10 servicios con `expert-react-frontend-engineer`: consistentes,
+  todos wrappers delgados sobre `apiFetch` sin lógica propia ni manejo de error divergente. Se
+  corrigieron 2 hallazgos triviales: `events.service.ts` tenía 4 tipos importados inline
+  (`import("@cocktrail/shared").Drink` etc.) en vez de en el `import type` del tope (único de los
+  10 con ese estilo); `PrinterStatus.configured` estaba tipado como literal `true` en vez de
+  `boolean`.
+- [x] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde (207/207, antes 161) +
+  `eslint` en 0.
 
 ### Bloque 2 — `Drink.vibe` visible en la carta
 

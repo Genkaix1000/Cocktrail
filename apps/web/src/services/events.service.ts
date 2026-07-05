@@ -1,12 +1,21 @@
 import { apiFetch } from "./api-client";
-import type { EventSummary, NightEvent, Theme } from "@cocktrail/shared";
+import type {
+  CashSale,
+  CustomTheme,
+  Drink,
+  EventSummary,
+  EventTotals,
+  NightEvent,
+  Order,
+  Theme,
+} from "@cocktrail/shared";
 
 type StateSnapshot = {
   event: NightEvent | null;
-  drinks: import("@cocktrail/shared").Drink[];
-  orders: import("@cocktrail/shared").Order[];
-  cashSales: import("@cocktrail/shared").CashSale[];
-  totals: import("@cocktrail/shared").EventTotals;
+  drinks: Drink[];
+  orders: Order[];
+  cashSales: CashSale[];
+  totals: EventTotals;
   activeTheme: Theme;
 };
 
@@ -50,7 +59,7 @@ export const eventsService = {
   getPublicConfig() {
     return apiFetch<{
       theme: Theme;
-      customTheme: import("@cocktrail/shared").CustomTheme | null;
+      customTheme: CustomTheme | null;
       eventStartedAt: number;
     }>("/api/theme");
   },
