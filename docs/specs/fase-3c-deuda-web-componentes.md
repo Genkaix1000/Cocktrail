@@ -210,3 +210,112 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 - **Extraer `TicketItemRow` con dos componentes separados en vez de uno con `showPrice?`** —
   descartada por ahora: la duplicación real (ícono + búsqueda de trago + badge de cantidad) es
   mayor que la diferencia de layout, así que una sola prop condicional alcanza sin sobre-diseñar.
+
+---
+
+## Tareas
+
+### Bloque 1 — Tests de `services/*.ts`
+
+- [ ] `apps/web/src/services/api-client.test.ts` — cliente base (headers, manejo de error HTTP).
+- [ ] `apps/web/src/services/auth.service.test.ts`.
+- [ ] `apps/web/src/services/cash-sales.service.test.ts`.
+- [ ] `apps/web/src/services/config.service.test.ts`.
+- [ ] `apps/web/src/services/drinks.service.test.ts`.
+- [ ] `apps/web/src/services/events.service.test.ts`.
+- [ ] `apps/web/src/services/mercadopago.service.test.ts`.
+- [ ] `apps/web/src/services/orders.service.test.ts`.
+- [ ] `apps/web/src/services/printer.service.test.ts`.
+- [ ] `apps/web/src/services/tickets.service.test.ts`.
+- [ ] `apps/web/src/services/users.service.test.ts`.
+- [ ] Revisión SOLID de los 10 servicios con `expert-react-frontend-engineer` (¿responsabilidad
+  única, manejo de error consistente entre ellos?) — corregir lo de bajo riesgo, documentar el
+  resto como hallazgo si no entra en esta fase.
+- [ ] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde antes de pasar al bloque 2.
+
+### Bloque 2 — `Drink.vibe` visible en la carta
+
+- [ ] Confirmar en `apps/web/src/app/carta/` qué componente arma la grilla de tragos y le pasa
+  props a `DrinkCard` (no asumir el nombre del archivo sin verificar).
+- [ ] `apps/web/src/components/shared/DrinkCard.tsx` — usar la prop `vibe?` (línea 25) para
+  renderizar un badge/subtítulo bajo el nombre del trago.
+- [ ] Componente identificado en la tarea anterior — pasar `drink.vibe` a `DrinkCard`.
+- [ ] `apps/web/src/components/shared/DrinkCard.test.tsx` — cubrir el render con y sin `vibe`.
+- [ ] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde.
+
+### Bloque 3 — `Toast` compartido + `TicketItemRow`
+
+- [ ] Extraer `apps/web/src/components/shared/Toast.tsx` desde `ToastItem` (hoy local en
+  `apps/web/src/components/barra/PendingOrdersList.tsx`), con variante éxito/error.
+- [ ] `apps/web/src/components/shared/Toast.test.tsx` — test de caracterización del timer (no
+  reintroducir el bug de Fase 3B donde se reseteaba con cada re-render del padre).
+- [ ] `apps/web/src/components/barra/PendingOrdersList.tsx` — reemplazar el `ToastItem` local por
+  el import de `Toast`; confirmar que su test existente sigue en verde.
+- [ ] `apps/web/src/components/settings/GeneralSection.tsx` — migrar el toast de éxito ad-hoc a
+  `Toast` y agregar variante de error en el `catch` de guardar/cargar.
+- [ ] `apps/web/src/components/settings/PagosSection.tsx` — agregar `Toast` de error en el
+  `catch` de guardar/cargar (hoy solo `console.error`).
+- [ ] `apps/web/src/components/settings/CartaSection.tsx` — agregar `Toast` de error en los
+  `catch` de guardar/borrar/toggle (hoy solo `console.error`).
+- [ ] Actualizar/agregar tests de caracterización de las 3 secciones de settings para cubrir el
+  camino de error con feedback visible.
+- [ ] Extraer `apps/web/src/components/carta/TicketItemRow.tsx` (props: `item`, `drink`
+  resuelto, `showPrice?`) — el `key` de cada fila se sigue pasando desde el `.map()` del padre,
+  no desde adentro del componente extraído.
+- [ ] `apps/web/src/components/carta/Ticket.tsx` — usar `TicketItemRow` en las dos secciones
+  ("Ticket de Control" sin precio, "Recibo de Pago" con precio), eliminando el `drinks.find`
+  duplicado.
+- [ ] `apps/web/src/components/carta/Ticket.test.tsx` — actualizar/agregar test que confirme que
+  ambas secciones renderizan igual cantidad de ítems con los datos correctos.
+- [ ] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde.
+
+### Bloque 4 — Modales a montaje condicional + partición de god-components
+
+- [ ] **Antes de tocar el checkout**: pedir a `mercadopago-integrator` que confirme que el
+  `useEffect` de polling del Posnet en `VentaSection.tsx` corta por su propia lógica de
+  éxito/error/cancelación y no depende implícitamente de que el nodo del modal exista.
+- [ ] `apps/web/src/components/admin/CashSaleModal.tsx` + padre
+  `apps/web/src/app/admin/AdminClient.tsx` — migrar a `{ cashOpen && <CashSaleModal .../> }`,
+  borrar el workaround `prevOpen`.
+- [ ] `apps/web/src/components/admin/OpenNightModal.tsx` + padre `AdminClient.tsx` — ídem, borrar
+  workaround de resync.
+- [ ] `apps/web/src/components/shared/CloseNightModal.tsx` + padres `AdminClient.tsx` y
+  `apps/web/src/app/caja/CajaClient.tsx` — ídem, borrar `isMounted`/`pendingTimers`.
+- [ ] `apps/web/src/components/shared/SafeDeleteModal.tsx` + sus padres (`CartaSection.tsx`,
+  `UsuariosSection.tsx`, `apps/web/src/components/caja/Sidebar.tsx`) — migrar a montaje
+  condicional en cada uno.
+- [ ] `apps/web/src/components/barra/CancelOrderModal.tsx` + padre (vía
+  `PendingOrdersList.tsx`/`BarraClient.tsx`) — migrar a montaje condicional.
+- [ ] `apps/web/src/components/barra/ManualRedeemModal.tsx` + padre — ídem.
+- [ ] `apps/web/src/components/caja/VentaSection.tsx` — Modal 1 (Carrito mobile) y Modal 2
+  (Checkout Posnet) inline: migrar ambos a montaje condicional, verificando que el polling del
+  terminal sigue funcionando igual (ver tarea de `mercadopago-integrator` arriba).
+- [ ] Test de caracterización antes/después por cada modal migrado: abrir con datos A, cerrar,
+  reabrir con datos B, confirmar que no queda estado de A visible.
+- [ ] Extraer `apps/web/src/components/settings/UsersTable.tsx` y
+  `apps/web/src/components/settings/UserFormDrawer.tsx` desde `UsuariosSection.tsx`, reusando
+  `SafeDeleteModal` (ya migrado a montaje condicional en la tarea anterior). Tests de
+  caracterización de ambos.
+- [ ] Extraer `apps/web/src/components/settings/DrinksTable.tsx` y
+  `apps/web/src/components/settings/DrinkFormModal.tsx` desde `CartaSection.tsx` (el formulario
+  incluye el input de `vibe` del bloque 2). Tests de caracterización de ambos.
+- [ ] `UsuariosSection.tsx` y `CartaSection.tsx` quedan como shells orquestadores (listado +
+  estado global), sin lógica de formulario/tabla inline.
+- [ ] Verificación visual/E2E de los modales migrados con `e2e-playwright-tester` (foco en el
+  checkout de `VentaSection.tsx` por ser el de mayor riesgo).
+
+### Cierre de fase
+
+- [ ] `pnpm typecheck` (api + web) en verde.
+- [ ] `pnpm --filter web lint` en 0.
+- [ ] `pnpm --filter web test` completo en verde (contar total de tests antes/después).
+- [ ] `pnpm --filter web build` en verde.
+- [ ] Actualizar `docs/ROADMAP.md`: marcar Fase 3C como completa, mover los 6 hallazgos resueltos
+  fuera de la lista de deuda de Fase 3B, y resolver los findings mecánicos restantes
+  (`accentColor` en `analytics/*`, `EmptyState` duplicado, `OSHeadbar.tsx`, validación
+  inalcanzable de `CashSaleModal`) directo en la misma rama si no se hicieron antes.
+- [ ] Marcar `docs/specs/fase-3c-deuda-web-componentes.md` como `estado: done`.
+- [ ] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
+
+> Implementar con **Plan Mode** dado el tamaño del bloque 4 (9 modales + 2 god-components). Ir
+> tildando `- [x]` en esta checklist a medida que se completa cada tarea.
