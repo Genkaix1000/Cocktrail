@@ -42,8 +42,13 @@ type Options = {
  * `setEvent`/`setSummary` se exponen porque los shells los necesitan para
  * flujos que no son SSE (respuestas HTTP directas: abrir noche, editar la
  * palabra clave, confirmar el cierre, limpiar el resumen al cerrar el
- * modal). `setOrders`/`setCashSales` NO se exponen — nada fuera de este
- * hook necesita mutarlos a mano.
+ * modal) — ahí no hay ningún invariante que proteger, es un reemplazo
+ * completo del valor. `setOrders`/`setCashSales` NO se exponen crudos
+ * porque sí hay un invariante (upsert-por-id); en cambio se expone
+ * `upsertOrder`, que reusa la misma lógica interna para el único caso real
+ * que lo necesita: `CajaClient` sincroniza el estado de un pedido tras una
+ * respuesta HTTP directa (cancelar/reimprimir desde `HistorialSection`),
+ * sin esperar el eco por SSE.
  */
 export function useEventState(options?: Options) {
   const { initial, onActivity, onEventClosed } = options ?? {};
@@ -98,5 +103,9 @@ export function useEventState(options?: Options) {
     },
   );
 
-  return { event, orders, cashSales, summary, setEvent, setSummary, refetch };
+  const upsertOrder = useCallback((order: Order) => {
+    setOrders((prev) => upsertById(prev, order));
+  }, []);
+
+  return { event, orders, cashSales, summary, setEvent, setSummary, upsertOrder, refetch };
 }

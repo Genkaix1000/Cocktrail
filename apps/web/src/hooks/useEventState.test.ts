@@ -248,11 +248,22 @@ describe("useEventState", () => {
     const newEvent = makeNightEvent();
 
     act(() => result.current.setEvent(newEvent));
-    act(() => result.current.setSummary(null));
+    expect(result.current.event).toEqual(newEvent);
 
-    // No verificamos el valor post-render acá (requeriría act()); solo que
-    // la API expone estas funciones sin explotar al llamarlas.
-    expect(typeof result.current.setEvent).toBe("function");
-    expect(typeof result.current.setSummary).toBe("function");
+    act(() => result.current.setSummary(makeSummary()));
+    act(() => result.current.setSummary(null));
+    expect(result.current.summary).toBeNull();
+  });
+
+  it("upsertOrder aplica un pedido sin pasar por SSE (caso HistorialSection en Caja)", () => {
+    const { result } = renderHook(() => useEventState());
+    const order = makeOrder({ id: "o1", status: "pendiente" });
+
+    act(() => result.current.upsertOrder(order));
+    expect(result.current.orders).toEqual([order]);
+
+    const updated = makeOrder({ id: "o1", status: "cancelado" });
+    act(() => result.current.upsertOrder(updated));
+    expect(result.current.orders).toEqual([updated]);
   });
 });
