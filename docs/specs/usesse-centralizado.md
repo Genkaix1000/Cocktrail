@@ -255,19 +255,19 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
 - [x] `pnpm --filter web test src/hooks/useEventState.test.ts` en verde (14/14). Suite completa:
   242/242 (antes 228). `tsc --noEmit` + `eslint` en 0.
 
-### Bloque 4 — Migrar `AdminClient.tsx`
+### Bloque 4 — Migrar `AdminClient.tsx` ✅ *(completo)*
 
-- [ ] Reemplazar en `apps/web/src/app/admin/AdminClient.tsx`: borrar los `useState` de
-  `event`/`orders`/`cashSales`/`summary`, la función `refetch` (líneas ~239-246), y el bloque
-  `useSSE({...}, { onOpen: ... })` completo (líneas ~248-290) por una llamada a
-  `useEventState({ onActivity: fetchSystemLogs, onEventClosed: (s) => { setSummary — ya lo
-  hace el hook —; setModalOpen(true); setHistoryLoaded(false); } })`. Ojo: `onEventClosed` NO
-  debe volver a setear `summary` (ya lo hizo el hook antes de llamarlo) — solo hace lo que el
-  shell necesita además.
-- [ ] Confirmar que los usos existentes de `setEvent` (modo `open`/`edit` de `OpenNightModal`,
-  líneas ~565-580) y `setSummary` (`handleCloseConfirm`, `handleModalClose`) siguen compilando
-  contra los setters devueltos por `useEventState`, sin cambiar su lógica interna.
-- [ ] `pnpm --filter web typecheck` en verde.
+- [x] Reemplazado en `apps/web/src/app/admin/AdminClient.tsx`: borrados los `useState` de
+  `event`/`orders`/`cashSales`/`summary`, la función `refetch`, y el bloque `useSSE({...}, {
+  onOpen: ... })` completo, por `useEventState({ initial: { event: initialEvent, orders:
+  initialOrders, cashSales: initialCashSales }, onActivity: fetchSystemLogs, onEventClosed: () =>
+  { setModalOpen(true); setHistoryLoaded(false); } })`. `refetch` no se desestructura (nada más
+  en el shell lo llama manualmente).
+- [x] Confirmado que los usos existentes de `setEvent` (modo `open`/`edit` de `OpenNightModal`) y
+  `setSummary` (`handleCloseConfirm`, `handleModalClose`) siguen compilando contra los setters
+  devueltos por `useEventState`, sin cambiar su lógica interna.
+- [x] `pnpm --filter web typecheck` + `eslint` en 0 + `pnpm --filter web test` (242/242) +
+  `pnpm --filter web build` en verde.
 
 ### Bloque 5 — Migrar `CajaClient.tsx`
 

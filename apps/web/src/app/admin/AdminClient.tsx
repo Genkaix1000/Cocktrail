@@ -24,7 +24,7 @@ import { OSHeadbar } from "@/components/shared/OSHeadbar";
 import { OSProfileFooter } from "@/components/shared/OSProfileFooter";
 
 import { computeTotals } from "@/lib/totals";
-import { useSSE } from "@/lib/useSSE";
+import { useEventState } from "@/hooks/useEventState";
 
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
@@ -66,12 +66,8 @@ export default function AdminClient({
   const { theme } = useTheme();
 
   // Basic layout state
-  const [event, setEvent] = useState(initialEvent);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [cashSales, setCashSales] = useState<CashSale[]>(initialCashSales);
   const [modalOpen, setModalOpen] = useState(false);
   const [editKeywordOpen, setEditKeywordOpen] = useState(false);
-  const [summary, setSummary] = useState<EventSummary | null>(null);
 
   // Tab & sidebar navigation state
   const [activeTab, setActiveTab] = useState<string>("monitoreo");
@@ -120,6 +116,15 @@ export default function AdminClient({
       console.error("Error fetching system logs:", err);
     }
   }, []);
+
+  const { event, orders, cashSales, summary, setEvent, setSummary } = useEventState({
+    initial: { event: initialEvent, orders: initialOrders, cashSales: initialCashSales },
+    onActivity: fetchSystemLogs,
+    onEventClosed: () => {
+      setModalOpen(true);
+      setHistoryLoaded(false); // Force reload next time history tab is opened
+    },
+  });
 
   // Fetch current user details
   useEffect(() => {
@@ -235,59 +240,6 @@ export default function AdminClient({
       }
     ].filter(b => b.total > 0 || b.pct > 0);
   }, [totals]);
-
-  const refetch = useCallback(async () => {
-    try {
-      const state = await eventsService.getState();
-      setEvent(state.event);
-      setOrders(state.orders ?? []);
-      setCashSales(state.cashSales ?? []);
-    } catch {}
-  }, []);
-
-  useSSE(
-    {
-      "order.created": ({ order }) => {
-        setOrders((prev) =>
-          prev.some((o) => o.id === order.id) ? prev : [...prev, order],
-        );
-        fetchSystemLogs();
-      },
-      "order.updated": ({ order }) => {
-        setOrders((prev) => {
-          const idx = prev.findIndex((o) => o.id === order.id);
-          if (idx === -1) return [...prev, order];
-          const next = [...prev];
-          next[idx] = order;
-          return next;
-        });
-        fetchSystemLogs();
-      },
-      "cash_sale.added": ({ cashSale }) => {
-        setCashSales((prev) =>
-          prev.some((s) => s.id === cashSale.id) ? prev : [...prev, cashSale],
-        );
-        fetchSystemLogs();
-      },
-      "event.closed": ({ summary: s }) => {
-        setSummary(s);
-        setModalOpen(true);
-        refetch();
-        fetchSystemLogs();
-        setHistoryLoaded(false); // Force reload next time history tab is opened
-      },
-      "event.opened": ({ event: newEvent }) => {
-        setEvent(newEvent);
-        refetch();
-      },
-    },
-    {
-      onOpen: () => {
-        refetch();
-        fetchSystemLogs();
-      },
-    },
-  );
 
   async function handleCloseConfirm(password: string) {
     const data = await eventsService.closeEvent(password);
