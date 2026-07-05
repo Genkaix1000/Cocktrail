@@ -42,12 +42,22 @@ function useEventState(options?: {
 ```
 
 `setOrders`/`setCashSales` no se exponen (nadie fuera del hook los necesita hoy).
-`setEvent`/`setSummary` sí, porque los shells los usan en flujos que no son SSE
-(`handleCloseConfirm` setea `summary` con la respuesta HTTP directa del POST de cierre;
-`handleModalClose` limpia `summary` al cerrar el modal de resumen).
+`setEvent`/`setSummary` sí, porque los shells los usan en flujos que no son SSE: en Admin,
+`OpenNightModal` (abrir noche) y la edición de la palabra clave llaman `setEvent` con la
+respuesta HTTP directa (`AdminClient.tsx:565,577`); `handleCloseConfirm` setea `summary` con la
+respuesta HTTP directa del POST de cierre; `handleModalClose` limpia `summary` al cerrar el
+modal de resumen. Son ≥3 call sites reales que necesitan setear el objeto completo con lo que
+vino del server — no vale la pena nombrarlos como métodos separados (`applyOpenedEvent`,
+`applyClosedSummary`, etc.), serían wrappers 1:1 sin invariante nueva. La fuga de abstracción
+que sí importa evitar es exponer `setOrders`/`setCashSales` crudos, y el diseño ya la evita.
 
-`event.opened` y el `onOpen` (llama `refetch()`) son idénticos hoy en ambos shells — el hook
-los maneja 100% interno, sin callback.
+`event.opened` es idéntico en ambos shells hoy — el hook lo maneja 100% interno, sin callback.
+`onOpen` (conexión inicial + cada reconexión) **no** es idéntico: ambos llaman `refetch()`, pero
+Admin además llama `fetchSystemLogs()` ahí (`AdminClient.tsx:285-288`) — si el hook manejara
+`onOpen` sin considerar esto, Admin perdería ese refresh de logs en cada reconexión SSE. Se
+resuelve sin agregar un tercer callback: en `onOpen` el hook llama `refetch()` y, si se pasó
+`onActivity`, también `onActivity()` (una reconexión se trata como una actividad más). Para Caja
+(que no pasa `onActivity`) el comportamiento en `onOpen` queda igual que hoy.
 
 ### 2. Shells resultantes
 
