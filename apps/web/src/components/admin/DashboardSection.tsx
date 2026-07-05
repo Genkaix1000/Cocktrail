@@ -5,19 +5,12 @@ import {
   TrendingUp,
   Wine,
   Tag,
-  DollarSign,
   Activity,
   CalendarDays,
   Download,
-  CheckCircle,
-  Undo,
-  Users,
-  Palette,
 } from "lucide-react";
 
 import PaymentDonut from "@/components/analytics/PaymentDonut";
-import SmartInsights from "@/components/analytics/SmartInsights";
-import Sparkline from "@/components/shared/Sparkline";
 import MetricCard from "@/components/shared/MetricCard";
 import EmptyCard from "@/components/shared/EmptyCard";
 
@@ -27,14 +20,6 @@ import type { DeltaInfo, ProductRevenue } from "@/lib/analytics";
 import type { LucideIcon } from "lucide-react";
 
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
-
-export type AuditLogEntry = {
-  id: string;
-  action: string;
-  description: string;
-  operator: string;
-  created_at: string;
-};
 
 type PaymentBreakdownEntry = {
   method: string;
@@ -49,41 +34,34 @@ type Props = {
   analytics: AdminAnalytics;
   totals: EventTotals;
   historyEvents: EventSummary[];
-  systemLogs: AuditLogEntry[];
   customPaymentBreakdown: PaymentBreakdownEntry[];
   isFirstLoad: boolean;
   isTabTransitioning: boolean;
   // activeTab solo se usa como `key` para reiniciar la animación de entrada al
   // volver a esta vista — se pasa tal cual estaba en AdminClient.
   activeTab: string;
-  chartMetric: "sales" | "glasses";
-  setChartMetric: (metric: "sales" | "glasses") => void;
   isBosko: boolean;
   barColorClass: string;
 };
 
 /**
- * Vista "Dashboard/Monitoreo" del panel admin — extraída de AdminClient.tsx
- * sin cambios de comportamiento. Los valores derivados (productRevenue,
- * avgTicket, hourlyData, etc.) salen de useAdminAnalytics, el mismo hook que
- * usa la vista Estadísticas.
+ * Vista "Dashboard/Monitoreo" del panel admin — fusiona lo que antes eran
+ * "Monitoreo" + "Estadísticas" en una sola vista de resumen (ver
+ * docs/specs/simplificar-dashboard-admin.md). Los valores derivados
+ * (productRevenue, hourlyData, peakHour, etc.) salen de useAdminAnalytics.
  */
 export default function DashboardSection({
   analytics,
   totals,
   historyEvents,
-  systemLogs,
   customPaymentBreakdown,
   isFirstLoad,
   isTabTransitioning,
   activeTab,
-  chartMetric,
-  setChartMetric,
   isBosko,
   barColorClass,
 }: Props) {
   const {
-    avgTicket,
     startedAtStr,
     deltaTotal,
     productRevenue,
@@ -91,34 +69,9 @@ export default function DashboardSection({
     totalOps,
     totalDrinkUnits,
     deltaTickets,
-    deltaAvgTicket,
     deltaUnits,
-    smartInsights,
+    peakHour,
   } = analytics;
-
-  // Comparison sparklines history from previous nights
-  function buildComparativeSparkline(
-    extract: (e: EventSummary) => number,
-    fallback: number,
-    fallbackRatio = 0.9,
-  ): number[] {
-    const hist = historyEvents.slice(0, 5).reverse().map(extract);
-    return hist.length > 1 ? hist : [fallback * fallbackRatio, fallback];
-  }
-
-  const compSalesSparkline = buildComparativeSparkline((e) => e.totals.total, totals.total, 0.85);
-  const compTicketsSparkline = buildComparativeSparkline(
-    (e) => e.totals.efectivoCount + e.totals.qrCount + e.totals.debitoCount,
-    totalOps,
-  );
-  const compAvgSparkline = buildComparativeSparkline((e) => {
-    const ops = (e.totals.efectivoCount + e.totals.qrCount + e.totals.debitoCount) || 1;
-    return Math.round(e.totals.total / ops);
-  }, avgTicket);
-  const compUnitsSparkline = buildComparativeSparkline(
-    (e) => e.totals.drinksSold.reduce((s, d) => s + d.qty, 0),
-    totalDrinkUnits,
-  );
 
   const lastNightName = historyEvents.length > 0 ? "Última Noche" : "Noche Anterior";
 
@@ -161,12 +114,8 @@ export default function DashboardSection({
               <div className="h-4 bg-ink-900 border border-ink-850 rounded-lg w-72 animate-pulse" />
             </div>
           </div>
-          {/* Row 1 Skeletons (4 Cards) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-ink-900 border border-ink-800/80 rounded-2xl p-5 animate-pulse h-[125px] flex flex-col justify-between">
-              <div className="h-3.5 bg-ink-850 rounded w-1/2" />
-              <div className="h-8 bg-ink-850 rounded w-3/4" />
-            </div>
+          {/* Row 1 Skeletons (3 Cards) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-ink-900 border border-ink-800/80 rounded-2xl p-5 animate-pulse h-[125px] flex flex-col justify-between">
               <div className="h-3.5 bg-ink-850 rounded w-1/2" />
               <div className="h-8 bg-ink-850 rounded w-3/4" />
@@ -224,8 +173,8 @@ export default function DashboardSection({
             </div>
           </div>
 
-          {/* Row 1: 4 Combined Metric Cards with Sparklines */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Row 1: 3 Metric Cards (número + delta, sin sparkline) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <MetricCard
               label="Ventas Totales"
               value={totals.total}
@@ -233,7 +182,6 @@ export default function DashboardSection({
               delta={deltaTotal}
               icon={TrendingUp}
               color="#10b981"
-              sparklineData={hourlyData.map(s => s.totalSales)}
             />
             <MetricCard
               label="Tickets Totales"
@@ -241,16 +189,6 @@ export default function DashboardSection({
               delta={deltaTickets}
               icon={Tag}
               color="#3b82f6"
-              sparklineData={hourlyData.map(s => s.totalCount)}
-            />
-            <MetricCard
-              label="Ticket Promedio"
-              value={avgTicket}
-              isCurrency
-              delta={deltaAvgTicket}
-              icon={DollarSign}
-              color="#a855f7"
-              sparklineData={hourlyData.map(s => s.totalCount > 0 ? Math.round(s.totalSales / s.totalCount) : 0)}
             />
             <MetricCard
               label="Unidades Vendidas"
@@ -258,67 +196,31 @@ export default function DashboardSection({
               delta={deltaUnits}
               icon={Wine}
               color="#f97316"
-              sparklineData={hourlyData.map(s => Math.round(s.totalCount * 1.6))}
             />
           </div>
 
           {/* Row 2: Charts and Products (Height Unified to h-[380px]) */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            {/* Ventas por Hora */}
+            {/* Ventas por Hora — solo pesos, sin toggle (ver docs/specs/simplificar-dashboard-admin.md) */}
             <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between h-[380px] shadow-lg">
-              <div className="flex justify-between items-center shrink-0">
-                <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-                    <Activity size={13} />
-                  </div>
-                  <span>Ventas por Hora</span>
-                </h3>
-
-                {/* Selector switcheable (Costo / Vaso) */}
-                <div className="flex items-center gap-0.5 bg-ink-850 p-0.5 rounded-xl border border-ink-800 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setChartMetric("sales")}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all select-none cursor-pointer ${
-                      chartMetric === "sales"
-                        ? "bg-accent text-ink-950 shadow"
-                        : "text-ink-400 hover:text-ink-200"
-                    }`}
-                    title="Ver costo en pesos ($)"
-                  >
-                    <DollarSign size={10} />
-                    <span>Costo</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartMetric("glasses")}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all select-none cursor-pointer ${
-                      chartMetric === "glasses"
-                        ? "bg-accent text-ink-950 shadow"
-                        : "text-ink-400 hover:text-ink-200"
-                    }`}
-                    title="Ver en vasos (uds)"
-                  >
-                    <Wine size={10} />
-                    <span>Vasos</span>
-                  </button>
+              <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none shrink-0">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+                  <Activity size={13} />
                 </div>
-              </div>
+                <span>Ventas por Hora</span>
+              </h3>
 
               {/* Graph bars mapping */}
               <div className="relative h-[270px] flex items-end justify-between gap-1.5 pt-6 pb-2 px-1 border-b border-ink-800/80">
-                {/* Grid lines in background with values (with 25% headroom to avoid overlaps) */}
+                {/* Grid lines de referencia (solo máximo y mitad, para no saturar) */}
                 <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-[28px] pt-[20px]">
-                  {[1, 0.75, 0.5, 0.25].map((ratio) => {
-                    const maxVal = Math.max(
-                      ...hourlyData.map((s) => (chartMetric === "sales" ? s.totalSales : s.totalGlasses)),
-                      chartMetric === "sales" ? 1000 : 5
-                    ) * 1.25;
+                  {[1, 0.5].map((ratio) => {
+                    const maxVal = Math.max(...hourlyData.map((s) => s.totalSales), 1000) * 1.25;
                     const lineVal = Math.round(maxVal * ratio);
                     return (
                       <div key={ratio} className="w-full relative flex items-center">
                         <span className="absolute left-1 -top-2 text-[9px] font-mono font-bold text-ink-200 bg-ink-900 border border-ink-750 px-2 py-0.5 rounded shadow-md z-10 select-none">
-                          {chartMetric === "sales" ? `$${lineVal.toLocaleString("es-AR")}` : `${lineVal} uds`}
+                          ${lineVal.toLocaleString("es-AR")}
                         </span>
                         <div className="w-full border-t border-ink-800/25 border-dashed" />
                       </div>
@@ -327,17 +229,12 @@ export default function DashboardSection({
                 </div>
 
                 {hourlyData.map((slot) => {
-                  const slotVal = chartMetric === "sales" ? slot.totalSales : slot.totalGlasses;
-                  const maxVal = Math.max(
-                    ...hourlyData.map((s) => (chartMetric === "sales" ? s.totalSales : s.totalGlasses)),
-                    chartMetric === "sales" ? 1000 : 5
-                  ) * 1.25;
-                  const heightPct = (slotVal / maxVal) * 100;
+                  const maxVal = Math.max(...hourlyData.map((s) => s.totalSales), 1000) * 1.25;
+                  const heightPct = (slot.totalSales / maxVal) * 100;
                   return (
                     <div key={slot.label} className="flex-1 flex flex-col items-center justify-end h-full group relative">
                       <div className="w-full relative h-[200px] flex items-end">
                         <div
-                          key={chartMetric + "-" + slot.label}
                           className={`w-full rounded-t bg-gradient-to-t transition-all duration-300 group-hover:brightness-110 animate-grow-bar ${barColorClass}`}
                           style={{ height: `${Math.max(4, heightPct)}%` }}
                         />
@@ -358,17 +255,10 @@ export default function DashboardSection({
             <PaymentDonut breakdown={customPaymentBreakdown} total={totals.total} isBosko={isBosko} />
           </div>
 
-          {/* Row 3: Alerts & Comparison (Height Unified to h-[300px]) */}
+          {/* Row 3: Comparativa (sin sparklines) & Hora Pico */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Insights (reemplaza las antiguas "Alertas y Notificaciones" —
-                dynamicAlerts reimplementaba reglas más simples que ya cubría
-                generateInsights()/smartInsights, calculado pero sin usar) */}
-            <div className="h-[300px] overflow-y-auto no-scrollbar">
-              <SmartInsights insights={smartInsights} isBosko={isBosko} />
-            </div>
-
             {/* Comparativa */}
-            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between h-[300px] shadow-lg">
+            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
               <div className="flex justify-between items-center shrink-0 mb-1">
                 <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
@@ -387,8 +277,6 @@ export default function DashboardSection({
                   icon={TrendingUp}
                   currentVal={totals.total}
                   delta={deltaTotal}
-                  sparklineData={compSalesSparkline}
-                  color="#10b981"
                   isCurrency
                 />
                 <ComparisonRow
@@ -396,90 +284,25 @@ export default function DashboardSection({
                   icon={Tag}
                   currentVal={totalOps}
                   delta={deltaTickets}
-                  sparklineData={compTicketsSparkline}
-                  color="#3b82f6"
-                />
-                <ComparisonRow
-                  label="Ticket Promedio"
-                  icon={DollarSign}
-                  currentVal={avgTicket}
-                  delta={deltaAvgTicket}
-                  sparklineData={compAvgSparkline}
-                  color="#a855f7"
-                  isCurrency
                 />
                 <ComparisonRow
                   label="Unidades"
                   icon={Wine}
                   currentVal={totalDrinkUnits}
                   delta={deltaUnits}
-                  sparklineData={compUnitsSparkline}
-                  color="#f97316"
                 />
               </div>
             </div>
-          </div>
 
-          {/* Row 4: Recent activity (audit logs) full width */}
-          <div className="w-full">
-            {/* Actividad Reciente */}
-            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-4 shadow-lg h-[340px]">
-              <div className="flex justify-between items-center">
-                <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-                    <Activity size={13} />
-                  </div>
-                  <span>Actividad Reciente</span>
-                </h3>
-                <span className="text-[10px] text-ink-400 font-medium">Historial de cambios en la app</span>
-              </div>
-
-              {systemLogs.length === 0 ? (
-                <EmptyCard text="Sin actividad reciente registrada aún" />
-              ) : (
-                <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar flex-1">
-                  {systemLogs.map((log) => {
-                    let colorClass = "bg-ink-800 text-ink-400";
-                    let icon = <Activity size={12} />;
-                    if (log.action.startsWith("order.created")) {
-                      colorClass = "bg-green-soft/20 text-green border border-green/20";
-                      icon = <CheckCircle size={12} />;
-                    } else if (log.action.startsWith("order.cancelled")) {
-                      colorClass = "bg-danger-soft/20 text-danger border border-danger/20";
-                      icon = <Undo size={12} />;
-                    } else if (log.action.startsWith("drink.")) {
-                      colorClass = "bg-blue-soft/20 text-blue border border-blue/20";
-                      icon = <Wine size={12} />;
-                    } else if (log.action.startsWith("staff.")) {
-                      colorClass = "bg-purple-soft/20 text-purple border border-purple/20";
-                      icon = <Users size={12} />;
-                    } else if (log.action.startsWith("config.")) {
-                      colorClass = "bg-amber-soft/20 text-amber border border-amber/20";
-                      icon = <Palette size={12} />;
-                    } else if (log.action.startsWith("cash_sale.created")) {
-                      colorClass = "bg-green-soft/20 text-green border border-green/20";
-                      icon = <DollarSign size={12} />;
-                    }
-
-                    return (
-                      <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-ink-950/40 border border-ink-850 hover:border-ink-800 transition-colors">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
-                            {icon}
-                          </div>
-                          <div className="flex flex-col min-w-0 text-left">
-                            <span className="text-xs text-ink-100 font-medium truncate">{log.description}</span>
-                            <span className="text-[9px] text-ink-500 font-mono">Por: {log.operator}</span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-ink-400 font-mono shrink-0 pl-3">
-                          {formatRelativeTime(log.created_at)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+            {/* Hora Pico */}
+            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-2 justify-center">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400 flex items-center gap-2">
+                <Activity size={12} /> Hora Pico de Ventas
+              </span>
+              <span className="font-mono text-[26px] font-bold leading-none text-accent">
+                {peakHour}
+              </span>
+              <span className="text-[10px] text-ink-400">Franja con mayor recaudación bruta</span>
             </div>
           </div>
 
@@ -530,7 +353,7 @@ function TopProductsList({ products }: { products: ProductRevenue[] }) {
                 </span>
               </div>
               <div className="flex items-center gap-6 shrink-0 font-mono text-xs tabular">
-                <span className="text-ink-400">{d.qty} uds.</span>
+                <span className="text-ink-400">{d.qty} vasos</span>
                 <span className="text-ink-100 font-bold">${d.subtotal.toLocaleString("es-AR")}</span>
               </div>
             </div>
@@ -546,16 +369,12 @@ function ComparisonRow({
   icon: Icon,
   currentVal,
   delta,
-  sparklineData,
-  color,
   isCurrency
 }: {
   label: string;
   icon: LucideIcon;
   currentVal: number;
   delta: DeltaInfo | null;
-  sparklineData: number[];
-  color: string;
   isCurrency?: boolean;
 }) {
   const deltaPct = delta?.pct ?? 0;
@@ -565,11 +384,6 @@ function ComparisonRow({
       <div className="flex items-center gap-2 text-ink-300 text-xs min-w-[110px]">
         <Icon size={13} className="text-ink-400" />
         <span>{label}</span>
-      </div>
-
-      {/* Tiny Sparkline */}
-      <div className="w-14 h-5 overflow-hidden select-none pointer-events-none shrink-0 mx-2">
-        <Sparkline data={sparklineData.length > 0 ? sparklineData : [currentVal, currentVal]} color={color} />
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
@@ -583,16 +397,4 @@ function ComparisonRow({
       </div>
     </div>
   );
-}
-
-function formatRelativeTime(ts: number | string): string {
-  const ms = Date.now() - new Date(ts).getTime();
-  const secs = Math.round(ms / 1000);
-  if (secs < 60) return "Hace instantes";
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `Hace ${mins} min`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `Hace ${hrs} h`;
-  const days = Math.floor(hrs / 24);
-  return `Hace ${days} d`;
 }

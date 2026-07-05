@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { render, renderHook, screen } from "@testing-library/react";
 
 import DashboardSection from "./DashboardSection";
@@ -51,13 +51,10 @@ function makeProps(overrides: {
   cashSales?: CashSale[];
   totals?: EventTotals;
   historyEvents?: EventSummary[];
-  systemLogs?: any[];
   customPaymentBreakdown?: any[];
   isFirstLoad?: boolean;
   isTabTransitioning?: boolean;
   activeTab?: string;
-  chartMetric?: "sales" | "glasses";
-  setChartMetric?: (metric: "sales" | "glasses") => void;
   isBosko?: boolean;
   barColorClass?: string;
 } = {}) {
@@ -73,13 +70,10 @@ function makeProps(overrides: {
     analytics: computeAnalytics(totals, event, orders, cashSales, historyEvents),
     totals,
     historyEvents,
-    systemLogs: [],
     customPaymentBreakdown: [],
     isFirstLoad: false,
     isTabTransitioning: false,
     activeTab: "monitoreo",
-    chartMetric: "sales" as const,
-    setChartMetric: vi.fn(),
     isBosko: false,
     barColorClass: "from-blue/15 to-blue",
     ...componentProps,
@@ -92,9 +86,32 @@ describe("DashboardSection", () => {
     expect(screen.getByText("Dashboard General")).toBeInTheDocument();
   });
 
-  it("muestra 'sin actividad' cuando no hay logs de sistema", () => {
-    render(<DashboardSection {...makeProps({ systemLogs: [] })} />);
-    expect(screen.getByText("Sin actividad reciente registrada aún")).toBeInTheDocument();
+  it("no muestra Ticket Promedio ni Actividad Reciente (fusión con Estadísticas)", () => {
+    render(<DashboardSection {...makeProps()} />);
+    expect(screen.queryByText("Ticket Promedio")).not.toBeInTheDocument();
+    expect(screen.queryByText("Actividad Reciente")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Insights|Alertas/i)).not.toBeInTheDocument();
+  });
+
+  it("muestra Hora Pico de Ventas (portado de la vista Estadísticas)", () => {
+    render(<DashboardSection {...makeProps()} />);
+    expect(screen.getByText("Hora Pico de Ventas")).toBeInTheDocument();
+  });
+
+  it("Ventas por Hora no tiene toggle Costo/Vasos y no muestra 'uds'", () => {
+    render(<DashboardSection {...makeProps()} />);
+    expect(screen.getByText("Ventas por Hora")).toBeInTheDocument();
+    expect(screen.queryByText("Costo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vasos")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\buds\b/)).not.toBeInTheDocument();
+  });
+
+  it("muestra la Comparativa con 3 filas, sin Ticket Promedio", () => {
+    render(<DashboardSection {...makeProps()} />);
+    expect(screen.getByText("Comparativa")).toBeInTheDocument();
+    expect(screen.getByText("Ventas")).toBeInTheDocument();
+    expect(screen.getByText("Tickets")).toBeInTheDocument();
+    expect(screen.getByText("Unidades")).toBeInTheDocument();
   });
 
   it("muestra el total de ventas formateado cuando hay pedidos", () => {

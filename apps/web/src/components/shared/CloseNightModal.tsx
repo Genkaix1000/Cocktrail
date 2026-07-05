@@ -131,27 +131,19 @@ export default function CloseNightModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fictional loading states
-  const [fakeLoading, setFakeLoading] = useState(false);
-  const [fakeLoadingStep, setFakeLoadingStep] = useState(0);
-
   // Success animations states
   const [wiggle, setWiggle] = useState(false);
   const [confettiTriggered, setConfettiTriggered] = useState(false);
 
-  // Timers de la secuencia de "carga ficticia" (ver handleConfirm). Se
-  // trackean para poder cancelarlos si el componente se desmonta a mitad de
-  // camino — de lo contrario el timer final llega a ejecutar onConfirm()
-  // (el cierre de noche real) sobre un modal ya desmontado.
-  const pendingTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // El cierre real puede tardar (red/DB) y el modal podría desmontarse antes
+  // de que la promesa resuelva (ej. el usuario navega) — evita setState sobre
+  // un componente ya desmontado.
   const isMounted = useRef(true);
 
   useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
-      pendingTimers.current.forEach(clearTimeout);
-      pendingTimers.current = [];
     };
   }, []);
 
@@ -180,34 +172,18 @@ export default function CloseNightModal({
 
   const isSummary = hasSummary;
 
-  function handleConfirm(password: string) {
-    if (submitting || fakeLoading) return;
-    setFakeLoading(true);
-    setFakeLoadingStep(0);
+  async function handleConfirm(password: string) {
+    if (submitting) return;
     setError(null);
-
-    // Sequence of fictional loading steps (3.2 seconds total)
-    const t1 = setTimeout(() => setFakeLoadingStep(1), 850);
-    const t2 = setTimeout(() => setFakeLoadingStep(2), 1700);
-    const t3 = setTimeout(() => setFakeLoadingStep(3), 2550);
-
-    const t4 = setTimeout(async () => {
-      // Si el modal se desmontó durante la animación (ver efecto de cleanup
-      // más arriba), no disparamos el cierre real de la noche.
+    setSubmitting(true);
+    try {
+      await onConfirm(password);
+    } catch (err) {
       if (!isMounted.current) return;
-      setSubmitting(true);
-      try {
-        await onConfirm(password);
-      } catch (err) {
-        if (!isMounted.current) return;
-        setError(err instanceof Error ? err.message : "Error al cerrar");
-        setFakeLoading(false);
-      } finally {
-        if (isMounted.current) setSubmitting(false);
-      }
-    }, 3200);
-
-    pendingTimers.current = [t1, t2, t3, t4];
+      setError(err instanceof Error ? err.message : "Error al cerrar");
+    } finally {
+      if (isMounted.current) setSubmitting(false);
+    }
   }
 
   return (
@@ -226,53 +202,46 @@ export default function CloseNightModal({
       `}</style>
 
       <div className={`bg-ink-900 border border-ink-800 w-full max-w-md rounded-[22px] p-6 shadow-2xl animate-in zoom-in-95 duration-200 transition-all ${wiggle ? "animate-wiggle" : ""}`}>
-        
-        {/* Header (Hidden during fake loading view) */}
-        {!fakeLoading && (
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                  isSummary
-                    ? "bg-green-soft border-green-line"
-                    : "bg-amber-soft border-amber-line"
-                }`}
-              >
-                {isSummary ? (
-                  <CheckCircle2 size={20} className="text-green" />
-                ) : (
-                  <AlertTriangle size={20} className="text-amber" />
-                )}
-              </div>
-              <div>
-                <h2 className="font-serif-italic text-[22px] text-ink-50 leading-none">
-                  {isSummary ? "Noche cerrada" : "Cerrar noche"}
-                </h2>
-                <p className="text-[10px] text-ink-400 uppercase tracking-[0.18em] font-medium mt-1.5">
-                  {isSummary ? "Resumen archivado" : "Acción irreversible"}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => !submitting && onClose()}
-              disabled={submitting}
-              className="p-2 bg-ink-800 rounded-full text-ink-300 hover:text-ink-50 disabled:opacity-40 cursor-pointer"
-              aria-label="Cerrar"
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                isSummary
+                  ? "bg-green-soft border-green-line"
+                  : "bg-amber-soft border-amber-line"
+              }`}
             >
-              <X size={18} />
-            </button>
+              {isSummary ? (
+                <CheckCircle2 size={20} className="text-green" />
+              ) : (
+                <AlertTriangle size={20} className="text-amber" />
+              )}
+            </div>
+            <div>
+              <h2 className="font-serif-italic text-[22px] text-ink-50 leading-none">
+                {isSummary ? "Noche cerrada" : "Cerrar noche"}
+              </h2>
+              <p className="text-[10px] text-ink-400 uppercase tracking-[0.18em] font-medium mt-1.5">
+                {isSummary ? "Resumen archivado" : "Acción irreversible"}
+              </p>
+            </div>
           </div>
-        )}
+          <button
+            type="button"
+            onClick={() => !submitting && onClose()}
+            disabled={submitting}
+            className="p-2 bg-ink-800 rounded-full text-ink-300 hover:text-ink-50 disabled:opacity-40 cursor-pointer"
+            aria-label="Cerrar"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-        {/* Content selection */}
-        {fakeLoading ? (
-          <FakeLoadingView step={fakeLoadingStep} />
-        ) : isSummary ? (
-          <SummaryView 
-            summary={summary!} 
-            onClose={onClose} 
-            startedAt={startedAt} 
+        {isSummary ? (
+          <SummaryView
+            summary={summary!}
+            onClose={onClose}
+            startedAt={startedAt}
           />
         ) : (
           <ConfirmView
@@ -285,34 +254,6 @@ export default function CloseNightModal({
             onConfirm={handleConfirm}
           />
         )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────── FakeLoadingView ───────────────────────────
-
-function FakeLoadingView({ step }: { step: number }) {
-  const messages = [
-    "Validando clave de seguridad...",
-    "Consolidando arqueo de caja (Efectivo, QR, Tarjeta)...",
-    "Archivando evento en base de datos...",
-    "Finalizando cierre..."
-  ];
-
-  return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center gap-6 select-none">
-      <div className="relative flex items-center justify-center w-16 h-16">
-        <Loader2 size={40} className="text-accent animate-spin" />
-        <div className="absolute inset-0 rounded-full border-4 border-accent/15 border-t-accent animate-ping opacity-30" />
-      </div>
-      <div className="flex flex-col gap-2 max-w-xs">
-        <p className="text-sm font-bold text-ink-50 animate-pulse transition-all duration-200">
-          {messages[step] || "Procesando..."}
-        </p>
-        <p className="text-[10px] text-ink-400 uppercase tracking-widest font-mono">
-          Por favor, no apagues la terminal
-        </p>
       </div>
     </div>
   );

@@ -43,6 +43,20 @@ type Props = {
 
 const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function formatShortDate(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+}
+
+// "Esta Semana" (semana calendario, lun-dom) y "Este Mes" (desde el día 1)
+// son ventanas distintas que pueden solaparse solo parcialmente — al
+// arrancar un mes, "esta semana" puede incluir días del mes anterior que
+// "este mes" no cuenta. Mostrar el rango de fechas de cada card evita que
+// esa diferencia se lea como una cuenta mal hecha.
+function formatDateRange(start: number, end: number): string {
+  return `${formatShortDate(start)}–${formatShortDate(end)}`;
+}
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -77,6 +91,13 @@ export default function HistorialSection({
   onRedirectToLogs,
 }: Props) {
   const { weeklyDelta, monthlyDelta, allTotal, avgNight, nightRecords } = analytics;
+
+  // `Date.now()` es impuro: se fija una sola vez al montar para calcular los
+  // rangos de fecha de "Esta Semana"/"Este Mes" sin variar en renders
+  // sucesivos (mismo patrón que ConfirmView en CloseNightModal.tsx).
+  const [now] = useState(() => Date.now());
+  const weekRange = formatDateRange(weeklyDelta.thisWeekStart, now);
+  const monthRange = formatDateRange(monthlyDelta.thisMonthStart, now);
 
   // History tab filtering & sorting state
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState<string>("");
@@ -284,7 +305,7 @@ export default function HistorialSection({
               icon={CalendarDays}
               color="#10b981"
               sparklineData={historyEvents.slice(0, 5).reverse().map(e => e.totals.total)}
-              subtitle="vs. semana ant"
+              subtitle={weekRange}
             />
             <MetricCard
               label="Este Mes"
@@ -294,7 +315,7 @@ export default function HistorialSection({
               icon={TrendingUp}
               color="#3b82f6"
               sparklineData={historyEvents.slice(0, 5).reverse().map(e => e.totals.total)}
-              subtitle="vs. mes ant"
+              subtitle={monthRange}
             />
             <MetricCard
               label="Total Archivado"
@@ -314,7 +335,7 @@ export default function HistorialSection({
               icon={DollarSign}
               color="#f97316"
               sparklineData={historyEvents.slice().reverse().map(e => e.totals.total)}
-              subtitle="por evento"
+              subtitle="últimos 30 días"
             />
           </div>
 

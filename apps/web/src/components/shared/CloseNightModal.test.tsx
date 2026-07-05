@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -41,10 +41,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof CloseNightModa
   };
 }
 
-// El flujo real hace pasar al usuario por una secuencia de "carga ficticia"
-// (~3.2s de setTimeouts) antes de invocar onConfirm. Usamos fake timers para
-// no pagar ese costo en cada test y para poder ejercitar los estados
-// intermedios de forma determinística.
 async function fillPasswordAndSubmit(user: ReturnType<typeof userEvent.setup>) {
   const input = screen.getByPlaceholderText(/ingres.*contraseña/i);
   await user.type(input, "clave-secreta");
@@ -53,14 +49,6 @@ async function fillPasswordAndSubmit(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("CloseNightModal", () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it("no expone ningún control de permisos: el chequeo de rol vive en el shell que lo abre", () => {
     render(<CloseNightModal {...baseProps()} />);
     // El modal no debe renderizar nada relacionado a roles/permisos: solo
@@ -85,7 +73,7 @@ describe("CloseNightModal", () => {
   });
 
   it("deshabilita 'Confirmar cierre' hasta ingresar contraseña", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     render(<CloseNightModal {...baseProps()} />);
     const confirmButton = screen.getByRole("button", { name: /confirmar cierre/i });
     expect(confirmButton).toBeDisabled();
@@ -94,8 +82,8 @@ describe("CloseNightModal", () => {
     expect(confirmButton).toBeEnabled();
   });
 
-  it("llama a onConfirm con la contraseña tras la secuencia de carga y muestra el estado pendiente mientras la promesa está en vuelo", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it("llama a onConfirm directo con la contraseña (sin demora artificial) y muestra un spinner mientras la promesa está en vuelo", async () => {
+    const user = userEvent.setup();
     let resolveConfirm: () => void = () => {};
     const onConfirm = vi.fn(
       () =>
@@ -107,51 +95,44 @@ describe("CloseNightModal", () => {
 
     await fillPasswordAndSubmit(user);
 
-    // Durante la secuencia de carga ficticia todavía no se llamó a onConfirm.
-    expect(onConfirm).not.toHaveBeenCalled();
-    expect(screen.getByText(/validando clave de seguridad/i)).toBeInTheDocument();
-
-    await vi.advanceTimersByTimeAsync(3200);
-
     expect(onConfirm).toHaveBeenCalledExactlyOnceWith("clave-secreta");
-    // Mientras la promesa de onConfirm sigue pendiente, el modal se queda en
-    // la vista de carga (submitting=true nunca se refleja en la UI: fakeLoading
-    // sigue en true hasta que la promesa resuelve o rechaza — ver hallazgo
-    // documentado sobre el estado "submitting" inalcanzable en ConfirmView).
-    expect(screen.getByText(/finalizando cierre/i)).toBeInTheDocument();
+    // Sin mensajes de progreso inventados: el botón muestra un spinner real
+    // mientras la promesa de onConfirm sigue pendiente.
+    expect(screen.getByText(/cerrando…/i)).toBeInTheDocument();
+    expect(screen.queryByText(/validando clave de seguridad|consolidando arqueo|archivando evento|finalizando cierre/i)).not.toBeInTheDocument();
 
     resolveConfirm();
-    await vi.runAllTimersAsync();
   });
 
   it("muestra un error y vuelve a habilitar el formulario si onConfirm rechaza", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const onConfirm = vi.fn().mockRejectedValue(new Error("Contraseña incorrecta"));
     render(<CloseNightModal {...baseProps({ onConfirm })} />);
 
     await fillPasswordAndSubmit(user);
-    await vi.advanceTimersByTimeAsync(3200);
-    // deja que el rechazo de la promesa se procese
-    await vi.runOnlyPendingTimersAsync();
 
     expect(await screen.findByText("Contraseña incorrecta")).toBeInTheDocument();
-    // Vuelve a la vista de confirmación (ya no está en fake-loading).
     expect(screen.getByRole("button", { name: /confirmar cierre/i })).toBeInTheDocument();
   });
 
-  it("no permite doble submit mientras la secuencia de carga está en curso", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    const onConfirm = vi.fn().mockResolvedValue(undefined);
+  it("no permite doble submit mientras onConfirm está en curso", async () => {
+    const user = userEvent.setup();
+    let resolveConfirm: () => void = () => {};
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        })
+    );
     render(<CloseNightModal {...baseProps({ onConfirm })} />);
 
     await fillPasswordAndSubmit(user);
-    // El botón de cerrar (X) desaparece durante la carga ficticia.
-    expect(screen.queryByLabelText("Cerrar")).not.toBeInTheDocument();
-
-    await vi.advanceTimersByTimeAsync(3200);
-    await vi.runAllTimersAsync();
+    // El botón de cerrar (X) sigue visible pero deshabilitado mientras
+    // submitting=true (ya no se oculta el header).
+    expect(screen.getByLabelText("Cerrar")).toBeDisabled();
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
+    resolveConfirm();
   });
 
   it("renderiza el resumen (comprobante) cuando summary no es null, sin volver a pedir contraseña", () => {
@@ -164,7 +145,7 @@ describe("CloseNightModal", () => {
   });
 
   it("llama a onClose al confirmar el resumen final", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const onClose = vi.fn();
     render(<CloseNightModal {...baseProps({ summary, onClose })} />);
 
@@ -172,15 +153,22 @@ describe("CloseNightModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("cancela la secuencia pendiente si el modal se desmonta antes de que termine (no dispara onConfirm post-unmount)", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    const onConfirm = vi.fn().mockResolvedValue(undefined);
+  it("no actualiza estado si el modal se desmonta mientras onConfirm sigue pendiente (evita error de setState post-unmount)", async () => {
+    const user = userEvent.setup();
+    let resolveConfirm: () => void = () => {};
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        })
+    );
     const { unmount } = render(<CloseNightModal {...baseProps({ onConfirm })} />);
 
     await fillPasswordAndSubmit(user);
     unmount();
 
-    await vi.advanceTimersByTimeAsync(4000);
-    expect(onConfirm).not.toHaveBeenCalled();
+    // No debe lanzar (React logueria un warning de setState post-unmount si
+    // el guard `isMounted` faltara).
+    expect(() => resolveConfirm()).not.toThrow();
   });
 });

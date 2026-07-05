@@ -14,21 +14,20 @@ import {
   computeOperationalVelocity,
   computeHourlySlots,
   findPeakHours,
-  computeSegmentedTicket,
   computeNightEvolution,
   computeMovingAverage,
   computeNightRecords,
   computeWeeklyDelta,
   computeMonthlyDelta,
-  generateInsights,
+  filterRecentNights,
 } from "@/lib/analytics";
 
 import type { CashSale, EventSummary, EventTotals, Order } from "@cocktrail/shared";
 
 /**
  * Hook compartido con todos los valores derivados de analytics que consumen
- * tanto la vista Monitoreo (DashboardSection) como la vista Estadísticas
- * (y parte de Historial) en AdminClient. Extraído del useMemo gigante que
+ * tanto DashboardSection (Monitoreo, fusionado con la ex-vista Estadísticas)
+ * como HistorialSection en AdminClient. Extraído del useMemo gigante que
  * vivía inline en AdminClient — misma lógica, mismas dependencias.
  */
 export function useAdminAnalytics(
@@ -48,7 +47,6 @@ export function useAdminAnalytics(
       totals.efectivoCount +
       totals.qrCount +
       totals.debitoCount;
-    const _avgTicket = _totalOps > 0 ? Math.round(totals.total / _totalOps) : 0;
 
     // Web vs Barra calculation
     const _webTotal = totals.webTotal;
@@ -78,7 +76,6 @@ export function useAdminAnalytics(
       ? prevTotals.efectivoCount + prevTotals.qrCount + prevTotals.debitoCount
       : 0;
 
-    const prevAvgTicket = prevTotalOps > 0 ? Math.round((prevTotals?.total ?? 0) / prevTotalOps) : 0;
     const prevTotalDrinkUnits = prevTotals ? prevTotals.drinksSold.reduce((s, d) => s + d.qty, 0) : 0;
     const prevUniqueClients = prevTotals
       ? Math.max(
@@ -89,7 +86,6 @@ export function useAdminAnalytics(
       : 0;
 
     const _deltaTickets = prevTotals ? computeDelta(_totalOps, prevTotalOps) : null;
-    const _deltaAvgTicket = prevTotals ? computeDelta(_avgTicket, prevAvgTicket) : null;
     const _deltaUnits = prevTotals ? computeDelta(_totalDrinkUnits, prevTotalDrinkUnits) : null;
     const _deltaClients = prevTotals ? computeDelta(_uniqueClients, prevUniqueClients) : null;
 
@@ -103,7 +99,6 @@ export function useAdminAnalytics(
     const _maxHourSales = _hourlySlots.reduce((max, s) => Math.max(max, s.totalSales), 1000);
     const peak = findPeakHours(_hourlySlots);
     const _peakHour = peak.peakRevenue ? `${peak.peakRevenue.label} hs` : "—";
-    const _segmentedTicket = computeSegmentedTicket(orders, cashSales);
 
     // 4. Historial & Evolución (C)
     const _nightEvolution = computeNightEvolution(historyEvents);
@@ -112,22 +107,17 @@ export function useAdminAnalytics(
     const _weeklyDelta = computeWeeklyDelta(historyEvents);
     const _monthlyDelta = computeMonthlyDelta(historyEvents);
     const _allTotal = historyEvents.reduce((s, e) => s + e.totals.total, 0);
-    const _avgNight = historyEvents.length > 0 ? Math.round(_allTotal / historyEvents.length) : 0;
-
-    // 5. Smart Insights
-    const _smartInsights = generateInsights(
-      totals,
-      orders,
-      cashSales,
-      _hourlySlots,
-      prevTotals
-    );
+    // "Promedio Noche" se calcula sobre una ventana reciente (no todo el
+    // historial acumulado) para que no lo distorsionen noches de hace
+    // meses — mismo criterio que computeNightRecords.
+    const recentNights = filterRecentNights(historyEvents);
+    const recentTotal = recentNights.reduce((s, e) => s + e.totals.total, 0);
+    const _avgNight = recentNights.length > 0 ? Math.round(recentTotal / recentNights.length) : 0;
 
     return {
       maxDrinkQty: _maxDrinkQty,
       totalDrinkUnits: _totalDrinkUnits,
       totalOps: _totalOps,
-      avgTicket: _avgTicket,
       startedAtStr: _startedAtStr,
       deltaTotal: _deltaTotal,
       cancellationInfo: _cancellationInfo,
@@ -138,7 +128,6 @@ export function useAdminAnalytics(
       hourlyData: _hourlySlots,
       maxHourSales: _maxHourSales,
       peakHour: _peakHour,
-      segmentedTicket: _segmentedTicket,
       nightEvolution: _nightEvolution,
       movingAvg: _movingAvg,
       nightRecords: _nightRecords,
@@ -146,7 +135,6 @@ export function useAdminAnalytics(
       monthlyDelta: _monthlyDelta,
       allTotal: _allTotal,
       avgNight: _avgNight,
-      smartInsights: _smartInsights,
       webTotal: _webTotal,
       webCount: _webCount,
       webPct: _webPct,
@@ -155,7 +143,6 @@ export function useAdminAnalytics(
       barraPct: _barraPct,
       uniqueClients: _uniqueClients,
       deltaTickets: _deltaTickets,
-      deltaAvgTicket: _deltaAvgTicket,
       deltaUnits: _deltaUnits,
       deltaClients: _deltaClients,
     };

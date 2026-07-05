@@ -22,7 +22,7 @@ export const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
 };
 
 export const PERMISSIONS_BY_ROLE: Record<Role, (keyof UserPermissions)[]> = {
-  admin: ["monitoreo", "metricas", "historial", "general", "carta", "pagos", "staff", "closeNight"],
+  admin: ["monitoreo", "metricas", "historial", "carta", "pagos", "staff", "closeNight"],
   caja: ["metricas", "historial", "closeNight", "cancelarTickets"],
   barman: ["cancelarTickets"],
 };

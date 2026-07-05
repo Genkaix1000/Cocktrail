@@ -11,10 +11,9 @@ import {
   ChevronRight,
   FileText,
   KeyRound,
-  TrendingUp,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import CloseNightModal from "@/components/shared/CloseNightModal";
 import OpenNightModal from "@/components/admin/OpenNightModal";
@@ -28,19 +27,14 @@ import { useEventState } from "@/hooks/useEventState";
 
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
-import { apiFetch } from "@/services/api-client";
 
-import GeneralSection from "@/components/settings/GeneralSection";
 import CartaSection from "@/components/settings/CartaSection";
 import PagosSection from "@/components/settings/PagosSection";
 import UsuariosSection from "@/components/settings/UsuariosSection";
 
 import DashboardSection from "@/components/admin/DashboardSection";
-import type { AuditLogEntry } from "@/components/admin/DashboardSection";
-import EstadisticasSection from "@/components/admin/EstadisticasSection";
 import HistorialSection from "@/components/admin/HistorialSection";
 import LogsSection from "@/components/admin/LogsSection";
-import QrSection from "@/components/admin/QrSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 
 import type {
@@ -95,11 +89,8 @@ export default function AdminClient({
     handleTabChange("logs");
   };
 
-  // System Logs & Status state
-  const [systemLogs, setSystemLogs] = useState<AuditLogEntry[]>([]);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
-  const [chartMetric, setChartMetric] = useState<"sales" | "glasses">("sales");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -108,18 +99,8 @@ export default function AdminClient({
     return () => clearTimeout(timer);
   }, []);
 
-  const fetchSystemLogs = useCallback(async () => {
-    try {
-      const data = await apiFetch<AuditLogEntry[]>("/api/system/logs");
-      setSystemLogs(data || []);
-    } catch (err) {
-      console.error("Error fetching system logs:", err);
-    }
-  }, []);
-
   const { event, orders, cashSales, summary, setEvent, setSummary } = useEventState({
     initial: { event: initialEvent, orders: initialOrders, cashSales: initialCashSales },
-    onActivity: fetchSystemLogs,
     onEventClosed: () => {
       setModalOpen(true);
       setHistoryLoaded(false); // Force reload next time history tab is opened
@@ -145,7 +126,7 @@ export default function AdminClient({
     }
   }, []);
 
-  // Fetch history and system info on mount
+  // Fetch history on mount
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingHistory(true);
@@ -157,16 +138,7 @@ export default function AdminClient({
         setHistoryLoaded(true);
       })
       .catch(() => setLoadingHistory(false));
-
-    fetchSystemLogs();
-    
-    // Poll system logs (fallback backup)
-    const interval = setInterval(() => {
-      fetchSystemLogs();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [fetchSystemLogs]);
+  }, []);
 
   const handleTabChange = (tab: string) => {
     const needsSkeleton = 
@@ -260,12 +232,11 @@ export default function AdminClient({
     router.refresh();
   }
 
-  // Analytics computation hook — se llama una sola vez acá; DashboardSection,
-  // EstadisticasSection y HistorialSection reciben el resultado ya calculado
-  // por prop en vez de volver a llamar useAdminAnalytics (evitaría recalcular
-  // el mismo useMemo varias veces). AdminClient ya no destructura campos
-  // individuales: es puro shell, cada vista extrae lo que necesita de
-  // `analytics`.
+  // Analytics computation hook — se llama una sola vez acá; DashboardSection
+  // y HistorialSection reciben el resultado ya calculado por prop en vez de
+  // volver a llamar useAdminAnalytics (evitaría recalcular el mismo useMemo
+  // varias veces). AdminClient ya no destructura campos individuales: es
+  // puro shell, cada vista extrae lo que necesita de `analytics`.
   const analytics = useAdminAnalytics(totals, event?.startedAt, orders, cashSales, historyEvents);
 
   // Breadcrumbs computation
@@ -273,16 +244,10 @@ export default function AdminClient({
     switch (activeTab) {
       case "monitoreo":
         return ["Administración", "Dashboard", "Monitoreo"];
-      case "estadisticas":
-        return ["Administración", "Dashboard", "Métricas"];
       case "historial":
         return ["Administración", "Operación", "Historial de Noches"];
       case "logs":
         return ["Administración", "Operación", "Auditoría de Tickets"];
-      case "qr":
-        return ["Administración", "Operación", "Imprimir QR"];
-      case "general":
-        return ["Administración", "Configuración", "General"];
       case "carta":
         return ["Administración", "Configuración", "Carta"];
       case "pagos":
@@ -398,16 +363,6 @@ export default function AdminClient({
                     <History size={13} strokeWidth={1.8} />
                   </div>
                   <span className={`text-[13.5px] ${navLabelClass("historial")}`}>Historial de Noches</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTabChange("estadisticas")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-200 cursor-pointer ${navBtnClass("estadisticas")}`}
-                >
-                  <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 ${navIconClass("estadisticas")}`}>
-                    <TrendingUp size={13} strokeWidth={1.8} />
-                  </div>
-                  <span className={`text-[13.5px] ${navLabelClass("estadisticas")}`}>Estadísticas</span>
                 </button>
                 <button
                   type="button"
@@ -598,23 +553,10 @@ export default function AdminClient({
               analytics={analytics}
               totals={totals}
               historyEvents={historyEvents}
-              systemLogs={systemLogs}
               customPaymentBreakdown={customPaymentBreakdown}
               isFirstLoad={isFirstLoad}
               isTabTransitioning={isTabTransitioning}
               activeTab={activeTab}
-              chartMetric={chartMetric}
-              setChartMetric={setChartMetric}
-              isBosko={isBosko}
-              barColorClass={barColorClass}
-            />
-          )}
-
-          {/* TAB 2: METRICAS (The new stats bar chart card) */}
-          {activeTab === "estadisticas" && (
-            <EstadisticasSection
-              analytics={analytics}
-              totals={totals}
               isBosko={isBosko}
               barColorClass={barColorClass}
             />
@@ -632,23 +574,12 @@ export default function AdminClient({
             />
           )}
 
-          {/* TAB 4: QR PRINT */}
-          {activeTab === "qr" && <QrSection isBosko={isBosko} />}
-
           {/* TAB 4.5: AUDITORIA DE LOGS */}
           {activeTab === "logs" && (
             <LogsSection
               initialFilterTimestamp={logsFilterTimestamp}
               isBosko={isBosko}
             />
-          )}
-
-
-          {/* TAB 5: SETTINGS GENERAL */}
-          {activeTab === "general" && (
-            <div key="general" className="animate-dashboard-in">
-              <GeneralSection />
-            </div>
           )}
 
           {/* TAB 6: SETTINGS CARTA CRUD */}

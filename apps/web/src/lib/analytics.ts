@@ -22,12 +22,6 @@ export type DeltaInfo = {
   label: string; // e.g. "+12%" or "-5%" or "—"
 };
 
-export type SegmentedTicket = {
-  digital: number; // promedio de pedidos digitales
-  barra: number; // promedio de ventas barra (CashSale)
-  general: number; // promedio combinado
-};
-
 export type HourlySlot = {
   label: string;
   hour: number;
@@ -37,7 +31,6 @@ export type HourlySlot = {
   cashCount: number;
   totalSales: number;
   totalCount: number;
-  totalGlasses: number;
 };
 
 export type ProductRevenue = {
@@ -71,12 +64,6 @@ export type NightRecord = {
   value: string;
   sub: string;
   event?: EventSummary;
-};
-
-export type SmartInsight = {
-  icon: string;
-  text: string;
-  tone: "positive" | "negative" | "neutral";
 };
 
 // ─────────────────────── A1: Delta Comparativo ───────────────────────
@@ -291,7 +278,6 @@ export function computeHourlySlots(
       cashCount: 0,
       totalSales: 0,
       totalCount: 0,
-      totalGlasses: 0,
     });
   }
 
@@ -303,8 +289,6 @@ export function computeHourlySlots(
       slot.digitalCount += 1;
       slot.totalSales += order.total;
       slot.totalCount += 1;
-      const glasses = order.items.reduce((sum, item) => sum + item.qty, 0);
-      slot.totalGlasses += glasses;
     }
   }
 
@@ -316,8 +300,6 @@ export function computeHourlySlots(
       slot.cashCount += 1;
       slot.totalSales += sale.amount;
       slot.totalCount += 1;
-      const estimatedGlasses = Math.max(1, Math.round(sale.amount / 5000));
-      slot.totalGlasses += estimatedGlasses;
     }
   }
 
@@ -336,39 +318,6 @@ export function findPeakHours(slots: HourlySlot[]): {
       byRevenue[0] && byRevenue[0].totalSales > 0 ? byRevenue[0] : null,
     peakOps: byOps[0] && byOps[0].totalCount > 0 ? byOps[0] : null,
   };
-}
-
-// ─────────────────────── B5: Ticket Promedio Segmentado ───────────────────────
-
-export function computeSegmentedTicket(
-  orders: Order[],
-  cashSales: CashSale[],
-): SegmentedTicket {
-  const validOrders = orders.filter((o) => o.status !== "cancelado");
-
-  // Web purchases
-  const webOrders = validOrders.filter((o) => o.createdBy === "Cliente");
-  const webTotal = webOrders.reduce((s, o) => s + o.total, 0);
-  const webCount = webOrders.length;
-
-  // Barra purchases = cashSales + orders with other payment methods
-  const barraOrders = validOrders.filter((o) => o.createdBy !== "Cliente");
-  const barraOrdersTotal = barraOrders.reduce((s, o) => s + o.total, 0);
-  const barraOrdersCount = barraOrders.length;
-
-  const cashSalesTotal = cashSales.reduce((s, c) => s + c.amount, 0);
-  const cashSalesCount = cashSales.length;
-
-  const barraTotal = barraOrdersTotal + cashSalesTotal;
-  const barraCount = barraOrdersCount + cashSalesCount;
-
-  const digital = webCount > 0 ? Math.round(webTotal / webCount) : 0;
-  const barra = barraCount > 0 ? Math.round(barraTotal / barraCount) : 0;
-  const generalTotal = webTotal + barraTotal;
-  const generalCount = webCount + barraCount;
-  const general = generalCount > 0 ? Math.round(generalTotal / generalCount) : 0;
-
-  return { digital, barra, general };
 }
 
 // ─────────────────────── C1: Evolución de Noches ───────────────────────
@@ -426,10 +375,41 @@ export function computeMovingAverage(
 
 // ─────────────────────── C3: Records ───────────────────────
 
+const RECORDS_WINDOW_DAYS = 30;
+
+/**
+ * Subconjunto de noches dentro de los últimos `windowDays`, con fallback al
+ * historial completo si no hay ninguna en la ventana — usado por los
+ * récords y por "Promedio Noche" para no promediar/rankear contra eventos
+ * de hace meses (ver docs/specs/simplificar-dashboard-admin.md).
+ */
+export function filterRecentNights(
+  historyEvents: EventSummary[],
+  windowDays = RECORDS_WINDOW_DAYS,
+): EventSummary[] {
+  const windowStart = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const recent = historyEvents.filter(
+    (e) => (e.closedAt ?? e.startedAt) >= windowStart,
+  );
+  return recent.length > 0 ? recent : historyEvents;
+}
+
+/**
+ * Récords (mejor/peor noche, más larga, trago estrella) sobre una ventana
+ * reciente en vez de todo el historial acumulado — si no hay noches en la
+ * ventana (ej. barra recién arrancando o mes flojo), cae al historial
+ * completo para no mostrar "sin datos" habiendo datos más viejos.
+ */
 export function computeNightRecords(
   historyEvents: EventSummary[],
+  windowDays = RECORDS_WINDOW_DAYS,
 ): NightRecord[] {
   if (historyEvents.length === 0) return [];
+
+  const scoped = filterRecentNights(historyEvents, windowDays);
+  const windowStart = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const hasRecent = historyEvents.some((e) => (e.closedAt ?? e.startedAt) >= windowStart);
+  const windowLabel = hasRecent ? `últimos ${windowDays} días` : "historial total";
 
   const WEEKDAYS = [
     "Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado",
@@ -447,19 +427,19 @@ export function computeNightRecords(
   const records: NightRecord[] = [];
 
   // Best night by revenue
-  const best = [...historyEvents].sort(
+  const best = [...scoped].sort(
     (a, b) => b.totals.total - a.totals.total,
   )[0]!;
   records.push({
     type: "best",
     label: "Mejor Noche",
     value: `$${best.totals.total.toLocaleString("es-AR")}`,
-    sub: formatDate(best.closedAt ?? best.startedAt),
+    sub: `${formatDate(best.closedAt ?? best.startedAt)} (${windowLabel})`,
     event: best,
   });
 
   // Worst night (exclude events shorter than 1 hour)
-  const validNights = historyEvents.filter((e) => {
+  const validNights = scoped.filter((e) => {
     if (!e.closedAt) return false;
     return e.closedAt - e.startedAt >= 3600 * 1000;
   });
@@ -471,13 +451,13 @@ export function computeNightRecords(
       type: "worst",
       label: "Peor Noche",
       value: `$${worst.totals.total.toLocaleString("es-AR")}`,
-      sub: formatDate(worst.closedAt ?? worst.startedAt),
+      sub: `${formatDate(worst.closedAt ?? worst.startedAt)} (${windowLabel})`,
       event: worst,
     });
   }
 
   // Longest night (measured from first drink sale to last drink sale)
-  const withDuration = historyEvents.map((e) => {
+  const withDuration = scoped.map((e) => {
     const timestamps = [
       ...(e.orders || []).map((o) => o.createdAt),
       ...(e.cashSales || []).map((c) => c.createdAt),
@@ -503,14 +483,14 @@ export function computeNightRecords(
       type: "longest",
       label: "Noche Más Larga",
       value: longest.duration > 0 ? `${hrs}h ${mins}m` : "0h 0m",
-      sub: formatDate(longest.closedAt ?? longest.startedAt),
+      sub: `${formatDate(longest.closedAt ?? longest.startedAt)} (${windowLabel})`,
       event: longest,
     });
   }
 
-  // Star drink (most sold across all nights)
+  // Star drink (most sold dentro de la ventana)
   const drinkAcc = new Map<number, { name: string; qty: number }>();
-  for (const e of historyEvents) {
+  for (const e of scoped) {
     for (const d of e.totals.drinksSold) {
       const acc = drinkAcc.get(d.drinkId);
       if (acc) {
@@ -529,7 +509,7 @@ export function computeNightRecords(
       type: "star_drink",
       label: "Trago Estrella",
       value: star.name,
-      sub: `${star.qty} unidades vendidas (historial total)`,
+      sub: `${star.qty} unidades vendidas (${windowLabel})`,
     });
   }
 
@@ -543,6 +523,7 @@ export function computeWeeklyDelta(historyEvents: EventSummary[]): {
   lastWeek: number;
   delta: DeltaInfo;
   thisWeekCount: number;
+  thisWeekStart: number;
 } {
   const now = new Date();
   const thisWeekStart = getWeekStart(now);
@@ -562,7 +543,7 @@ export function computeWeeklyDelta(historyEvents: EventSummary[]): {
     }
   }
 
-  return { thisWeek, lastWeek, delta: computeDelta(thisWeek, lastWeek), thisWeekCount };
+  return { thisWeek, lastWeek, delta: computeDelta(thisWeek, lastWeek), thisWeekCount, thisWeekStart };
 }
 
 export function computeMonthlyDelta(historyEvents: EventSummary[]): {
@@ -570,6 +551,7 @@ export function computeMonthlyDelta(historyEvents: EventSummary[]): {
   lastMonth: number;
   delta: DeltaInfo;
   thisMonthCount: number;
+  thisMonthStart: number;
 } {
   const now = new Date();
   const thisMonthStart = new Date(
@@ -597,7 +579,7 @@ export function computeMonthlyDelta(historyEvents: EventSummary[]): {
     }
   }
 
-  return { thisMonth, lastMonth, delta: computeDelta(thisMonth, lastMonth), thisMonthCount };
+  return { thisMonth, lastMonth, delta: computeDelta(thisMonth, lastMonth), thisMonthCount, thisMonthStart };
 }
 
 function getWeekStart(d: Date): number {
@@ -658,106 +640,3 @@ export function downloadCSV(csv: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-// ─────────────────────── D2: Smart Insights ───────────────────────
-
-export function generateInsights(
-  totals: EventTotals,
-  orders: Order[],
-  cashSales: CashSale[],
-  hourlySlots: HourlySlot[],
-  lastNight: EventTotals | null,
-): SmartInsight[] {
-  const insights: SmartInsight[] = [];
-
-  // Delta vs last night
-  if (lastNight) {
-    const delta = computeDelta(totals.total, lastNight.total);
-    if (delta.direction === "up") {
-      insights.push({
-        icon: "📈",
-        text: `Esta noche facturaste un ${delta.label} más que la noche anterior.`,
-        tone: "positive",
-      });
-    } else if (delta.direction === "down") {
-      insights.push({
-        icon: "📉",
-        text: `Esta noche estás facturando un ${Math.abs(delta.pct)}% menos que la noche anterior.`,
-        tone: "negative",
-      });
-    }
-  }
-
-  // Star drink
-  if (totals.drinksSold.length > 0) {
-    const star = totals.drinksSold[0]!;
-    const totalRev = totals.drinksSold.reduce((s, d) => s + d.subtotal, 0);
-    const pct =
-      totalRev > 0 ? Math.round((star.subtotal / totalRev) * 100) : 0;
-    insights.push({
-      icon: "🍹",
-      text: `Tu trago estrella es ${star.name} con ×${star.qty} unidades (${pct}% del revenue de tragos).`,
-      tone: "neutral",
-    });
-  }
-
-  // Peak hour
-  const peaks = findPeakHours(hourlySlots);
-  if (peaks.peakRevenue) {
-    insights.push({
-      icon: "⏰",
-      text: `La hora pico fue a las ${peaks.peakRevenue.label} hs con $${peaks.peakRevenue.totalSales.toLocaleString("es-AR")} facturados.`,
-      tone: "neutral",
-    });
-  }
-
-  // Web conversion
-  const webOrdersCount = orders.filter((o) => o.status !== "cancelado" && o.createdBy === "Cliente").length;
-  const totalOpsCount = orders.filter((o) => o.status !== "cancelado").length + cashSales.length;
-  if (totalOpsCount > 0) {
-    const rate = Math.round((webOrdersCount / totalOpsCount) * 100);
-    const tone = rate >= 50 ? "positive" : rate >= 30 ? "neutral" : "negative";
-    insights.push({
-      icon: "🌐",
-      text: `El ${rate}% de las ventas totales se realizaron a través de la Web (${webOrdersCount} de ${totalOpsCount}).`,
-      tone,
-    });
-  }
-
-  // Hourly redemption wait delay
-  const delivered = orders.filter(
-    (o) => o.status === "entregado" && o.deliveredAt,
-  );
-  if (delivered.length > 0) {
-    const hourlyDelays = new Map<number, { totalDelay: number; count: number }>();
-    for (const o of delivered) {
-      const hr = new Date(o.createdAt).getHours();
-      const delay = o.deliveredAt! - o.createdAt;
-      const existing = hourlyDelays.get(hr) || { totalDelay: 0, count: 0 };
-      existing.totalDelay += delay;
-      existing.count += 1;
-      hourlyDelays.set(hr, existing);
-    }
-
-    let worstHour = -1;
-    let worstAvgDelay = -1;
-    for (const [hr, data] of hourlyDelays.entries()) {
-      const avg = data.totalDelay / data.count;
-      if (avg > worstAvgDelay) {
-        worstAvgDelay = avg;
-        worstHour = hr;
-      }
-    }
-
-    if (worstHour !== -1 && worstAvgDelay > 10 * 1000) {
-      const delayStr = formatDuration(worstAvgDelay);
-      const hourStr = `${String(worstHour).padStart(2, "0")}:00`;
-      insights.push({
-        icon: "⏳",
-        text: `La hora con mayor demora de canje en barra fue a las ${hourStr} hs, tardando un promedio de ${delayStr} por pedido.`,
-        tone: worstAvgDelay > 5 * 60 * 1000 ? "negative" : "neutral",
-      });
-    }
-  }
-
-  return insights;
-}

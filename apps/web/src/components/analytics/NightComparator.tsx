@@ -65,9 +65,6 @@ function buildRows(a: EventSummary, b: EventSummary): ComparisonRow[] {
   const ticketsA = a.orderCounter;
   const ticketsB = b.orderCounter;
 
-  const avgA = ticketsA > 0 ? Math.round(totalA / ticketsA) : 0;
-  const avgB = ticketsB > 0 ? Math.round(totalB / ticketsB) : 0;
-
   const webSalesA = a.totals.webTotal;
   const webSalesB = b.totals.webTotal;
 
@@ -98,15 +95,6 @@ function buildRows(a: EventSummary, b: EventSummary): ComparisonRow[] {
       rawB: ticketsB,
       winMode: "higher",
       delta: computeDeltaPct(ticketsA, ticketsB),
-    },
-    {
-      label: "Ticket Promedio",
-      valueA: formatMoney(avgA),
-      valueB: formatMoney(avgB),
-      rawA: avgA,
-      rawB: avgB,
-      winMode: "higher",
-      delta: computeDeltaPct(avgA, avgB),
     },
     {
       label: "Ventas Web",
@@ -345,7 +333,7 @@ function NightSelector({
           className="w-full appearance-none bg-ink-850 border border-ink-700 rounded-xl px-3 py-2 pr-8 text-ink-50 text-[12px] font-medium cursor-pointer focus:outline-none focus:border-ink-600 transition-colors"
         >
           {nights.map((n, idx) => (
-            <option key={n.id} value={idx}>
+            <option key={idx} value={idx}>
               {formatNightDate(n.closedAt ?? n.startedAt)} —{" "}
               {formatMoney(n.totals.total)}
             </option>

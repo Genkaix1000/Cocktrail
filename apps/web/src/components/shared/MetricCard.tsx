@@ -19,7 +19,7 @@ export default function MetricCard({
   delta: DeltaInfo | null | undefined;
   icon: LucideIcon;
   color: string;
-  sparklineData: number[];
+  sparklineData?: number[];
   subtitle?: string;
 }) {
   const deltaTone = delta?.direction === "down" ? "down" : "up";
@@ -57,9 +57,11 @@ export default function MetricCard({
       </div>
 
       {/* Sparkline positioned absolutely in the background at the bottom-right */}
-      <div className="absolute right-3.5 bottom-3.5 w-[85px] h-9 overflow-hidden select-none pointer-events-none opacity-80">
-        <Sparkline data={sparklineData} color={color} />
-      </div>
+      {sparklineData && (
+        <div className="absolute right-3.5 bottom-3.5 w-[85px] h-9 overflow-hidden select-none pointer-events-none opacity-80">
+          <Sparkline data={sparklineData} color={color} />
+        </div>
+      )}
     </div>
   );
 }
