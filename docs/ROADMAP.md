@@ -2,7 +2,7 @@
 
 > Estado y plan de trabajo. La arquitectura vigente está en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 > Convención: `[x]` hecho · `[~]` parcial/a verificar · `[ ]` pendiente.
-> Última actualización: 2026-07-04.
+> Última actualización: 2026-07-05.
 
 ---
 
@@ -218,41 +218,70 @@ tratamiento que Fases 2/3: tests de caracterización + auditoría (`architect-re
   `components/` (envuelve `layout.tsx`, no es "de un dominio"). `tsc`+`eslint`+`vitest`(161/161)+
   `build` en verde.
 
-**Hallazgos documentados, no resueltos en la fase** (deuda a considerar más adelante, no bloquean
-nada hoy):
-- `useSSE` centralizado en los 3 shells — se mantiene igual que en la Fase 3, alto riesgo sin tests
-  de integración SSE real.
-- **`apps/web/src/services/*.ts` queda sin auditar** — es la capa que llama a la API desde el
-  frontend; ni la Fase 3 ni esta la tocaron (solo se mockea en los tests de componentes). Falta
-  decidir si se le da el mismo tratamiento SOLID/tests que al resto del repo.
-- Patrón **"modal montado permanentemente, solo `return null`"** repetido en varios modales de
-  `AdminClient`/`CajaClient` (no solo los 3 que tuvieron bug real) — sería más prolijo montarlos
-  condicionalmente en el padre (`{open && <Modal .../>}`) en vez del workaround de resincronizar
-  estado en cada uno.
-- `CloseNightModal`: la "carga ficticia" de 3.2s con mensajes que no reflejan trabajo real es una
-  decisión de producto/UX pendiente de revisar, no técnica; el estado `submitting` de `ConfirmView`
-  quedó inalcanzable en la práctica (mientras es `true`, `fakeLoading` también lo es).
-- `Ticket.tsx` duplica el bloque de render de cada `OrderItem` entre "Ticket de Control" y "Recibo
-  de Pago" — candidato a extraer `TicketItemRow`, no se tocó por ser un componente de impresión sin
-  cobertura visual previa.
-- `Drink.vibe` es un campo obligatorio del dominio (`packages/shared/src/domain.ts`) que
-  `CartaSection`/`DrinkCard` nunca exponen en la UI ni leen — candidato a sacarlo del contrato de
-  dominio, toca API y otros consumidores.
-- `GeneralSection`/`PagosSection` (settings) tragan errores de carga/guardado solo con
-  `console.error`, sin feedback visual al usuario — mismo patrón que se corrigió puntualmente en
-  `CartaSection` pero no se generalizó.
-- `UsuariosSection.tsx`/`CartaSection.tsx` mezclan vista + lógica de negocio en un solo archivo
-  (600+ líneas cada uno) — candidatos a extracción de sub-componentes en un futuro bloque de
-  refactor, mismo tratamiento que ya tuvieron los god-components en Fase 3.
-- Duplicación del patrón `accentColor`/`accentBg`/`accentBorder` según `isBosko` repetida literal en
-  los 7 componentes de `analytics/*` — candidato a un hook compartido `useAccentColors(isBosko)`.
-- Duplicación del estado-vacío con emoji en `NightRecords`/`RevenueByProduct`/`NightEvolutionChart`
-  — candidato a un `<EmptyState>` compartido.
-- `OSHeadbar.tsx` mezcla dos componentes sin relación fuerte (`OSHeadbar` + `OSProfileFooter`) en el
-  mismo archivo — separarlos es mecánico pero toca imports en varios shells.
-- `CashSaleModal.tsx`: el branch de validación `parsed <= 0` es en la práctica inalcanzable por
-  teclado (el `<input type="number" min="1">` bloquea el submit antes) — no es un bug, pero queda
-  anotado por si se refactoriza el formulario.
+**Hallazgos documentados al cierre de esta fase** — **todos resueltos en la Fase 3C** salvo los
+2 marcados como deuda que se mantiene:
+- `useSSE` centralizado en los 3 shells — **deuda que se mantiene**, alto riesgo sin tests de
+  integración SSE real, no se tocó en 3C.
+- `CloseNightModal`: la "carga ficticia" de 3.2s con mensajes que no reflejan trabajo real —
+  **deuda que se mantiene**, es una decisión de producto/UX pendiente de revisar, no técnica.
+- ~~`apps/web/src/services/*.ts` sin auditar~~ (resuelto, Bloque 1: 46 tests nuevos).
+- ~~Patrón "modal montado permanentemente"~~ (resuelto, Bloque 4: migrados a montaje condicional;
+  `CashSaleModal` se eliminó en vez de migrarse, ver Fase 3C).
+- ~~`Ticket.tsx` duplica el render de cada `OrderItem`~~ (resuelto, Bloque 3: `TicketItemRow`).
+- ~~`Drink.vibe` nunca se mostraba en la UI~~ (resuelto, Bloque 2: visible en `DrinkCard`/`/carta`).
+- ~~`GeneralSection`/`PagosSection` tragaban errores sin feedback visual~~ (resuelto, Bloque 3:
+  `Toast` compartido).
+- ~~`UsuariosSection.tsx`/`CartaSection.tsx` god-components~~ (resuelto, Bloque 4: partidos en
+  tabla+formulario).
+- ~~Duplicación de `accentColor`/`accentBg`/`accentBorder` en `analytics/*`~~ (resuelto,
+  `lib/accentColors.ts`).
+- ~~Duplicación del estado-vacío en `NightRecords`/`RevenueByProduct`/`NightEvolutionChart`~~
+  (resuelto, `components/shared/EmptyState.tsx`).
+- ~~`OSHeadbar.tsx` mezclaba dos componentes~~ (resuelto, separado en `OSHeadbar.tsx`/
+  `OSProfileFooter.tsx`).
+- ~~`CashSaleModal.tsx`: validación inalcanzable~~ — ya no aplica, el archivo se eliminó.
+
+---
+
+## Fase 3C — Deuda documentada de Fase 3B 🎨 *(completa)*
+
+**Objetivo**: resolver los 6 hallazgos no-mecánicos documentados al cierre de la Fase 3B (arriba)
++ 3 findings mecánicos, mismo tratamiento SDD que las fases anteriores. Spec completa en
+`docs/specs/fase-3c-deuda-web-componentes.md` (estado `done`), rama `refactor/fase-3c-deuda-web`.
+
+- [x] **Bloque 1 — `apps/web/src/services/*.ts` auditado**: 46 tests nuevos (207 total en
+  `apps/web`). `api-client.test.ts` mockea `fetch` global (única vez que se prueba `apiFetch` de
+  verdad); los otros 9 servicios mockean `apiFetch` y solo verifican path/method/body. Revisión
+  SOLID con `expert-react-frontend-engineer`: consistentes, 2 fixes triviales (tipos inline en
+  `events.service.ts`, `PrinterStatus.configured` tipado como literal `true` en vez de `boolean`).
+- [x] **Bloque 2 — `Drink.vibe` visible en la carta**: `DrinkCard` ya tenía la prop `vibe?` sin
+  usar; ahora se renderiza como subtítulo en ambas variantes. `carta/page.tsx` y `VentaSection.tsx`
+  ya spreadeaban el `Drink` completo, no hizo falta tocarlos.
+- [x] **Bloque 3 — `Toast` compartido + `TicketItemRow`**: `components/shared/Toast.tsx` extraído
+  del `ToastItem` local de `PendingOrdersList.tsx` (variante éxito/error), reusado para dar
+  feedback de error en `GeneralSection`/`PagosSection`/`CartaSection` (antes solo
+  `console.error`). `components/carta/TicketItemRow.tsx` extraído de `Ticket.tsx`, elimina el
+  `drinks.find` duplicado entre "Ticket de Control" y "Recibo de Pago".
+- [x] **Bloque 4 — Modales a montaje condicional + god-components partidos**: de los 9 modales
+  candidatos, 5 ya estaban bien (`VentaSection.tsx` ya usaba montaje condicional,
+  `CancelOrderModal`/`ManualRedeemModal` en `BarraClient` también). Se migraron 3
+  (`OpenNightModal` modo `edit`, `CloseNightModal`, `SafeDeleteModal`), eliminando los workarounds
+  `prevOpen`/`isMounted`/`key`-remount. `UsersTable`+`UserFormDrawer` extraídos de
+  `UsuariosSection.tsx` (593→265 líneas); `DrinksTable`+`DrinkFormModal` extraídos de
+  `CartaSection.tsx` (658→261 líneas, con el input de `vibe` nuevo).
+- [x] **Hallazgo mayor — `CashSaleModal` era una feature muerta, no un bug de montaje**: la
+  verificación E2E post-migración reveló que el botón que debía abrirlo (`setCashOpen(true)`)
+  nunca existió en ningún commit del historial del repo — el modal era inalcanzable desde el
+  primer commit. Investigando el propósito (`lib/totals.ts` documenta que es para que el
+  **barman** cargue efectivo fuera del checkout digital) se confirmó que no hay caso de uso real
+  que `VentaSection.tsx` (`/caja`, efectivo/débito/QR + ticket impreso) no cubra ya. Se **eliminó**
+  la feature completa del frontend (`CashSaleModal.tsx`, `cash-sales.service.ts` y sus tests) en
+  vez de agregarle un botón. El backend (`apps/api/src/modules/cash-sales/`, tabla `cash_sales`,
+  `computeTotals`) queda intacto — sigue siendo necesario para totales/sync de eventos cerrados.
+- [x] **Findings mecánicos resueltos** (`accentColor`/`EmptyState`/`OSHeadbar`, ver lista de la
+  Fase 3B arriba).
+- [x] Cierre de fase: `tsc --noEmit` + `eslint` (en archivos tocados; ver R11 abajo) +
+  `vitest run` (223/223, subió de 161 al cierre de 3B) + `next build` de punta a punta en verde.
 
 ---
 
@@ -337,6 +366,7 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 | R7 | `supabase/docker/kong.yml` usa las **demo keys públicas** de Supabase (JWT secret demo incluido), hardcodeadas. Kong DB-less **no** interpola env vars en el campo `key` de key-auth (ni `${{}}` de decK ni vault refs), así que no se pueden mover a `.env`. | Para LAN aceptable; si se expone `:54321` a internet = takeover de la DB (secret público). | Abierto — rotar las 3 llaves + JWT_SECRET antes de exponer fuera de LAN; alternativa: render con `envsubst` (la imagen de Kong no lo trae). |
 | R8 | La impresora térmica **no reporta "sin papel"** — verificado en vivo: con el rollo vacío/sin papel, `GET /api/printer/status` sigue devolviendo `connected: true` y la venta marca `printed: true` aunque no salió nada. La impresora no expone protocolo bidireccional confiable (por eso se evitó CUPS), así que el software solo confirma que el device node existe y acepta la escritura, no que el papel esté presente. | La cajera puede creer que el ticket salió cuando en realidad no imprimió nada (papel agotado). | Abierto — mitigación operativa por ahora: revisar visualmente el rollo antes de empezar el turno. Una detección real requeriría lectura de estado bidireccional (fuera de alcance, ver plan técnico de `docs/specs/impresora-termica.md`). |
 | R10 | 11 componentes de `apps/web/src/components/` (`BrandLogo`, `CashSaleModal`, `CloseNightModal`, `DrinkCard`, `DrinkSkeleton`, `OpenNightModal`, `OSHeadbar`, `SafeDeleteModal`, `ThemeProvider`, `Ticket`, `TicketLive`) estaban sueltos en la raíz en vez de organizados por dominio como el resto del árbol (`admin/`, `caja/`, `barra/`, `analytics/`, `settings/`, `shared/`). | Ninguno funcional — solo hacía más difícil ubicar un componente por convención de carpetas. | ✅ Resuelto (2026-07-04, rama `refactor/reorganizar-componentes-web`) — movidos con `git mv`: `BrandLogo`/`OSHeadbar`/`DrinkCard`/`DrinkSkeleton`/`SafeDeleteModal`/`CloseNightModal` → `shared/`, `CashSaleModal`/`OpenNightModal` → `admin/`, `Ticket`/`TicketLive` → `carta/` (nueva). `ThemeProvider` se queda en la raíz de `components/` (cross-cutting real, lo usa `layout.tsx`). `tsc`+`eslint`+`vitest`(161/161)+`build` en verde. |
+| R11 | `pnpm --filter web lint` sobre **todo** `apps/web` reporta 21 errores preexistentes (reglas `react-hooks/refs`, `react-hooks/purity`, `react-hooks/set-state-in-effect` de una versión más estricta de `eslint-plugin-react-hooks`/reglas del React Compiler) en archivos que la Fase 3C no tocó: `LogsSection.tsx`, `QrSection.tsx`, `AnimatedNumber.tsx`, `Sparkline.tsx`, `orderStatus.ts`. Confirmado que ya estaban así antes de esta rama (corrido sobre el commit previo al Bloque 1, mismo resultado) — no es una regresión de ninguna fase de auditoría, es deuda que nunca se detectó porque las fases anteriores solo corrieron `eslint` sobre los archivos tocados, nunca `eslint .` sobre el árbol completo. | Cosmético/mantenibilidad — no rompe build ni tests, pero el criterio "`eslint` en 0" de las specs de auditoría en realidad nunca se cumplió a nivel repo completo. | Abierto — candidato a una fase de limpieza puntual (no se mezcló con Fase 3C para no ensuciar el diff de cada bloque con archivos no relacionados). |
 
 ---
 

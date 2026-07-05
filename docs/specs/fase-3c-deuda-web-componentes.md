@@ -1,6 +1,6 @@
 # Fase 3C — Deuda documentada de la Fase 3B (auditoría web componentes)
 
-**Estado**: draft
+**Estado**: done
 **Fecha**: 2026-07-05
 **Diseño validado**: [`docs/plans/2026-07-05-fase-3c-design.md`](../plans/2026-07-05-fase-3c-design.md)
 
@@ -368,18 +368,18 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 
 ### Cierre de fase
 
-- [ ] `pnpm typecheck` (api + web) en verde.
-- [ ] `pnpm --filter web lint` en 0.
-- [ ] `pnpm --filter web test` completo en verde (contar total de tests antes/después).
-- [ ] `pnpm --filter web build` en verde.
-- [ ] Actualizar `docs/ROADMAP.md`: marcar Fase 3C como completa, mover los 6 hallazgos resueltos
-  fuera de la lista de deuda de Fase 3B, documentar la eliminación de `CashSaleModal`/
-  `cash-sales.service.ts` como decisión de esta fase, y resolver los findings mecánicos
-  restantes (`accentColor` en `analytics/*`, `EmptyState` duplicado, `OSHeadbar.tsx`) directo en
-  la misma rama si no se hicieron antes — el de "validación inalcanzable de `CashSaleModal`" ya
-  no aplica, el archivo no existe más.
-- [ ] Marcar `docs/specs/fase-3c-deuda-web-componentes.md` como `estado: done`.
-- [ ] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
+- [x] `pnpm typecheck` (api + web) en verde.
+- [x] `pnpm --filter web lint` en 0 en todos los archivos tocados por Fase 3C (el repo completo
+  tiene 21 errores preexistentes sin relación, documentados como R11 en `docs/ROADMAP.md`).
+- [x] `pnpm --filter web test` completo en verde: 223/223 (161 al cierre de Fase 3B → 232 en el
+  pico del Bloque 4 → 223 tras eliminar `CashSaleModal`/`cash-sales.service` y sus tests).
+- [x] `pnpm --filter web build` en verde.
+- [x] Actualizado `docs/ROADMAP.md`: Fase 3C marcada completa, los 6 hallazgos no-mecánicos +
+  3 mecánicos movidos de "deuda" a "resuelto" en la sección de Fase 3B, documentada la
+  eliminación de `CashSaleModal`/`cash-sales.service.ts` como decisión de esta fase, y agregado
+  R11 (deuda de lint preexistente descubierta, sin relación con Fase 3C).
+- [x] Marcado `docs/specs/fase-3c-deuda-web-componentes.md` como `estado: done`.
+- [x] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
 
 > Implementar con **Plan Mode** dado el tamaño del bloque 4 (9 modales + 2 god-components). Ir
 > tildando `- [x]` en esta checklist a medida que se completa cada tarea.
