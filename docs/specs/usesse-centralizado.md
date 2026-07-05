@@ -220,9 +220,9 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
 - [x] `pnpm --filter web test src/lib/useSSE.test.ts` en verde (5/5). Suite completa: 228/228
   (antes 223). `tsc --noEmit` + `eslint` en 0.
 
-### Bloque 3 — `useEventState.ts` (el hook compartido) + sus tests
+### Bloque 3 — `useEventState.ts` (el hook compartido) + sus tests ✅ *(completo)*
 
-- [ ] `apps/web/src/hooks/useEventState.ts` (nuevo): estado `event`/`orders`/`cashSales`/
+- [x] `apps/web/src/hooks/useEventState.ts` (nuevo): estado `event`/`orders`/`cashSales`/
   `summary`, función `refetch()` (idéntica a la que hoy está duplicada en ambos shells), las 5
   suscripciones SSE (`order.created`/`order.updated`/`cash_sale.added`/`event.opened`/
   `event.closed`) con upsert-por-id para `orders`/`cashSales`, `onOpen` interno que llama
@@ -230,19 +230,16 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
   `useEventState(options?: { onActivity?: () => void; onEventClosed?: (summary: EventSummary) => void })`.
   Retorna `{ event, orders, cashSales, summary, setEvent, setSummary, refetch }` (sin
   `setOrders`/`setCashSales`).
-- [ ] `apps/web/src/hooks/useEventState.test.ts` (nuevo), mismo patrón de doble de `EventSource`:
-  - `order.created`/`order.updated` hacen upsert por id en `orders` (agrega si no existe,
-    reemplaza si existe);
-  - `cash_sale.added` hace upsert por id en `cashSales`;
-  - `event.opened` setea `event` y dispara `refetch` (mock de `eventsService.getState`);
-  - `event.closed` setea `summary` y llama `onEventClosed(summary)` si se pasó la opción;
-  - `onActivity` se llama exactamente una vez por cada evento de actividad
-    (`order.created`/`order.updated`/`cash_sale.added`), y no se llama si no se pasó la opción;
-  - `onOpen`/reconexión: llama `refetch()` siempre, y llama `onActivity()` además si se pasó
-    (cubre el hallazgo de `architect-reviewer` sobre Admin refrescando logs en cada reconexión);
-  - al desmontar, limpia listeners y cierra la conexión (igual que `useSSE.test.ts`, para
-    confirmar que `useEventState` no rompe esa garantía al envolver el hook base).
-- [ ] `pnpm --filter web test src/hooks/useEventState.test.ts` en verde.
+- [x] `apps/web/src/hooks/useEventState.test.ts` (nuevo, 12 tests), mismo patrón de doble de
+  `EventSource`: upsert por id en `orders`/`cashSales`; `event.opened` setea `event` y dispara
+  `refetch` (mock de `eventsService.getState`); `event.closed` setea `summary` y llama
+  `onEventClosed`; `onActivity` una vez por evento de actividad y no llamado sin la opción;
+  `onOpen`/reconexión llama `refetch()` siempre y `onActivity()` si se pasó; al desmontar cierra
+  la conexión; `setEvent`/`setSummary` expuestos y funcionales. Los emits de la conexión fake se
+  envuelven en `act()` de `@testing-library/react` (sin eso, `result.current` no refleja el
+  estado actualizado tras un evento disparado fuera del ciclo de render de React).
+- [x] `pnpm --filter web test src/hooks/useEventState.test.ts` en verde (12/12). Suite completa:
+  240/240 (antes 228). `tsc --noEmit` + `eslint` en 0.
 
 ### Bloque 4 — Migrar `AdminClient.tsx`
 
