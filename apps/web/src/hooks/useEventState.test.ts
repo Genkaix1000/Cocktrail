@@ -90,6 +90,28 @@ afterEach(() => {
 });
 
 describe("useEventState", () => {
+  it("arranca con los valores de `initial` cuando se pasan (caso AdminClient)", () => {
+    const seedEvent = makeNightEvent();
+    const seedOrders = [makeOrder({ id: "seed-1" })];
+    const seedCashSales = [makeCashSale({ id: "seed-cash" })];
+
+    const { result } = renderHook(() =>
+      useEventState({ initial: { event: seedEvent, orders: seedOrders, cashSales: seedCashSales } }),
+    );
+
+    expect(result.current.event).toEqual(seedEvent);
+    expect(result.current.orders).toEqual(seedOrders);
+    expect(result.current.cashSales).toEqual(seedCashSales);
+  });
+
+  it("arranca en null/[] sin `initial` (caso CajaClient)", () => {
+    const { result } = renderHook(() => useEventState());
+
+    expect(result.current.event).toBeNull();
+    expect(result.current.orders).toEqual([]);
+    expect(result.current.cashSales).toEqual([]);
+  });
+
   it("order.created hace upsert por id: agrega si es nuevo", () => {
     const { result } = renderHook(() => useEventState());
     const es = FakeEventSource.instances.at(-1)!;
