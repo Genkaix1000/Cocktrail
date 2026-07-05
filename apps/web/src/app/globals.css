@@ -245,6 +245,12 @@ body {
   50% { opacity: 0.4; }
 }
 
+/* Usada por components/shared/Toast.tsx (barra de progreso de auto-dismiss) */
+@keyframes shrinkWidth {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
 .ct-pulse-ring::after {
   content: "";
   position: absolute;

@@ -184,6 +184,53 @@ describe("CartaSection", () => {
     expect(await screen.findByText("Fernet con Coca")).toBeInTheDocument();
   });
 
+  it("muestra un toast de error si falla el guardado de un trago", async () => {
+    const user = userEvent.setup();
+    mockedDrinksService.list.mockResolvedValue([]);
+    mockedDrinksService.create.mockRejectedValue(new Error("network down"));
+
+    render(<CartaSection />);
+    await screen.findByText("No hay tragos registrados");
+
+    await user.click(screen.getByRole("button", { name: /Nuevo Trago/i }));
+    await user.type(screen.getByPlaceholderText("Fernet con Coca"), "Campari Spritz");
+    await user.type(screen.getByPlaceholderText("5500"), "4800");
+    await user.click(screen.getByRole("button", { name: "Crear" }));
+
+    expect(await screen.findByText(/No se pudo guardar el trago/i)).toBeInTheDocument();
+  });
+
+  it("muestra un toast de error si falla la eliminación de un trago", async () => {
+    const user = userEvent.setup();
+    const existing = makeDrink({ id: 1, name: "Fernet con Coca" });
+    mockedDrinksService.list.mockResolvedValue([existing]);
+    mockedDrinksService.delete.mockRejectedValue(new Error("network down"));
+
+    render(<CartaSection />);
+    await screen.findByText("Fernet con Coca");
+    await user.click(screen.getByTitle("Eliminar"));
+
+    const input = await screen.findByPlaceholderText("Fernet con Coca");
+    await user.type(input, "Fernet con Coca");
+    const modalForm = input.closest("form")!;
+    await user.click(within(modalForm).getByRole("button", { name: "Eliminar" }));
+
+    expect(await screen.findByText(/No se pudo eliminar el trago/i)).toBeInTheDocument();
+  });
+
+  it("muestra un toast de error si falla el toggle de disponibilidad", async () => {
+    const user = userEvent.setup();
+    const existing = makeDrink({ id: 1, name: "Fernet con Coca", available: true });
+    mockedDrinksService.list.mockResolvedValue([existing]);
+    mockedDrinksService.update.mockRejectedValue(new Error("network down"));
+
+    render(<CartaSection />);
+    await screen.findByText("Fernet con Coca");
+    await user.click(screen.getByTitle("Ocultar de la carta"));
+
+    expect(await screen.findByText(/No se pudo actualizar la disponibilidad/i)).toBeInTheDocument();
+  });
+
   it("filtra por búsqueda de nombre", async () => {
     const user = userEvent.setup();
     mockedDrinksService.list.mockResolvedValue([

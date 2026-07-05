@@ -94,4 +94,20 @@ describe("GeneralSection", () => {
 
     expect(await screen.findByText("Configuración guardada correctamente")).toBeInTheDocument();
   });
+
+  it("muestra un toast de error si falla el guardado", async () => {
+    const user = userEvent.setup();
+    mockedConfigService.get.mockResolvedValue(makeConfig());
+    mockedConfigService.update.mockRejectedValue(new Error("network down"));
+
+    render(<GeneralSection />);
+    await screen.findByText("General");
+
+    const logoUrlInput = screen.getByLabelText("Logo URL (Imagen PNG/SVG)");
+    await user.clear(logoUrlInput);
+    await user.type(logoUrlInput, "/nuevo-logo.png");
+    await user.click(screen.getByRole("button", { name: /Guardar Configuración/i }));
+
+    expect(await screen.findByText(/No se pudo guardar la configuración/i)).toBeInTheDocument();
+  });
 });

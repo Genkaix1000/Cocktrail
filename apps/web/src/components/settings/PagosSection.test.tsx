@@ -141,4 +141,18 @@ describe("PagosSection", () => {
     // Solo debe aparecer la forma enmascarada expuesta por SafeConfig.
     expect(container.innerHTML).toContain("APP_USR-****-1234");
   });
+
+  it("muestra un toast de error si falla el guardado de las credenciales", async () => {
+    const user = userEvent.setup();
+    mockedConfigService.get.mockResolvedValue(makeConfig());
+    mockedConfigService.update.mockRejectedValue(new Error("network down"));
+
+    render(<PagosSection />);
+    await screen.findByText("Pagos");
+
+    await user.type(screen.getByLabelText("Public Key"), "APP_USR-x");
+    await user.click(screen.getByRole("button", { name: /Guardar configuración de pagos/i }));
+
+    expect(await screen.findByText(/No se pudo guardar la configuración de pagos/i)).toBeInTheDocument();
+  });
 });

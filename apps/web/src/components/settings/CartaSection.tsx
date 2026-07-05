@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, createElement } from "react";
 import {
-  Check,
   Eye,
   EyeOff,
   RefreshCw,
@@ -29,6 +28,7 @@ import { drinksService } from "@/services/drinks.service";
 import type { Drink } from "@cocktrail/shared";
 import { useTheme } from "@/components/ThemeProvider";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
+import Toast from "@/components/shared/Toast";
 
 type DrinkForm = Omit<Drink, "id"> & { id?: number };
 
@@ -69,6 +69,7 @@ export default function CartaSection() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Drink | null>(null);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [iconSearch, setIconSearch] = useState("");
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [imgPreview, setImgPreview] = useState("");
@@ -151,6 +152,7 @@ export default function CartaSection() {
   const handleSave = useCallback(async () => {
     if (!editDrink || saving) return;
     setSaving(true);
+    setError(null);
     try {
       if (editDrink.id) {
         // Update
@@ -164,9 +166,9 @@ export default function CartaSection() {
       }
       closeModal();
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Error saving trago:", err);
+      setError("No se pudo guardar el trago. Reintentá en unos segundos.");
     } finally {
       setSaving(false);
     }
@@ -178,9 +180,9 @@ export default function CartaSection() {
       setDrinks((prev) => prev.filter((d) => d.id !== id));
       setDeleteConfirm(null);
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Error deleting trago:", err);
+      setError("No se pudo eliminar el trago. Reintentá en unos segundos.");
     }
   }, []);
 
@@ -190,9 +192,9 @@ export default function CartaSection() {
       const updated = await drinksService.update(drink.id, { available: !drink.available });
       setDrinks((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Error toggling availability:", err);
+      setError("No se pudo actualizar la disponibilidad. Reintentá en unos segundos.");
     }
   }, []);
 
@@ -638,9 +640,13 @@ export default function CartaSection() {
 
       {/* Saved feedback popup */}
       {saved && (
-        <div className="fixed bottom-6 right-6 bg-green-soft border border-green-line text-green px-4 py-2.5 rounded-xl text-[12px] font-medium flex items-center gap-2 shadow-2xl animate-in slide-in-from-bottom-4 z-50">
-          <Check size={16} />
-          Cambios guardados
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="success" message="Cambios guardados" duration={2500} onClose={() => setSaved(false)} />
+        </div>
+      )}
+      {error && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="error" message={error} onClose={() => setError(null)} />
         </div>
       )}
 

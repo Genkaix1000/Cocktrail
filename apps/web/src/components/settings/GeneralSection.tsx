@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Image as ImageIcon, Type, Sparkles, Plus, Settings } from "lucide-react";
 import { configService, type SafeConfig } from "@/services/config.service";
 import { useTheme } from "@/components/ThemeProvider";
+import Toast from "@/components/shared/Toast";
 
 export default function GeneralSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { isDark } = useTheme();
 
   // Initial loaded configuration state to compare changes
@@ -52,6 +54,7 @@ export default function GeneralSection() {
   const saveAllConfig = useCallback(async () => {
     if (!hasChanges()) return;
     setSaving(true);
+    setError(null);
     try {
       const updated = await configService.update({
         theme: "bosko",
@@ -73,9 +76,9 @@ export default function GeneralSection() {
       localStorage.setItem("cocktrail_text_logo_size", String(textLogoSize));
 
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Error saving configuration:", err);
+      setError("No se pudo guardar la configuración. Reintentá en unos segundos.");
     } finally {
       setSaving(false);
     }
@@ -442,11 +445,15 @@ export default function GeneralSection() {
         )}
       </div>
 
-      {/* Save feedback toast */}
+      {/* Save feedback */}
       {saved && (
-        <div className="fixed bottom-6 right-6 bg-green-soft border border-green-line text-green px-4 py-2.5 rounded-xl text-[12px] font-medium flex items-center gap-2 shadow-2xl animate-in slide-in-from-bottom-4 z-50">
-          <Check size={16} />
-          Configuración guardada correctamente
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="success" message="Configuración guardada correctamente" duration={2500} onClose={() => setSaved(false)} />
+        </div>
+      )}
+      {error && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="error" message={error} onClose={() => setError(null)} />
         </div>
       )}
     </div>

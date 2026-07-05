@@ -251,31 +251,39 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 - [x] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde (210/210, antes 207) +
   `eslint` en 0 en los archivos tocados.
 
-### Bloque 3 — `Toast` compartido + `TicketItemRow`
+### Bloque 3 — `Toast` compartido + `TicketItemRow` ✅ *(completo)*
 
-- [ ] Extraer `apps/web/src/components/shared/Toast.tsx` desde `ToastItem` (hoy local en
-  `apps/web/src/components/barra/PendingOrdersList.tsx`), con variante éxito/error.
-- [ ] `apps/web/src/components/shared/Toast.test.tsx` — test de caracterización del timer (no
-  reintroducir el bug de Fase 3B donde se reseteaba con cada re-render del padre).
-- [ ] `apps/web/src/components/barra/PendingOrdersList.tsx` — reemplazar el `ToastItem` local por
-  el import de `Toast`; confirmar que su test existente sigue en verde.
-- [ ] `apps/web/src/components/settings/GeneralSection.tsx` — migrar el toast de éxito ad-hoc a
-  `Toast` y agregar variante de error en el `catch` de guardar/cargar.
-- [ ] `apps/web/src/components/settings/PagosSection.tsx` — agregar `Toast` de error en el
-  `catch` de guardar/cargar (hoy solo `console.error`).
-- [ ] `apps/web/src/components/settings/CartaSection.tsx` — agregar `Toast` de error en los
-  `catch` de guardar/borrar/toggle (hoy solo `console.error`).
-- [ ] Actualizar/agregar tests de caracterización de las 3 secciones de settings para cubrir el
-  camino de error con feedback visible.
-- [ ] Extraer `apps/web/src/components/carta/TicketItemRow.tsx` (props: `item`, `drink`
-  resuelto, `showPrice?`) — el `key` de cada fila se sigue pasando desde el `.map()` del padre,
-  no desde adentro del componente extraído.
-- [ ] `apps/web/src/components/carta/Ticket.tsx` — usar `TicketItemRow` en las dos secciones
-  ("Ticket de Control" sin precio, "Recibo de Pago" con precio), eliminando el `drinks.find`
-  duplicado.
-- [ ] `apps/web/src/components/carta/Ticket.test.tsx` — actualizar/agregar test que confirme que
-  ambas secciones renderizan igual cantidad de ítems con los datos correctos.
-- [ ] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde.
+- [x] Extraído `apps/web/src/components/shared/Toast.tsx` (variante éxito/error, `title`/`badge`
+  opcionales para el caso "Nuevo pedido #12" de barra, timer con ref para no reiniciarse en
+  re-renders del padre). Se agregó el keyframe `shrinkWidth` a `globals.css` (antes solo vivía
+  inline en `BarraClient.tsx`, por lo que no habría animado fuera de esa pantalla).
+- [x] `apps/web/src/components/shared/Toast.test.tsx` — 4 tests (mensaje+cierre, title/badge,
+  auto-dismiss, timer no se reinicia si `onClose` cambia de identidad).
+- [x] `apps/web/src/components/barra/PendingOrdersList.tsx` — `ToastItem` local reemplazado por
+  `Toast`; su test existente sigue en verde sin cambios (mismo texto, mismo aria-label).
+- [x] `GeneralSection.tsx`/`PagosSection.tsx`/`CartaSection.tsx` (settings) — toast de éxito
+  migrado a `Toast`, y agregado `Toast` de error (antes `console.error` sin feedback visual) en
+  guardar/cargar (Pagos, General) y guardar/borrar/toggle (Carta). Test de error nuevo por cada
+  catch.
+- [x] Extraído `apps/web/src/components/carta/TicketItemRow.tsx` (props: `item`, `drink`
+  resuelto, `showPrice?`) — el `ICON_MAP` se movió con él; el `key` de cada fila lo sigue
+  pasando cada `.map()` del padre con su propio esquema (`${it.drinkId}-${i}` en "Ticket de
+  Control", `i` en "Recibo de Pago" — no se unificaron, tal como marcó `architect-reviewer`).
+- [x] `Ticket.tsx` usa `TicketItemRow` en ambas secciones, sin el `drinks.find` duplicado.
+- [x] `TicketItemRow.test.tsx` nuevo (sin precio / con precio / ícono fallback); `Ticket.test.tsx`
+  existente sigue en verde sin cambios.
+- [x] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde (222/222, antes 210) +
+  `eslint` en 0 en todos los archivos de este bloque (el lint global del repo tiene 21 errores
+  preexistentes en archivos no tocados por Fase 3C — ver nota abajo).
+
+> **Hallazgo no planeado, fuera de alcance de esta fase**: `pnpm --filter web lint` sobre todo
+> `apps/web` reporta 21 errores preexistentes (reglas `react-hooks/refs`, `react-hooks/purity`,
+> `react-hooks/set-state-in-effect` de una versión de `eslint-plugin-react-hooks` más estricta) en
+> archivos que Fase 3C no toca: `LogsSection.tsx`, `QrSection.tsx`, `AnimatedNumber.tsx`,
+> `Sparkline.tsx`, `orderStatus.ts`. Ya estaban así antes de esta rama (confirmado corriendo lint
+> sobre el commit previo a Bloque 1). El criterio de cierre "`eslint` en 0" de esta spec se
+> entiende por archivos tocados en Fase 3C, no por el repo completo — limpiar esa deuda
+> preexistente queda pendiente para una fase aparte.
 
 ### Bloque 4 — Modales a montaje condicional + partición de god-components
 

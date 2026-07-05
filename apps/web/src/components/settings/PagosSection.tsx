@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, CreditCard, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { configService, type SafeConfig } from "@/services/config.service";
 import { useTheme } from "@/components/ThemeProvider";
+import Toast from "@/components/shared/Toast";
 
 export default function PagosSection() {
   const { theme } = useTheme();
@@ -11,6 +12,7 @@ export default function PagosSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
 
   const [publicKey, setPublicKey] = useState("");
@@ -30,6 +32,7 @@ export default function PagosSection() {
 
   const handleSave = useCallback(async () => {
     setSaving(true);
+    setError(null);
     try {
       const updated = await configService.update({
         mercadoPago: { publicKey, accessToken, sandbox },
@@ -37,9 +40,9 @@ export default function PagosSection() {
       setConfig(updated);
       setAccessToken(""); // Limpiar input del token por seguridad
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Error saving payment config:", err);
+      setError("No se pudo guardar la configuración de pagos. Reintentá en unos segundos.");
     } finally {
       setSaving(false);
     }
@@ -201,9 +204,13 @@ export default function PagosSection() {
 
       {/* Save feedback */}
       {saved && (
-        <div className="fixed bottom-6 right-6 bg-green-soft border border-green-line text-green px-4 py-2.5 rounded-xl text-[12px] font-medium flex items-center gap-2 shadow-2xl animate-in slide-in-from-bottom-4 z-50">
-          <Check size={16} />
-          Cambios guardados
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="success" message="Cambios guardados" duration={2500} onClose={() => setSaved(false)} />
+        </div>
+      )}
+      {error && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="error" message={error} onClose={() => setError(null)} />
         </div>
       )}
     </div>

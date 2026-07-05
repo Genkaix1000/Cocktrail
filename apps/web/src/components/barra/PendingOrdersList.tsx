@@ -1,11 +1,12 @@
 "use client";
 
 import { Inbox, Package, X } from "lucide-react";
-import { useEffect, useRef, type MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 import { getPendingStatus } from "./orderStatus";
 import type { CurrentUser } from "./types";
 import type { Order } from "@cocktrail/shared";
+import Toast from "@/components/shared/Toast";
 
 type ToastNotification = {
   id: string;
@@ -43,10 +44,13 @@ export default function PendingOrdersList({
         {/* Toast stack */}
         <div className="absolute top-3 right-3 z-50 flex flex-col gap-2 w-full max-w-[300px] pointer-events-none">
           {notifications.map((n) => (
-            <ToastItem
+            <Toast
               key={n.id}
-              displayNumber={n.displayNumber}
-              text={n.text}
+              variant="success"
+              title="Nuevo pedido"
+              badge={`#${n.displayNumber}`}
+              message={n.text}
+              duration={5000}
               onClose={() => onDismissNotification(n.id)}
             />
           ))}
@@ -141,75 +145,5 @@ export default function PendingOrdersList({
         )}
       </div>
     </aside>
-  );
-}
-
-function ToastItem({
-  displayNumber,
-  text,
-  onClose,
-}: {
-  displayNumber: number;
-  text: string;
-  onClose: () => void;
-}) {
-  // `onClose` se recrea en cada render del padre (arrow inline en el
-  // `.map` de PendingOrdersList) — si el efecto dependiera de `onClose`
-  // directamente, cualquier re-render (ej. un evento SSE) reiniciaría el
-  // timer de dismiss. Se guarda en un ref para que el timer sobreviva a
-  // esos re-renders y solo se dispare/limpie una vez, al montar/desmontar.
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onCloseRef.current();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <div
-      className="relative overflow-hidden w-full bg-ink-900/95 border border-green-line/40 backdrop-blur-xl rounded-2xl p-3.5 shadow-2xl flex flex-col gap-1.5 pointer-events-auto"
-      style={{
-        animation: "toastSlideIn 5s ease-in-out forwards",
-      }}
-    >
-      <div className="flex justify-between items-start gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-green-soft border border-green-line flex items-center justify-center shrink-0">
-            <Package size={13} className="text-green" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-green font-bold block">
-              Nuevo pedido
-            </span>
-            <span className="font-mono text-base font-black text-white tabular">
-              #{displayNumber}
-            </span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Cerrar notificación"
-          className="w-6 h-6 flex items-center justify-center rounded-lg text-ink-500 hover:text-white hover:bg-ink-800 transition-colors cursor-pointer shrink-0"
-        >
-          <X size={12} />
-        </button>
-      </div>
-      <p className="text-xs font-semibold text-ink-200 leading-snug line-clamp-2 pl-9">
-        {text}
-      </p>
-
-      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-ink-950">
-        <div
-          className="h-full bg-green"
-          style={{
-            animation: "shrinkWidth 5s linear forwards",
-          }}
-        />
-      </div>
-    </div>
   );
 }
