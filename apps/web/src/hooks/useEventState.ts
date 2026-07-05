@@ -84,6 +84,7 @@ export function useEventState(options?: Options) {
       },
       "event.closed": ({ summary: closedSummary }) => {
         setSummary(closedSummary);
+        refetch();
         onEventClosed?.(closedSummary);
       },
     },

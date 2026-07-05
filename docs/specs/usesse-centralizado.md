@@ -238,11 +238,16 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
   `useEventState()` le habría hecho perder esa garantía. Se agregó `options.initial` (leído solo
   en el `useState` inicial, sin efecto en re-renders) para que Admin siga sembrando su estado con
   las props que ya recibe, y Caja simplemente no la pase (mismo comportamiento que tiene hoy).
+- [x] **Segundo hallazgo corregido antes de migrar shells**: el handler `event.closed` de
+  **ambos** shells originales también llama `refetch()` (trae el estado post-cierre del
+  servidor), no solo `setSummary`/abrir el modal — se había omitido en el diseño inicial del
+  hook. Agregado: `event.closed` ahora hace `setSummary(closedSummary); refetch();
+  onEventClosed?.(closedSummary)`, mismo orden que tenían ambos shells.
 - [x] `apps/web/src/hooks/useEventState.test.ts` (nuevo, 14 tests), mismo patrón de doble de
   `EventSource`: arranca con los valores de `initial` cuando se pasan, y en `null`/`[]` sin
   `initial`; upsert por id en `orders`/`cashSales`; `event.opened` setea `event` y dispara
-  `refetch` (mock de `eventsService.getState`); `event.closed` setea `summary` y llama
-  `onEventClosed`; `onActivity` una vez por evento de actividad y no llamado sin la opción;
+  `refetch` (mock de `eventsService.getState`); `event.closed` setea `summary`, dispara `refetch`
+  y llama `onEventClosed`; `onActivity` una vez por evento de actividad y no llamado sin la opción;
   `onOpen`/reconexión llama `refetch()` siempre y `onActivity()` si se pasó; al desmontar cierra
   la conexión; `setEvent`/`setSummary` expuestos y funcionales. Los emits de la conexión fake se
   envuelven en `act()` de `@testing-library/react` (sin eso, `result.current` no refleja el

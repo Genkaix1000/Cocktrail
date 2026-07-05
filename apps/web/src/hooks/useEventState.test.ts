@@ -167,15 +167,17 @@ describe("useEventState", () => {
     await waitFor(() => expect(result.current.orders.map((o) => o.id)).toEqual(["refetched"]));
   });
 
-  it("event.closed setea summary y llama onEventClosed", () => {
+  it("event.closed setea summary, dispara refetch, y llama onEventClosed", () => {
     const onEventClosed = vi.fn();
     const { result } = renderHook(() => useEventState({ onEventClosed }));
     const es = FakeEventSource.instances.at(-1)!;
     const summary = makeSummary();
 
+    mockedEventsService.getState.mockClear();
     act(() => es.emit("event.closed", { summary }));
 
     expect(result.current.summary).toEqual(summary);
+    expect(mockedEventsService.getState).toHaveBeenCalledTimes(1);
     expect(onEventClosed).toHaveBeenCalledWith(summary);
   });
 
