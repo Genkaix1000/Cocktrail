@@ -28,15 +28,15 @@ sin depender de internet, con caja + reconciliación a la nube al cerrar la noch
 - [x] **Impresora térmica** (Fase 1, ver abajo) + **Abrir Noche manual** con palabra clave.
 
 ### Pendiente de esta fase
-- [ ] **Documentación consolidada** (este commit): `docs/ARCHITECTURE.md` + `ROADMAP.md`, `CLAUDE.md` reescrito, `AGENTS.md`, README. *(en progreso)*
+- [x] **Documentación consolidada**: `docs/ARCHITECTURE.md` + `ROADMAP.md`, `CLAUDE.md` reescrito, `AGENTS.md`, `README.md` — los 5 existen y están al día.
 - [x] **Limpieza de código muerto**: borrados los repos `LocalJSON*` / `InMemory*` (~397 líneas) y los `apps/api/src/data/*.json`. Verificado: `app.ts` solo usa `Supabase*Repository`, sin tests afectados, `pnpm typecheck` pasa. Se conservaron `SEED_DRINKS` (lo usa `sync`), `hashPassword` y `DEFAULT_CONFIG`.
 - [x] **Resuelto el mismatch de `docker-compose.yml`** (R1): ahora levanta un stack Supabase mínimo (db + PostgREST + Kong) que expone la REST en `:54321`. Verificado con curl. Ver `docs/DEPLOY.md`.
-- [ ] **Migración faltante**: la columna `night_events.totals` que usa el sync no está en las migraciones locales. Agregarla o documentar que es cloud-only.
-- [ ] **Guía de despliegue en la mini-PC**: `docs/DEPLOY.md` con pasos reproducibles (instalar Docker/Supabase CLI, env, arranque, acceso por LAN, generación del QR).
+- [ ] **Migración faltante**: la columna `night_events.totals` que usa el sync no está en las migraciones locales (confirmado: no existe en ningún archivo de `supabase/migrations/`). Agregarla o documentar que es cloud-only.
+- [x] **Guía de despliegue en la mini-PC**: `docs/DEPLOY.md` (190 líneas) — requisitos, stack de Docker, arranque de la app, **acceso por LAN** (sección 5), reset/limpieza, rotación de llaves, troubleshooting. Reproducible de punta a punta.
 - [ ] **Activar el sync cloud** (la lógica ya existe en `sync.service.ts`; falta config): el usuario YA tiene proyecto en supabase.com. Pasos: (1) asegurar que el esquema cloud matchea las migraciones + la columna `night_events.totals` (R2); (2) setear `SUPABASE_CLOUD_URL` + `SUPABASE_CLOUD_SERVICE_ROLE_KEY` en `apps/api/.env`; (3) probar un cierre de noche con internet y confirmar el push. Diferido a pedido del usuario.
-- [ ] **Verificación E2E del flujo demo que SÍ se prueba ahora**: venta directa en **caja** (la cajera elige el trago en `/caja`, cobra — efectivo/Posnet/QR — y se genera el ticket con código) → **cerrar noche** desde `/admin` → **sync** a Supabase Cloud. El cliente retira el trago en barra físicamente, pero eso es logística del local, no un paso de software a validar.
-- [ ] **Tests**: smoke/E2E con Playwright de los **2 flujos activos** (`/caja`, `/admin`). Ver nota abajo sobre qué queda fuera y por qué.
-- [ ] Revisar **atomicidad del canje de ticket** (evitar doble canje bajo concurrencia).
+- [ ] **Verificación E2E del flujo demo que SÍ se prueba ahora**: venta directa en **caja** (la cajera elige el trago en `/caja`, cobra — efectivo/Posnet/QR — y se genera el ticket con código) → **cerrar noche** desde `/admin` → **sync** a Supabase Cloud. El cliente retira el trago en barra físicamente, pero eso es logística del local, no un paso de software a validar. *(Se hicieron verificaciones ad-hoc de este flujo con `e2e-playwright-tester` durante Fase 3C/`usesse-centralizado`, pero como parte de validar refactors puntuales — no como el smoke test formal que pide este ítem.)*
+- [ ] **Tests**: smoke/E2E con Playwright de los **2 flujos activos** (`/caja`, `/admin`) como suite propia del repo (hoy no hay ningún archivo de test Playwright commiteado — las verificaciones E2E de las fases anteriores fueron manuales, con el agente, no tests persistidos). Ver nota abajo sobre qué queda fuera y por qué.
+- [ ] Revisar **atomicidad del canje de ticket** (evitar doble canje bajo concurrencia) — es R3 en la tabla de riesgos, sigue "a verificar".
 
 > 📌 **Nota — `/carta`, el ticket virtual y `/barra` quedan fuera de la validación hasta la Fase 7**:
 > las tres pantallas del **flujo digital del cliente** (`/carta` para armar el pedido por QR, la pantalla
