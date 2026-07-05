@@ -193,3 +193,99 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
   aislada), y montarlos completos para este test necesitaría mockear servicios/auth/tema que ya
   están fuera del alcance de esta feature — la cobertura en el hook cubre el riesgo real sin ese
   costo.
+
+---
+
+## Tareas
+
+### Bloque 1 — Infraestructura de testing (antes de tocar código de producción)
+
+- [ ] `apps/web/src/lib/__testUtils__/fakeEventSource.ts` — doble de `EventSource`:
+  `addEventListener`/`removeEventListener`/`close` (misma interfaz que usa `useSSE.ts`), más
+  `emit(type, data)` (dispara el listener registrado para ese `type` con un `MessageEvent` cuyo
+  `data` es `JSON.stringify(data)`) y `emitOpen()` (dispara el listener de `"open"`). Expone una
+  lista estática `instances` (o similar) para que el test acceda a la conexión creada dentro del
+  hook bajo prueba.
+- [ ] `pnpm --filter web typecheck` en verde con el nuevo archivo (sin producción que lo consuma
+  todavía).
+
+### Bloque 2 — Tests de caracterización de `useSSE.ts` (hook existente, sin tocar su código)
+
+- [ ] `apps/web/src/lib/useSSE.test.ts` (nuevo) usando el doble del Bloque 1 y
+  `vi.stubGlobal("EventSource", FakeEventSource)`:
+  - despacha el handler correcto según el `type` del evento con el `data` ya parseado;
+  - ignora un frame con JSON malformado sin lanzar (ya está en el código, falta el test);
+  - llama `onOpen` en el evento `open` (inicial y una segunda vez simulando reconexión);
+  - al desmontar (`renderHook(...).unmount()`), remueve los listeners y cierra la conexión
+    (verificar con spies sobre la instancia fake).
+- [ ] `pnpm --filter web test src/lib/useSSE.test.ts` en verde.
+
+### Bloque 3 — `useEventState.ts` (el hook compartido) + sus tests
+
+- [ ] `apps/web/src/hooks/useEventState.ts` (nuevo): estado `event`/`orders`/`cashSales`/
+  `summary`, función `refetch()` (idéntica a la que hoy está duplicada en ambos shells), las 5
+  suscripciones SSE (`order.created`/`order.updated`/`cash_sale.added`/`event.opened`/
+  `event.closed`) con upsert-por-id para `orders`/`cashSales`, `onOpen` interno que llama
+  `refetch()` y, si se pasó `onActivity`, también `onActivity()`. Firma:
+  `useEventState(options?: { onActivity?: () => void; onEventClosed?: (summary: EventSummary) => void })`.
+  Retorna `{ event, orders, cashSales, summary, setEvent, setSummary, refetch }` (sin
+  `setOrders`/`setCashSales`).
+- [ ] `apps/web/src/hooks/useEventState.test.ts` (nuevo), mismo patrón de doble de `EventSource`:
+  - `order.created`/`order.updated` hacen upsert por id en `orders` (agrega si no existe,
+    reemplaza si existe);
+  - `cash_sale.added` hace upsert por id en `cashSales`;
+  - `event.opened` setea `event` y dispara `refetch` (mock de `eventsService.getState`);
+  - `event.closed` setea `summary` y llama `onEventClosed(summary)` si se pasó la opción;
+  - `onActivity` se llama exactamente una vez por cada evento de actividad
+    (`order.created`/`order.updated`/`cash_sale.added`), y no se llama si no se pasó la opción;
+  - `onOpen`/reconexión: llama `refetch()` siempre, y llama `onActivity()` además si se pasó
+    (cubre el hallazgo de `architect-reviewer` sobre Admin refrescando logs en cada reconexión);
+  - al desmontar, limpia listeners y cierra la conexión (igual que `useSSE.test.ts`, para
+    confirmar que `useEventState` no rompe esa garantía al envolver el hook base).
+- [ ] `pnpm --filter web test src/hooks/useEventState.test.ts` en verde.
+
+### Bloque 4 — Migrar `AdminClient.tsx`
+
+- [ ] Reemplazar en `apps/web/src/app/admin/AdminClient.tsx`: borrar los `useState` de
+  `event`/`orders`/`cashSales`/`summary`, la función `refetch` (líneas ~239-246), y el bloque
+  `useSSE({...}, { onOpen: ... })` completo (líneas ~248-290) por una llamada a
+  `useEventState({ onActivity: fetchSystemLogs, onEventClosed: (s) => { setSummary — ya lo
+  hace el hook —; setModalOpen(true); setHistoryLoaded(false); } })`. Ojo: `onEventClosed` NO
+  debe volver a setear `summary` (ya lo hizo el hook antes de llamarlo) — solo hace lo que el
+  shell necesita además.
+- [ ] Confirmar que los usos existentes de `setEvent` (modo `open`/`edit` de `OpenNightModal`,
+  líneas ~565-580) y `setSummary` (`handleCloseConfirm`, `handleModalClose`) siguen compilando
+  contra los setters devueltos por `useEventState`, sin cambiar su lógica interna.
+- [ ] `pnpm --filter web typecheck` en verde.
+
+### Bloque 5 — Migrar `CajaClient.tsx`
+
+- [ ] Mismo tipo de cambio en `apps/web/src/app/caja/CajaClient.tsx` (líneas ~88-130): borrar
+  `useState` locales, `refetch`, y el bloque `useSSE({...}, { onOpen: refetch })`; reemplazar por
+  `useEventState({ onEventClosed: () => setCloseModalOpen(true) })` (sin `onActivity`, Caja no
+  tiene `fetchSystemLogs`).
+- [ ] Confirmar que `handleCloseConfirm`/`handleCloseModalClose` siguen compilando contra los
+  setters del hook.
+- [ ] `pnpm --filter web typecheck` en verde.
+
+### Bloque 6 — `BarraClient.tsx`: confirmar que NO se tocó
+
+- [ ] `git diff` de `apps/web/src/app/barra/BarraClient.tsx` vacío al final de la feature —
+  fuera de alcance, sin cambios.
+
+### Cierre de fase
+
+- [ ] `pnpm typecheck` (api + web) en verde.
+- [ ] `pnpm --filter web lint` en 0 en todos los archivos tocados.
+- [ ] `pnpm --filter web test` completo en verde (contar total de tests antes/después).
+- [ ] `pnpm --filter web build` en verde.
+- [ ] Verificación manual o con `e2e-playwright-tester`: en `/admin` y `/caja`, un pedido
+  nuevo/actualizado y una venta en efectivo se siguen reflejando en vivo; cerrar la noche abre el
+  modal de resumen correcto en cada shell; no hay errores de consola.
+- [ ] Actualizar `docs/ROADMAP.md`: mover el hallazgo "`useSSE` centralizado" de la lista de
+  deuda de Fase 3B a resuelto, referenciando esta feature.
+- [ ] Marcar `docs/specs/usesse-centralizado.md` como `estado: done`.
+- [ ] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
+
+> Implementar con **Plan Mode** dado que toca el estado real-time de 2 shells en producción. Ir
+> tildando `- [x]` en esta checklist a medida que se completa cada tarea.
