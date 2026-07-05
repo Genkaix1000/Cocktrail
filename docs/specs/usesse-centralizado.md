@@ -1,6 +1,6 @@
 # useSSE centralizado — deuda de Fase 3B
 
-**Estado**: draft
+**Estado**: done
 **Fecha**: 2026-07-05
 **Diseño validado**: [`docs/plans/2026-07-05-usesse-centralizado-design.md`](../plans/2026-07-05-usesse-centralizado-design.md)
 
@@ -286,24 +286,27 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
 - [x] `pnpm --filter web typecheck` + `eslint` en 0 + `pnpm --filter web test` (243/243) +
   `pnpm --filter web build` en verde.
 
-### Bloque 6 — `BarraClient.tsx`: confirmar que NO se tocó
+### Bloque 6 — `BarraClient.tsx`: confirmar que NO se tocó ✅ *(completo)*
 
-- [ ] `git diff` de `apps/web/src/app/barra/BarraClient.tsx` vacío al final de la feature —
-  fuera de alcance, sin cambios.
+- [x] `git diff` de `apps/web/src/app/barra/BarraClient.tsx` vacío en todos los commits de esta
+  feature — fuera de alcance, sin cambios, confirmado.
 
-### Cierre de fase
+### Cierre de fase ✅ *(completo)*
 
-- [ ] `pnpm typecheck` (api + web) en verde.
-- [ ] `pnpm --filter web lint` en 0 en todos los archivos tocados.
-- [ ] `pnpm --filter web test` completo en verde (contar total de tests antes/después).
-- [ ] `pnpm --filter web build` en verde.
-- [ ] Verificación manual o con `e2e-playwright-tester`: en `/admin` y `/caja`, un pedido
-  nuevo/actualizado y una venta en efectivo se siguen reflejando en vivo; cerrar la noche abre el
-  modal de resumen correcto en cada shell; no hay errores de consola.
-- [ ] Actualizar `docs/ROADMAP.md`: mover el hallazgo "`useSSE` centralizado" de la lista de
-  deuda de Fase 3B a resuelto, referenciando esta feature.
-- [ ] Marcar `docs/specs/usesse-centralizado.md` como `estado: done`.
-- [ ] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
+- [x] `pnpm typecheck` (api + web) en verde.
+- [x] `pnpm --filter web lint` en 0 en todos los archivos tocados.
+- [x] `pnpm --filter web test` completo en verde: 243/243 (228 al cierre de Fase 3C).
+- [x] `pnpm --filter web build` en verde.
+- [x] Verificación con `e2e-playwright-tester`: login + `/admin` sin parpadeo de vacío (la
+  semilla `initial` funcionó), `/caja` en segunda pestaña, venta en efectivo reflejada en vivo en
+  ambos shells cruzando pestañas por SSE, cierre de noche con modal de resumen correcto y
+  cancelable sin tocar datos. Cero errores de consola reales (se descartaron ~69 mensajes
+  acumulados de hot-reload de Turbopack de una sesión larga, verificados contra el código fuente
+  actual — no correspondían a ningún problema real).
+- [x] Actualizado `docs/ROADMAP.md`: el hallazgo "`useSSE` centralizado" pasa de deuda a
+  resuelto, referenciando esta feature.
+- [x] Marcado `docs/specs/usesse-centralizado.md` como `estado: done`.
+- [x] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
 
 > Implementar con **Plan Mode** dado que toca el estado real-time de 2 shells en producción. Ir
 > tildando `- [x]` en esta checklist a medida que se completa cada tarea.

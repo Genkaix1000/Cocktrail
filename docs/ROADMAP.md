@@ -167,11 +167,11 @@ plan técnico, tareas) en `docs/specs/auditoria-web.md` (estado `done`), rama `r
   suprimido en otros 7 lugares del código — fetch-on-mount async, no es un bug real, la regla no
   distingue `setState` detrás de un `await`).
 
-**Hallazgos documentados al cierre de esta fase** — **todos resueltos en la Fase 3B** (ver abajo):
-`useSSE` centralizado sigue sin descomponerse (deuda que se mantiene, alto riesgo sin tests de
-integración SSE real); `activeTab === "estadisticas"` sin link (resuelto), `dynamicAlerts` duplicado
-con `smartInsights` (resuelto), `ToastItem` con timer que se resetea (resuelto), `renderSidebar` sin
-extraer (resuelto, solo existía en `CajaClient`).
+**Hallazgos documentados al cierre de esta fase** — **todos resueltos** (`useSSE` centralizado
+en la feature `usesse-centralizado` post-Fase 3C, el resto en la Fase 3B, ver abajo):
+`useSSE` centralizado sin descomponerse; `activeTab === "estadisticas"` sin link; `dynamicAlerts`
+duplicado con `smartInsights`; `ToastItem` con timer que se resetea; `renderSidebar` sin extraer
+(solo existía en `CajaClient`).
 
 ---
 
@@ -218,12 +218,12 @@ tratamiento que Fases 2/3: tests de caracterización + auditoría (`architect-re
   `components/` (envuelve `layout.tsx`, no es "de un dominio"). `tsc`+`eslint`+`vitest`(161/161)+
   `build` en verde.
 
-**Hallazgos documentados al cierre de esta fase** — **todos resueltos en la Fase 3C** salvo los
-2 marcados como deuda que se mantiene:
-- `useSSE` centralizado en los 3 shells — **deuda que se mantiene**, alto riesgo sin tests de
-  integración SSE real, no se tocó en 3C.
+**Hallazgos documentados al cierre de esta fase** — **todos resueltos** (la mayoría en la Fase
+3C, `useSSE` centralizado en la feature aparte `usesse-centralizado`) salvo 1 que se mantiene:
 - `CloseNightModal`: la "carga ficticia" de 3.2s con mensajes que no reflejan trabajo real —
   **deuda que se mantiene**, es una decisión de producto/UX pendiente de revisar, no técnica.
+- ~~`useSSE` centralizado en los 3 shells~~ (resuelto — ver "Feature — useSSE centralizado" más
+  abajo, hecha después de cerrar la Fase 3C).
 - ~~`apps/web/src/services/*.ts` sin auditar~~ (resuelto, Bloque 1: 46 tests nuevos).
 - ~~Patrón "modal montado permanentemente"~~ (resuelto, Bloque 4: migrados a montaje condicional;
   `CashSaleModal` se eliminó en vez de migrarse, ver Fase 3C).
@@ -282,6 +282,48 @@ tratamiento que Fases 2/3: tests de caracterización + auditoría (`architect-re
   Fase 3B arriba).
 - [x] Cierre de fase: `tsc --noEmit` + `eslint` (en archivos tocados; ver R11 abajo) +
   `vitest run` (223/223, subió de 161 al cierre de 3B) + `next build` de punta a punta en verde.
+
+---
+
+## Feature — `useSSE` centralizado (deuda de Fase 3B) 🔌 *(completa)*
+
+**Objetivo**: resolver el último hallazgo abierto de Fase 3B — no era un problema del hook
+`useSSE.ts` en sí (genérico, tipado, ~86 líneas, bien hecho), sino que `AdminClient.tsx` y
+`CajaClient.tsx` duplicaban byte a byte la función `refetch()` y el manejo de los 5 eventos SSE
+(`order.created`/`order.updated`/`cash_sale.added`/`event.opened`/`event.closed`), y ningún
+shell tenía un solo test de integración SSE. Spec completa en
+`docs/specs/usesse-centralizado.md` (estado `done`), sin rama aparte (se implementó directo en
+`develop`, feature acotada y de bajo riesgo estructural una vez con tests).
+
+- [x] `apps/web/src/lib/__testUtils__/fakeEventSource.ts` (nuevo) — doble de test de
+  `EventSource` con `emit`/`emitOpen`/`emitRaw`, usado tanto para `useSSE.test.ts` (5 tests,
+  hoy inexistente) como para `useEventState.test.ts`.
+- [x] `apps/web/src/hooks/useEventState.ts` (nuevo, 15 tests) — hook compartido para
+  Admin+Caja únicamente (`BarraClient.tsx` queda afuera a propósito, su modelo de estado —cola de
+  pendientes, toasts, modo dev— no comparte el molde de upsert-por-id). Expone `setEvent`/
+  `setSummary` (sin invariante que proteger, reemplazo completo) y `upsertOrder` (con invariante
+  de upsert-por-id, en vez de exponer `setOrders` crudo).
+- [x] **3 hallazgos que el diseño original no contempló, corregidos antes/durante la
+  implementación** (todos vía revisión del código real, no solo del diseño en abstracto):
+  1. `onOpen` (reconexión SSE) no era idéntico entre shells — Admin también refresca logs ahí.
+     Resuelto sin agregar un tercer callback: `onOpen` llama `refetch()` y, si hay `onActivity`,
+     también `onActivity()`.
+  2. `AdminClient` recibe `initialEvent`/`initialOrders`/`initialCashSales` como props (su
+     página padre ya hace su propio `getState()` antes de montarlo, para no mostrar un instante
+     de vacío) — `CajaClient` no. Se agregó `options.initial` al hook para que Admin no pierda
+     esa garantía.
+  3. El handler `event.closed` de ambos shells originales también llamaba `refetch()`, no solo
+     `setSummary`/abrir el modal — se había omitido en el diseño inicial.
+  4. `CajaClient` tenía `handleOrderUpdated` (pasado a `HistorialSection`) que sincronizaba un
+     pedido tras cancelar/reimprimir un ticket vía HTTP directo, sin esperar el eco SSE — resuelto
+     con `upsertOrder` expuesto por el hook.
+- [x] `AdminClient.tsx` y `CajaClient.tsx` migrados a `useEventState`; `BarraClient.tsx` sin
+  cambios (confirmado con `git diff` vacío en toda la feature).
+- [x] Verificación con `e2e-playwright-tester`: `/admin` sin parpadeo de vacío al cargar, `/caja`
+  en segunda pestaña, venta en efectivo reflejada en vivo cruzando pestañas por SSE, cierre de
+  noche con modal de resumen correcto.
+- [x] Cierre: `tsc --noEmit` (api+web) + `eslint` en 0 + `vitest run` (243/243, subió de 223 al
+  cierre de 3C) + `next build` de punta a punta en verde.
 
 ---
 
