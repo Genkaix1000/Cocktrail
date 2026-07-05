@@ -46,4 +46,19 @@ describe("DrinkCard", () => {
     render(<DrinkCard name="Aperol Spritz" price={4000} variant="trending" />);
     expect(screen.getByText("▲ TREND")).toBeInTheDocument();
   });
+
+  it("muestra el vibe en variante regular cuando viene cargado", () => {
+    render(<DrinkCard name="Fernet con Coca" price={2500} vibe="PROMO AMIGOS" />);
+    expect(screen.getByText("PROMO AMIGOS")).toBeInTheDocument();
+  });
+
+  it("no rompe ni muestra nada extra cuando el vibe viene vacío", () => {
+    render(<DrinkCard name="Fernet con Coca" price={2500} vibe="" />);
+    expect(screen.getByText("Fernet con Coca")).toBeInTheDocument();
+  });
+
+  it("muestra el vibe en variante promo/banner cuando viene cargado", () => {
+    render(<DrinkCard name="2x1 Fernet" price={2500} variant="promo" vibe="FIESTA TOTAL" />);
+    expect(screen.getByText("FIESTA TOTAL")).toBeInTheDocument();
+  });
 });

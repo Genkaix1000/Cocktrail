@@ -73,6 +73,7 @@ function ActionButtons({ quantity, onAdd, onRemove }: ActionButtonsProps) {
 export default function DrinkCard({
   name,
   price,
+  vibe,
   icon,
   image,
   variant = "regular",
@@ -110,6 +111,11 @@ export default function DrinkCard({
             <span className="font-bold text-[16px] text-white leading-tight truncate">
               {name}
             </span>
+            {vibe && (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 truncate">
+                {vibe}
+              </span>
+            )}
             <span className="text-[15px] font-black text-blue tabular mt-1">
               ${price.toLocaleString("es-AR")}
             </span>
@@ -161,6 +167,11 @@ export default function DrinkCard({
 
         <div className="flex items-end justify-between mt-auto">
           <div className="flex flex-col min-w-0 pr-4">
+            {vibe && (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/60 drop-shadow-md truncate">
+                {vibe}
+              </span>
+            )}
             <span className="font-bold text-[20px] leading-tight text-white mb-1 drop-shadow-md">
               {name}
             </span>

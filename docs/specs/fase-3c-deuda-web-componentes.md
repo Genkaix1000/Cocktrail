@@ -237,15 +237,19 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
 - [x] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde (207/207, antes 161) +
   `eslint` en 0.
 
-### Bloque 2 — `Drink.vibe` visible en la carta
+### Bloque 2 — `Drink.vibe` visible en la carta ✅ *(completo)*
 
-- [ ] Confirmar en `apps/web/src/app/carta/` qué componente arma la grilla de tragos y le pasa
-  props a `DrinkCard` (no asumir el nombre del archivo sin verificar).
-- [ ] `apps/web/src/components/shared/DrinkCard.tsx` — usar la prop `vibe?` (línea 25) para
-  renderizar un badge/subtítulo bajo el nombre del trago.
-- [ ] Componente identificado en la tarea anterior — pasar `drink.vibe` a `DrinkCard`.
-- [ ] `apps/web/src/components/shared/DrinkCard.test.tsx` — cubrir el render con y sin `vibe`.
-- [ ] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde.
+- [x] Confirmado: `apps/web/src/app/carta/page.tsx` arma la grilla y renderiza
+  `<DrinkCard key={d.id} {...d} .../>` — al spreadear el `Drink` completo, `vibe` ya viaja solo,
+  sin necesidad de tocar el caller (lo mismo aplica a `VentaSection.tsx` en `/caja`, que usa el
+  mismo spread).
+- [x] `apps/web/src/components/shared/DrinkCard.tsx` — la prop `vibe?` ahora se renderiza como
+  subtítulo uppercase bajo el nombre en ambas variantes (lista "regular" y banner
+  "promo/trending"), solo si viene cargado.
+- [x] `apps/web/src/components/shared/DrinkCard.test.tsx` — 3 tests nuevos: vibe visible en
+  variante regular, vibe vacío no rompe nada, vibe visible en variante promo/banner.
+- [x] `pnpm --filter web typecheck` + `pnpm --filter web test` en verde (210/210, antes 207) +
+  `eslint` en 0 en los archivos tocados.
 
 ### Bloque 3 — `Toast` compartido + `TicketItemRow`
 
