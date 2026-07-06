@@ -326,15 +326,12 @@ export default function DashboardSection({
 function TopProductsList({ products }: { products: ProductRevenue[] }) {
   return (
     <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between min-w-0 h-[380px] shadow-lg">
-      <div className="flex justify-between items-center">
-        <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-            <Wine size={13} />
-          </div>
-          <span>Productos Más Vendidos</span>
-        </h3>
-        <span className="text-[10px] text-accent font-bold hover:underline cursor-pointer">Ver todos</span>
-      </div>
+      <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+          <Wine size={13} />
+        </div>
+        <span>Productos Más Vendidos</span>
+      </h3>
 
       {products.length === 0 ? (
         <EmptyCard text="Aún no hay ventas esta noche" />

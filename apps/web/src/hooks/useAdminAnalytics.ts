@@ -19,7 +19,6 @@ import {
   computeNightRecords,
   computeWeeklyDelta,
   computeMonthlyDelta,
-  filterRecentNights,
 } from "@/lib/analytics";
 
 import type { CashSale, EventSummary, EventTotals, Order } from "@cocktrail/shared";
@@ -107,12 +106,6 @@ export function useAdminAnalytics(
     const _weeklyDelta = computeWeeklyDelta(historyEvents);
     const _monthlyDelta = computeMonthlyDelta(historyEvents);
     const _allTotal = historyEvents.reduce((s, e) => s + e.totals.total, 0);
-    // "Promedio Noche" se calcula sobre una ventana reciente (no todo el
-    // historial acumulado) para que no lo distorsionen noches de hace
-    // meses — mismo criterio que computeNightRecords.
-    const recentNights = filterRecentNights(historyEvents);
-    const recentTotal = recentNights.reduce((s, e) => s + e.totals.total, 0);
-    const _avgNight = recentNights.length > 0 ? Math.round(recentTotal / recentNights.length) : 0;
 
     return {
       maxDrinkQty: _maxDrinkQty,
@@ -134,7 +127,6 @@ export function useAdminAnalytics(
       weeklyDelta: _weeklyDelta,
       monthlyDelta: _monthlyDelta,
       allTotal: _allTotal,
-      avgNight: _avgNight,
       webTotal: _webTotal,
       webCount: _webCount,
       webPct: _webPct,

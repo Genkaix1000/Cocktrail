@@ -7,14 +7,11 @@ import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
 
-// HistorialSection no hace fetch propio: historyEvents/loadingHistory/
-// historyLoaded siguen viviendo en AdminClient (el shell) porque
-// useAdminAnalytics y DashboardSection también dependen de esos datos sin
-// importar qué tab está activo — solo el filtrado/orden/paginación
-// exclusivos de esta vista se movieron acá. Por eso, igual que
-// DashboardSection.test.tsx/EstadisticasSection.test.tsx, reutilizamos el
-// hook real vía renderHook en vez de mockear a mano sus ~30 campos
-// derivados.
+// HistorialSection no hace fetch propio: historyEvents/historyLoaded
+// siguen viviendo en AdminClient (el shell) porque useAdminAnalytics y
+// DashboardSection también dependen de esos datos sin importar qué tab
+// está activo. Reutilizamos el hook real vía renderHook en vez de mockear
+// a mano sus campos derivados (mismo patrón que DashboardSection.test.tsx).
 function computeAnalytics(totals: EventTotals, historyEvents: EventSummary[] = []) {
   const { result } = renderHook(() =>
     useAdminAnalytics(totals, Date.now() - 60 * 60 * 1000, [], [], historyEvents),
@@ -64,7 +61,6 @@ function makeProps(overrides: Partial<Parameters<typeof HistorialSection>[0]> = 
   return {
     analytics: computeAnalytics(totals, historyEvents),
     historyEvents,
-    loadingHistory: false,
     historyLoaded: true,
     isTabTransitioning: false,
     isBosko: false,
@@ -79,12 +75,20 @@ describe("HistorialSection", () => {
     expect(screen.getByText("Historial de Noches")).toBeInTheDocument();
   });
 
-  it("muestra 'sin noches' cuando el historial está vacío", () => {
-    render(<HistorialSection {...makeProps({ historyEvents: [] })} />);
-    expect(screen.getByText("Sin noches cerradas todavía.")).toBeInTheDocument();
+  it("muestra solo 3 MetricCard (sin Promedio Noche)", () => {
+    render(<HistorialSection {...makeProps()} />);
+    expect(screen.getByText("Esta Semana")).toBeInTheDocument();
+    expect(screen.getByText("Este Mes")).toBeInTheDocument();
+    expect(screen.getByText("Total Archivado")).toBeInTheDocument();
+    expect(screen.queryByText("Promedio Noche")).not.toBeInTheDocument();
   });
 
-  it("renderiza el estado de carga (skeleton) mientras loadingHistory/historyLoaded no resolvieron", () => {
+  it("sin noches archivadas, el selector único muestra su propio estado vacío", () => {
+    render(<HistorialSection {...makeProps({ historyEvents: [] })} />);
+    expect(screen.getByText("Todavía no hay noches archivadas.")).toBeInTheDocument();
+  });
+
+  it("renderiza el estado de carga (skeleton) mientras historyLoaded no resolvió", () => {
     const { container } = render(
       <HistorialSection {...makeProps({ historyLoaded: false })} />,
     );
@@ -92,24 +96,20 @@ describe("HistorialSection", () => {
     expect(screen.queryByText("Historial de Noches")).not.toBeInTheDocument();
   });
 
-  it("muestra una noche archivada y dispara onRedirectToLogs al pedir la auditoría", async () => {
+  it("con una noche archivada, el selector único muestra su detalle directo (sin tabla ni popup)", async () => {
     const user = userEvent.setup();
     const night = makeNight();
     const onRedirectToLogs = vi.fn();
 
-    const { container } = render(
+    render(
       <HistorialSection
         {...makeProps({ historyEvents: [night], onRedirectToLogs })}
       />,
     );
 
-    // La noche aparece listada en la tabla de detalle
-    const row = container.querySelector("tbody tr");
-    expect(row).not.toBeNull();
-    expect(row?.textContent).toContain("$15.000");
-
-    // Click en la fila abre el popup de detalle del día
-    await user.click(row as Element);
+    expect(screen.getByText("Totales Consolidados del Día")).toBeInTheDocument();
+    // "Fernet" aparece 2 veces: la card de Trago Estrella y el detalle de la noche.
+    expect(screen.getAllByText("Fernet").length).toBeGreaterThanOrEqual(2);
 
     const auditButton = screen.getByRole("button", { name: /Ver Auditoría de Tickets/i });
     await user.click(auditButton);

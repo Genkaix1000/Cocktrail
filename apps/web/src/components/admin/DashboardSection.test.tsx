@@ -141,6 +141,7 @@ describe("DashboardSection", () => {
     expect(screen.getByText("Ventas Totales")).toBeInTheDocument();
     expect(screen.getByText("Productos Más Vendidos")).toBeInTheDocument();
     expect(screen.getByText("Fernet")).toBeInTheDocument();
+    expect(screen.queryByText("Ver todos")).not.toBeInTheDocument();
   });
 
   it("renderiza el estado de carga (skeleton) cuando isFirstLoad es true", () => {

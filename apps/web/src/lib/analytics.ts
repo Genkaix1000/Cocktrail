@@ -59,11 +59,41 @@ export type OperationalVelocity = {
 };
 
 export type NightRecord = {
-  type: "best" | "worst" | "longest" | "shortest" | "star_drink";
+  type: "star_drink";
   label: string;
   value: string;
   sub: string;
   event?: EventSummary;
+};
+
+/**
+ * Un "día" de historial unifica todas las sesiones (`EventSummary`) cerradas
+ * el mismo día calendario en un solo registro con totales sumados — lo
+ * construye `HistorialSection.tsx` (agrupando por `dateKey`) y lo consume
+ * `NightComparator.tsx` para el selector de detalle/comparación. Vive acá
+ * (no en el componente) porque ambos lo necesitan tipado sin recurrir a un
+ * cast `as any[]`.
+ */
+export type UnifiedNightDay = {
+  dateKey: string;
+  monthLabel: string;
+  startedAt: number;
+  closedAt: number;
+  sessions: EventSummary[];
+  totals: {
+    total: number;
+    webTotal: number;
+    webCount: number;
+    efectivoTotal: number;
+    efectivoCount: number;
+    qrTotal: number;
+    qrCount: number;
+    debitoTotal: number;
+    debitoCount: number;
+    drinksSold: DrinkSold[];
+  };
+  orderCounter: number;
+  cashSalesCount: number;
 };
 
 // ─────────────────────── A1: Delta Comparativo ───────────────────────
@@ -395,10 +425,12 @@ export function filterRecentNights(
 }
 
 /**
- * Récords (mejor/peor noche, más larga, trago estrella) sobre una ventana
- * reciente en vez de todo el historial acumulado — si no hay noches en la
- * ventana (ej. barra recién arrancando o mes flojo), cae al historial
- * completo para no mostrar "sin datos" habiendo datos más viejos.
+ * Trago Estrella sobre una ventana reciente en vez de todo el historial
+ * acumulado — si no hay noches en la ventana (ej. barra recién arrancando o
+ * mes flojo), cae al historial completo para no mostrar "sin datos"
+ * habiendo datos más viejos. (Mejor/Peor Noche y Noche Más Larga se
+ * eliminaron — no cambiaban ninguna decisión, ver
+ * docs/specs/simplificar-historial-noches.md).
  */
 export function computeNightRecords(
   historyEvents: EventSummary[],
@@ -411,82 +443,7 @@ export function computeNightRecords(
   const hasRecent = historyEvents.some((e) => (e.closedAt ?? e.startedAt) >= windowStart);
   const windowLabel = hasRecent ? `últimos ${windowDays} días` : "historial total";
 
-  const WEEKDAYS = [
-    "Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado",
-  ];
-  const MONTHS_SHORT = [
-    "ene", "feb", "mar", "abr", "may", "jun",
-    "jul", "ago", "sep", "oct", "nov", "dic",
-  ];
-
-  const formatDate = (ts: number) => {
-    const d = new Date(ts);
-    return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
-  };
-
   const records: NightRecord[] = [];
-
-  // Best night by revenue
-  const best = [...scoped].sort(
-    (a, b) => b.totals.total - a.totals.total,
-  )[0]!;
-  records.push({
-    type: "best",
-    label: "Mejor Noche",
-    value: `$${best.totals.total.toLocaleString("es-AR")}`,
-    sub: `${formatDate(best.closedAt ?? best.startedAt)} (${windowLabel})`,
-    event: best,
-  });
-
-  // Worst night (exclude events shorter than 1 hour)
-  const validNights = scoped.filter((e) => {
-    if (!e.closedAt) return false;
-    return e.closedAt - e.startedAt >= 3600 * 1000;
-  });
-  if (validNights.length > 0) {
-    const worst = [...validNights].sort(
-      (a, b) => a.totals.total - b.totals.total,
-    )[0]!;
-    records.push({
-      type: "worst",
-      label: "Peor Noche",
-      value: `$${worst.totals.total.toLocaleString("es-AR")}`,
-      sub: `${formatDate(worst.closedAt ?? worst.startedAt)} (${windowLabel})`,
-      event: worst,
-    });
-  }
-
-  // Longest night (measured from first drink sale to last drink sale)
-  const withDuration = scoped.map((e) => {
-    const timestamps = [
-      ...(e.orders || []).map((o) => o.createdAt),
-      ...(e.cashSales || []).map((c) => c.createdAt),
-    ];
-    let duration = 0;
-    if (timestamps.length > 0) {
-      duration = Math.max(...timestamps) - Math.min(...timestamps);
-    } else if (e.closedAt) {
-      duration = e.closedAt - e.startedAt;
-    }
-    return { ...e, duration };
-  });
-
-  if (withDuration.length > 0) {
-    const longest = [...withDuration].sort(
-      (a, b) => b.duration - a.duration,
-    )[0]!;
-    const hrs = Math.floor(longest.duration / (60 * 60 * 1000));
-    const mins = Math.round(
-      (longest.duration % (60 * 60 * 1000)) / 60000,
-    );
-    records.push({
-      type: "longest",
-      label: "Noche Más Larga",
-      value: longest.duration > 0 ? `${hrs}h ${mins}m` : "0h 0m",
-      sub: `${formatDate(longest.closedAt ?? longest.startedAt)} (${windowLabel})`,
-      event: longest,
-    });
-  }
 
   // Star drink (most sold dentro de la ventana)
   const drinkAcc = new Map<number, { name: string; qty: number }>();

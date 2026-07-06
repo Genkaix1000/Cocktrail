@@ -74,7 +74,6 @@ export default function AdminClient({
 
   // Historial lazy data state
   const [historyEvents, setHistoryEvents] = useState<EventSummary[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // Puente Historial → Logs: LogsSection se monta de cero cada vez que
@@ -128,16 +127,13 @@ export default function AdminClient({
 
   // Fetch history on mount
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingHistory(true);
     eventsService
       .getHistory()
       .then((data) => {
         setHistoryEvents((data || []).filter(e => e.totals.total > 0));
-        setLoadingHistory(false);
         setHistoryLoaded(true);
       })
-      .catch(() => setLoadingHistory(false));
+      .catch(() => {});
   }, []);
 
   const handleTabChange = (tab: string) => {
@@ -566,7 +562,6 @@ export default function AdminClient({
             <HistorialSection
               analytics={analytics}
               historyEvents={historyEvents}
-              loadingHistory={loadingHistory}
               historyLoaded={historyLoaded}
               isTabTransitioning={isTabTransitioning}
               isBosko={isBosko}

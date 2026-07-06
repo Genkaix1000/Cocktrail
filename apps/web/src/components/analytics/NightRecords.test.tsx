@@ -6,10 +6,10 @@ import type { NightRecord } from "@/lib/analytics";
 
 function makeRecord(overrides: Partial<NightRecord> = {}): NightRecord {
   return {
-    type: "best",
-    label: "Mejor Noche",
-    value: "$120.000",
-    sub: "Vie 6 jun",
+    type: "star_drink",
+    label: "Trago Estrella",
+    value: "Fernet con Coca",
+    sub: "23 unidades vendidas (últimos 30 días)",
     ...overrides,
   };
 }
@@ -20,19 +20,10 @@ describe("NightRecords", () => {
     expect(screen.getByText("Aún no hay récords registrados")).toBeInTheDocument();
   });
 
-  it("renderiza una card por récord con su emoji", () => {
-    render(
-      <NightRecords
-        records={[
-          makeRecord({ type: "best", label: "Mejor Noche" }),
-          makeRecord({ type: "worst", label: "Peor Noche", sub: "Lun 2 jun" }),
-        ]}
-        isBosko={false}
-      />
-    );
-    expect(screen.getByText("Mejor Noche")).toBeInTheDocument();
-    expect(screen.getByText("Peor Noche")).toBeInTheDocument();
-    expect(screen.getByText("🏆")).toBeInTheDocument();
-    expect(screen.getByText("📉")).toBeInTheDocument();
+  it("renderiza la card de Trago Estrella con su emoji", () => {
+    render(<NightRecords records={[makeRecord()]} isBosko={false} />);
+    expect(screen.getByText("Trago Estrella")).toBeInTheDocument();
+    expect(screen.getByText("Fernet con Coca")).toBeInTheDocument();
+    expect(screen.getByText("🍹")).toBeInTheDocument();
   });
 });

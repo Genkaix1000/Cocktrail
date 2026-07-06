@@ -1,18 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import NightComparator from "./NightComparator";
+import type { UnifiedNightDay } from "@/lib/analytics";
 import type { EventSummary } from "@cocktrail/shared";
 
-function makeNight(overrides: Partial<EventSummary> = {}): EventSummary {
-  const startedAt = Date.now() - 5 * 60 * 60 * 1000;
-  const closedAt = Date.now();
+function makeSession(overrides: Partial<EventSummary> = {}): EventSummary {
   return {
-    id: "night-1",
+    id: "session-1",
     status: "cerrado",
-    startedAt,
-    closedAt,
+    startedAt: Date.now() - 5 * 60 * 60 * 1000,
+    closedAt: Date.now(),
     orderCounter: 10,
     orders: [],
     cashSales: [],
@@ -32,22 +31,62 @@ function makeNight(overrides: Partial<EventSummary> = {}): EventSummary {
   };
 }
 
+function makeNight(overrides: Partial<UnifiedNightDay> = {}): UnifiedNightDay {
+  const session = makeSession();
+  return {
+    dateKey: "5/7/2026",
+    monthLabel: "Julio 2026",
+    startedAt: session.startedAt,
+    closedAt: session.closedAt!,
+    sessions: [session],
+    orderCounter: session.orderCounter,
+    cashSalesCount: session.cashSales.length,
+    totals: session.totals,
+    ...overrides,
+  };
+}
+
+const noop = () => {};
+
 describe("NightComparator", () => {
-  it("pide al menos 2 noches cerradas para comparar", () => {
-    render(<NightComparator nights={[makeNight()]} isBosko={false} />);
-    expect(
-      screen.getByText("Se necesitan al menos 2 noches cerradas para comparar.")
-    ).toBeInTheDocument();
+  it("muestra un estado vacío sin noches archivadas", () => {
+    render(<NightComparator nights={[]} isBosko={false} onRedirectToLogs={noop} />);
+    expect(screen.getByText("Todavía no hay noches archivadas.")).toBeInTheDocument();
   });
 
-  it("compara las 2 noches más recientes por default y muestra el delta", () => {
-    const nightA = makeNight({ id: "night-1", closedAt: Date.now() });
+  it("con una sola noche, muestra su detalle en vez de pedir una comparación", () => {
+    render(<NightComparator nights={[makeNight()]} isBosko={false} onRedirectToLogs={noop} />);
+    expect(screen.getByText("Totales Consolidados del Día")).toBeInTheDocument();
+    expect(screen.getByText("Detalle de Sesiones Individuales")).toBeInTheDocument();
+    expect(screen.getByText("Ver Auditoría de Tickets")).toBeInTheDocument();
+  });
+
+  it("llama a onRedirectToLogs con la fecha de la noche al click en Ver Auditoría de Tickets", async () => {
+    const user = userEvent.setup();
+    const onRedirectToLogs = vi.fn();
+    const night = makeNight();
+    render(<NightComparator nights={[night]} isBosko={false} onRedirectToLogs={onRedirectToLogs} />);
+
+    await user.click(screen.getByText("Ver Auditoría de Tickets"));
+    expect(onRedirectToLogs).toHaveBeenCalledExactlyOnceWith(night.closedAt);
+  });
+
+  it("al elegir una 2da noche (Noche B), muestra la comparación con delta", async () => {
+    const user = userEvent.setup();
+    const nightA = makeNight({ dateKey: "a", closedAt: Date.now() });
     const nightB = makeNight({
-      id: "night-2",
+      dateKey: "b",
       closedAt: Date.now() - 24 * 60 * 60 * 1000,
       totals: { ...nightA.totals, total: 50000 },
     });
-    render(<NightComparator nights={[nightA, nightB]} isBosko={false} />);
+    render(<NightComparator nights={[nightA, nightB]} isBosko={false} onRedirectToLogs={noop} />);
+
+    // Por default (sin elegir B) se ve el detalle de A, no la comparación.
+    expect(screen.getByText("Totales Consolidados del Día")).toBeInTheDocument();
+
+    const selects = screen.getAllByRole("combobox");
+    await user.selectOptions(selects[1]!, "1");
+
     expect(screen.getByText("Total Facturado")).toBeInTheDocument();
     expect(screen.getByText("$100.000")).toBeInTheDocument();
     expect(screen.getByText("$50.000")).toBeInTheDocument();
@@ -56,10 +95,14 @@ describe("NightComparator", () => {
 
   it("permite cambiar la noche seleccionada en el selector A", async () => {
     const user = userEvent.setup();
-    const nightA = makeNight({ id: "night-1", closedAt: Date.now() });
-    const nightB = makeNight({ id: "night-2", closedAt: Date.now() - 86400000 });
-    const nightC = makeNight({ id: "night-3", closedAt: Date.now() - 172800000, totals: { ...nightA.totals, total: 1000 } });
-    render(<NightComparator nights={[nightA, nightB, nightC]} isBosko={false} />);
+    const nightA = makeNight({ dateKey: "a", closedAt: Date.now() });
+    const nightB = makeNight({ dateKey: "b", closedAt: Date.now() - 86400000 });
+    const nightC = makeNight({
+      dateKey: "c",
+      closedAt: Date.now() - 172800000,
+      totals: { ...nightA.totals, total: 1000 },
+    });
+    render(<NightComparator nights={[nightA, nightB, nightC]} isBosko={false} onRedirectToLogs={noop} />);
 
     const selects = screen.getAllByRole("combobox");
     await user.selectOptions(selects[0]!, "2");
