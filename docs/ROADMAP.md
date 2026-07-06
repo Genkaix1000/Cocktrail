@@ -384,6 +384,42 @@ tienen ningún consumidor hoy — candidatos a limpieza en una pasada aparte.
 
 ---
 
+## Feature — Simplificar Historial de Noches 📉 *(completa)*
+
+**Objetivo**: Historial de Noches mostraba 8 tarjetas + 2 widgets interactivos (4 `MetricCard`,
+4 "récords", un Comparador de Noches y una tabla ordenable/paginada con popup) — muy por encima
+del rango de 5-9 elementos que la literatura de UX de dashboards recomienda por pantalla antes de
+que suba la carga cognitiva y el error. Varios de esos datos tampoco eran accionables (Promedio
+Noche sin tendencia; Peor Noche/Noche Más Larga sin contexto de por qué). Spec completa en
+`docs/specs/simplificar-historial-noches.md` (estado `done`), implementada directo en `develop`,
+sin cambios de datos/backend/SSE (mismo criterio que `simplificar-dashboard-admin`).
+
+- [x] **Métricas recortadas a lo accionable**: quedan 3 `MetricCard` (Esta Semana / Este Mes /
+  Total Archivado) — se elimina "Promedio Noche" (`avgNight` sacado de `useAdminAnalytics`).
+- [x] **Récords recortados a Trago Estrella**: `computeNightRecords` (`lib/analytics.ts`) ya no
+  calcula Mejor Noche/Peor Noche/Noche Más Larga — solo el trago más vendido (ventana de 30 días,
+  con fallback a todo el historial). `NightRecords.tsx` pasa de un grid de 4 tarjetas a una sola.
+- [x] **Comparador de Noches + tabla "Detalle por Noche" → un único selector**:
+  `NightComparator.tsx` extiende su segundo selector ("Noche B") para admitir "— Ver solo Noche
+  A —" (sentinel `-1`); sin B seleccionada muestra el detalle de esa noche (totales, tragos
+  vendidos, sesiones individuales y el botón "Ver Auditoría de Tickets" — contenido que antes
+  vivía en el popup de la tabla), con B seleccionada muestra la comparación que ya existía. Se
+  elimina la tabla completa de `HistorialSection.tsx` (filtro por mes, columnas ordenables,
+  paginación, popup) — mismo criterio de "un solo patrón de interacción" que unificar dos
+  mecánicas para la misma tarea. De paso se corrigió el tipo `nights` de `NightComparator` (el
+  shape real es el "día unificado" que arma `HistorialSection`, con `dateKey`, no `EventSummary`
+  — se sacó el cast `as any[]`, tipo nuevo `UnifiedNightDay` en `lib/analytics.ts`).
+- [x] **Dashboard**: se saca el link muerto "Ver todos" de "Productos Más Vendidos" (no llevaba a
+  ningún lado).
+- [x] **Código muerto eliminado de paso**: el estado `loadingHistory`/`setLoadingHistory` en
+  `AdminClient.tsx` quedaba sin consumidor real tras sacar la tabla (su único uso era el spinner
+  de carga de la tabla eliminada — `historyLoaded` ya gatilla el skeleton general de la vista).
+- [x] Cierre: `tsc --noEmit` (api+web) + `eslint` sin errores nuevos + `vitest run` (236/236,
+  subió de 233 al cierre de `simplificar-dashboard-admin`) + `next build` de punta a punta en
+  verde. Verificación E2E con `e2e-playwright-tester`.
+
+---
+
 ## Fase 4 — E2E post-refactor 🧪
 
 **Objetivo**: una vez que API y Web estén auditadas, pruebas E2E (Playwright, agente
