@@ -31,7 +31,7 @@ export class OrdersService {
   async createOrder(input: NewOrderInput, createdBy?: string): Promise<CreateOrderResult> {
     const event = await this.getActiveEvent();
     if (!event || event.status !== "activo") {
-      throw new Conflict("No hay un evento activo. No se pueden crear pedidos.");
+      throw new Conflict("Todavía no se abrió la noche. Pedile al admin que la abra desde /admin para poder cobrar.");
     }
     if (input.items.length === 0) {
       throw new BadRequest("El pedido no tiene items.");

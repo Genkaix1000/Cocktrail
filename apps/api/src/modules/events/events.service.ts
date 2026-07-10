@@ -132,7 +132,7 @@ export class EventsService {
 
   async incrementOrderCounter(): Promise<number> {
     await this.ensureInitialized();
-    if (!this.event) throw new Conflict("No hay un evento activo.");
+    if (!this.event) throw new Conflict("Todavía no se abrió la noche. Pedile al admin que la abra desde /admin para poder cobrar.");
     const nextCounter = this.event.orderCounter + 1;
     this.event.orderCounter = nextCounter;
     await this.eventsRepo.update(this.event.id, { orderCounter: nextCounter });

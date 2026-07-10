@@ -13,7 +13,7 @@ export class CashSalesService {
   async addCashSale(input: NewCashSaleInput, addedBy: string): Promise<CashSale> {
     const event = await this.getActiveEvent();
     if (!event || event.status !== "activo") {
-      throw new Conflict("No hay un evento activo.");
+      throw new Conflict("Todavía no se abrió la noche. Pedile al admin que la abra desde /admin para poder cobrar.");
     }
     if (input.amount <= 0) throw new BadRequest("Monto inválido.");
 

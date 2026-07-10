@@ -135,7 +135,7 @@ describe("EventsService.incrementOrderCounter", () => {
   it("tira Conflict si no hay evento activo", async () => {
     const service = makeService();
     await service.initialize();
-    await expect(service.incrementOrderCounter()).rejects.toThrow(/evento activo/);
+    await expect(service.incrementOrderCounter()).rejects.toThrow(/no se abrió la noche/);
   });
 
   it("incrementa el contador secuencialmente", async () => {

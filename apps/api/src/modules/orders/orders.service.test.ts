@@ -67,7 +67,7 @@ describe("OrdersService.createOrder", () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo();
     const service = new OrdersService(ordersRepo, drinksRepo, async () => null, async () => 1);
-    await expect(service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" })).rejects.toThrow(/evento activo/);
+    await expect(service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" })).rejects.toThrow(/no se abrió la noche/);
   });
 
   it("tira BadRequest si no hay items", async () => {
