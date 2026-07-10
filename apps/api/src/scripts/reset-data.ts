@@ -16,21 +16,37 @@ export async function countRows(client: SupabaseClient, table: string): Promise<
   return count ?? 0;
 }
 
+function isMissingTableError(error: { code?: string; message: string }): boolean {
+  return error.code === "PGRST205" || error.message.includes("Could not find the table");
+}
+
 /**
  * Vacía cada tabla de `tables` en `client`. supabase-js no expone un
  * `.truncate()`, así que se usa el patrón estándar "borrar todo":
  * `.delete().not("id", "is", null)` — todas las tablas relevantes tienen
  * PK `id`.
+ *
+ * Si una tabla directamente no existe en ese entorno (ej. `audit_logs`
+ * todavía no migrada a cloud — ver riesgo R13), se saltea con un aviso en
+ * vez de abortar el resto del reset: no tiene sentido que falte una
+ * migración en cloud bloquee el borrado de las tablas que sí existen.
  */
 export async function resetData(
   client: SupabaseClient,
   tables: readonly string[] = TABLES_TO_RESET,
-): Promise<Record<string, number>> {
-  const deleted: Record<string, number> = {};
+): Promise<Record<string, number | null>> {
+  const deleted: Record<string, number | null> = {};
   for (const table of tables) {
     const before = await countRows(client, table);
     const { error } = await client.from(table).delete().not("id", "is", null);
-    if (error) throw new Error(`No se pudo vaciar "${table}": ${error.message}`);
+    if (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️  "${table}" no existe en este entorno — se saltea (no bloquea el resto).`);
+        deleted[table] = null;
+        continue;
+      }
+      throw new Error(`No se pudo vaciar "${table}": ${error.message}`);
+    }
     deleted[table] = before;
   }
   return deleted;

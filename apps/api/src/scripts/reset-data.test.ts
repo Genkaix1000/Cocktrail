@@ -3,7 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { countRows, parseArgs, resetData, TABLES_TO_RESET } from "./reset-data.js";
 
-type TableConfig = { count?: number; countError?: { message: string }; deleteError?: { message: string } };
+type TableConfig = {
+  count?: number;
+  countError?: { message: string };
+  deleteError?: { message: string; code?: string };
+};
 
 /**
  * Fake mínimo del query builder "thenable" de supabase-js, con soporte para
@@ -98,12 +102,28 @@ describe("resetData", () => {
     expect(calls.every((c) => c.table === "users")).toBe(true);
   });
 
-  it("lanza si el delete de una tabla falla", async () => {
+  it("lanza si el delete de una tabla falla por un error real", async () => {
     const { client } = makeFakeClient({
       night_events: { count: 1, deleteError: { message: "permission denied" } },
     });
 
     await expect(resetData(client, ["night_events"])).rejects.toThrow(/night_events.*permission denied/);
+  });
+
+  it("saltea (sin lanzar) una tabla que no existe en ese entorno, y sigue con las demás", async () => {
+    const { client, calls } = makeFakeClient({
+      night_events: { count: 3 },
+      users: { count: 2 },
+      audit_logs: {
+        deleteError: { message: "Could not find the table 'public.audit_logs' in the schema cache", code: "PGRST205" },
+      },
+    });
+
+    const deleted = await resetData(client);
+
+    expect(deleted).toEqual({ night_events: 3, users: 2, audit_logs: null });
+    // igual intentó borrar audit_logs, no lo saltea de antemano
+    expect(calls).toContainEqual({ table: "audit_logs", op: "delete" });
   });
 });
 
