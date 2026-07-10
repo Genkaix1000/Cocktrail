@@ -53,13 +53,40 @@ function makeCallbacks() {
 }
 
 describe("useCajaShortcuts", () => {
-  it("Enter abre el checkout cuando hay items y está cerrado", () => {
+  it("tecla C abre el checkout cuando hay items y está cerrado", () => {
+    const callbacks = makeCallbacks();
+    renderHook(() => useCajaShortcuts(baseState({ totalItems: 2 }), callbacks));
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    expect(callbacks.onOpenCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it("tecla C no abre el checkout si el carrito está vacío", () => {
+    const callbacks = makeCallbacks();
+    renderHook(() => useCajaShortcuts(baseState({ totalItems: 0 }), callbacks));
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    expect(callbacks.onOpenCheckout).not.toHaveBeenCalled();
+  });
+
+  it("tecla C no abre el checkout si ya está abierto", () => {
+    const callbacks = makeCallbacks();
+    renderHook(() => useCajaShortcuts(baseState({ isCheckoutOpen: true, totalItems: 2 }), callbacks));
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    expect(callbacks.onOpenCheckout).not.toHaveBeenCalled();
+  });
+
+  it("Enter ya no abre el checkout (esa acción quedó en la tecla C)", () => {
     const callbacks = makeCallbacks();
     renderHook(() => useCajaShortcuts(baseState({ totalItems: 2 }), callbacks));
 
     fireEvent.keyDown(window, { key: "Enter" });
 
-    expect(callbacks.onOpenCheckout).toHaveBeenCalledTimes(1);
+    expect(callbacks.onOpenCheckout).not.toHaveBeenCalled();
     expect(callbacks.onConfirmCash).not.toHaveBeenCalled();
     expect(callbacks.onNewSale).not.toHaveBeenCalled();
   });

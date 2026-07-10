@@ -567,6 +567,7 @@ export default function VentaSection({ drinks, printer }: Props) {
             >
               <Receipt size={16} strokeWidth={2.5} />
               Cobrar
+              <span className="text-[9px] font-mono opacity-60 normal-case tracking-normal">(C)</span>
             </button>
           </div>
         </aside>

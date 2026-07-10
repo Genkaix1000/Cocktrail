@@ -25,15 +25,18 @@ type CajaShortcutsCallbacks = {
 
 /**
  * Atajos de teclado de la pantalla de venta de caja: Enter resuelve una de
- * cuatro acciones distintas según el estado (agregar el producto resaltado
- * del grid / abrir cobro / confirmar efectivo / nueva venta — nunca más de
- * una a la vez), 1/2/3 eligen método de pago, E carga el monto exacto en
- * efectivo, Escape retrocede un paso en el checkout y Espacio repite el
- * "Nueva Venta" de la pantalla de éxito. Mismo patrón que
- * useScannerInput.ts: listener único en window, con guardas de foco para
- * no interferir con inputs de texto. `onEscape` decide qué significa
- * "retroceder" según el estado — esa lógica vive en el componente porque
- * depende de campos de Posnet que este hook no necesita conocer.
+ * tres acciones según el estado (agregar el producto resaltado del grid /
+ * confirmar efectivo / nueva venta — nunca más de una a la vez), C abre el
+ * cobro (separado de Enter a propósito: si el grid tiene un producto
+ * resaltado, Enter siempre lo agrega, así que abrir el cobro necesita su
+ * propia tecla en vez de competir con esa acción), 1/2/3 eligen método de
+ * pago, E carga el monto exacto en efectivo, Escape retrocede un paso en
+ * el checkout y Espacio repite el "Nueva Venta" de la pantalla de éxito.
+ * Mismo patrón que useScannerInput.ts: listener único en window, con
+ * guardas de foco para no interferir con inputs de texto. `onEscape`
+ * decide qué significa "retroceder" según el estado — esa lógica vive en
+ * el componente porque depende de campos de Posnet que este hook no
+ * necesita conocer.
  */
 export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShortcutsCallbacks) {
   const { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems, highlightedGridIndex } = state;
@@ -61,8 +64,6 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
           onConfirmCash();
         } else if (!isCheckoutOpen && highlightedGridIndex !== null) {
           onSelectHighlighted();
-        } else if (!isCheckoutOpen && totalItems > 0) {
-          onOpenCheckout();
         }
         return;
       }
@@ -76,6 +77,11 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
         if (event.key === "1") onSelectMethod("efectivo");
         else if (event.key === "2") onSelectMethod("debito");
         else if (event.key === "3") onSelectMethod("qr");
+        return;
+      }
+
+      if (event.key.toLowerCase() === "c" && !isCheckoutOpen && totalItems > 0) {
+        onOpenCheckout();
         return;
       }
 

@@ -119,13 +119,22 @@ describe("VentaSection", () => {
     expect(screen.getAllByText("$2.500").length).toBeGreaterThan(0);
   });
 
-  it("abre el checkout con Enter cuando el carrito tiene items (atajo de teclado)", async () => {
+  it("abre el checkout con la tecla C cuando el carrito tiene items (atajo de teclado)", async () => {
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    await addFirstDrinkToCart();
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
+  });
+
+  it("Enter ya no abre el checkout (evita re-agregar sin querer con el grid resaltado)", async () => {
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
     await addFirstDrinkToCart();
 
     fireEvent.keyDown(window, { key: "Enter" });
 
-    expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
+    expect(screen.queryByText("Total a cobrar")).not.toBeInTheDocument();
   });
 
   it("navega el grid con flechas y agrega el producto resaltado con Enter", async () => {
@@ -194,7 +203,7 @@ describe("VentaSection", () => {
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
     await addFirstDrinkToCart();
 
-    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.keyDown(window, { key: "c" });
     expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "Escape" });
