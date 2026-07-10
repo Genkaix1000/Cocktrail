@@ -19,7 +19,8 @@ pnpm install
 cp apps/api/.env.example apps/api/.env   # completar AUTH_SECRET, etc.
 cp apps/web/.env.example apps/web/.env   # AUTH_SECRET debe coincidir con la api
 
-pnpm dev          # api (:3001) + web (:3000) en paralelo
+docker compose up -d   # levanta Supabase local (Postgres + PostgREST + Kong, REST en :54321)
+pnpm dev                # api (:3001) + web (:3000) en paralelo
 # para que el celu acceda por LAN: pnpm dev:web ya usa -H 0.0.0.0
 ```
 
@@ -34,8 +35,37 @@ Roles de prueba (fallback): `admin/admin`, `caja/caja`, `barra/barra`.
 ```bash
 pnpm typecheck    # tsc --noEmit en api + web
 pnpm build        # build de ambas apps
-docker compose up -d # Supabase local (REST en :54321) — ver docs/DEPLOY.md
+docker compose up -d    # levanta Supabase local (REST en :54321) — ver docs/DEPLOY.md
+docker compose down     # baja el stack local (agregá -v para borrar también el volumen de datos)
 ```
+
+## Resetear datos (dejar la base limpia)
+
+`pnpm --filter cocktrail-api db:reset -- --target=local|cloud` vacía `night_events`, `orders`,
+`tickets`, `cash_sales`, `users` y `audit_logs` (noches, pedidos, tickets, ventas en efectivo y
+usuarios custom creados desde `/admin`). **No toca** `drinks` (la carta) ni `app_config` — es
+contenido real del local, no dato de prueba. Ver `apps/api/src/scripts/reset-data.ts`.
+
+```bash
+pnpm --filter cocktrail-api db:reset -- --target=local            # pide confirmación tipeada
+pnpm --filter cocktrail-api db:reset -- --target=local --yes      # sin confirmación (solo local)
+pnpm --filter cocktrail-api db:reset -- --target=cloud            # SIEMPRE pide confirmación tipeada, sin --yes posible
+```
+
+- **`--target=local`**: usalo todas las veces que quieras durante desarrollo/testeo para limpiar
+  la base de la mini-PC (ej. después de probar un flujo de cobro, antes de una demo). No requiere
+  nada especial, `docker compose up -d` alcanza.
+- **`--target=cloud`**: borra los datos reales de Supabase Cloud (producción). Requiere
+  `SUPABASE_CLOUD_URL` y `SUPABASE_CLOUD_SERVICE_ROLE_KEY` configuradas en `apps/api/.env` — si
+  no están, el comando falla explícitamente en vez de fallar en silencio. **Correr solo el día de
+  la entrega real**, no antes (mientras se sigue developeando conviene tener datos de prueba en
+  cloud para verificar que el sync funciona).
+- Después de un reset, la tabla `users` se re-siembra sola con el admin default al reiniciar el
+  server (`ensureLocalMasterDataSeeded`) — el login de `admin`/`caja`/`barra` sigue funcionando
+  igual en cualquier caso, porque tiene un fallback por variables de entorno independiente de la
+  tabla (`apps/api/src/modules/auth/auth.service.ts`).
+- El server **ya no siembra historial de demo automáticamente al arrancar** (antes lo hacía si no
+  había noches cerradas) — así un reset queda limpio de verdad entre reinicios.
 
 ## Documentación
 

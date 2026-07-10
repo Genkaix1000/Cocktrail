@@ -1,7 +1,6 @@
 import { env } from "./config/env.js";
 import { app, eventsService } from "./app.js";
 import { syncService } from "./modules/sync/sync.service.js";
-import { seedHistoryDemo } from "./data/seed-history.js";
 import { supabase } from "./shared/supabase.js";
 import { exec } from "node:child_process";
 
@@ -75,13 +74,6 @@ async function boot() {
     await eventsService.initialize();
     console.log("[boot] EventsService initialized");
 
-    // Seed the closed night history demo if database is empty
-    const closed = await eventsService.listClosedEvents();
-    if (closed.length === 0) {
-      await seedHistoryDemo(eventsService);
-      console.log("[boot] Historial demo seedeado");
-    }
-
     // Ensure local master data is seeded in the background (no Cloud Pull on boot)
     console.log("[boot] Ensuring local master data is seeded...");
     await syncService.ensureLocalMasterDataSeeded();
@@ -109,12 +101,6 @@ async function boot() {
         // Re-run initialization steps
         await eventsService.initialize();
         console.log("[boot] [Retry] EventsService initialized");
-
-        const closed = await eventsService.listClosedEvents();
-        if (closed.length === 0) {
-          await seedHistoryDemo(eventsService);
-          console.log("[boot] [Retry] Historial demo seedeado");
-        }
 
         console.log("[boot] [Retry] Ensuring local master data is seeded...");
         await syncService.ensureLocalMasterDataSeeded();

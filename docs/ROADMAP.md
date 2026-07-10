@@ -469,6 +469,17 @@ nada a mano.
 - [ ] Integrar la impresora térmica (Fase 1) dentro del paquete.
 - [ ] Multi-tenant (slug por boliche) + RLS en Supabase.
 
+### Dejar la base limpia antes de entregar
+
+- [x] Comando `pnpm --filter cocktrail-api db:reset -- --target=local` (o `--target=cloud`) vacía
+  `night_events`/`orders`/`tickets`/`cash_sales`/`users`/`audit_logs` (cascada desde
+  `night_events`) sin tocar `drinks`/`app_config`. Pide confirmación tipeada siempre para
+  `cloud`; `--yes` solo vale para `local`. Ver `apps/api/src/scripts/reset-data.ts`.
+- [x] Se sacó el auto-seed de historial demo (`seedHistoryDemo`) del boot del server — antes se
+  re-insertaban noches falsas en cada arranque si no había noches cerradas.
+- [ ] Correr `db:reset --target=cloud` recién el día de la entrega real (no antes, para no perder
+  datos de prueba útiles mientras se sigue developeando).
+
 ### Acceso simple (sin escribir IP/localhost) — surgió al planear el setup con una sola tablet
 
 **Contexto**: el boliche de prueba tiene **una sola tablet** — no hay mini-PC + tablet + laptop
