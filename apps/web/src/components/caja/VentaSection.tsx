@@ -31,6 +31,7 @@ import { mercadopagoService } from "@/services/mercadopago.service";
 import { useCheckout } from "@/hooks/useCheckout";
 import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
+import { useGridColumns } from "@/hooks/useGridColumns";
 import type { Drink } from "@cocktrail/shared";
 
 type Props = {
@@ -315,9 +316,52 @@ export default function VentaSection({ drinks, printer }: Props) {
     stopPolling();
   }
 
+  // Retrocede un paso en el checkout, replicando lo que hace el botón
+  // "Atrás"/"Volver Atrás" visible en cada pantalla del modal (no cierra
+  // todo salvo que ya esté en la selección de método).
+  function handleEscape() {
+    if (!isCheckoutOpen || latestOrder) return;
+
+    if (posnetStatus === "error") {
+      setPosnetStatus("idle");
+      setPaymentMethod(null);
+      setPaymentIntentState(null);
+      setPosnetErrorMessage(null);
+      setCurrentIntentId(null);
+      return;
+    }
+
+    const isPosInProgress = (paymentMethod === "debito" || paymentMethod === "qr") && posnetStatus !== "idle";
+    if (isPosInProgress) {
+      if (paymentIntentState === "ON_TERMINAL") return; // no se puede salir con el cobro activo en el lector
+      stopPolling();
+      if (currentIntentId) {
+        mercadopagoService.cancelPosIntent(currentIntentId).catch((err) => console.warn("Error canceling intent (handled):", err));
+      }
+      setPaymentMethod(null);
+      setPosnetStatus("idle");
+      setPaymentIntentState(null);
+      setCurrentIntentId(null);
+      return;
+    }
+
+    if (paymentMethod) {
+      // Efectivo: volver a la selección de método.
+      setPaymentMethod(null);
+      setPosnetStatus("idle");
+      setPaymentIntentState(null);
+      return;
+    }
+
+    // Sin método elegido todavía: cerrar el checkout por completo.
+    closeCheckout();
+  }
+
+  const gridColumns = useGridColumns();
   const { highlightedIndex: gridHighlightedIndex } = useProductGridNav({
     length: filteredDrinks.length,
     enabled: !isCheckoutOpen,
+    columns: gridColumns,
   });
 
   useCajaShortcuts(
@@ -332,6 +376,7 @@ export default function VentaSection({ drinks, printer }: Props) {
         const drink = filteredDrinks[gridHighlightedIndex ?? -1];
         if (drink) addToCart(drink.id);
       },
+      onEscape: handleEscape,
     },
   );
 

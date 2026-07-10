@@ -189,4 +189,54 @@ describe("VentaSection", () => {
 
     expect(await screen.findByText(/Esperando pago con Tarjeta/i)).toBeInTheDocument();
   });
+
+  it("Escape sin método elegido cierra el checkout por completo", async () => {
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    await addFirstDrinkToCart();
+
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByText("Total a cobrar")).not.toBeInTheDocument());
+  });
+
+  it("Escape en efectivo vuelve a la selección de método (sin cerrar el checkout)", async () => {
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+    const efectivoButton = await screen.findByRole("button", { name: /efectivo/i });
+    await user.click(efectivoButton);
+
+    expect(await screen.findByText("Monto Recibido")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
+  });
+
+  it("Escape con un cobro Posnet en curso cancela la intención y vuelve a elegir método", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ state: "OPEN", status: "OPEN" });
+    mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "canceled" });
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+    const tarjetaButton = await screen.findByRole("button", { name: /tarjeta/i });
+    await user.click(tarjetaButton);
+
+    await waitFor(() => expect(mockedMercadopagoService.createPosIntent).toHaveBeenCalled());
+    expect(await screen.findByText(/Esperando pago con Tarjeta/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => expect(mockedMercadopagoService.cancelPosIntent).toHaveBeenCalledWith("intent-1"));
+    expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
+  });
 });

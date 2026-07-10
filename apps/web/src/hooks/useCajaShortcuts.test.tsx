@@ -48,6 +48,7 @@ function makeCallbacks() {
     onConfirmCash: vi.fn(),
     onNewSale: vi.fn(),
     onSelectHighlighted: vi.fn(),
+    onEscape: vi.fn(),
   };
 }
 
@@ -262,6 +263,35 @@ describe("useCajaShortcuts", () => {
     fireEvent.keyDown(window, { key: " " });
 
     expect(callbacks.onNewSale).not.toHaveBeenCalled();
+  });
+
+  it("Escape llama a onEscape (la lógica de a dónde vuelve vive en el componente)", () => {
+    const callbacks = makeCallbacks();
+    renderHook(() =>
+      useCajaShortcuts(baseState({ isCheckoutOpen: true, paymentMethod: "efectivo" }), callbacks),
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(callbacks.onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape se procesa incluso con foco en el input de monto en efectivo", () => {
+    const callbacks = makeCallbacks();
+    function Wrapper() {
+      useCajaShortcuts(
+        baseState({ isCheckoutOpen: true, paymentMethod: "efectivo" }),
+        callbacks,
+      );
+      return <input data-testid="monto" />;
+    }
+    render(<Wrapper />);
+    const input = document.querySelector<HTMLInputElement>('[data-testid="monto"]')!;
+    input.focus();
+
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(callbacks.onEscape).toHaveBeenCalledTimes(1);
   });
 
   it("ningún atajo dispara con foco en un input de texto, salvo Enter para confirmar el cobro", () => {

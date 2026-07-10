@@ -20,6 +20,7 @@ type CajaShortcutsCallbacks = {
   onConfirmCash: () => void;
   onNewSale: () => void;
   onSelectHighlighted: () => void;
+  onEscape: () => void;
 };
 
 /**
@@ -27,13 +28,16 @@ type CajaShortcutsCallbacks = {
  * cuatro acciones distintas según el estado (agregar el producto resaltado
  * del grid / abrir cobro / confirmar efectivo / nueva venta — nunca más de
  * una a la vez), 1/2/3 eligen método de pago, E carga el monto exacto en
- * efectivo y Espacio repite el "Nueva Venta" de la pantalla de éxito.
- * Mismo patrón que useScannerInput.ts: listener único en window, con
- * guardas de foco para no interferir con inputs de texto.
+ * efectivo, Escape retrocede un paso en el checkout y Espacio repite el
+ * "Nueva Venta" de la pantalla de éxito. Mismo patrón que
+ * useScannerInput.ts: listener único en window, con guardas de foco para
+ * no interferir con inputs de texto. `onEscape` decide qué significa
+ * "retroceder" según el estado — esa lógica vive en el componente porque
+ * depende de campos de Posnet que este hook no necesita conocer.
  */
 export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShortcutsCallbacks) {
   const { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems, highlightedGridIndex } = state;
-  const { onOpenCheckout, onSelectMethod, onExactAmount, onConfirmCash, onNewSale, onSelectHighlighted } = callbacks;
+  const { onOpenCheckout, onSelectMethod, onExactAmount, onConfirmCash, onNewSale, onSelectHighlighted, onEscape } = callbacks;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -45,9 +49,10 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
           target.tagName === "SELECT" ||
           target.isContentEditable);
 
-      // Enter siempre se procesa (incluso con foco en el input de monto en
-      // efectivo); el resto de los atajos se ignora si se está tipeando.
-      if (isTextInput && event.key !== "Enter") return;
+      // Enter y Escape siempre se procesan (incluso con foco en el input de
+      // monto en efectivo); el resto de los atajos se ignora si se está
+      // tipeando.
+      if (isTextInput && event.key !== "Enter" && event.key !== "Escape") return;
 
       if (event.key === "Enter") {
         if (latestOrder) {
@@ -59,6 +64,11 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
         } else if (!isCheckoutOpen && totalItems > 0) {
           onOpenCheckout();
         }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        onEscape();
         return;
       }
 
@@ -95,5 +105,6 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
     onConfirmCash,
     onNewSale,
     onSelectHighlighted,
+    onEscape,
   ]);
 }
