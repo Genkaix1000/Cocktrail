@@ -24,6 +24,7 @@ import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { gsap } from "gsap";
 
 import DrinkCard from "@/components/shared/DrinkCard";
+import ProductSearch from "@/components/caja/ProductSearch";
 import { drinkIcon } from "@/lib/icons";
 import { ApiError } from "@/services/api-client";
 import { mercadopagoService } from "@/services/mercadopago.service";
@@ -307,6 +308,11 @@ export default function VentaSection({ drinks, printer }: Props) {
       <div className="flex-1 flex overflow-hidden min-h-0 w-full">
         {/* Products column */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+          {/* Buscador de productos por teclado (solo desktop, no reemplaza el grid táctil) */}
+          <div className="hidden lg:block px-5 pt-5">
+            <ProductSearch drinks={drinks} onSelect={addToCart} />
+          </div>
 
           {/* Grid scrollable */}
           <div className="flex-1 overflow-y-auto p-5">
