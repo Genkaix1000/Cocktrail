@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import OpenNightModal from "./OpenNightModal";
 import { eventsService } from "@/services/events.service";
+import { NIGHT_KEYWORDS } from "@/lib/randomKeyword";
 
 import type { NightEvent } from "@cocktrail/shared";
 
@@ -95,9 +96,47 @@ describe("OpenNightModal", () => {
       expect(await screen.findByText("Ya hay una noche abierta")).toBeInTheDocument();
       expect(onSubmit).not.toHaveBeenCalled();
     });
+
+    it("el botón Generar palabra completa el input con una palabra de la lista curada", async () => {
+      const user = userEvent.setup();
+      render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
+
+      const input = screen.getByPlaceholderText("ej. TEQUILA") as HTMLInputElement;
+      expect(input.value).toBe("");
+
+      await user.click(screen.getByRole("button", { name: /Generar palabra/i }));
+
+      expect(NIGHT_KEYWORDS).toContain(input.value);
+    });
+
+    it("después de generar una palabra, el submit sigue funcionando igual", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      const event = makeNightEvent({ keyword: "TEQUILA" });
+      mockedEventsService.openEvent.mockResolvedValue(event);
+
+      render(<OpenNightModal mode="open" onSubmit={onSubmit} />);
+
+      await user.click(screen.getByRole("button", { name: /Generar palabra/i }));
+      const input = screen.getByPlaceholderText("ej. TEQUILA") as HTMLInputElement;
+      const generated = input.value;
+
+      await user.click(screen.getByRole("button", { name: /Abrir noche/i }));
+
+      await waitFor(() => expect(mockedEventsService.openEvent).toHaveBeenCalledWith(generated));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(event));
+    });
   });
 
   describe("modo edit", () => {
+    it("no muestra el botón Generar palabra (solo tiene sentido al abrir, no al editar)", () => {
+      render(
+        <OpenNightModal mode="edit" onClose={vi.fn()} onSubmit={vi.fn()} currentKeyword="TEQUILA" />,
+      );
+
+      expect(screen.queryByRole("button", { name: /Generar palabra/i })).not.toBeInTheDocument();
+    });
+
     it("precarga la palabra clave actual y guarda la nueva", async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();

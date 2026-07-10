@@ -1,9 +1,10 @@
 "use client";
 
-import { KeyRound, Loader2, X } from "lucide-react";
+import { Dices, KeyRound, Loader2, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import type { NightEvent } from "@cocktrail/shared";
 import { eventsService } from "@/services/events.service";
+import { getRandomKeyword } from "@/lib/randomKeyword";
 
 type Props = {
   mode: "open" | "edit";
@@ -72,11 +73,27 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
         </div>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-400">
-              Palabra clave de la noche
-            </span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="night-keyword"
+                className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-400"
+              >
+                Palabra clave de la noche
+              </label>
+              {!isEdit && (
+                <button
+                  type="button"
+                  onClick={() => setKeyword(getRandomKeyword(keyword))}
+                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue hover:brightness-125 transition-all cursor-pointer"
+                >
+                  <Dices size={12} />
+                  Generar palabra
+                </button>
+              )}
+            </div>
             <input
+              id="night-keyword"
               type="text"
               required
               autoFocus
@@ -85,7 +102,7 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
               className="bg-ink-850 border border-ink-750 rounded-xl px-4 py-3 text-ink-50 outline-none focus:border-blue-line transition-colors"
               placeholder="ej. TEQUILA"
             />
-          </label>
+          </div>
 
           {!isEdit && (
             <p className="text-xs text-ink-400 leading-relaxed">
