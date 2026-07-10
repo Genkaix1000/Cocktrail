@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import VentaSection from "./VentaSection";
@@ -117,6 +117,15 @@ describe("VentaSection", () => {
 
     expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
     expect(screen.getAllByText("$2.500").length).toBeGreaterThan(0);
+  });
+
+  it("abre el checkout con Enter cuando el carrito tiene items (atajo de teclado)", async () => {
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    await addFirstDrinkToCart();
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
   });
 
   it("completa un pago en efectivo exitoso", async () => {

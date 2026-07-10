@@ -29,6 +29,7 @@ import { drinkIcon } from "@/lib/icons";
 import { ApiError } from "@/services/api-client";
 import { mercadopagoService } from "@/services/mercadopago.service";
 import { useCheckout } from "@/hooks/useCheckout";
+import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import type { Drink } from "@cocktrail/shared";
 
 type Props = {
@@ -302,6 +303,23 @@ export default function VentaSection({ drinks, printer }: Props) {
     setCurrentIntentId(null);
     stopPolling();
   }
+
+  function newSale() {
+    setIsCheckoutOpen(false);
+    setPosnetStatus("idle");
+    stopPolling();
+  }
+
+  useCajaShortcuts(
+    { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems },
+    {
+      onOpenCheckout: openCheckout,
+      onSelectMethod: (method) => (method === "efectivo" ? setPaymentMethod("efectivo") : startPosnetPayment(method)),
+      onExactAmount: () => handleChangeCash(String(totalPrice)),
+      onConfirmCash: confirmOrder,
+      onNewSale: newSale,
+    },
+  );
 
   return (
     <>
@@ -588,10 +606,11 @@ export default function VentaSection({ drinks, printer }: Props) {
                   </button>
 
                   <button
-                    onClick={() => { setIsCheckoutOpen(false); setPosnetStatus("idle"); stopPolling(); }}
-                    className="w-full h-12 bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider cursor-pointer hover:bg-ink-800"
+                    onClick={newSale}
+                    className="w-full h-12 bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider cursor-pointer hover:bg-ink-800 flex items-center justify-center gap-2"
                   >
                     Nueva Venta
+                    <span className="text-[9px] font-mono opacity-60 normal-case tracking-normal">Enter / Espacio</span>
                   </button>
                 </div>
               </div>
@@ -762,7 +781,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                       <button
                         disabled={submitting}
                         onClick={() => setPaymentMethod("efectivo")}
-                        className="w-full h-16 rounded-2xl bg-ink-950 border border-ink-800 flex items-center px-4 gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer text-left disabled:opacity-50"
+                        className="relative w-full h-16 rounded-2xl bg-ink-950 border border-ink-800 flex items-center px-4 gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer text-left disabled:opacity-50"
                       >
                         <div className="w-10 h-10 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center shrink-0">
                           <Banknote size={22} />
@@ -771,6 +790,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                           <p className="font-bold text-sm text-ink-50">Efectivo</p>
                           <p className="text-[10px] text-ink-400">Cobro manual y cálculo de vuelto</p>
                         </div>
+                        <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">1</span>
                       </button>
                     </div>
 
@@ -782,23 +802,25 @@ export default function VentaSection({ drinks, printer }: Props) {
                         <button
                           disabled={submitting}
                           onClick={() => startPosnetPayment("debito")}
-                          className="h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                          className="relative h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                         >
                           <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center">
                             <CreditCard size={22} />
                           </div>
                           <span className="font-bold text-xs text-ink-50 text-center">Tarjeta</span>
+                          <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">2</span>
                         </button>
 
                         <button
                           disabled={submitting}
                           onClick={() => startPosnetPayment("qr")}
-                          className="h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                          className="relative h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                         >
                           <div className="w-10 h-10 rounded-xl bg-purple-soft border border-purple-border text-purple flex items-center justify-center">
                             <QrCode size={22} />
                           </div>
                           <span className="font-bold text-xs text-ink-50 text-center">Código QR</span>
+                          <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">3</span>
                         </button>
                       </div>
                     </div>
@@ -814,7 +836,16 @@ export default function VentaSection({ drinks, printer }: Props) {
                     {paymentMethod === "efectivo" && (
                       <div className="flex flex-col gap-4">
                         <label className="flex flex-col gap-2">
-                          <span className="text-xs uppercase tracking-widest font-bold text-ink-400">Monto Recibido</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs uppercase tracking-widest font-bold text-ink-400">Monto Recibido</span>
+                            <button
+                              type="button"
+                              onClick={() => handleChangeCash(String(totalPrice))}
+                              className="h-7 px-2.5 rounded-md bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 text-[10px] font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
+                            >
+                              Monto exacto <span className="opacity-60 normal-case">(E)</span>
+                            </button>
+                          </div>
                           <div className="relative">
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-ink-400">$</span>
                             <input
@@ -848,6 +879,9 @@ export default function VentaSection({ drinks, printer }: Props) {
                           >
                             {submitting && <Loader2 size={18} className="animate-spin" />}
                             {submitting ? "Cargando..." : "Pedido Concretado"}
+                            {!submitting && (
+                              <span className="text-[9px] font-mono opacity-60 normal-case tracking-normal">Enter</span>
+                            )}
                           </button>
                         </div>
                       </div>

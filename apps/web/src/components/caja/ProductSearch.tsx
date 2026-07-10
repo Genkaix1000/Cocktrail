@@ -69,10 +69,11 @@ export default function ProductSearch({ drinks, onSelect }: Props) {
       />
 
       {results.length > 0 && (
-        <ul className="absolute z-10 top-full mt-1.5 w-full max-h-64 overflow-y-auto bg-ink-900 border border-ink-800 rounded-xl shadow-2xl py-1">
+        <ul role="listbox" className="absolute z-10 top-full mt-1.5 w-full max-h-64 overflow-y-auto bg-ink-900 border border-ink-800 rounded-xl shadow-2xl py-1">
           {results.map((d, idx) => (
             <li
               key={d.id}
+              role="option"
               aria-selected={idx === highlightedIndex}
               onMouseEnter={() => setHighlightedIndex(idx)}
               onClick={() => onSelect(d.id)}
