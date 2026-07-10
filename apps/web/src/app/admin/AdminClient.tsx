@@ -62,6 +62,7 @@ export default function AdminClient({
   // Basic layout state
   const [modalOpen, setModalOpen] = useState(false);
   const [editKeywordOpen, setEditKeywordOpen] = useState(false);
+  const [openNightOpen, setOpenNightOpen] = useState(false);
 
   // Tab & sidebar navigation state
   const [activeTab, setActiveTab] = useState<string>("monitoreo");
@@ -456,24 +457,32 @@ export default function AdminClient({
           </div>
         )}
 
+        {(!event || event.status !== "activo") && (
+          <div className="px-5 mb-2 shrink-0 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpenNightOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="w-full h-10 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+            >
+              <Power size={13} />
+              <span>Abrir noche</span>
+            </button>
+          </div>
+        )}
+
         {/* Sidebar Profile Card Footer */}
         <OSProfileFooter onLogout={logout} username={currentUser?.username} role={currentUser?.role} />
       </aside>
     );
   };
 
-  if (!event) {
-    return (
-      <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center p-6">
-        <OpenNightModal mode="open" onSubmit={(ev) => setEvent(ev)} />
-      </main>
-    );
-  }
-
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-ink-950">
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full">
-      {editKeywordOpen && (
+      {editKeywordOpen && event && (
         <OpenNightModal
           mode="edit"
           onClose={() => setEditKeywordOpen(false)}
@@ -481,7 +490,7 @@ export default function AdminClient({
           currentKeyword={event.keyword}
         />
       )}
-      {modalOpen && (
+      {modalOpen && event && (
         <CloseNightModal
           totals={totals}
           pendingDeliveries={pendingDeliveries}
@@ -489,6 +498,16 @@ export default function AdminClient({
           summary={summary}
           onConfirm={handleCloseConfirm}
           onClose={handleModalClose}
+        />
+      )}
+      {openNightOpen && (
+        <OpenNightModal
+          mode="open"
+          onClose={() => setOpenNightOpen(false)}
+          onSubmit={(ev) => {
+            setEvent(ev);
+            setOpenNightOpen(false);
+          }}
         />
       )}
 
