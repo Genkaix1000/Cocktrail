@@ -435,8 +435,13 @@ se hace del flujo caja→admin (ver nota en la Fase actual).
 **Objetivo**: que la pantalla de caja sea más rápida y dinámica para el ritmo real de una barra
 (menos clicks, cobro más ágil), antes de empaquetar y llevar al boliche.
 
-- [ ] Revisar el flujo de cobro: atajos de teclado, montos/medios de pago rápidos, menos pasos.
-- [ ] Bajar la latencia percibida en la operación de caja.
+- [x] Revisar el flujo de cobro: atajos de teclado, montos/medios de pago rápidos, menos pasos.
+  Ver [`docs/specs/pulir-ui-caja.md`](./specs/pulir-ui-caja.md) (done): buscador de productos con
+  autocompletar, Enter abre el cobro, 1/2/3 eligen método, tecla/botón "Monto exacto" en efectivo,
+  Enter confirma, Enter/Espacio vuelve a "Nueva Venta". Enfocado en teclado físico (la caja corre
+  en la PC servidor); tablet táctil queda con el flujo actual sin cambios.
+- [x] Bajar la latencia percibida en la operación de caja. Se sacó un delay artificial de 800ms
+  (`setTimeout` sin carga real detrás) antes de mostrar el grid de productos en `/caja`.
 - [ ] Detallar el resto con el uso real en el boliche (test en LAN, sin empaquetar todavía).
 
 ---
@@ -463,6 +468,36 @@ nada a mano.
 - [ ] **App "doble-click"** = Node embebido + Postgres embebido (sin Docker).
 - [ ] Integrar la impresora térmica (Fase 1) dentro del paquete.
 - [ ] Multi-tenant (slug por boliche) + RLS en Supabase.
+
+### Acceso simple (sin escribir IP/localhost) — surgió al planear el setup con una sola tablet
+
+**Contexto**: el boliche de prueba tiene **una sola tablet** — no hay mini-PC + tablet + laptop
+separadas. Admin/caja van a operarse desde la misma compu que corre el servidor; la tablet queda
+para `/barra` (o lo que se decida). Escribir `http://<ip>:3000` a mano no es práctico para el uso
+diario. Ideas evaluadas, de más simple a más "parece una app" — no bloquean nada, son pulido de UX
+de acceso, candidatas para esta fase o para la Fase 5:
+
+- [ ] **Hostname en vez de IP**: `avahi-daemon` (mDNS) en la mini-PC para que responda a
+  `cocktrail.local` en vez de una IP que puede cambiar. Complementar con **reserva de IP fija por
+  DHCP** en el router para que nunca cambie aunque se desactive el mDNS.
+- [ ] **PWA instalable en la tablet**: agregar `manifest.json` + íconos a `apps/web` para que
+  "Agregar a pantalla de inicio" deje un ícono real (`display: standalone`, sin barra de
+  direcciones) en vez de un bookmark de navegador — toca el ícono y abre a pantalla completa como
+  una app nativa.
+- [ ] **Accesos directos "app mode" en la PC**: acceso de escritorio con
+  `chrome --app=http://localhost:3000/admin` (y otro para `/caja`) — ventana sin barra de URL,
+  se puede anclar a la barra de tareas, se siente como programa aparte sin empaquetar nada.
+- [ ] **Modo kiosco en la tablet (opcional, más robusto)**: apps tipo "Fully Kiosk Browser"
+  (Android) para que la tablet arranque directo en `/barra` a pantalla completa sin que nadie
+  tenga que tocar nada — común en KDS de bares/restaurantes.
+
+**Requisitos mínimos de la mini-PC** (ya evaluados, el stack Docker de este repo está recortado a
+`db` + `rest` (PostgREST) + `kong` — no es el Supabase completo, así que el piso de hardware es
+bajo): CPU x86_64 dual-core (~1.8GHz, ej. Intel N100/Celeron), 4GB RAM mínimo (8GB recomendado),
+SSD 64GB+ (evitar HDD/eMMC por las escrituras de Postgres), Linux (Debian/Ubuntu) para que Docker
+arranque solo con el sistema, y que el SO **nunca entre en suspensión/hibernación** durante el
+turno. Con una sola tablet + una PC la carga concurrente es mínima — casi cualquier mini-PC de los
+últimos años sobra.
 
 ---
 
