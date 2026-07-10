@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import OpenNightModal from "./OpenNightModal";
@@ -107,6 +107,44 @@ describe("OpenNightModal", () => {
       await user.click(screen.getByRole("button", { name: /Generar palabra/i }));
 
       expect(NIGHT_KEYWORDS).toContain(input.value);
+    });
+
+    it("muestra el botón de cerrar (X) cuando se pasa onClose, y cancela sin abrir la noche", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      const onClose = vi.fn();
+
+      render(<OpenNightModal mode="open" onSubmit={onSubmit} onClose={onClose} />);
+
+      await user.click(screen.getByRole("button", { name: /Cerrar/i }));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(mockedEventsService.openEvent).not.toHaveBeenCalled();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("no muestra el botón de cerrar si no se pasa onClose (uso standalone sin forma de cancelar)", () => {
+      render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
+
+      expect(screen.queryByRole("button", { name: /Cerrar/i })).not.toBeInTheDocument();
+    });
+
+    it("Escape cierra el modal sin abrir la noche", () => {
+      const onSubmit = vi.fn();
+      const onClose = vi.fn();
+
+      render(<OpenNightModal mode="open" onSubmit={onSubmit} onClose={onClose} />);
+
+      fireEvent.keyDown(window, { key: "Escape" });
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(mockedEventsService.openEvent).not.toHaveBeenCalled();
+    });
+
+    it("Escape no hace nada si no se pasa onClose", () => {
+      render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
+
+      expect(() => fireEvent.keyDown(window, { key: "Escape" })).not.toThrow();
     });
 
     it("después de generar una palabra, el submit sigue funcionando igual", async () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Dices, KeyRound, Loader2, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { NightEvent } from "@cocktrail/shared";
 import { eventsService } from "@/services/events.service";
 import { getRandomKeyword } from "@/lib/randomKeyword";
@@ -42,6 +42,15 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
 
   const isEdit = mode === "edit";
 
+  useEffect(() => {
+    if (!onClose) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !submitting) onClose!();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, submitting]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-[22px] p-6 shadow-2xl animate-in slide-in-from-bottom-10">
@@ -59,12 +68,12 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
               </p>
             </div>
           </div>
-          {isEdit && onClose && (
+          {onClose && (
             <button
               type="button"
               onClick={() => !submitting && onClose()}
               disabled={submitting}
-              className="p-2 bg-ink-800 rounded-full text-ink-300 hover:text-ink-50 disabled:opacity-40"
+              className="p-2 bg-ink-800 rounded-full text-ink-300 hover:text-ink-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Cerrar"
             >
               <X size={18} />
