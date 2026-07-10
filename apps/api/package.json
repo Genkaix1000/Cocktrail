@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "db:reset": "tsx src/scripts/reset-data.ts",
+    "verify-sync": "tsx src/scripts/verify-sync.ts",
     "typecheck": "tsc --noEmit",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "vitest run --exclude '**/tests/integration/**'",
