@@ -129,7 +129,7 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
           <button
             type="submit"
             disabled={submitting || !keyword.trim()}
-            className="mt-2 h-12 bg-blue text-ink-950 font-semibold rounded-xl text-sm uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="mt-2 h-12 bg-blue text-ink-950 font-semibold rounded-xl text-sm uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <>
