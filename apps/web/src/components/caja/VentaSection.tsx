@@ -175,20 +175,12 @@ function CompactDrinkSkeleton() {
  * lo usa el popup de detalle de Historial (que todavía vive en CajaClient).
  */
 export default function VentaSection({ drinks, printer }: Props) {
-  const [loadingProducts, setLoadingProducts] = useState(true);
+  const loadingProducts = false;
   const shoppingBagRef = useRef<HTMLDivElement>(null);
 
   // Estados del carrito
   const [cart, setCart] = useState<Record<number, number>>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
-
-  // Simulated 800ms loading state for skeleton demonstration
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoadingProducts(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []);
 
   // GSAP stagger entrance on load complete
   useEffect(() => {
