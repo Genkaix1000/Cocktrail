@@ -25,6 +25,7 @@ type State = {
   latestOrder: Order | null;
   canConfirmCash: boolean;
   totalItems: number;
+  highlightedGridIndex: number | null;
 };
 
 function baseState(overrides: Partial<State> = {}): State {
@@ -34,6 +35,7 @@ function baseState(overrides: Partial<State> = {}): State {
     latestOrder: null,
     canConfirmCash: false,
     totalItems: 0,
+    highlightedGridIndex: null,
     ...overrides,
   };
 }
@@ -45,6 +47,7 @@ function makeCallbacks() {
     onExactAmount: vi.fn(),
     onConfirmCash: vi.fn(),
     onNewSale: vi.fn(),
+    onSelectHighlighted: vi.fn(),
   };
 }
 
@@ -58,6 +61,29 @@ describe("useCajaShortcuts", () => {
     expect(callbacks.onOpenCheckout).toHaveBeenCalledTimes(1);
     expect(callbacks.onConfirmCash).not.toHaveBeenCalled();
     expect(callbacks.onNewSale).not.toHaveBeenCalled();
+  });
+
+  it("Enter con un producto resaltado del grid lo agrega en vez de abrir el checkout", () => {
+    const callbacks = makeCallbacks();
+    renderHook(() =>
+      useCajaShortcuts(baseState({ totalItems: 2, highlightedGridIndex: 3 }), callbacks),
+    );
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(callbacks.onSelectHighlighted).toHaveBeenCalledTimes(1);
+    expect(callbacks.onOpenCheckout).not.toHaveBeenCalled();
+  });
+
+  it("Enter con un producto resaltado agrega aunque el carrito esté vacío", () => {
+    const callbacks = makeCallbacks();
+    renderHook(() =>
+      useCajaShortcuts(baseState({ totalItems: 0, highlightedGridIndex: 0 }), callbacks),
+    );
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(callbacks.onSelectHighlighted).toHaveBeenCalledTimes(1);
   });
 
   it("Enter no abre el checkout si el carrito está vacío", () => {
@@ -119,6 +145,21 @@ describe("useCajaShortcuts", () => {
     expect(callbacks.onNewSale).toHaveBeenCalledTimes(1);
     expect(callbacks.onConfirmCash).not.toHaveBeenCalled();
     expect(callbacks.onOpenCheckout).not.toHaveBeenCalled();
+  });
+
+  it("Enter con latestOrder tiene prioridad incluso sobre un producto resaltado del grid", () => {
+    const callbacks = makeCallbacks();
+    renderHook(() =>
+      useCajaShortcuts(
+        baseState({ latestOrder: makeOrder(), highlightedGridIndex: 2, totalItems: 1 }),
+        callbacks,
+      ),
+    );
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(callbacks.onNewSale).toHaveBeenCalledTimes(1);
+    expect(callbacks.onSelectHighlighted).not.toHaveBeenCalled();
   });
 
   it("Enter no hace nada con el checkout abierto y sin método elegido", () => {

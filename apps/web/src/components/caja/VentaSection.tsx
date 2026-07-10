@@ -30,6 +30,7 @@ import { ApiError } from "@/services/api-client";
 import { mercadopagoService } from "@/services/mercadopago.service";
 import { useCheckout } from "@/hooks/useCheckout";
 import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
+import { useProductGridNav } from "@/hooks/useProductGridNav";
 import type { Drink } from "@cocktrail/shared";
 
 type Props = {
@@ -44,11 +45,13 @@ type Props = {
 function CompactDrinkCard({
   drink,
   qty,
+  focused,
   onAdd,
   onRemove,
 }: {
   drink: Drink;
   qty: number;
+  focused?: boolean;
   onAdd: () => void;
   onRemove: () => void;
 }) {
@@ -61,10 +64,12 @@ function CompactDrinkCard({
     ? "border-green/60 shadow-[0_0_0_1px_var(--success-soft)]"
     : "border-ink-800 hover:border-accent/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300";
 
+  const focusRingClass = focused ? "ring-2 ring-blue ring-offset-2 ring-offset-ink-950" : "";
+
   return (
     <div
       onClick={onAdd}
-      className={`group relative bg-ink-900 border rounded-xl p-3 flex flex-col gap-2.5 cursor-pointer ${cardBorderClass}`}
+      className={`group relative bg-ink-900 border rounded-xl p-3 flex flex-col gap-2.5 cursor-pointer ${cardBorderClass} ${focusRingClass}`}
     >
       {drink.promo && (
         <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-amber-soft text-amber border border-amber-line rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
@@ -310,14 +315,23 @@ export default function VentaSection({ drinks, printer }: Props) {
     stopPolling();
   }
 
+  const { highlightedIndex: gridHighlightedIndex } = useProductGridNav({
+    length: filteredDrinks.length,
+    enabled: !isCheckoutOpen,
+  });
+
   useCajaShortcuts(
-    { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems },
+    { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems, highlightedGridIndex: gridHighlightedIndex },
     {
       onOpenCheckout: openCheckout,
       onSelectMethod: (method) => (method === "efectivo" ? setPaymentMethod("efectivo") : startPosnetPayment(method)),
       onExactAmount: () => handleChangeCash(String(totalPrice)),
       onConfirmCash: confirmOrder,
       onNewSale: newSale,
+      onSelectHighlighted: () => {
+        const drink = filteredDrinks[gridHighlightedIndex ?? -1];
+        if (drink) addToCart(drink.id);
+      },
     },
   );
 
@@ -372,11 +386,12 @@ export default function VentaSection({ drinks, printer }: Props) {
                 </div>
                 {/* Desktop Grid */}
                 <div className="hidden lg:grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-                  {filteredDrinks.map((d) => (
+                  {filteredDrinks.map((d, idx) => (
                     <div key={d.id} className="drink-card-anim opacity-0">
                       <CompactDrinkCard
                         drink={d}
                         qty={cart[d.id] || 0}
+                        focused={idx === gridHighlightedIndex}
                         onAdd={() => addToCart(d.id)}
                         onRemove={() => removeFromCart(d.id)}
                       />

@@ -128,6 +128,18 @@ describe("VentaSection", () => {
     expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
   });
 
+  it("navega el grid con flechas y agrega el producto resaltado con Enter", async () => {
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    await waitForProductsGrid();
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    const cartBadge = await screen.findByText("Pedido actual");
+    const badgeCount = cartBadge.closest("div")?.querySelector(".tabular");
+    expect(badgeCount).toHaveTextContent("1");
+  });
+
   it("completa un pago en efectivo exitoso", async () => {
     const order = makeOrder();
     mockedOrdersService.create.mockResolvedValue(order);

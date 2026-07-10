@@ -10,6 +10,7 @@ type CajaShortcutsState = {
   latestOrder: Order | null;
   canConfirmCash: boolean;
   totalItems: number;
+  highlightedGridIndex: number | null;
 };
 
 type CajaShortcutsCallbacks = {
@@ -18,20 +19,21 @@ type CajaShortcutsCallbacks = {
   onExactAmount: () => void;
   onConfirmCash: () => void;
   onNewSale: () => void;
+  onSelectHighlighted: () => void;
 };
 
 /**
  * Atajos de teclado de la pantalla de venta de caja: Enter resuelve una de
- * tres acciones distintas según el estado del checkout (abrir cobro /
- * confirmar efectivo / nueva venta — nunca más de una a la vez), 1/2/3
- * eligen método de pago, E carga el monto exacto en efectivo y Espacio
- * repite el "Nueva Venta" de la pantalla de éxito. Mismo patrón que
- * useScannerInput.ts: listener único en window, con guardas de foco para
- * no interferir con inputs de texto.
+ * cuatro acciones distintas según el estado (agregar el producto resaltado
+ * del grid / abrir cobro / confirmar efectivo / nueva venta — nunca más de
+ * una a la vez), 1/2/3 eligen método de pago, E carga el monto exacto en
+ * efectivo y Espacio repite el "Nueva Venta" de la pantalla de éxito.
+ * Mismo patrón que useScannerInput.ts: listener único en window, con
+ * guardas de foco para no interferir con inputs de texto.
  */
 export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShortcutsCallbacks) {
-  const { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems } = state;
-  const { onOpenCheckout, onSelectMethod, onExactAmount, onConfirmCash, onNewSale } = callbacks;
+  const { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems, highlightedGridIndex } = state;
+  const { onOpenCheckout, onSelectMethod, onExactAmount, onConfirmCash, onNewSale, onSelectHighlighted } = callbacks;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -52,6 +54,8 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
           onNewSale();
         } else if (isCheckoutOpen && paymentMethod === "efectivo" && canConfirmCash) {
           onConfirmCash();
+        } else if (!isCheckoutOpen && highlightedGridIndex !== null) {
+          onSelectHighlighted();
         } else if (!isCheckoutOpen && totalItems > 0) {
           onOpenCheckout();
         }
@@ -84,10 +88,12 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
     latestOrder,
     canConfirmCash,
     totalItems,
+    highlightedGridIndex,
     onOpenCheckout,
     onSelectMethod,
     onExactAmount,
     onConfirmCash,
     onNewSale,
+    onSelectHighlighted,
   ]);
 }
