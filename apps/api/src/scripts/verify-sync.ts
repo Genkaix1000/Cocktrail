@@ -59,16 +59,23 @@ export async function compareEventSync(
 
   const mismatches: string[] = [];
 
-  const localTotals = JSON.stringify(localEvent.totals ?? null);
-  const cloudTotals = JSON.stringify(cloudEvent.totals ?? null);
-  if (localTotals !== cloudTotals) {
-    mismatches.push(`totals no coincide: local=${localTotals} cloud=${cloudTotals}`);
-  }
-
   const [localOrders, cloudOrders] = await Promise.all([
     fetchOrders(localClient, eventId),
     fetchOrders(cloudClient, eventId),
   ]);
+
+  // `night_events.totals` es una columna cloud-only (no existe en las
+  // migraciones locales — ver riesgo R2/docs/ROADMAP.md), así que no tiene
+  // sentido comparar el campo crudo entre local y cloud: local nunca lo va
+  // a tener. En cambio, se valida que el total que cloud calculó coincide
+  // con la suma real de las orders locales.
+  const localOrdersSum = localOrders.reduce((sum, o) => sum + Number(o.total ?? 0), 0);
+  const cloudTotalsObj = cloudEvent.totals as { total?: number } | null | undefined;
+  if (!cloudTotalsObj || typeof cloudTotalsObj.total !== "number") {
+    mismatches.push(`cloud no tiene totals.total calculado (totals=${JSON.stringify(cloudEvent.totals)})`);
+  } else if (cloudTotalsObj.total !== localOrdersSum) {
+    mismatches.push(`totals.total de cloud (${cloudTotalsObj.total}) no coincide con la suma de orders locales (${localOrdersSum})`);
+  }
 
   if (localOrders.length !== cloudOrders.length) {
     mismatches.push(`cantidad de orders no coincide: local=${localOrders.length} cloud=${cloudOrders.length}`);
@@ -120,7 +127,7 @@ export async function compareEventSync(
       orders: localOrders.length,
       tickets: localTickets.length,
       cashSales: localCashSales.length,
-      totals: localEvent.totals,
+      totals: cloudEvent.totals,
     },
   };
 }

@@ -37,8 +37,15 @@ function makeFakeClient(db: Db) {
   return { from: (table: string) => makeBuilder(table) } as unknown as SupabaseClient;
 }
 
-function makeEvent(overrides: Record<string, unknown> = {}) {
-  return { id: "event-1", status: "cerrado", closed_at: "2026-07-10T22:00:00Z", totals: { total: 5000 }, ...overrides };
+// `night_events.totals` es cloud-only (no existe en las migraciones
+// locales, ver R2 en docs/ROADMAP.md) — los fixtures de local nunca lo
+// incluyen, solo los de cloud.
+function makeLocalEvent(overrides: Record<string, unknown> = {}) {
+  return { id: "event-1", status: "cerrado", closed_at: "2026-07-10T22:00:00Z", ...overrides };
+}
+
+function makeCloudEvent(overrides: Record<string, unknown> = {}) {
+  return { id: "event-1", status: "cerrado", closed_at: "2026-07-10T22:00:00Z", totals: { total: 2500 }, ...overrides };
 }
 
 function makeOrder(overrides: Record<string, unknown> = {}) {
@@ -46,15 +53,15 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
 }
 
 describe("compareEventSync", () => {
-  it("ok:true cuando todo coincide", async () => {
+  it("ok:true cuando todo coincide (incluida la suma de orders vs cloud.totals.total)", async () => {
     const local = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeLocalEvent()],
       orders: [makeOrder()],
       tickets: [{ id: "t1", order_id: "order-1" }],
       cash_sales: [],
     });
     const cloud = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeCloudEvent({ totals: { total: 2500 } })],
       orders: [makeOrder()],
       tickets: [{ id: "t1", order_id: "order-1" }],
       cash_sales: [],
@@ -64,11 +71,11 @@ describe("compareEventSync", () => {
 
     expect(result.ok).toBe(true);
     expect(result.mismatches).toEqual([]);
-    expect(result.summary).toEqual({ orders: 1, tickets: 1, cashSales: 0, totals: { total: 5000 } });
+    expect(result.summary).toEqual({ orders: 1, tickets: 1, cashSales: 0, totals: { total: 2500 } });
   });
 
   it("ok:false si el evento no llegó a cloud todavía", async () => {
-    const local = makeFakeClient({ night_events: [makeEvent()], orders: [], tickets: [], cash_sales: [] });
+    const local = makeFakeClient({ night_events: [makeLocalEvent()], orders: [], tickets: [], cash_sales: [] });
     const cloud = makeFakeClient({ night_events: [], orders: [], tickets: [], cash_sales: [] });
 
     const result = await compareEventSync(local, cloud, "event-1");
@@ -79,13 +86,13 @@ describe("compareEventSync", () => {
 
   it("ok:false si falta un order en cloud", async () => {
     const local = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeLocalEvent()],
       orders: [makeOrder(), makeOrder({ id: "order-2" })],
       tickets: [],
       cash_sales: [],
     });
     const cloud = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeCloudEvent({ totals: { total: 2500 } })],
       orders: [makeOrder()],
       tickets: [],
       cash_sales: [],
@@ -100,13 +107,13 @@ describe("compareEventSync", () => {
 
   it("ok:false si un order tiene distinto total en cloud", async () => {
     const local = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeLocalEvent()],
       orders: [makeOrder({ total: 2500 })],
       tickets: [],
       cash_sales: [],
     });
     const cloud = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeCloudEvent({ totals: { total: 2500 } })],
       orders: [makeOrder({ total: 9999 })],
       tickets: [],
       cash_sales: [],
@@ -118,20 +125,40 @@ describe("compareEventSync", () => {
     expect(result.mismatches.some((m) => m.includes("total no coincide"))).toBe(true);
   });
 
-  it("ok:false si totals del evento no coincide", async () => {
-    const local = makeFakeClient({ night_events: [makeEvent({ totals: { total: 5000 } })], orders: [], tickets: [], cash_sales: [] });
-    const cloud = makeFakeClient({ night_events: [makeEvent({ totals: { total: 1 } })], orders: [], tickets: [], cash_sales: [] });
+  it("ok:false si cloud.totals.total no coincide con la suma de orders locales", async () => {
+    const local = makeFakeClient({
+      night_events: [makeLocalEvent()],
+      orders: [makeOrder({ total: 2500 })],
+      tickets: [],
+      cash_sales: [],
+    });
+    const cloud = makeFakeClient({
+      night_events: [makeCloudEvent({ totals: { total: 999 } })],
+      orders: [makeOrder({ total: 2500 })],
+      tickets: [],
+      cash_sales: [],
+    });
 
     const result = await compareEventSync(local, cloud, "event-1");
 
     expect(result.ok).toBe(false);
-    expect(result.mismatches.some((m) => m.includes("totals no coincide"))).toBe(true);
+    expect(result.mismatches.some((m) => m.includes("totals.total de cloud"))).toBe(true);
+  });
+
+  it("ok:false si cloud no tiene totals calculado", async () => {
+    const local = makeFakeClient({ night_events: [makeLocalEvent()], orders: [], tickets: [], cash_sales: [] });
+    const cloud = makeFakeClient({ night_events: [makeCloudEvent({ totals: null })], orders: [], tickets: [], cash_sales: [] });
+
+    const result = await compareEventSync(local, cloud, "event-1");
+
+    expect(result.ok).toBe(false);
+    expect(result.mismatches.some((m) => m.includes("no tiene totals.total"))).toBe(true);
   });
 });
 
 describe("getLastClosedEventId", () => {
   it("devuelve el id del último evento cerrado", async () => {
-    const client = makeFakeClient({ night_events: [makeEvent({ id: "event-9" })] });
+    const client = makeFakeClient({ night_events: [makeLocalEvent({ id: "event-9" })] });
 
     await expect(getLastClosedEventId(client)).resolves.toBe("event-9");
   });
@@ -146,7 +173,7 @@ describe("getLastClosedEventId", () => {
 describe("verifyWithRetries", () => {
   it("reintenta mientras el evento no llegó a cloud, y encuentra éxito en un intento posterior", async () => {
     const local = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeLocalEvent()],
       orders: [makeOrder()],
       tickets: [],
       cash_sales: [],
@@ -157,7 +184,10 @@ describe("verifyWithRetries", () => {
       from: (table: string) => {
         call++;
         // Primer intento: cloud vacío (todavía no sincronizado). Resto: ya sincronizado.
-        const db = call <= 1 ? {} : { night_events: [makeEvent()], orders: [makeOrder()], tickets: [], cash_sales: [] };
+        const db =
+          call <= 1
+            ? {}
+            : { night_events: [makeCloudEvent({ totals: { total: 2500 } })], orders: [makeOrder()], tickets: [], cash_sales: [] };
         return (makeFakeClient(db) as any).from(table);
       },
     } as unknown as SupabaseClient;
@@ -169,13 +199,13 @@ describe("verifyWithRetries", () => {
 
   it("no reintenta si el mismatch es un error real (no 'pendiente')", async () => {
     const local = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeLocalEvent()],
       orders: [makeOrder({ total: 1 })],
       tickets: [],
       cash_sales: [],
     });
     const cloud = makeFakeClient({
-      night_events: [makeEvent()],
+      night_events: [makeCloudEvent({ totals: { total: 2 } })],
       orders: [makeOrder({ total: 2 })],
       tickets: [],
       cash_sales: [],
