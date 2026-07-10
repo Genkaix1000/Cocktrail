@@ -15,6 +15,11 @@ type Props = {
  * caja: escribís el nombre, filtra, flechas navegan, Enter suma el
  * resaltado al carrito. Convive con el grid táctil existente — es un modo
  * adicional para operar por teclado, no lo reemplaza.
+ *
+ * Enter solo corta la propagación cuando hay un resultado para sumar; con
+ * la búsqueda vacía/sin match, el Enter sigue de largo hacia
+ * useCajaShortcuts (así un segundo Enter después de sumar un producto
+ * puede abrir el checkout).
  */
 export default function ProductSearch({ drinks, onSelect }: Props) {
   const [query, setQuery] = useState("");
@@ -48,9 +53,10 @@ export default function ProductSearch({ drinks, onSelect }: Props) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightedIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      // Siempre corta la propagación: mientras el foco esté acá, Enter
-      // nunca debe abrir el checkout (eso lo maneja useCajaShortcuts).
+    } else if (e.key === "Enter" && results.length > 0) {
+      // Solo corta la propagación cuando realmente selecciona un
+      // resultado — así un segundo Enter con la búsqueda vacía burbujea
+      // hacia useCajaShortcuts y puede abrir el checkout.
       e.stopPropagation();
       selectHighlighted();
     }
@@ -69,7 +75,7 @@ export default function ProductSearch({ drinks, onSelect }: Props) {
       />
 
       {results.length > 0 && (
-        <ul role="listbox" className="absolute z-10 top-full mt-1.5 w-full max-h-64 overflow-y-auto bg-ink-900 border border-ink-800 rounded-xl shadow-2xl py-1">
+        <ul role="listbox" className="absolute z-30 top-full mt-1.5 w-full max-h-64 overflow-y-auto bg-ink-900 border border-ink-800 rounded-xl shadow-2xl py-1">
           {results.map((d, idx) => (
             <li
               key={d.id}

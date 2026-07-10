@@ -91,4 +91,32 @@ describe("ProductSearch", () => {
 
     expect(onSelect).toHaveBeenCalledWith(1);
   });
+
+  it("Enter con un resultado seleccionado no propaga el evento (no debe abrir el checkout)", async () => {
+    const user = userEvent.setup();
+    const enterSpy = vi.fn();
+    const windowSpy = (e: KeyboardEvent) => { if (e.key === "Enter") enterSpy(); };
+    window.addEventListener("keydown", windowSpy);
+    render(<ProductSearch drinks={drinks} onSelect={vi.fn()} />);
+
+    await user.type(screen.getByRole("textbox"), "gin");
+    await user.keyboard("{Enter}");
+
+    expect(enterSpy).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", windowSpy);
+  });
+
+  it("Enter sin resultados sí propaga el evento (para poder abrir el checkout)", async () => {
+    const user = userEvent.setup();
+    const enterSpy = vi.fn();
+    const windowSpy = (e: KeyboardEvent) => { if (e.key === "Enter") enterSpy(); };
+    window.addEventListener("keydown", windowSpy);
+    render(<ProductSearch drinks={drinks} onSelect={vi.fn()} />);
+
+    await user.type(screen.getByRole("textbox"), "whisky");
+    await user.keyboard("{Enter}");
+
+    expect(enterSpy).toHaveBeenCalledTimes(1);
+    window.removeEventListener("keydown", windowSpy);
+  });
 });
