@@ -11,8 +11,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Cocktrail - Menú Digital",
+  title: "Bosko - Menú Digital",
   description: "Pedí tus tragos favoritos desde tu mesa",
+  icons: {
+    icon: "/bosko.webp",
+    shortcut: "/bosko.webp",
+    apple: "/bosko.webp",
+  },
 };
 
 export default function RootLayout({
