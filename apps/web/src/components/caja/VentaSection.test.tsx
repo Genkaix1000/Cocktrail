@@ -179,9 +179,21 @@ describe("VentaSection", () => {
     expect(screen.getByText(`#${order.displayNumber}`)).toBeInTheDocument();
   });
 
+  it("el selector de método de pago solo muestra Efectivo y Tarjeta (sin Código QR)", async () => {
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+
+    expect(await screen.findByRole("button", { name: /efectivo/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /tarjeta/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /código qr/i })).not.toBeInTheDocument();
+  });
+
   it("inicia un pago con Posnet llamando a createPosIntent", async () => {
     mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ state: "OPEN", status: "OPEN" });
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
 
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
     const user = await addFirstDrinkToCart();
@@ -229,7 +241,7 @@ describe("VentaSection", () => {
 
   it("Escape con un cobro Posnet en curso cancela la intención y vuelve a elegir método", async () => {
     mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ state: "OPEN", status: "OPEN" });
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
     mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "canceled" });
 
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);

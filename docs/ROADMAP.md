@@ -134,7 +134,8 @@ code, módulo por módulo, antes de tocar el frontend. Ver `docs/specs/auditoria
   de infra separada; `system.controller.ts` no tiene Service propio; `TicketsService.redeemTicket`
   orquesta directamente la máquina de estados de `OrdersService`.
 - [ ] **Fuera de alcance de esta fase** (sin tests/auditoría todavía): módulos `printer`,
-  `mercadopago`, `cash-sales`, `audit-logs`, `sse`.
+  `cash-sales`, `audit-logs`, `sse`. (`mercadopago` salió de esta lista: ya tiene tests, ver spec
+  `cobro-posnet-mercadopago`.)
 
 ---
 
@@ -532,7 +533,7 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 - [ ] **Sync bidireccional**: pedidos creados en la nube → bajan a la barra local (hoy el sync sube; falta el camino inverso para órdenes online).
 - [ ] Auth de la zona cloud (las cookies HMAC LAN no sirven cross-origin contra un host cloud).
 - [ ] Reconciliación de tragos online al **cerrar la caja** (juntar lo online con lo presencial en el resumen de la noche).
-- [ ] Mercado Pago **online** (Checkout Pro / QR / Bricks) además del Point físico — usar el plugin oficial de MP (ver `docs/AGENTS.md`).
+- [ ] Mercado Pago **online** (Checkout Pro / QR / Bricks) además del Point físico — usar el plugin oficial de MP (ver `docs/AGENTS.md`). Incluye el QR real (Orders API, ver R14) que el Posnet físico no puede mostrar.
 - [ ] **Reactivar `/barra`**: sumar de nuevo el acceso rápido de barman en `/login` y verificar E2E el flujo completo (pedido online → ticket en el celular → barman lo lee/canjea en `/barra` → reconciliación).
 
 ---
@@ -561,6 +562,8 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 | R11 | `pnpm --filter web lint` sobre **todo** `apps/web` reporta errores preexistentes (reglas `react-hooks/refs`, `react-hooks/purity`, `react-hooks/set-state-in-effect` de una versión más estricta de `eslint-plugin-react-hooks`/reglas del React Compiler). Confirmado (2026-07-05, tras cerrar `simplificar-historial-noches`) que persisten en: `apps/carta/page.tsx`, `LogsSection.tsx`, `AnimatedNumber.tsx`, `Sparkline.tsx`, `Toast.tsx`, `orderStatus.ts` (`QrSection.tsx` salió de la lista porque se eliminó junto con el tab muerto en `simplificar-dashboard-admin`; `HistorialSection.tsx` salió porque la simplificación sacó el código que disparaba el warning). No es una regresión de ninguna fase — las specs siempre corrieron `eslint` solo sobre los archivos tocados, nunca `eslint .` sobre el árbol completo. | Cosmético/mantenibilidad — no rompe build ni tests, pero el criterio "`eslint` en 0" de las specs nunca se cumplió a nivel repo completo. | Abierto — candidato a una fase de limpieza puntual. |
 | R13 | `audit_logs` no existe en el esquema de Supabase Cloud (solo local). Confirmado con `select` real contra el proyecto cloud del usuario: `PGRST205`. | No bloquea el sync de noches (no es parte de `pushEventData`), pero impide tener auditoría en cloud si se necesitara. | Abierto — correr la migración `20260629201500_create_audit_logs.sql` contra cloud si se decide auditar ahí. |
 | R12 | Varios campos de `useAdminAnalytics` (`webTotal`/`webCount`/`webPct`/`barraTotal`/`barraCount`/`barraPct`/`nightEvolution`/`movingAvg`/`cancellationInfo`/`digitalConversion`/`uniqueClients`/`deltaClients`/`operationalVelocity`/`maxDrinkQty`) y el componente `NightEvolutionChart.tsx` no tienen ningún consumidor — detectado durante `simplificar-dashboard-admin` (2026-07-05), confirmado que sigue así tras `simplificar-historial-noches`. | Ninguno funcional — cómputo y bundle innecesarios, ruido al leer el hook. | Abierto — candidato a limpieza en una pasada aparte, no se mezcló con ninguna de las 2 specs de simplificación para no ensuciar su diff. |
+| R14 | QR real de Mercado Pago (mostrar un código escaneable, vía la Orders API con `type: "qr"` + `external_pos_id`) no está implementado — confirmado con la doc oficial de MP (2026-07-12, spec `cobro-posnet-mercadopago`) que el Posnet físico (Point Integration API) no puede mostrar QR en su pantalla; es un producto distinto atado a otra superficie. | Ninguno hoy (se sacó la opción de UI que prometía algo que no existía). Si se quiere QR real hace falta una pantalla nueva donde mostrarlo y probablemente credenciales/config adicionales. | Abierto — ver también Fase 7 ("Mercado Pago online"), que ya cubre esto como feature futura. |
+| R15 | `modules/mercadopago` sigue sobre la Payment Intents API (legacy) de Mercado Pago, no la Orders API moderna que MP recomienda para nuevas features (spec `cobro-posnet-mercadopago`, 2026-07-12). | Ninguno funcional hoy — el flujo probado en producción con el Posnet real sigue andando. Riesgo a futuro si MP deprecara la API legacy. | Abierto — migración deliberadamente no abordada; el flujo actual es el único probado en vivo y migrar el contrato completo no se justificaba en esa iteración. |
 
 ---
 

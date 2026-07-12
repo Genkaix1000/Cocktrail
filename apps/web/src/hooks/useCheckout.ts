@@ -9,6 +9,10 @@ import type { Drink, Order, PaymentMethod } from "@cocktrail/shared";
 
 type CartEntry = { drink: Drink; qty: number };
 
+/** Métodos que se cobran vía Posnet. Hoy solo "debito" — el Posnet físico no puede
+ * diferenciar un cobro con QR del resto (ver docs/specs/cobro-posnet-mercadopago.md). */
+type PosnetMethod = Exclude<PaymentMethod, "efectivo" | "qr">;
+
 type UseCheckoutArgs = {
   cart: Record<number, number>;
   cartEntries: CartEntry[];
@@ -101,13 +105,13 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     }
   }, [cart, canConfirmCash, clearCart, paymentMethod, submitting, totalItems]);
 
-  const startPolling = useCallback((intentId: string, method: PaymentMethod) => {
+  const startPolling = useCallback((intentId: string, method: PosnetMethod) => {
     stopPolling();
 
     pollingRef.current = setInterval(async () => {
       try {
         const st = await mercadopagoService.getPosIntentStatus(intentId);
-        const currentState = st.state || st.status;
+        const currentState = st.status;
         if (currentState) {
           setPaymentIntentState(currentState);
         }
@@ -122,24 +126,25 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
           setCurrentIntentId(null);
           setPaymentIntentState(null);
           setPosnetErrorMessage(null);
-        } else if (currentState === "CANCELED" || currentState === "ERROR") {
+        } else if (currentState === "CANCELED") {
           stopPolling();
           setPosnetStatus("error");
           setCurrentIntentId(null);
           setPaymentIntentState(null);
-          setPosnetErrorMessage(
-            currentState === "CANCELED"
-              ? "El cobro fue cancelado en el Posnet."
-              : "El cobro fue rechazado o falló en el Posnet."
-          );
+          setPosnetErrorMessage("El cobro fue cancelado en el Posnet.");
         }
       } catch (err) {
         console.error("Error polling MP status:", err);
+        stopPolling();
+        setPosnetStatus("error");
+        setCurrentIntentId(null);
+        setPaymentIntentState(null);
+        setPosnetErrorMessage("Error al consultar el estado del cobro. Verificá la conexión.");
       }
     }, 3000);
   }, [cart, clearCart, stopPolling]);
 
-  const startPosnetPayment = useCallback(async (method: PaymentMethod) => {
+  const startPosnetPayment = useCallback(async (method: PosnetMethod) => {
     if (isSubmittingRef.current || submitting || totalItems === 0) return;
     isSubmittingRef.current = true;
     setSubmitting(true);

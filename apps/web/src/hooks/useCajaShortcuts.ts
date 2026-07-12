@@ -15,7 +15,7 @@ type CajaShortcutsState = {
 
 type CajaShortcutsCallbacks = {
   onOpenCheckout: () => void;
-  onSelectMethod: (method: PaymentMethod) => void;
+  onSelectMethod: (method: Exclude<PaymentMethod, "qr">) => void;
   onExactAmount: () => void;
   onConfirmCash: () => void;
   onNewSale: () => void;
@@ -29,7 +29,7 @@ type CajaShortcutsCallbacks = {
  * confirmar efectivo / nueva venta — nunca más de una a la vez), C abre el
  * cobro (separado de Enter a propósito: si el grid tiene un producto
  * resaltado, Enter siempre lo agrega, así que abrir el cobro necesita su
- * propia tecla en vez de competir con esa acción), 1/2/3 eligen método de
+ * propia tecla en vez de competir con esa acción), 1/2 eligen método de
  * pago, E carga el monto exacto en efectivo, Escape retrocede un paso en
  * el checkout y Espacio repite el "Nueva Venta" de la pantalla de éxito.
  * Mismo patrón que useScannerInput.ts: listener único en window, con
@@ -76,7 +76,6 @@ export function useCajaShortcuts(state: CajaShortcutsState, callbacks: CajaShort
       if (isCheckoutOpen && paymentMethod === null) {
         if (event.key === "1") onSelectMethod("efectivo");
         else if (event.key === "2") onSelectMethod("debito");
-        else if (event.key === "3") onSelectMethod("qr");
         return;
       }
 

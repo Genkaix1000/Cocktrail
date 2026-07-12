@@ -221,7 +221,6 @@ describe("useCajaShortcuts", () => {
   it.each([
     ["1", "efectivo"],
     ["2", "debito"],
-    ["3", "qr"],
   ] as const)("tecla %s selecciona el método %s cuando el checkout está abierto sin método", (key, method) => {
     const callbacks = makeCallbacks();
     renderHook(() =>
@@ -233,7 +232,7 @@ describe("useCajaShortcuts", () => {
     expect(callbacks.onSelectMethod).toHaveBeenCalledWith(method);
   });
 
-  it("1/2/3 no hacen nada si ya hay un método elegido", () => {
+  it("1/2 no hacen nada si ya hay un método elegido", () => {
     const callbacks = makeCallbacks();
     renderHook(() =>
       useCajaShortcuts(
@@ -244,7 +243,6 @@ describe("useCajaShortcuts", () => {
 
     fireEvent.keyDown(window, { key: "1" });
     fireEvent.keyDown(window, { key: "2" });
-    fireEvent.keyDown(window, { key: "3" });
 
     expect(callbacks.onSelectMethod).not.toHaveBeenCalled();
   });

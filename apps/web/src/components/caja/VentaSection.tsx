@@ -8,7 +8,6 @@ import {
   ShoppingBag,
   X,
   Banknote,
-  QrCode,
   CreditCard,
   ArrowLeft,
   ArrowRight,
@@ -331,7 +330,7 @@ export default function VentaSection({ drinks, printer }: Props) {
       return;
     }
 
-    const isPosInProgress = (paymentMethod === "debito" || paymentMethod === "qr") && posnetStatus !== "idle";
+    const isPosInProgress = paymentMethod === "debito" && posnetStatus !== "idle";
     if (isPosInProgress) {
       if (paymentIntentState === "ON_TERMINAL") return; // no se puede salir con el cobro activo en el lector
       stopPolling();
@@ -620,7 +619,7 @@ export default function VentaSection({ drinks, printer }: Props) {
       {isCheckoutOpen && (
         <div
           onClick={() => {
-            const isPosInProgress = (paymentMethod === "debito" || paymentMethod === "qr") && posnetStatus !== "idle";
+            const isPosInProgress = paymentMethod === "debito" && posnetStatus !== "idle";
             if (isPosInProgress) return;
             closeCheckout();
           }}
@@ -765,7 +764,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                 <div className="flex justify-between items-center mb-6 shrink-0">
                   {paymentMethod ? (
                     // Si es POS en progreso
-                    ((paymentMethod === "debito" || paymentMethod === "qr") && posnetStatus !== "idle") ? (
+                    (paymentMethod === "debito" && posnetStatus !== "idle") ? (
                       paymentIntentState === "ON_TERMINAL" ? (
                         // Ocultamos "Atrás" si está ON_TERMINAL
                         <div />
@@ -810,13 +809,13 @@ export default function VentaSection({ drinks, printer }: Props) {
                   )}
 
                   {/* Botón X de cierre del modal */}
-                  {((paymentMethod === "debito" || paymentMethod === "qr") && posnetStatus !== "idle" && paymentIntentState === "ON_TERMINAL") ? (
+                  {(paymentMethod === "debito" && posnetStatus !== "idle" && paymentIntentState === "ON_TERMINAL") ? (
                     // Si está ON_TERMINAL, no renderizamos el botón X para impedir salir
                     null
                   ) : (
                     <button
                       onClick={async () => {
-                        const isPosInProgress = (paymentMethod === "debito" || paymentMethod === "qr") && posnetStatus !== "idle";
+                        const isPosInProgress = paymentMethod === "debito" && posnetStatus !== "idle";
                         if (isPosInProgress && currentIntentId) {
                           mercadopagoService.cancelPosIntent(currentIntentId).catch(e => console.warn(e));
                         }
@@ -859,31 +858,17 @@ export default function VentaSection({ drinks, printer }: Props) {
                       <h3 className="text-xs uppercase tracking-widest font-bold text-ink-400 flex items-center gap-1.5">
                         Cobro Posnet Mercado Pago
                       </h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <button
-                          disabled={submitting}
-                          onClick={() => startPosnetPayment("debito")}
-                          className="relative h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
-                        >
-                          <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center">
-                            <CreditCard size={22} />
-                          </div>
-                          <span className="font-bold text-xs text-ink-50 text-center">Tarjeta</span>
-                          <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">2</span>
-                        </button>
-
-                        <button
-                          disabled={submitting}
-                          onClick={() => startPosnetPayment("qr")}
-                          className="relative h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
-                        >
-                          <div className="w-10 h-10 rounded-xl bg-purple-soft border border-purple-border text-purple flex items-center justify-center">
-                            <QrCode size={22} />
-                          </div>
-                          <span className="font-bold text-xs text-ink-50 text-center">Código QR</span>
-                          <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">3</span>
-                        </button>
-                      </div>
+                      <button
+                        disabled={submitting}
+                        onClick={() => startPosnetPayment("debito")}
+                        className="relative h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center">
+                          <CreditCard size={22} />
+                        </div>
+                        <span className="font-bold text-xs text-ink-50 text-center">Tarjeta</span>
+                        <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">2</span>
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -948,7 +933,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                       </div>
                     )}
 
-                    {(paymentMethod === "debito" || paymentMethod === "qr") && (
+                    {paymentMethod === "debito" && (
                       <div className="flex flex-col gap-4">
                         <div className={`py-10 flex flex-col items-center text-center gap-4 bg-ink-950 border border-ink-800 rounded-2xl ${paymentIntentState === "ON_TERMINAL" ? "" : "animate-pulse"}`}>
                           <Loader2 size={48} className="text-accent animate-spin" />
@@ -965,7 +950,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                             ) : (
                               <>
                                 <p className="text-sm font-bold text-ink-50">
-                                  Esperando pago con {paymentMethod === "qr" ? "QR" : "Tarjeta"}...
+                                  Esperando pago con Tarjeta...
                                 </p>
                                 <p className="text-xs text-ink-400 px-8">
                                   {paymentIntentState === "CREATING" ? "Generando intención de cobro..." : "Enviando orden de cobro al Posnet."}

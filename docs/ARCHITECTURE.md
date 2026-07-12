@@ -10,7 +10,7 @@ Internamente el repo se llama **Cocktrail**. En el plan de negocio el producto s
 
 ## 1. Qué es
 
-Sistema de pedidos y cobro para un boliche. El cliente escanea un QR → arma su pedido en el celular → recibe un **ticket con código** → lo retira en la barra. En paralelo, la **caja** cobra de forma presencial (efectivo, débito/Posnet, QR) y el **admin** ve totales en vivo y cierra la noche.
+Sistema de pedidos y cobro para un boliche. El cliente escanea un QR → arma su pedido en el celular → recibe un **ticket con código** → lo retira en la barra. En paralelo, la **caja** cobra de forma presencial (efectivo, débito/Posnet) y el **admin** ve totales en vivo y cierra la noche.
 
 Tres operadores + el cliente:
 
@@ -18,7 +18,7 @@ Tres operadores + el cliente:
 |---|---|---|
 | **Carta** (`/carta`) | Cliente (QR) | Ve tragos, arma pedido, recibe ticket con estado en vivo |
 | **Barra** (`/barra`) | Barman | Cola de pedidos (KDS), cambia estado, **canjea tickets** (escáner o manual) |
-| **Caja** (`/caja`) | Cajera | Cobro presencial (efectivo / débito Posnet / QR), ventas en efectivo |
+| **Caja** (`/caja`) | Cajera | Cobro presencial (efectivo / débito Posnet), ventas en efectivo |
 | **Admin** (`/admin`) | Dueño/encargado | Totales en vivo, historial, carta, usuarios, config, **abrir/cerrar noche** |
 
 > 🌙 **La noche se abre manualmente**: la admin abre cada noche desde `/admin` (`POST /api/events/open`)
@@ -271,11 +271,15 @@ Transiciones válidas (en `orders.service.ts`): `pagado→{preparando,cancelado}
 `modules/mercadopago/mercadopago.service.ts` llama a `https://api.mercadopago.com` (**Point Integration API**, lectora física Posnet):
 
 - `POST /point/integration-api/devices/{deviceId}/payment-intents` (monto en centavos)
-- `GET /point/integration-api/payment-intents/{id}` (status)
+- `GET /point/integration-api/payment-intents/{id}` (status, normalizado a
+  `OPEN|ON_TERMINAL|FINISHED|CANCELED|PENDING` antes de llegar al frontend)
 - `DELETE .../payment-intents/{id}` (cancelar)
+- `GET /v1/payments/{id}` (Payments API estándar) — usado internamente cuando MP responde el
+  estado final `CONFIRMATION_REQUIRED`, para resolver automáticamente si el cobro se concretó sin
+  que la cajera tenga que mirar la pantalla del Posnet
 - `checkDeviceConnection` (usado por `/api/system/status`)
 
-Requiere `MP_ACCESS_TOKEN` + `MP_POS_DEVICE_ID`. Si faltan, lanza `Conflict` (no hay fallback simulado). **Es cobro presencial con lectora física, no checkout web ni QR de MP.**
+Requiere `MP_ACCESS_TOKEN` + `MP_POS_DEVICE_ID`. Si faltan, lanza `Conflict` (no hay fallback simulado). **Es cobro presencial con lectora física, no checkout web ni QR de MP** — `/caja` solo ofrece Efectivo y Tarjeta; el valor `"qr"` de `PaymentMethod` sigue existiendo en el dominio para la preferencia que declara el cliente en `/carta` y el reporte de `/admin`, sin relación con el Posnet.
 
 ---
 
