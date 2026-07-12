@@ -3,6 +3,29 @@ import { app, eventsService } from "./app.js";
 import { syncService } from "./modules/sync/sync.service.js";
 import { supabase } from "./shared/supabase.js";
 import { exec } from "node:child_process";
+import { networkInterfaces } from "node:os";
+
+/** IP LAN real de esta máquina (no "localhost") — la necesita cualquier dispositivo
+ * de la red (tablet de caja/barra) para llegar al backend, a diferencia de localhost
+ * que solo resuelve a sí mismo desde cada dispositivo. */
+function getLanIp(): string | null {
+  const interfaces = networkInterfaces();
+  const candidates: string[] = [];
+
+  for (const name of Object.keys(interfaces)) {
+    // Puentes de Docker/Compose (docker0, br-*, veth*) no son la LAN real del boliche.
+    if (/^(docker|br-|veth)/.test(name)) continue;
+    for (const iface of interfaces[name] ?? []) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        candidates.push(iface.address);
+      }
+    }
+  }
+
+  // Preferir rangos típicos de LAN doméstica/local (192.168.x.x, 10.x.x.x) por sobre
+  // cualquier otro rango privado que pueda quedar de una interfaz virtual.
+  return candidates.find((ip) => ip.startsWith("192.168.")) ?? candidates.find((ip) => ip.startsWith("10.")) ?? candidates[0] ?? null;
+}
 
 async function ensureDatabaseConnection(): Promise<void> {
   const maxAttempts = 6;
@@ -57,7 +80,13 @@ async function ensureDatabaseConnection(): Promise<void> {
 async function boot() {
   // 1. Start listening on configured port IMMEDIATELY so the port is open and Next.js doesn't receive ECONNREFUSED
   app.listen(env.PORT, () => {
+    const lanIp = getLanIp();
     console.log(`🍸 Cocktrail API corriendo en http://localhost:${env.PORT}`);
+    if (lanIp) {
+      console.log(`   LAN (para tablets/otros dispositivos): http://${lanIp}:${env.PORT}`);
+    } else {
+      console.log(`   ⚠️ No se detectó una IP LAN — verificá la conexión de red si vas a acceder desde otro dispositivo.`);
+    }
     console.log(`   CORS: ${env.FRONTEND_URL}`);
     console.log(`   Env: ${env.NODE_ENV}`);
   });
