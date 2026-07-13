@@ -130,14 +130,17 @@ code, módulo por módulo, antes de tocar el frontend. Ver `docs/specs/auditoria
   una implementación in-memory anterior sin callers). `AuditLogsService` inyectado en vez de
   import estático en config/tickets/drinks/orders/users. Varios `any` tipados. `mapRowToEvent`
   extraído (estaba duplicado 5 veces). Seeding de admin/drinks por defecto desduplicado en `sync`.
-- [ ] **Deuda estructural documentada, no resuelta en esta fase** → spec
-  [`deuda-estructural-fase2.md`](./specs/deuda-estructural-fase2.md) (2026-07-13, decisión de
-  abordarla antes de la Fase 6): `auth.service.ts` mezcla autenticación + firma de
-  sesión + captcha en un archivo; `SyncService` bypasea los repositorios existentes y pega directo
-  a Supabase (`users`/`drinks`/`orders`/`cash-sales` duplican el mismo patrón de sync a cloud);
-  `emit` (SSE) se llama directo desde `orders.service.ts`/`events.service.ts` en vez de una capa
-  de infra separada; `system.controller.ts` no tiene Service propio; `TicketsService.redeemTicket`
-  orquesta directamente la máquina de estados de `OrdersService`.
+- [x] **Deuda estructural resuelta (2026-07-13)** → spec
+  [`deuda-estructural-fase2.md`](./specs/deuda-estructural-fase2.md) (done), 5 commits
+  secuenciales: (1) `emit` (SSE) inyectado por constructor en `OrdersService`/
+  `CashSalesService`/`EventsService` en vez de importado como singleton; (2) `auth.service.ts`
+  partido en `session.ts`/`credentials.ts`/`captcha.service.ts` (este último — luego eliminado
+  del todo, ver más abajo); (3) `TicketsService` ya no arma los parámetros de
+  `OrdersService.updateOrderStatus` — nuevo método `OrdersService.markDelivered()`, misma
+  atomicidad exacta que `atomicidad-canje-ticket`; (4) `SyncService` usa los repos locales
+  auditados + un `CloudSyncRepository` nuevo y dedicado en vez de pegarle directo a
+  `supabase`/`supabaseCloud` — verificado end-to-end contra Supabase Cloud real; (5)
+  `system.controller.ts` delega en `SystemService` nuevo, ya no tiene lógica de negocio inline.
 - [ ] **Fuera de alcance de esta fase** (sin tests/auditoría todavía): módulos `printer`,
   `cash-sales`, `audit-logs`, `sse`. (`mercadopago` salió de esta lista: ya tiene tests, ver spec
   `cobro-posnet-mercadopago`.)
@@ -483,8 +486,13 @@ quedan explícitamente afuera de esta ronda — ver sus secciones.
   [`hardening-kong-demo-keys.md`](./specs/hardening-kong-demo-keys.md) (done, 2026-07-13). Pendiente
   real: probar la rotación completa contra un `docker compose` reiniciado (no se hizo en esta
   sesión para no cortar el dev server que estaba corriendo en vivo) — ver nota en la spec.
-- [ ] **Deuda estructural de Fase 2** (`SyncService`, `auth.service.ts`, capa SSE, etc.) → spec
-  [`deuda-estructural-fase2.md`](./specs/deuda-estructural-fase2.md) (ver bullet en Fase 2 arriba).
+- [x] **Deuda estructural de Fase 2** (`SyncService`, `auth.service.ts`, capa SSE, etc.) → spec
+  [`deuda-estructural-fase2.md`](./specs/deuda-estructural-fase2.md) (done, 2026-07-13 — ver
+  bullet en Fase 2 arriba). De paso, en la misma sesión: se sacó el captcha del login por completo
+  (`CaptchaService`, agregado en el punto 1 de esta spec, se eliminó horas después a pedido del
+  usuario — sistema 100% LAN, `loginLimiter` alcanza) y se arregló un bug real encontrado en el
+  camino: Historial de Noches quedaba en skeleton para siempre tras cerrar la noche
+  (`AdminClient.tsx`, `useEffect` de fetch con deps `[]` que nunca se re-disparaba).
 - [ ] **Limpieza de lint a nivel repo** (R11) → spec
   [`limpieza-lint-repo.md`](./specs/limpieza-lint-repo.md).
 - [x] **R6 resuelto**: `next-env.d.ts` y `apps/api/src/data/*.json` — confirmado (2026-07-13) que

@@ -154,7 +154,13 @@ El "flag" que decide *single backend* vs *local+cloud* es simplemente **la prese
 
 ## 6. Sincronización local ↔ nube (`modules/sync/sync.service.ts`)
 
-Implementa el modelo "**caja offline, reconcilia al cerrar**":
+Implementa el modelo "**caja offline, reconcilia al cerrar**". `SyncService` recibe los
+repositorios locales ya auditados (`Users`/`Drinks`/`Orders`/`CashSales`/`Tickets`/
+`EventsRepository`) y un `CloudSyncRepository` (`modules/sync/cloud-sync.repository.ts`) por
+constructor — no pega directo a `supabase`/`supabaseCloud`, salvo el seed local-only de datos
+demo (a propósito: evita el dual-write a cloud que hacen `UsersRepository.create()`/
+`DrinksRepository.create()` para escrituras normales). `CloudSyncRepository` es el único lugar
+que concentra el acceso crudo a `supabaseCloud` (pull cloud→local, push local→cloud bulk).
 
 - **`pullMasterData()`** — **Cloud → Local**. Baja `users` y `drinks` y hace `upsert` en local. Si no hay nada en ningún lado, siembra admin + drinks por defecto.
 - **`pushEventData(eventId)`** — **Local → Cloud**. Sube un `night_event` cerrado + sus `orders` + `tickets` + `cash_sales`. Marca `sync_status` `pending → synced/failed` en la tabla local. Calcula totales con `computeTotals` y los guarda en `night_events.totals` (cloud).
@@ -171,7 +177,7 @@ Implementa el modelo "**caja offline, reconcilia al cerrar**":
 
 ## 7. Real-time (SSE)
 
-- **Servidor**: `modules/sse/sse.controller.ts` expone `GET /api/events` como `text/event-stream` (frame `connected` inicial + ping cada 25s). Bus: `shared/sse/sse-manager.ts` (Node `EventEmitter`, canal único `domain`).
+- **Servidor**: `modules/sse/sse.controller.ts` expone `GET /api/events` como `text/event-stream` (frame `connected` inicial + ping cada 25s). Bus: `shared/sse/sse-manager.ts` (Node `EventEmitter`, canal único `domain`). Los servicios que emiten (`OrdersService`/`CashSalesService`/`EventsService`) reciben `emit` (tipo `EmitFn`) inyectado por constructor, no lo importan como singleton — mismo patrón de DI que los repos.
 - **Eventos** (`DomainEvent`): `order.created`, `order.updated`, `cash_sale.added`, `event.closed`, `event.opened`, `theme.changed`.
 - **Cliente**: hook `apps/web/src/lib/useSSE.ts` abre `EventSource(${API_URL}/api/events, {withCredentials:true})`. El stream es **global** y se filtra del lado del cliente (por token para el cliente, por rol para staff).
 

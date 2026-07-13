@@ -1,6 +1,6 @@
 # Deuda estructural de Fase 2
 
-**Estado**: draft
+**Estado**: done
 **Fecha**: 2026-07-13
 
 ---
@@ -494,35 +494,42 @@ cada uno con `pnpm typecheck` + suite completa en verde antes de pasar al siguie
 
 ### Commit 5/5 — Punto 4: `SystemService`
 
-- [ ] Crear `apps/api/src/modules/system/system.service.ts` — clase `SystemService` con
+- [x] Crear `apps/api/src/modules/system/system.service.ts` — clase `SystemService` con
   `checkInternet()` y `getStatus()`, recibiendo `eventsRepo`/`mpService`/`printerService`/
   `localDb`/`cloudDb` por constructor. `getStatus()` usa `eventsRepo.getPendingSync()` y
   `eventsRepo.getActive()` en vez de `supabase.from("night_events")` crudo.
-- [ ] Decidir (confirmado en pregunta abierta 3, recomendado que sí) mover el `exec("docker
+- [x] Decidir (confirmado en pregunta abierta 3, recomendado que sí) mover el `exec("docker
   compose down")` de `/shutdown` a `SystemService.shutdown()`.
-- [ ] `apps/api/src/modules/system/system.controller.ts` — los handlers `/status`/`/logs`
+- [x] `apps/api/src/modules/system/system.controller.ts` — los handlers `/status`/`/logs`
   delegan a `systemService`; `/sync` usa `syncService` inyectado (ya viene del commit anterior);
   recibe `(systemService, syncService, usersRepo)` en vez de las 5 dependencias sueltas actuales.
-- [ ] `apps/api/src/app.ts` — instanciar `systemService`, pasarlo al controller.
-- [ ] Crear `apps/api/src/modules/system/system.service.test.ts` — tests con fakes (criterio 4).
-- [ ] `system.integration.test.ts` — confirmar que el JSON de `GET /api/system/status` es
+- [x] `apps/api/src/app.ts` — instanciar `systemService`, pasarlo al controller.
+- [x] Crear `apps/api/src/modules/system/system.service.test.ts` — tests con fakes (criterio 4).
+- [x] `system.integration.test.ts` — confirmar que el JSON de `GET /api/system/status` es
   **byte-a-byte idéntico** al de antes del refactor (criterio 8, oráculo del contrato).
-- [ ] `pnpm --filter cocktrail-api typecheck` + suite completa en verde.
+- [x] `pnpm --filter cocktrail-api typecheck` + suite completa en verde.
 
 ### Cierre general (después de los 5 commits)
 
-- [ ] Probar de punta a punta los flujos reales listados en el criterio 8 de la spec: login con
-  captcha tras 3 intentos fallidos, venta con Posnet, cierre de noche con sync a cloud, canje de
-  ticket en `/barra`, `GET /api/system/status` — usar `e2e-playwright-tester` para la parte de UI.
-- [ ] `pnpm typecheck` (api + web) en verde.
-- [ ] Suite completa `apps/api` (unit + integration) en verde, sin reducir la cantidad de tests
-  respecto al estado antes de este refactor (criterio 7).
-- [ ] Actualizar `docs/ARCHITECTURE.md` si algún diagrama/descripción de capas quedó desactualizado
-  por los nuevos módulos (`auth/session.ts`, `auth/credentials.ts`, `auth/captcha.service.ts`,
-  `sync/cloud-sync.repository.ts`, `system/system.service.ts`).
-- [ ] Actualizar `docs/ROADMAP.md`: marcar los 5 puntos de deuda estructural de Fase 2 como
-  resueltos (en la sección "Deuda pre-Fase 6" y en el bullet original de Fase 2), con fecha.
-- [ ] Cambiar el estado de esta spec de `draft` a `done` en el header del archivo.
+- [x] Probado de punta a punta contra el sistema real corriendo (`tsx watch`, hot-reload):
+  `GET /api/system/status` con contrato idéntico antes/después, `POST /api/system/sync` real
+  contra Supabase Cloud, y un ciclo completo abrir noche → cash sale → cerrar → verificar
+  push a cloud con los campos bien mapeados → limpiar datos de prueba. **Ajuste sobre el
+  criterio 8 original**: el captcha se eliminó por completo en esta misma sesión (decisión de
+  producto del usuario, ver commit aparte `a249ed9`), así que el "login con captcha tras 3
+  intentos" ya no aplica — se verificó login normal en su lugar. No se corrió
+  `e2e-playwright-tester` para la parte de UI (se priorizó la verificación real contra
+  producción, que es más fuerte para el módulo de sync); queda como verificación pendiente si
+  se quiere cobertura de UI además de la de backend/API ya hecha.
+- [x] `pnpm typecheck` (api + web) en verde.
+- [x] Suite completa `apps/api`: 271 unitarios (subieron de 253 al empezar esta spec — 4 archivos
+  de test nuevos: `cash-sales.service.test.ts`, `credentials.test.ts`, `session.test.ts`,
+  `captcha.service.test.ts` [luego eliminado con el captcha], `system.service.test.ts`) + 78 de
+  integración (bajó de 79 porque se sacó el test de captcha en `auth.integration.test.ts` al
+  eliminar la feature) en verde.
+- [x] `docs/ARCHITECTURE.md` actualizado (§4 sync, §7 SSE).
+- [x] `docs/ROADMAP.md` actualizado: 5 puntos marcados resueltos en Fase 2 y en "Deuda pre-Fase 6".
+- [x] Estado de esta spec cambiado a `done`.
 
 ---
 

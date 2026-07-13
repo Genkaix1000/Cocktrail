@@ -37,6 +37,8 @@ import { PrinterService } from "./modules/printer/printer.service.js";
 import { emit } from "./shared/sse/sse-manager.js";
 import { SupabaseCloudSyncRepository } from "./modules/sync/cloud-sync.repository.js";
 import { SyncService } from "./modules/sync/sync.service.js";
+import { SystemService } from "./modules/system/system.service.js";
+import { supabase, supabaseCloud } from "./shared/supabase.js";
 
 // Middleware
 import { errorHandler } from "./shared/middleware/error-handler.js";
@@ -93,6 +95,7 @@ const cashSalesService = new CashSalesService(
 );
 
 const mpService = new MercadoPagoService();
+const systemService = new SystemService(eventsRepo, mpService, printerService, supabase, supabaseCloud);
 
 // ── Express App ──
 
@@ -153,7 +156,7 @@ app.use("/api/users", createUsersController(usersService));
 app.use("/api/config", createConfigController(configRepo, eventsService));
 app.use("/api/mercadopago", createMercadoPagoController(mpService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
-app.use("/api/system", createSystemController(usersRepo, mpService, printerService, syncService));
+app.use("/api/system", createSystemController(usersRepo, systemService, syncService));
 app.use("/api", createEventsController(eventsService, usersRepo));
 
 // Error handler global (ÚLTIMO)
