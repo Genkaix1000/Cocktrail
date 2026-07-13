@@ -3,7 +3,7 @@ import type { EventsService } from "./events.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, ThemeSchema } from "../../shared/middleware/validate.js";
 import type { UsersRepository } from "../users/users.repository.js";
-import { authenticate } from "../auth/auth.service.js";
+import { authenticate } from "../auth/credentials.js";
 import { BadRequest, Forbidden, Unauthorized } from "../../shared/errors/http-errors.js";
 
 export function createEventsController(

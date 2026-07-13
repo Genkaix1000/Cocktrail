@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { exec } from "node:child_process";
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
-import { authenticate } from "../auth/auth.service.js";
+import { authenticate } from "../auth/credentials.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { syncService } from "../sync/sync.service.js";
 import type { UsersRepository } from "../users/users.repository.js";
@@ -10,7 +10,7 @@ import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js
 import { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
 import type { PrinterService } from "../printer/printer.service.js";
 import { env } from "../../config/env.js";
-import { verifySession } from "../auth/auth.service.js";
+import { verifySession } from "../auth/session.js";
 import { systemStatusLimiter } from "../../shared/middleware/rate-limit.js";
 import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 

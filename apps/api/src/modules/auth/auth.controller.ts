@@ -1,20 +1,12 @@
 import { Router } from "express";
-import {
-  authenticate,
-  buildSessionCookie,
-  buildClearCookie,
-  COOKIE_NAME,
-  verifySession,
-  verifyCaptcha,
-  getCaptchaInfo,
-  registerFailedAttempt,
-  clearFailedAttempts,
-} from "./auth.service.js";
+import { authenticate } from "./credentials.js";
+import { buildSessionCookie, buildClearCookie, COOKIE_NAME, verifySession } from "./session.js";
+import type { CaptchaService } from "./captcha.service.js";
 import { validate, LoginSchema } from "../../shared/middleware/validate.js";
 import { loginLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";
 
-export function createAuthController(usersRepo: UsersRepository): Router {
+export function createAuthController(usersRepo: UsersRepository, captchaService: CaptchaService): Router {
   const router = Router();
 
   // POST /api/auth/login
@@ -24,13 +16,13 @@ export function createAuthController(usersRepo: UsersRepository): Router {
       const ip = req.ip || "unknown";
 
       // 1. Verify captcha if failure count >= 3
-      const captchaInfo = getCaptchaInfo(ip);
+      const captchaInfo = captchaService.getCaptchaInfo(ip);
       if (captchaInfo.required) {
-        const captchaValid = verifyCaptcha(ip, captchaAnswer);
+        const captchaValid = captchaService.verifyCaptcha(ip, captchaAnswer);
         if (!captchaValid) {
           // Increment or refresh captcha on failure
-          registerFailedAttempt(ip);
-          const newCaptcha = getCaptchaInfo(ip);
+          captchaService.registerFailedAttempt(ip);
+          const newCaptcha = captchaService.getCaptchaInfo(ip);
           res.status(400).json({
             error: "Captcha incorrecto o requerido.",
             captchaRequired: true,
@@ -44,7 +36,7 @@ export function createAuthController(usersRepo: UsersRepository): Router {
       const user = await authenticate(username, password, usersRepo);
       if (!user) {
         // Register failed attempt
-        const failedInfo = registerFailedAttempt(ip);
+        const failedInfo = captchaService.registerFailedAttempt(ip);
         res.status(400).json({
           error: "Credenciales inválidas",
           captchaRequired: failedInfo.captchaRequired,
@@ -54,7 +46,7 @@ export function createAuthController(usersRepo: UsersRepository): Router {
       }
 
       // Success: clear failed attempts registry
-      clearFailedAttempts(ip);
+      captchaService.clearFailedAttempts(ip);
 
       res.setHeader("Set-Cookie", buildSessionCookie(user.username, user.role));
       res.json({ username: user.username, role: user.role });

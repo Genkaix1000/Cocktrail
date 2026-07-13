@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { OrdersService } from "./orders.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
-import { COOKIE_NAME, verifySession } from "../auth/auth.service.js";
+import { COOKIE_NAME, verifySession } from "../auth/session.js";
 import { validate, CreateOrderSchema, UpdateOrderStatusSchema } from "../../shared/middleware/validate.js";
 import { orderLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";

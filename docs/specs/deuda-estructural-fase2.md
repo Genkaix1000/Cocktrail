@@ -416,28 +416,28 @@ cada uno con `pnpm typecheck` + suite completa en verde antes de pasar al siguie
 
 ### Commit 2/5 — Punto 1: split de `auth.service.ts`
 
-- [ ] Crear `apps/api/src/modules/auth/session.ts` — mover `COOKIE_NAME`, `signSession`,
+- [x] Crear `apps/api/src/modules/auth/session.ts` — mover `COOKIE_NAME`, `signSession`,
   `verifySession`, `buildSessionCookie`, `buildClearCookie`, tipos `Session`/`SignedCookie`
   (funciones puras, sin DI).
-- [ ] Crear `apps/api/src/modules/auth/credentials.ts` — mover `authenticate`, `hashPassword`,
+- [x] Crear `apps/api/src/modules/auth/credentials.ts` — mover `authenticate`, `hashPassword`,
   `USERS`, tipo `AuthenticatedUser`.
-- [ ] Crear `apps/api/src/modules/auth/captcha.service.ts` — clase `CaptchaService` con
+- [x] Crear `apps/api/src/modules/auth/captcha.service.ts` — clase `CaptchaService` con
   `registry` como campo de instancia (no `Map` de módulo), métodos `getCaptchaInfo`/
   `registerFailedAttempt`/`clearFailedAttempts`/`verifyCaptcha`.
-- [ ] Borrar `apps/api/src/modules/auth/auth.service.ts` una vez migrado todo.
-- [ ] `apps/api/src/modules/auth/auth.middleware.ts` — actualizar import (`./auth.service` →
+- [x] Borrar `apps/api/src/modules/auth/auth.service.ts` una vez migrado todo.
+- [x] `apps/api/src/modules/auth/auth.middleware.ts` — actualizar import (`./auth.service` →
   `./session`).
-- [ ] `apps/api/src/modules/auth/auth.controller.ts` — actualizar imports (session +
+- [x] `apps/api/src/modules/auth/auth.controller.ts` — actualizar imports (session +
   credentials), recibir `captchaService: CaptchaService` inyectado.
-- [ ] `apps/api/src/modules/system/system.controller.ts` — actualizar imports (`authenticate`
+- [x] `apps/api/src/modules/system/system.controller.ts` — actualizar imports (`authenticate`
   desde `./auth/credentials`, `verifySession` desde `./auth/session`).
-- [ ] `apps/api/src/app.ts` — instanciar `const captchaService = new CaptchaService()`, pasarlo a
+- [x] `apps/api/src/app.ts` — instanciar `const captchaService = new CaptchaService()`, pasarlo a
   `createAuthController`.
-- [ ] Partir `auth.service.test.ts` en `session.test.ts`, `credentials.test.ts`,
+- [x] Partir `auth.service.test.ts` en `session.test.ts`, `credentials.test.ts`,
   `captcha.service.test.ts` (este último con `new CaptchaService()` por test).
-- [ ] Confirmar que `auth.integration.test.ts` sigue pasando **sin modificarlo** (es la red de
+- [x] Confirmar que `auth.integration.test.ts` sigue pasando **sin modificarlo** (es la red de
   seguridad de los criterios 1 y 8 — contrato HTTP idéntico).
-- [ ] `pnpm --filter cocktrail-api typecheck` + `pnpm --filter cocktrail-api test` en verde.
+- [x] `pnpm --filter cocktrail-api typecheck` + `pnpm --filter cocktrail-api test` en verde.
 
 ### Commit 3/5 — Punto 5: límite `TicketsService`/`OrdersService`
 

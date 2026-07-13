@@ -7,6 +7,7 @@ import { generalLimiter } from "./shared/middleware/rate-limit.js";
 
 // Controllers
 import { createAuthController } from "./modules/auth/auth.controller.js";
+import { CaptchaService } from "./modules/auth/captcha.service.js";
 import { createDrinksController } from "./modules/drinks/drinks.controller.js";
 import { createOrdersController } from "./modules/orders/orders.controller.js";
 import { createCashSalesController } from "./modules/cash-sales/cash-sales.controller.js";
@@ -48,6 +49,7 @@ const cashSalesRepo = new SupabaseCashSalesRepository();
 const ticketsRepo = new SupabaseTicketsRepository();
 const usersRepo = new SupabaseUsersRepository();
 const configRepo = new SupabaseConfigRepository();
+const captchaService = new CaptchaService();
 
 const drinksService = new DrinksService(drinksRepo);
 const usersService = new UsersService(usersRepo);
@@ -138,7 +140,7 @@ app.get("/health", (_req, res) => {
 // Routes
 import { createSystemController } from "./modules/system/system.controller.js";
 
-app.use("/api/auth", createAuthController(usersRepo));
+app.use("/api/auth", createAuthController(usersRepo, captchaService));
 app.use("/api/drinks", createDrinksController(drinksService));
 app.use("/api/orders", createOrdersController(ordersService, usersRepo));
 app.use("/api/cash-sales", createCashSalesController(cashSalesService));
@@ -154,4 +156,4 @@ app.use("/api", createEventsController(eventsService, usersRepo));
 // Error handler global (ÚLTIMO)
 app.use(errorHandler);
 
-export { app, eventsService };
+export { app, eventsService, captchaService };

@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { Role } from "@cocktrail/shared";
-import { COOKIE_NAME, verifySession, type Session } from "./auth.service.js";
+import { COOKIE_NAME, verifySession, type Session } from "./session.js";
 import { Unauthorized, Forbidden } from "../../shared/errors/http-errors.js";
 
 // Extiende el tipo Request de Express para incluir la sesión

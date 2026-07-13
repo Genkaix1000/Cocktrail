@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { supabase } from "../../src/shared/supabase.js";
-import { signSession, COOKIE_NAME } from "../../src/modules/auth/auth.service.js";
+import { signSession, COOKIE_NAME } from "../../src/modules/auth/session.js";
 import { hashPassword } from "../../src/modules/users/users.repository.js";
 import type { Role } from "@cocktrail/shared";
 import type { UserPermissions } from "../../src/modules/users/users.repository.js";

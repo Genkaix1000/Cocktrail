@@ -1,15 +1,14 @@
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
-import { app } from "../../src/app.js";
-import { clearFailedAttempts } from "../../src/modules/auth/auth.service.js";
+import { app, captchaService } from "../../src/app.js";
 import { cleanUsers, createTestAdmin, signTestSession } from "../setup/db-helpers.js";
 
 // req.ip es constante entre requests de supertest (misma conexión local) — el registro
 // de captcha/intentos fallidos es por IP, así que se limpia entre tests para no filtrar
 // estado de un test a otro.
 afterEach(async () => {
-  clearFailedAttempts("::ffff:127.0.0.1");
-  clearFailedAttempts("127.0.0.1");
+  captchaService.clearFailedAttempts("::ffff:127.0.0.1");
+  captchaService.clearFailedAttempts("127.0.0.1");
   await cleanUsers();
 });
 
