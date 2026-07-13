@@ -36,6 +36,8 @@ import { SupabaseConfigRepository } from "./modules/config/config.repository.js"
 import { MercadoPagoService } from "./modules/mercadopago/mercadopago.service.js";
 import { PrinterService } from "./modules/printer/printer.service.js";
 import { emit } from "./shared/sse/sse-manager.js";
+import { SupabaseCloudSyncRepository } from "./modules/sync/cloud-sync.repository.js";
+import { SyncService } from "./modules/sync/sync.service.js";
 
 // Middleware
 import { errorHandler } from "./shared/middleware/error-handler.js";
@@ -54,7 +56,10 @@ const captchaService = new CaptchaService();
 const drinksService = new DrinksService(drinksRepo);
 const usersService = new UsersService(usersRepo);
 
-const eventsService = new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, emit, configRepo);
+const cloudSyncRepo = new SupabaseCloudSyncRepository();
+const syncService = new SyncService(usersRepo, drinksRepo, ordersRepo, cashSalesRepo, ticketsRepo, eventsRepo, cloudSyncRepo);
+
+const eventsService = new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, emit, syncService, configRepo);
 
 const printerService = new PrinterService();
 
@@ -150,10 +155,10 @@ app.use("/api/users", createUsersController(usersService));
 app.use("/api/config", createConfigController(configRepo, eventsService));
 app.use("/api/mercadopago", createMercadoPagoController(mpService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
-app.use("/api/system", createSystemController(usersRepo, ordersRepo, cashSalesRepo, mpService, printerService));
+app.use("/api/system", createSystemController(usersRepo, mpService, printerService, syncService));
 app.use("/api", createEventsController(eventsService, usersRepo));
 
 // Error handler global (ÚLTIMO)
 app.use(errorHandler);
 
-export { app, eventsService, captchaService };
+export { app, eventsService, captchaService, syncService };

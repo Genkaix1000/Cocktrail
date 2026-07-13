@@ -1,14 +1,42 @@
-import { supabase, supabaseCloud } from "../../shared/supabase.js";
+import { randomUUID, createHash } from "node:crypto";
+import type { UsersRepository } from "../users/users.repository.js";
+import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
+import type { TicketsRepository } from "../tickets/tickets.repository.js";
+import type { EventsRepository } from "../events/events.repository.js";
+import type { CloudSyncRepository } from "./cloud-sync.repository.js";
 import type { EventTotals, NightEvent } from "@cocktrail/shared";
+import { computeTotals } from "../../shared/utils/totals.js";
+import { supabase } from "../../shared/supabase.js";
+
+function hashPassword(password: string): string {
+  return createHash("sha256").update(password).digest("hex");
+}
 
 export class SyncService {
-  /** Siembra el admin por defecto en la DB local si no hay ninguno todavía. */
+  constructor(
+    private usersRepo: UsersRepository,
+    private drinksRepo: DrinksRepository,
+    private ordersRepo: OrdersRepository,
+    private cashSalesRepo: CashSalesRepository,
+    private ticketsRepo: TicketsRepository,
+    private eventsRepo: EventsRepository,
+    private cloudSyncRepo: CloudSyncRepository,
+  ) {}
+
+  /**
+   * Siembra el admin/tragos por defecto LOCAL-ONLY (sin pasar por
+   * usersRepo.create()/drinksRepo.create()) — esos métodos hacen dual-write a cloud si
+   * `supabaseCloud` está configurado, y este seed de datos demo nunca debe empujarse a
+   * cloud (comportamiento preexistente, preservado a propósito — ver pregunta abierta 1
+   * de docs/specs/deuda-estructural-fase2.md). Usa el cliente local directo por eso, no
+   * es una excepción al espíritu de "reusar repos": es la escritura, no la lectura, la
+   * que necesita evitar el side-effect de dual-write.
+   */
   private async seedDefaultAdminIfMissing(): Promise<void> {
-    const { randomUUID, createHash } = await import("node:crypto");
     const { env } = await import("../../config/env.js");
-    const passHash = createHash("sha256").update(env.ADMIN_PASS).digest("hex");
+    const passHash = hashPassword(env.ADMIN_PASS);
     await supabase.from("users").insert({
       id: randomUUID(),
       username: env.ADMIN_USER,
@@ -23,7 +51,6 @@ export class SyncService {
     });
   }
 
-  /** Siembra la carta de tragos por defecto en la DB local si está vacía. */
   private async seedDefaultDrinksIfMissing(): Promise<void> {
     const { SEED_DRINKS } = await import("../../data/drinks.js");
     const drinksToInsert = SEED_DRINKS.map(d => ({
@@ -47,7 +74,7 @@ export class SyncService {
    * y la guarda en la base local (Mini-PC).
    */
   async pullMasterData(): Promise<void> {
-    if (!supabaseCloud) {
+    if (!this.cloudSyncRepo.isConfigured()) {
       console.log("[SyncService] No hay conexión a Supabase Cloud configurada. Saltando Pull...");
       return;
     }
@@ -56,38 +83,28 @@ export class SyncService {
       console.log("[SyncService] 🔄 Iniciando Pull desde Supabase Cloud...");
 
       // 1. Pull Users
-      const { data: users, error: errUsers } = await supabaseCloud.from("users").select("*");
-      if (!errUsers && users && users.length > 0) {
-        await supabase.from("users").upsert(users);
-        console.log(`[SyncService] ✅ Users actualizados: ${users.length}`);
+      const { count: usersCount } = await this.cloudSyncRepo.pullUsers();
+      if (usersCount > 0) {
+        console.log(`[SyncService] ✅ Users actualizados: ${usersCount}`);
       } else {
-        if (errUsers) console.error("[SyncService] Error descargando users:", errUsers.message);
-        
-        // Check if local users is empty
-        const { data: localUsers } = await supabase.from("users").select("id").limit(1);
-        if (!localUsers || localUsers.length === 0) {
+        const localUsers = await this.usersRepo.list();
+        if (localUsers.length === 0) {
           console.log("[SyncService] No users found anywhere. Seeding default admin locally.");
           await this.seedDefaultAdminIfMissing();
         }
       }
 
       // 2. Pull Drinks
-      const { data: drinks, error: errDrinks } = await supabaseCloud.from("drinks").select("*");
-      if (!errDrinks && drinks && drinks.length > 0) {
-        await supabase.from("drinks").upsert(drinks);
-        console.log(`[SyncService] ✅ Drinks actualizados: ${drinks.length}`);
+      const { count: drinksCount } = await this.cloudSyncRepo.pullDrinks();
+      if (drinksCount > 0) {
+        console.log(`[SyncService] ✅ Drinks actualizados: ${drinksCount}`);
       } else {
-        if (errDrinks) console.error("[SyncService] Error descargando drinks:", errDrinks.message);
-        
-        // Check if local drinks is empty
-        const { data: localDrinks } = await supabase.from("drinks").select("id").limit(1);
-        if (!localDrinks || localDrinks.length === 0) {
+        const localDrinks = await this.drinksRepo.list();
+        if (localDrinks.length === 0) {
           console.log("[SyncService] No drinks found anywhere. Seeding default drinks locally.");
           await this.seedDefaultDrinksIfMissing();
         }
       }
-
-
 
       console.log("[SyncService] 🎯 Pull completado con éxito.");
     } catch (error) {
@@ -101,17 +118,15 @@ export class SyncService {
    */
   async ensureLocalMasterDataSeeded(): Promise<void> {
     try {
-      // 1. Seed Users if empty
-      const { data: localUsers, error: errUsers } = await supabase.from("users").select("id").limit(1);
-      if (!errUsers && (!localUsers || localUsers.length === 0)) {
+      const localUsers = await this.usersRepo.list();
+      if (localUsers.length === 0) {
         console.log("[SyncService] No users found locally. Seeding default admin...");
         await this.seedDefaultAdminIfMissing();
         console.log("[SyncService] Default admin seeded locally.");
       }
 
-      // 2. Seed Drinks if empty
-      const { data: localDrinks, error: errDrinks } = await supabase.from("drinks").select("id").limit(1);
-      if (!errDrinks && (!localDrinks || localDrinks.length === 0)) {
+      const localDrinks = await this.drinksRepo.list();
+      if (localDrinks.length === 0) {
         console.log("[SyncService] No drinks found locally. Seeding default drinks...");
         await this.seedDefaultDrinksIfMissing();
         console.log("[SyncService] Default drinks seeded locally.");
@@ -125,122 +140,77 @@ export class SyncService {
    * Sube toda la información transaccional de una noche desde la caja local a la Nube.
    * Incluye el evento en sí, todos los pedidos, tickets y cierres parciales de caja.
    */
-  async pushEventData(eventId: string, event: NightEvent, eventTotals: EventTotals): Promise<void> {
-    if (!supabaseCloud) {
+  /** Devuelve `true` si el evento terminó `synced`, `false` si falló o no había cloud configurada. */
+  async pushEventData(eventId: string, event: NightEvent, eventTotals: EventTotals): Promise<boolean> {
+    if (!this.cloudSyncRepo.isConfigured()) {
       console.log("[SyncService] No hay conexión a Supabase Cloud configurada. Saltando Push...");
-      return;
+      return false;
     }
 
     try {
       console.log(`[SyncService] ⬆️ Iniciando Push a Supabase Cloud para evento ${eventId}...`);
 
       // 1. Marcar como 'pending' localmente
-      await supabase.from("night_events").update({ sync_status: "pending" }).eq("id", eventId);
+      await this.eventsRepo.updateSyncStatus(eventId, "pending");
 
-      // 2. Subir Night Event con totales (sin status ya que la tabla cloud de historial no contiene esa columna)
-      const eventRecord = {
-        id: event.id,
-        started_at: new Date(event.startedAt).toISOString(),
-        closed_at: event.closedAt ? new Date(event.closedAt).toISOString() : null,
-        order_counter: event.orderCounter,
-        totals: eventTotals,
-      };
-
-      const { error: errEvent } = await supabaseCloud.from("night_events").upsert(eventRecord);
-      if (errEvent) throw errEvent;
+      // 2. Subir Night Event con totales
+      await this.cloudSyncRepo.pushNightEvent(event, eventTotals);
 
       // 3. Obtener y subir Orders
-      const { data: orders, error: errOrdersFetch } = await supabase.from("orders").select("*").eq("event_id", eventId);
-      if (errOrdersFetch) throw errOrdersFetch;
-      if (orders && orders.length > 0) {
-        const { error: errOrdersUpsert } = await supabaseCloud.from("orders").upsert(orders);
-        if (errOrdersUpsert) throw errOrdersUpsert;
-      }
+      const orders = await this.ordersRepo.listForEvent(eventId);
+      await this.cloudSyncRepo.pushOrders(eventId, orders);
 
       // 4. Obtener y subir Tickets correspondientes a esos orders
-      if (orders && orders.length > 0) {
-        const orderIds = orders.map((o: any) => o.id);
-        const { data: tickets, error: errTicketsFetch } = await supabase.from("tickets").select("*").in("order_id", orderIds);
-        if (errTicketsFetch) throw errTicketsFetch;
-        
-        if (tickets && tickets.length > 0) {
-          const { error: errTicketsUpsert } = await supabaseCloud.from("tickets").upsert(tickets);
-          if (errTicketsUpsert) throw errTicketsUpsert;
-        }
+      if (orders.length > 0) {
+        const tickets = await this.ticketsRepo.listByOrderIds(orders.map((o) => o.id));
+        await this.cloudSyncRepo.pushTickets(tickets);
       }
 
       // 5. Obtener y subir Cash Sales
-      const { data: cashSales, error: errCashSalesFetch } = await supabase.from("cash_sales").select("*").eq("event_id", eventId);
-      if (errCashSalesFetch) throw errCashSalesFetch;
-      if (cashSales && cashSales.length > 0) {
-        const { error: errCashSalesUpsert } = await supabaseCloud.from("cash_sales").upsert(cashSales);
-        if (errCashSalesUpsert) throw errCashSalesUpsert;
-      }
+      const cashSales = await this.cashSalesRepo.listForEvent(eventId);
+      await this.cloudSyncRepo.pushCashSales(eventId, cashSales);
 
       // 6. Marcar como sincronizado localmente
-      await supabase
-        .from("night_events")
-        .update({ sync_status: "synced", synced_at: new Date().toISOString() })
-        .eq("id", eventId);
+      await this.eventsRepo.updateSyncStatus(eventId, "synced", Date.now());
 
       console.log(`[SyncService] ☁️✅ Evento ${eventId} subido a la nube correctamente.`);
+      return true;
     } catch (error) {
       console.error(`[SyncService] ❌ Falló la sincronización a la nube del evento ${eventId}:`, error);
-      
+
       // Marcar como fallido
-      await supabase
-        .from("night_events")
-        .update({ sync_status: "failed" })
-        .eq("id", eventId);
+      await this.eventsRepo.updateSyncStatus(eventId, "failed");
+      return false;
     }
   }
 
-  async syncAllPendingEvents(ordersRepo: OrdersRepository, cashSalesRepo: CashSalesRepository): Promise<{ successCount: number; failedCount: number }> {
-    if (!supabaseCloud) {
+  async syncAllPendingEvents(): Promise<{ successCount: number; failedCount: number }> {
+    if (!this.cloudSyncRepo.isConfigured()) {
       throw new Error("No cloud DB configured");
     }
 
-    const { data: pendingEvents, error } = await supabase
-      .from("night_events")
-      .select("*")
-      .eq("status", "cerrado")
-      .neq("sync_status", "synced");
-
-    if (error) throw error;
-    if (!pendingEvents || pendingEvents.length === 0) {
+    const pendingEvents = await this.eventsRepo.getPendingSync();
+    if (pendingEvents.length === 0) {
       return { successCount: 0, failedCount: 0 };
     }
 
     let successCount = 0;
     let failedCount = 0;
 
-    for (const row of pendingEvents) {
+    for (const event of pendingEvents) {
       try {
-        const eventId = row.id;
-        const event: NightEvent = {
-          id: row.id,
-          status: row.status,
-          startedAt: new Date(row.started_at).getTime(),
-          closedAt: row.closed_at ? new Date(row.closed_at).getTime() : undefined,
-          orderCounter: row.order_counter,
-        };
-
-        const orders = await ordersRepo.listForEvent(eventId);
-        const cashSales = await cashSalesRepo.listForEvent(eventId);
-        const { computeTotals } = await import("../../shared/utils/totals.js");
+        const orders = await this.ordersRepo.listForEvent(event.id);
+        const cashSales = await this.cashSalesRepo.listForEvent(event.id);
         const totals = computeTotals(orders, cashSales);
 
-        await this.pushEventData(eventId, event, totals);
-        
-        // Re-check sync status locally to ensure it successfully marked as synced
-        const { data: updated } = await supabase.from("night_events").select("sync_status").eq("id", eventId).single();
-        if (updated && updated.sync_status === "synced") {
+        const synced = await this.pushEventData(event.id, event, totals);
+        if (synced) {
           successCount++;
         } else {
           failedCount++;
         }
       } catch (err) {
-        console.error(`[SyncService] Error manually syncing event ${row.id}:`, err);
+        console.error(`[SyncService] Error manually syncing event ${event.id}:`, err);
         failedCount++;
       }
     }
@@ -248,5 +218,3 @@ export class SyncService {
     return { successCount, failedCount };
   }
 }
-
-export const syncService = new SyncService();

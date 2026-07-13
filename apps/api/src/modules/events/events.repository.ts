@@ -156,10 +156,14 @@ export class SupabaseEventsRepository implements EventsRepository {
   }
 
   async getPendingSync(): Promise<(NightEvent & { sync_status: string })[]> {
+    // neq("synced"), no eq("pending"): también reintenta eventos que quedaron en "failed"
+    // de un intento de sync anterior — mismo criterio que syncAllPendingEvents usaba antes
+    // de esta refactor (SyncService pegándole directo a supabase.from). No tenía otro
+    // caller hasta ahora, así que ajustar el filtro acá es seguro.
     const { data, error } = await supabase
       .from("night_events")
       .select("*")
-      .eq("sync_status", "pending")
+      .neq("sync_status", "synced")
       .eq("status", "cerrado");
 
     if (error) {

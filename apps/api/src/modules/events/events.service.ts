@@ -10,6 +10,7 @@ import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { ConfigRepository } from "../config/config.repository.js";
+import type { SyncService } from "../sync/sync.service.js";
 import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
 import { computeTotals } from "../../shared/utils/totals.js";
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
@@ -27,6 +28,7 @@ export class EventsService {
     private cashSalesRepo: CashSalesRepository,
     private drinksRepo: DrinksRepository,
     private emit: EmitFn,
+    private syncService: SyncService,
     private configRepo?: ConfigRepository,
   ) {}
 
@@ -103,15 +105,13 @@ export class EventsService {
         this.isInitialized = true;
 
         // Trigger automatic sync of all pending events in the background on startup
-        import("../sync/sync.service.js").then(({ syncService }) => {
-          syncService.syncAllPendingEvents(this.ordersRepo, this.cashSalesRepo)
-            .then((res) => {
-              if (res.successCount > 0 || res.failedCount > 0) {
-                console.log(`[EventsService] Auto-sync completed: ${res.successCount} succeeded, ${res.failedCount} failed.`);
-              }
-            })
-            .catch((err) => console.error("[EventsService] Auto-sync failed:", err));
-        }).catch(console.error);
+        this.syncService.syncAllPendingEvents()
+          .then((res) => {
+            if (res.successCount > 0 || res.failedCount > 0) {
+              console.log(`[EventsService] Auto-sync completed: ${res.successCount} succeeded, ${res.failedCount} failed.`);
+            }
+          })
+          .catch((err) => console.error("[EventsService] Auto-sync failed:", err));
       } catch (err) {
         this.initPromise = null;
         throw err;
@@ -317,9 +317,7 @@ export class EventsService {
   }
 
   private async syncEventToCloudBackground(event: NightEvent, totals: EventTotals) {
-    import("../sync/sync.service.js").then(({ syncService }) => {
-      syncService.pushEventData(event.id, event, totals).catch(console.error);
-    });
+    this.syncService.pushEventData(event.id, event, totals).catch(console.error);
   }
 
   async seedClosedEvent(summary: EventSummary): Promise<void> {

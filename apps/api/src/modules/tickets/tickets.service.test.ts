@@ -38,6 +38,7 @@ function makeTicketsRepo(overrides?: Partial<TicketsRepository>): TicketsReposit
     findByCode: vi.fn(),
     findByReadable: vi.fn(),
     findByOrderId: vi.fn(),
+    listByOrderIds: vi.fn(),
     list: vi.fn(),
     updateRedemption: vi.fn(),
     ...overrides,

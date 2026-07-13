@@ -3,10 +3,8 @@ import { exec } from "node:child_process";
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
 import { authenticate } from "../auth/credentials.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
-import { syncService } from "../sync/sync.service.js";
+import type { SyncService } from "../sync/sync.service.js";
 import type { UsersRepository } from "../users/users.repository.js";
-import type { OrdersRepository } from "../orders/orders.repository.js";
-import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
 import type { PrinterService } from "../printer/printer.service.js";
 import { env } from "../../config/env.js";
@@ -18,10 +16,9 @@ const serverStartedAt = Date.now();
 
 export function createSystemController(
   usersRepo: UsersRepository,
-  ordersRepo: OrdersRepository,
-  cashSalesRepo: CashSalesRepository,
   mpService: MercadoPagoService,
-  printerService: PrinterService
+  printerService: PrinterService,
+  syncService: SyncService,
 ): Router {
   const router = Router();
 
@@ -168,7 +165,7 @@ export function createSystemController(
       // 2. Push Pending Events
       let syncResult = { successCount: 0, failedCount: 0 };
       if (supabaseCloud) {
-        syncResult = await syncService.syncAllPendingEvents(ordersRepo, cashSalesRepo);
+        syncResult = await syncService.syncAllPendingEvents();
       }
 
       res.json({

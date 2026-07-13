@@ -16,6 +16,7 @@ export interface TicketsRepository {
   findByCode(code: string): Promise<Ticket | undefined>;
   findByReadable(readable: string): Promise<Ticket | undefined>;
   findByOrderId(orderId: string): Promise<Ticket | undefined>;
+  listByOrderIds(orderIds: string[]): Promise<Ticket[]>;
   list(): Promise<Ticket[]>;
   /**
    * Condicionado a `redeemed_at IS NULL` — devuelve `undefined` si el ticket ya estaba
@@ -108,6 +109,21 @@ export class SupabaseTicketsRepository implements TicketsRepository {
     }
 
     return data ? mapRowToTicket(data) : undefined;
+  }
+
+  async listByOrderIds(orderIds: string[]): Promise<Ticket[]> {
+    if (orderIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from("tickets")
+      .select("*")
+      .in("order_id", orderIds);
+
+    if (error) {
+      console.error("[SupabaseTicketsRepository] Error listing tickets by orderIds:", error);
+      throw error;
+    }
+
+    return data.map(mapRowToTicket);
   }
 
   async list(): Promise<Ticket[]> {

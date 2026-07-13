@@ -1,55 +1,42 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SyncService } from "./sync.service.js";
+import type { UsersRepository } from "../users/users.repository.js";
+import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
+import type { TicketsRepository } from "../tickets/tickets.repository.js";
+import type { EventsRepository } from "../events/events.repository.js";
+import type { CloudSyncRepository } from "./cloud-sync.repository.js";
 import { computeTotals } from "../../shared/utils/totals.js";
+import type { NightEvent } from "@cocktrail/shared";
 
 const EMPTY_TOTALS = computeTotals([], []);
 
-// supabase-js expone un query builder "thenable" (select/eq/insert/... encadenables,
-// y awaitable directamente). Este fake soporta ambos usos: encadenar métodos y
-// resolver a un resultado configurado por tabla al ser awaited.
-type QueryResult = { data: any; error: any };
-
-function makeQueryBuilder(result: QueryResult) {
-  const builder: any = {};
-  const chainable = ["select", "eq", "neq", "in", "limit", "order", "upsert", "insert", "update", "delete"];
-  for (const method of chainable) {
-    builder[method] = vi.fn(() => builder);
-  }
-  builder.single = vi.fn(() => Promise.resolve(result));
-  builder.maybeSingle = vi.fn(() => Promise.resolve(result));
-  builder.then = (resolve: (r: QueryResult) => void) => resolve(result);
-  return builder;
+function makeUsersRepo(overrides?: Partial<UsersRepository>): UsersRepository {
+  return {
+    list: vi.fn().mockResolvedValue([]),
+    findById: vi.fn(),
+    findByUsername: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    ...overrides,
+  };
 }
 
-const localResults = new Map<string, QueryResult>();
-const cloudResults = new Map<string, QueryResult>();
-let cloudConfigured = true;
-
-vi.mock("../../shared/supabase.js", () => ({
-  get supabase() {
-    return {
-      from: (table: string) => makeQueryBuilder(localResults.get(table) ?? { data: [], error: null }),
-    };
-  },
-  get supabaseCloud() {
-    if (!cloudConfigured) return null;
-    return {
-      from: (table: string) => makeQueryBuilder(cloudResults.get(table) ?? { data: [], error: null }),
-    };
-  },
-}));
-
-const { SyncService } = await import("./sync.service.js");
-
-function setLocal(table: string, result: QueryResult) {
-  localResults.set(table, result);
-}
-function setCloud(table: string, result: QueryResult) {
-  cloudResults.set(table, result);
+function makeDrinksRepo(overrides?: Partial<DrinksRepository>): DrinksRepository {
+  return {
+    list: vi.fn().mockResolvedValue([]),
+    findById: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    nextId: vi.fn(),
+    ...overrides,
+  };
 }
 
-function makeOrdersRepo(): OrdersRepository {
+function makeOrdersRepo(overrides?: Partial<OrdersRepository>): OrdersRepository {
   return {
     create: vi.fn(),
     findById: vi.fn(),
@@ -58,83 +45,220 @@ function makeOrdersRepo(): OrdersRepository {
     listForEvent: vi.fn().mockResolvedValue([]),
     listAll: vi.fn(),
     updateStatus: vi.fn(),
+    ...overrides,
   } as unknown as OrdersRepository;
 }
 
-function makeCashSalesRepo(): CashSalesRepository {
+function makeCashSalesRepo(overrides?: Partial<CashSalesRepository>): CashSalesRepository {
   return {
     add: vi.fn(),
     listForEvent: vi.fn().mockResolvedValue([]),
-  } as unknown as CashSalesRepository;
+    clear: vi.fn(),
+    ...overrides,
+  };
 }
 
-beforeEach(() => {
-  localResults.clear();
-  cloudResults.clear();
-  cloudConfigured = true;
-});
+function makeTicketsRepo(overrides?: Partial<TicketsRepository>): TicketsRepository {
+  return {
+    create: vi.fn(),
+    findByCode: vi.fn(),
+    findByReadable: vi.fn(),
+    findByOrderId: vi.fn(),
+    listByOrderIds: vi.fn().mockResolvedValue([]),
+    list: vi.fn(),
+    updateRedemption: vi.fn(),
+    ...overrides,
+  };
+}
+
+function makeEventsRepo(overrides?: Partial<EventsRepository>): EventsRepository {
+  return {
+    getActive: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    findById: vi.fn(),
+    listClosed: vi.fn(),
+    updateSyncStatus: vi.fn(),
+    getPendingSync: vi.fn().mockResolvedValue([]),
+    delete: vi.fn(),
+    ...overrides,
+  };
+}
+
+function makeCloudSyncRepo(overrides?: Partial<CloudSyncRepository>): CloudSyncRepository {
+  return {
+    isConfigured: vi.fn().mockReturnValue(true),
+    pullUsers: vi.fn().mockResolvedValue({ count: 0 }),
+    pullDrinks: vi.fn().mockResolvedValue({ count: 0 }),
+    pushNightEvent: vi.fn().mockResolvedValue(undefined),
+    pushOrders: vi.fn().mockResolvedValue(undefined),
+    pushTickets: vi.fn().mockResolvedValue(undefined),
+    pushCashSales: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function makeService(overrides?: {
+  usersRepo?: UsersRepository;
+  drinksRepo?: DrinksRepository;
+  ordersRepo?: OrdersRepository;
+  cashSalesRepo?: CashSalesRepository;
+  ticketsRepo?: TicketsRepository;
+  eventsRepo?: EventsRepository;
+  cloudSyncRepo?: CloudSyncRepository;
+}) {
+  return new SyncService(
+    overrides?.usersRepo ?? makeUsersRepo(),
+    overrides?.drinksRepo ?? makeDrinksRepo(),
+    overrides?.ordersRepo ?? makeOrdersRepo(),
+    overrides?.cashSalesRepo ?? makeCashSalesRepo(),
+    overrides?.ticketsRepo ?? makeTicketsRepo(),
+    overrides?.eventsRepo ?? makeEventsRepo(),
+    overrides?.cloudSyncRepo ?? makeCloudSyncRepo(),
+  );
+}
+
+const CLOSED_EVENT: NightEvent = {
+  id: "event-1",
+  status: "cerrado",
+  startedAt: Date.now(),
+  orderCounter: 1,
+};
 
 describe("SyncService.pullMasterData", () => {
   it("sin Supabase Cloud configurada, no hace nada (no tira)", async () => {
-    cloudConfigured = false;
-    const service = new SyncService();
+    const cloudSyncRepo = makeCloudSyncRepo({ isConfigured: vi.fn().mockReturnValue(false) });
+    const service = makeService({ cloudSyncRepo });
     await expect(service.pullMasterData()).resolves.toBeUndefined();
+    expect(cloudSyncRepo.pullUsers).not.toHaveBeenCalled();
   });
 
-  it("con datos en la nube, hace upsert local de users y drinks", async () => {
-    setCloud("users", { data: [{ id: "u1", username: "admin" }], error: null });
-    setCloud("drinks", { data: [{ id: 1, name: "Fernet" }], error: null });
-    const service = new SyncService();
+  it("con datos en la nube, los pull*() ya hicieron el upsert local — no dispara el seed", async () => {
+    const usersRepo = makeUsersRepo();
+    const drinksRepo = makeDrinksRepo();
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pullUsers: vi.fn().mockResolvedValue({ count: 3 }),
+      pullDrinks: vi.fn().mockResolvedValue({ count: 5 }),
+    });
+    const service = makeService({ usersRepo, drinksRepo, cloudSyncRepo });
+
+    await service.pullMasterData();
+
+    expect(usersRepo.list).not.toHaveBeenCalled();
+    expect(drinksRepo.list).not.toHaveBeenCalled();
+  });
+
+  it("si la nube no devuelve nada y local está vacío, dispara el seed por defecto", async () => {
+    const usersRepo = makeUsersRepo({ list: vi.fn().mockResolvedValue([]) });
+    const drinksRepo = makeDrinksRepo({ list: vi.fn().mockResolvedValue([]) });
+    const cloudSyncRepo = makeCloudSyncRepo();
+    const service = makeService({ usersRepo, drinksRepo, cloudSyncRepo });
+
     await expect(service.pullMasterData()).resolves.toBeUndefined();
+    expect(usersRepo.list).toHaveBeenCalled();
+    expect(drinksRepo.list).toHaveBeenCalled();
   });
 });
 
 describe("SyncService.ensureLocalMasterDataSeeded", () => {
-  it("no rompe si local ya tiene users y drinks", async () => {
-    setLocal("users", { data: [{ id: "u1" }], error: null });
-    setLocal("drinks", { data: [{ id: 1 }], error: null });
-    const service = new SyncService();
+  it("no rompe si local ya tiene users y drinks (no siembra nada)", async () => {
+    const usersRepo = makeUsersRepo({ list: vi.fn().mockResolvedValue([{ id: "u1" }]) });
+    const drinksRepo = makeDrinksRepo({ list: vi.fn().mockResolvedValue([{ id: 1 }]) });
+    const service = makeService({ usersRepo, drinksRepo });
     await expect(service.ensureLocalMasterDataSeeded()).resolves.toBeUndefined();
   });
 
   it("no rompe si local está vacío (dispara el seed por defecto)", async () => {
-    setLocal("users", { data: [], error: null });
-    setLocal("drinks", { data: [], error: null });
-    const service = new SyncService();
+    const usersRepo = makeUsersRepo({ list: vi.fn().mockResolvedValue([]) });
+    const drinksRepo = makeDrinksRepo({ list: vi.fn().mockResolvedValue([]) });
+    const service = makeService({ usersRepo, drinksRepo });
     await expect(service.ensureLocalMasterDataSeeded()).resolves.toBeUndefined();
   });
 });
 
 describe("SyncService.pushEventData", () => {
-  it("sin Supabase Cloud configurada, no hace nada (no tira)", async () => {
-    cloudConfigured = false;
-    const service = new SyncService();
-    await expect(
-      service.pushEventData("event-1", { id: "event-1", status: "cerrado", startedAt: Date.now(), orderCounter: 1 }, EMPTY_TOTALS),
-    ).resolves.toBeUndefined();
+  it("sin Supabase Cloud configurada, no hace nada y devuelve false", async () => {
+    const cloudSyncRepo = makeCloudSyncRepo({ isConfigured: vi.fn().mockReturnValue(false) });
+    const service = makeService({ cloudSyncRepo });
+    await expect(service.pushEventData("event-1", CLOSED_EVENT, EMPTY_TOTALS)).resolves.toBe(false);
   });
 
-  it("con cloud configurada y sin error, no tira", async () => {
-    setLocal("orders", { data: [], error: null });
-    setLocal("cash_sales", { data: [], error: null });
-    const service = new SyncService();
-    await expect(
-      service.pushEventData("event-1", { id: "event-1", status: "cerrado", startedAt: Date.now(), orderCounter: 1 }, EMPTY_TOTALS),
-    ).resolves.toBeUndefined();
+  it("con cloud configurada y sin error, sube el evento vía el repo de cloud y devuelve true", async () => {
+    const eventsRepo = makeEventsRepo();
+    const cloudSyncRepo = makeCloudSyncRepo();
+    const service = makeService({ eventsRepo, cloudSyncRepo });
+
+    const result = await service.pushEventData("event-1", CLOSED_EVENT, EMPTY_TOTALS);
+
+    expect(result).toBe(true);
+    expect(cloudSyncRepo.pushNightEvent).toHaveBeenCalledWith(CLOSED_EVENT, EMPTY_TOTALS);
+    expect(eventsRepo.updateSyncStatus).toHaveBeenCalledWith("event-1", "pending");
+    expect(eventsRepo.updateSyncStatus).toHaveBeenCalledWith("event-1", "synced", expect.any(Number));
+  });
+
+  it("si el push a cloud tira, marca failed localmente y devuelve false", async () => {
+    const eventsRepo = makeEventsRepo();
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pushNightEvent: vi.fn().mockRejectedValue(new Error("cloud caída")),
+    });
+    const service = makeService({ eventsRepo, cloudSyncRepo });
+
+    const result = await service.pushEventData("event-1", CLOSED_EVENT, EMPTY_TOTALS);
+
+    expect(result).toBe(false);
+    expect(eventsRepo.updateSyncStatus).toHaveBeenCalledWith("event-1", "failed");
+  });
+
+  it("sube tickets solo si hubo orders para el evento", async () => {
+    const ordersRepo = makeOrdersRepo({ listForEvent: vi.fn().mockResolvedValue([{ id: "order-1" }]) });
+    const ticketsRepo = makeTicketsRepo({ listByOrderIds: vi.fn().mockResolvedValue([{ id: "ticket-1" }]) });
+    const cloudSyncRepo = makeCloudSyncRepo();
+    const service = makeService({ ordersRepo, ticketsRepo, cloudSyncRepo });
+
+    await service.pushEventData("event-1", CLOSED_EVENT, EMPTY_TOTALS);
+
+    expect(ticketsRepo.listByOrderIds).toHaveBeenCalledWith(["order-1"]);
+    expect(cloudSyncRepo.pushTickets).toHaveBeenCalledWith([{ id: "ticket-1" }]);
   });
 });
 
 describe("SyncService.syncAllPendingEvents", () => {
   it("tira si no hay Supabase Cloud configurada", async () => {
-    cloudConfigured = false;
-    const service = new SyncService();
-    await expect(service.syncAllPendingEvents(makeOrdersRepo(), makeCashSalesRepo())).rejects.toThrow(/No cloud DB configured/);
+    const cloudSyncRepo = makeCloudSyncRepo({ isConfigured: vi.fn().mockReturnValue(false) });
+    const service = makeService({ cloudSyncRepo });
+    await expect(service.syncAllPendingEvents()).rejects.toThrow(/No cloud DB configured/);
   });
 
   it("sin eventos pendientes, devuelve counts en 0", async () => {
-    setLocal("night_events", { data: [], error: null });
-    const service = new SyncService();
-    const result = await service.syncAllPendingEvents(makeOrdersRepo(), makeCashSalesRepo());
+    const eventsRepo = makeEventsRepo({ getPendingSync: vi.fn().mockResolvedValue([]) });
+    const service = makeService({ eventsRepo });
+    const result = await service.syncAllPendingEvents();
     expect(result).toEqual({ successCount: 0, failedCount: 0 });
+  });
+
+  it("con un evento pendiente que sincroniza bien, cuenta 1 success", async () => {
+    const eventsRepo = makeEventsRepo({
+      getPendingSync: vi.fn().mockResolvedValue([{ ...CLOSED_EVENT, sync_status: "pending" }]),
+    });
+    const cloudSyncRepo = makeCloudSyncRepo();
+    const service = makeService({ eventsRepo, cloudSyncRepo });
+
+    const result = await service.syncAllPendingEvents();
+
+    expect(result).toEqual({ successCount: 1, failedCount: 0 });
+  });
+
+  it("si el push falla para un evento, cuenta 1 failed", async () => {
+    const eventsRepo = makeEventsRepo({
+      getPendingSync: vi.fn().mockResolvedValue([{ ...CLOSED_EVENT, sync_status: "failed" }]),
+    });
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pushNightEvent: vi.fn().mockRejectedValue(new Error("cloud caída")),
+    });
+    const service = makeService({ eventsRepo, cloudSyncRepo });
+
+    const result = await service.syncAllPendingEvents();
+
+    expect(result).toEqual({ successCount: 0, failedCount: 1 });
   });
 });

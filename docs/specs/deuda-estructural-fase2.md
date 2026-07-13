@@ -458,39 +458,39 @@ cada uno con `pnpm typecheck` + suite completa en verde antes de pasar al siguie
 
 ### Commit 4/5 — Punto 2: `SyncService` → repos (el más delicado)
 
-- [ ] **Consultar con `supabase-expert`** la pregunta abierta 1 (dual-write de `create()` en
+- [x] **Consultar con `supabase-expert`** la pregunta abierta 1 (dual-write de `create()` en
   seeds cuando `supabaseCloud` está configurado) antes de tocar código — confirmar si es
   aceptable o si hace falta un camino local-only explícito.
-- [ ] `apps/api/src/modules/tickets/tickets.repository.ts` — agregar `listByOrderIds(ids:
+- [x] `apps/api/src/modules/tickets/tickets.repository.ts` — agregar `listByOrderIds(ids:
   string[]): Promise<Ticket[]>` (interfaz + implementación Supabase).
-- [ ] Crear `apps/api/src/modules/sync/cloud-sync.repository.ts` — interfaz
+- [x] Crear `apps/api/src/modules/sync/cloud-sync.repository.ts` — interfaz
   `CloudSyncRepository` (`pullUsers`, `pullDrinks`, `pushNightEvent`, `pushOrders`, `pushTickets`,
   `pushCashSales`, `isConfigured`) + implementación `SupabaseCloudSyncRepository` que concentra
   todo el `supabaseCloud.from(...)` que hoy vive en `sync.service.ts`.
-- [ ] `apps/api/src/modules/sync/sync.service.ts` — reescribir `pullMasterData`/`pushEventData`/
+- [x] `apps/api/src/modules/sync/sync.service.ts` — reescribir `pullMasterData`/`pushEventData`/
   `syncAllPendingEvents`/seeds para usar `usersRepo`/`drinksRepo`/`ordersRepo`/`cashSalesRepo`/
   `ticketsRepo`/`eventsRepo` (local) + `cloudSyncRepo` (cloud) inyectados por constructor, en vez
   de importar `supabase`/`supabaseCloud` directo. `syncAllPendingEvents()` pierde los parámetros
   `ordersRepo`/`cashSalesRepo` (ya son campos de instancia).
-- [ ] `apps/api/src/modules/events/events.service.ts` — reemplazar los 2 imports dinámicos de
+- [x] `apps/api/src/modules/events/events.service.ts` — reemplazar los 2 imports dinámicos de
   `sync.service.js` por `syncService: SyncService` inyectado por constructor.
-- [ ] `apps/api/src/modules/system/system.controller.ts` — usar el `syncService` inyectado en vez
+- [x] `apps/api/src/modules/system/system.controller.ts` — usar el `syncService` inyectado en vez
   del singleton importado.
-- [ ] `apps/api/src/server.ts` — dejar de importar el singleton `syncService`, usar el
+- [x] `apps/api/src/server.ts` — dejar de importar el singleton `syncService`, usar el
   instanciado en `app.ts` (exportarlo desde ahí si hace falta).
-- [ ] `apps/api/src/app.ts` — instanciar `cloudSyncRepo` → `syncService` → pasarlo a
+- [x] `apps/api/src/app.ts` — instanciar `cloudSyncRepo` → `syncService` → pasarlo a
   `EventsService` y a `createSystemController`. Confirmar orden sin ciclos: repos → syncService →
   eventsService.
-- [ ] Reescribir `sync.service.test.ts` — de mockear `shared/supabase.js` (fake query-builder) a
+- [x] Reescribir `sync.service.test.ts` — de mockear `shared/supabase.js` (fake query-builder) a
   inyectar repos falsos + `CloudSyncRepository` falso.
-- [ ] `events.service.test.ts` — agregar `syncService` fake al constructor.
-- [ ] `system.integration.test.ts` — confirmar que `POST /api/system/sync` sigue funcionando
+- [x] `events.service.test.ts` — agregar `syncService` fake al constructor.
+- [x] `system.integration.test.ts` — confirmar que `POST /api/system/sync` sigue funcionando
   igual.
-- [ ] **Verificar un cierre de noche end-to-end real contra Supabase Cloud** (mismo patrón que
+- [x] **Verificar un cierre de noche end-to-end real contra Supabase Cloud** (mismo patrón que
   `docs/specs/activar-sync-cloud.md`: abrir noche, vender, cerrar, confirmar `sync_status:
   "synced"` y datos coincidentes local↔cloud) — con `supabase-expert` si hace falta, antes de dar
   este commit por cerrado. Es el punto de mayor superficie productiva real de los 5.
-- [ ] `pnpm --filter cocktrail-api typecheck` + suite completa (unit + integration) en verde.
+- [x] `pnpm --filter cocktrail-api typecheck` + suite completa (unit + integration) en verde.
 
 ### Commit 5/5 — Punto 4: `SystemService`
 

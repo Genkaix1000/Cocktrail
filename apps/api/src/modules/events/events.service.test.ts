@@ -50,12 +50,19 @@ function makeDrinksRepo(): DrinksRepository {
   };
 }
 
+function makeSyncService() {
+  return {
+    syncAllPendingEvents: vi.fn().mockResolvedValue({ successCount: 0, failedCount: 0 }),
+    pushEventData: vi.fn().mockResolvedValue(true),
+  } as any;
+}
+
 function makeService(overrides?: { eventsRepo?: EventsRepository }) {
   const eventsRepo = overrides?.eventsRepo ?? makeEventsRepo();
   const ordersRepo = makeOrdersRepo();
   const cashSalesRepo = makeCashSalesRepo();
   const drinksRepo = makeDrinksRepo();
-  return new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, vi.fn());
+  return new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, vi.fn(), makeSyncService());
 }
 
 describe("EventsService.initialize", () => {

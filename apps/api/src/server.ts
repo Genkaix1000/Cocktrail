@@ -1,6 +1,5 @@
 import { env } from "./config/env.js";
-import { app, eventsService } from "./app.js";
-import { syncService } from "./modules/sync/sync.service.js";
+import { app, eventsService, syncService } from "./app.js";
 import { supabase } from "./shared/supabase.js";
 import { exec } from "node:child_process";
 import { networkInterfaces } from "node:os";
