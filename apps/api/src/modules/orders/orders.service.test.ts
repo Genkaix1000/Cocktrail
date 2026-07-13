@@ -189,6 +189,7 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
       "order-1",
       "entregado",
       expect.objectContaining({ deliveredBy: "barman1", deliveredByBar: "BARRA-01", redeemMethod: "manual" }),
+      "pendiente",
     );
   });
 
@@ -202,6 +203,18 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
       "order-1",
       "cancelado",
       expect.objectContaining({ cancelledBy: "desconocido" }),
+      "pendiente",
+    );
+  });
+
+  it("si el UPDATE condicional no matchea (la orden cambió de estado en el medio), tira Conflict con el estado real", async () => {
+    vi.mocked(ordersRepo.findById)
+      .mockResolvedValueOnce(makeOrder({ status: "pendiente" })) // lectura inicial
+      .mockResolvedValueOnce(makeOrder({ status: "cancelado" })); // re-lectura tras perder la carrera
+    vi.mocked(ordersRepo.updateStatus).mockResolvedValue(undefined);
+
+    await expect(service.updateOrderStatus("order-1", "entregado", "barman1")).rejects.toThrow(
+      /cancelado.*entregado/,
     );
   });
 });

@@ -125,7 +125,17 @@ export class OrdersService {
       timestamps.cancelledBy = operator || "desconocido";
     }
 
-    const updated = await this.ordersRepo.updateStatus(id, status, timestamps);
+    // `expectedStatus: order.status` hace el UPDATE atómico ante una transición concurrente
+    // (ej. canje + cancelación del mismo pedido casi al mismo tiempo) — si otra request ya
+    // cambió el status entre el findById de arriba y este UPDATE, la condición no matchea y
+    // undefined nos avisa que perdimos la carrera, en vez de pisar el resultado del ganador.
+    const updated = await this.ordersRepo.updateStatus(id, status, timestamps, order.status);
+    if (!updated) {
+      const current = await this.ordersRepo.findById(id);
+      throw new Conflict(
+        `Transición inválida: ${current?.status ?? "desconocido"} → ${status} (el pedido cambió de estado durante la operación).`,
+      );
+    }
     emit({ type: "order.updated", order: updated });
     return updated;
   }

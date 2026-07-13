@@ -121,6 +121,39 @@ describe("TicketsService.redeemTicket", () => {
     expect(ticketsRepo.updateRedemption).not.toHaveBeenCalled();
   });
 
+  it("transiciona la orden ANTES de marcar el ticket canjeado (orden es el gate atómico de la carrera)", async () => {
+    const ticket = makeTicket();
+    const order = makeOrder({ status: "pendiente" });
+    const callOrder: string[] = [];
+    vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
+    vi.mocked(ordersService.getOrder).mockResolvedValue(order);
+    vi.mocked(ordersService.updateOrderStatus).mockImplementation(async () => {
+      callOrder.push("orders");
+      return { ...order, status: "entregado" };
+    });
+    vi.mocked(ticketsRepo.updateRedemption).mockImplementation(async () => {
+      callOrder.push("tickets");
+      return { ...ticket, redeemedAt: Date.now() };
+    });
+
+    await service.redeemTicket(ticket.code, "barman1");
+
+    expect(callOrder).toEqual(["orders", "tickets"]);
+  });
+
+  it("si la transición de la orden pierde la carrera (Conflict), no llega a marcar el ticket canjeado", async () => {
+    const ticket = makeTicket();
+    const order = makeOrder({ status: "pendiente" });
+    vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
+    vi.mocked(ordersService.getOrder).mockResolvedValue(order);
+    vi.mocked(ordersService.updateOrderStatus).mockRejectedValue(
+      new Error("Transición inválida: entregado → entregado (el pedido cambió de estado durante la operación)."),
+    );
+
+    await expect(service.redeemTicket(ticket.code, "barman1")).rejects.toThrow(/cambió de estado/);
+    expect(ticketsRepo.updateRedemption).not.toHaveBeenCalled();
+  });
+
   it("resuelve el ticket por prefijo legible cuando el código tiene 8 caracteres", async () => {
     const ticket = makeTicket();
     const readable = ticket.code.split("-")[0];

@@ -70,7 +70,10 @@ export class TicketsService {
       throw new BadRequest("Ticket inválido (firma corrupta)");
     }
 
-    // Double-spend check
+    // Double-spend check: fail-fast en memoria para el caso obvio no-concurrente (evita ir
+    // a la base para un error claro). La protección real ante una carrera de canje real vive
+    // en el UPDATE condicional de orders.updateStatus más abajo — ver
+    // docs/specs/atomicidad-canje-ticket.md.
     if (ticket.redeemedAt) {
       const timeStr = new Date(ticket.redeemedAt).toLocaleTimeString("es-AR", {
         hour: "2-digit",
@@ -94,16 +97,28 @@ export class TicketsService {
     if (order.status !== "pendiente") {
       throw new Conflict(`El pedido está en un estado (${order.status}) que no se puede entregar.`);
     }
+
+    // Orden primero: es el gate atómico real de la carrera de canje (UPDATE condicionado a
+    // status="pendiente" en OrdersRepository.updateStatus). Si dos canjes concurrentes llegan
+    // acá, uno gana esta escritura y el otro recibe Conflict — recién si esta gana, se marca
+    // el ticket. El orden inverso (ticket primero) podría dejar un ticket "canjeado" con una
+    // orden que en el medio se canceló. Ver docs/specs/atomicidad-canje-ticket.md.
     const updatedOrder = await this.ordersService.updateOrderStatus(order.id, "entregado", username, {
       deliveredByBar: options?.barCode,
       redeemMethod: options?.method ?? "scan",
     });
 
-    // Mark ticket as redeemed
-    await this.ticketsRepo.updateRedemption(ticket.code, username, {
+    // Mark ticket as redeemed. Defensa en profundidad: si esto devolviera undefined (el ticket
+    // ya estaba canjeado pese a que la orden acaba de transicionar — no debería pasar dado el
+    // gate de arriba), no rompemos la respuesta: la orden ya quedó "entregado" correctamente,
+    // que es lo que le importa a /barra. Se loguea para investigar si llegara a ocurrir.
+    const redeemedTicket = await this.ticketsRepo.updateRedemption(ticket.code, username, {
       barCode: options?.barCode,
       method: options?.method ?? "scan",
     });
+    if (!redeemedTicket) {
+      console.error(`[TicketsService] Ticket ${ticket.code} no se pudo marcar canjeado (ya estaba canjeado) pese a que la orden ${order.id} recién transicionó a "entregado".`);
+    }
 
     return updatedOrder;
   }

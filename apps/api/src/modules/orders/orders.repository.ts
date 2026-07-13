@@ -10,6 +10,12 @@ export interface OrdersRepository {
   findActive(eventId: string): Promise<Order[]>;
   listForEvent(eventId: string): Promise<Order[]>;
   listAll(): Promise<Order[]>;
+  /**
+   * `expectedStatus`, si se pasa, condiciona el UPDATE (`WHERE status = expectedStatus`) para
+   * que la escritura sea atómica ante transiciones concurrentes — devuelve `undefined` (no
+   * `Order`) si la fila no matcheaba esa condición en el momento del UPDATE, en vez de aplicar
+   * la escritura igual. Ver docs/specs/atomicidad-canje-ticket.md.
+   */
   updateStatus(
     id: string,
     status: OrderStatus,
@@ -22,7 +28,8 @@ export interface OrdersRepository {
       deliveredByBar?: string;
       redeemMethod?: "scan" | "manual";
     },
-  ): Promise<Order>;
+    expectedStatus?: OrderStatus,
+  ): Promise<Order | undefined>;
 }
 
 // ── Implementación Supabase ──
@@ -184,7 +191,8 @@ export class SupabaseOrdersRepository implements OrdersRepository {
       deliveredByBar?: string;
       redeemMethod?: "scan" | "manual";
     },
-  ): Promise<Order> {
+    expectedStatus?: OrderStatus,
+  ): Promise<Order | undefined> {
     const updates: Partial<Omit<OrderRow, "id">> = { status };
     if (timestamps?.readyAt) updates.ready_at = new Date(timestamps.readyAt).toISOString();
     if (timestamps?.deliveredAt) updates.delivered_at = new Date(timestamps.deliveredAt).toISOString();
@@ -194,18 +202,16 @@ export class SupabaseOrdersRepository implements OrdersRepository {
     if (timestamps?.deliveredByBar) updates.delivered_by_bar = timestamps.deliveredByBar;
     if (timestamps?.redeemMethod) updates.redeem_method = timestamps.redeemMethod;
 
-    const { data, error } = await supabase
-      .from("orders")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
+    let query = supabase.from("orders").update(updates).eq("id", id);
+    if (expectedStatus) query = query.eq("status", expectedStatus);
+
+    const { data, error } = await query.select().maybeSingle();
 
     if (error) {
       console.error("[SupabaseOrdersRepository] Error updating order status:", error);
       throw error;
     }
 
-    return mapRowToOrder(data);
+    return data ? mapRowToOrder(data) : undefined;
   }
 }

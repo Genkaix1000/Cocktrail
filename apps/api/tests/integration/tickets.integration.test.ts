@@ -29,7 +29,7 @@ async function createOrderWithTicket(drinkId: number) {
     .post("/api/orders")
     .send({ items: [{ drinkId, qty: 1 }], paymentMethod: "efectivo" });
   expect(res.status).toBe(201);
-  return res.body as { id: string; ticketCode?: string; displayNumber: number };
+  return res.body as { id: string; token: string; ticketCode?: string; displayNumber: number };
 }
 
 describe("POST /api/tickets/redeem (integración)", () => {
@@ -95,6 +95,32 @@ describe("POST /api/tickets/redeem (integración)", () => {
       .set("Cookie", barmanCookie)
       .send({ code: order.ticketCode });
     expect(second.status).toBe(409);
+  });
+
+  it("dos canjes concurrentes del mismo ticket: exactamente uno gana, el pedido queda 'entregado' una sola vez", async () => {
+    const drink = await createTestDrink();
+    const order = await createOrderWithTicket(drink.id);
+
+    const barman1Cookie = signTestSession("barman1-test", "barman");
+    const barman2Cookie = signTestSession("barman2-test", "barman");
+
+    // Promise.all (no secuencial): las dos requests llegan al backend prácticamente
+    // al mismo tiempo — es la condición real que reproduce la carrera de
+    // docs/specs/atomicidad-canje-ticket.md, no un mock que serialice las llamadas.
+    const [res1, res2] = await Promise.all([
+      request(app).post("/api/tickets/redeem").set("Cookie", barman1Cookie).send({ code: order.ticketCode }),
+      request(app).post("/api/tickets/redeem").set("Cookie", barman2Cookie).send({ code: order.ticketCode }),
+    ]);
+
+    const statuses = [res1.status, res2.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const winner = res1.status === 200 ? res1 : res2;
+    expect(winner.body.order.status).toBe("entregado");
+
+    // El pedido quedó "entregado" una sola vez (endpoint público por token, no requiere rol).
+    const finalOrder = await request(app).get(`/api/orders/by-token/${order.token}`);
+    expect(finalOrder.body.status).toBe("entregado");
   });
 
   it("resuelve el ticket por el prefijo legible de 8 caracteres", async () => {

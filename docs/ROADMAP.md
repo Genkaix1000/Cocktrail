@@ -473,8 +473,8 @@ de arrancar el empaquetado (Fase 6), para no mezclar bugfixes/hardening con el t
 packaging. Decisión de alcance (2026-07-13): la Fase 4 (E2E formal) y la Fase 7 (pedido online)
 quedan explícitamente afuera de esta ronda — ver sus secciones.
 
-- [ ] **Atomicidad del canje de ticket** (R3, riesgo de doble canje bajo concurrencia) → spec
-  [`atomicidad-canje-ticket.md`](./specs/atomicidad-canje-ticket.md).
+- [x] **Atomicidad del canje de ticket** (R3, riesgo de doble canje bajo concurrencia) → spec
+  [`atomicidad-canje-ticket.md`](./specs/atomicidad-canje-ticket.md) (done, 2026-07-13).
 - [ ] **Hardening de Kong / demo keys hardcodeadas** (R7) → spec
   [`hardening-kong-demo-keys.md`](./specs/hardening-kong-demo-keys.md).
 - [ ] **Deuda estructural de Fase 2** (`SyncService`, `auth.service.ts`, capa SSE, etc.) → spec
@@ -591,7 +591,7 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 |---|---|---|---|
 | R1 | `docker-compose.yml` levantaba Postgres pelado en `:54321`, pero el cliente espera la REST de Supabase ahí. | El arranque sin Supabase CLI no funcionaba. | ✅ Resuelto (2026-06-30) — stack db+PostgREST+Kong |
 | R2 | `night_events.totals` no está en migraciones locales (solo cloud). | El push de totales asume schema cloud. | ✅ Resuelto (2026-07-10) — confirmado en vivo que la columna existe en el proyecto cloud real |
-| R3 | Canje de ticket podría no ser atómico (read-check-write). | Doble canje bajo concurrencia. | En progreso — spec `atomicidad-canje-ticket` |
+| R3 | Canje de ticket podría no ser atómico (read-check-write). | Doble canje bajo concurrencia. | ✅ Resuelto (2026-07-13) — spec `atomicidad-canje-ticket` (done): `OrdersRepository.updateStatus`/`TicketsRepository.updateRedemption` pasan a UPDATE condicional (`WHERE status = expectedStatus` / `WHERE redeemed_at IS NULL`), y `TicketsService.redeemTicket` transiciona la orden ANTES de marcar el ticket (la orden es el gate atómico real). Test de integración con `Promise.all` reproduce la carrera real contra Supabase local. |
 | R4 | Código muerto (`data/*.json`, repos `LocalJSON/InMemory`). | Confunde, sugiere persistencia que no se usa. | ✅ Resuelto (2026-06-30) |
 | R5 | Credencial `cajavip/cajavip` hardcodeada en `auth.service.ts`. | Acceso no documentado. | ✅ Resuelto (2026-07-01, Fase 2) — eliminada |
 | R9 | `GET /api/system/logs`, `GET /api/system/status` y `POST /api/system/sync` no tenían **ningún** middleware de auth pese a estar documentados como protegidos por rol `staff`. | Cualquiera en la LAN podía ver audit logs, estado interno del sistema y disparar un sync completo. | ✅ Resuelto (2026-07-01, Fase 2) — agregado `authMiddleware`+`requireRole` |
