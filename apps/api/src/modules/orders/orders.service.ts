@@ -141,6 +141,26 @@ export class OrdersService {
     return updated;
   }
 
+  /**
+   * Intención "entregar este pedido" para el flujo de canje de ticket (/barra), sin que el
+   * caller (TicketsService) necesite conocer el literal "entregado" ni la máquina de estados
+   * interna. Wrapper delgado sobre updateOrderStatus — la atomicidad (UPDATE condicionado a
+   * status="pendiente") es exactamente la misma, solo cambia quién arma los parámetros. Ver
+   * docs/specs/deuda-estructural-fase2.md (punto 5) y docs/specs/atomicidad-canje-ticket.md.
+   */
+  async markDelivered(
+    orderId: string,
+    operator: string,
+    meta?: { deliveredByBar?: string; redeemMethod?: "scan" | "manual" },
+  ): Promise<Order> {
+    const order = await this.ordersRepo.findById(orderId);
+    if (!order) throw new NotFound(`Order ${orderId} no existe.`);
+    if (order.status !== "pendiente") {
+      throw new Conflict(`El pedido está en un estado (${order.status}) que no se puede entregar.`);
+    }
+    return this.updateOrderStatus(orderId, "entregado", operator, meta);
+  }
+
   async getActiveOrders(): Promise<Order[]> {
     const event = await this.getActiveEvent();
     if (!event) return [];

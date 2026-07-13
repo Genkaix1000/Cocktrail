@@ -94,16 +94,15 @@ export class TicketsService {
       throw new NotFound("Pedido asociado no encontrado");
     }
 
-    if (order.status !== "pendiente") {
-      throw new Conflict(`El pedido está en un estado (${order.status}) que no se puede entregar.`);
-    }
-
     // Orden primero: es el gate atómico real de la carrera de canje (UPDATE condicionado a
-    // status="pendiente" en OrdersRepository.updateStatus). Si dos canjes concurrentes llegan
-    // acá, uno gana esta escritura y el otro recibe Conflict — recién si esta gana, se marca
-    // el ticket. El orden inverso (ticket primero) podría dejar un ticket "canjeado" con una
-    // orden que en el medio se canceló. Ver docs/specs/atomicidad-canje-ticket.md.
-    const updatedOrder = await this.ordersService.updateOrderStatus(order.id, "entregado", username, {
+    // status="pendiente", ver OrdersService.markDelivered/updateOrderStatus). Si dos canjes
+    // concurrentes llegan acá, uno gana esta escritura y el otro recibe Conflict — recién si
+    // esta gana, se marca el ticket. El orden inverso (ticket primero) podría dejar un ticket
+    // "canjeado" con una orden que en el medio se canceló. markDelivered ya valida
+    // order.status === "pendiente" con el mismo mensaje que antes vivía acá — TicketsService
+    // no necesita conocer la máquina de estados de OrdersService. Ver
+    // docs/specs/atomicidad-canje-ticket.md y docs/specs/deuda-estructural-fase2.md.
+    const updatedOrder = await this.ordersService.markDelivered(order.id, username, {
       deliveredByBar: options?.barCode,
       redeemMethod: options?.method ?? "scan",
     });

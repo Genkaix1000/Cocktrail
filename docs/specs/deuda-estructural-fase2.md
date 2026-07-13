@@ -441,19 +441,19 @@ cada uno con `pnpm typecheck` + suite completa en verde antes de pasar al siguie
 
 ### Commit 3/5 — Punto 5: límite `TicketsService`/`OrdersService`
 
-- [ ] `apps/api/src/modules/orders/orders.service.ts` — agregar `markDelivered(orderId, operator,
+- [x] `apps/api/src/modules/orders/orders.service.ts` — agregar `markDelivered(orderId, operator,
   meta?)` que valida `status === "pendiente"` con el mensaje exacto actual (`"El pedido está en
   un estado (X) que no se puede entregar."`) y delega a `updateOrderStatus(id, "entregado", ...)`.
-- [ ] `apps/api/src/modules/tickets/tickets.service.ts` — `redeemTicket` llama a
+- [x] `apps/api/src/modules/tickets/tickets.service.ts` — `redeemTicket` llama a
   `ordersService.markDelivered(...)` en vez de `updateOrderStatus(...)` directo, sin conocer el
   literal `"entregado"` ni la forma exacta del `deliveryMeta`.
-- [ ] `tickets.service.test.ts` — actualizar spies de `updateOrderStatus` → `markDelivered`.
-- [ ] `orders.service.test.ts` — test nuevo de `markDelivered` (delega correctamente, propaga
+- [x] `tickets.service.test.ts` — actualizar spies de `updateOrderStatus` → `markDelivered`.
+- [x] `orders.service.test.ts` — test nuevo de `markDelivered` (delega correctamente, propaga
   Conflict con el mensaje exacto).
-- [ ] **Re-correr el test de integración concurrente** de `atomicidad-canje-ticket.md`
+- [x] **Re-correr el test de integración concurrente** de `atomicidad-canje-ticket.md`
   (`tickets.integration.test.ts`, el de `Promise.all` con dos canjes) — debe seguir pasando
   exactamente igual. Este es el criterio 6, no negociable.
-- [ ] `pnpm --filter cocktrail-api typecheck` + `pnpm --filter cocktrail-api test` (unit +
+- [x] `pnpm --filter cocktrail-api typecheck` + `pnpm --filter cocktrail-api test` (unit +
   integration) en verde.
 
 ### Commit 4/5 — Punto 2: `SyncService` → repos (el más delicado)

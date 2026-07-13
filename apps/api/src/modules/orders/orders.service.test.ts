@@ -218,3 +218,41 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
     );
   });
 });
+
+describe("OrdersService.markDelivered", () => {
+  let ordersRepo: OrdersRepository;
+  let service: OrdersService;
+
+  beforeEach(() => {
+    ordersRepo = makeOrdersRepo();
+    const drinksRepo = makeDrinksRepo();
+    service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn());
+  });
+
+  it("tira NotFound si el pedido no existe", async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(undefined);
+    await expect(service.markDelivered("no-existe", "barman1")).rejects.toThrow(/no existe/);
+  });
+
+  it("tira Conflict con el mensaje específico si el pedido no está 'pendiente'", async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: "cancelado" }));
+    await expect(service.markDelivered("order-1", "barman1")).rejects.toThrow(
+      /El pedido está en un estado \(cancelado\) que no se puede entregar\./,
+    );
+  });
+
+  it("con pedido 'pendiente', delega en updateOrderStatus('entregado') con la metadata recibida", async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: "pendiente" }));
+    vi.mocked(ordersRepo.updateStatus).mockResolvedValue(makeOrder({ status: "entregado" }));
+
+    const result = await service.markDelivered("order-1", "barman1", { deliveredByBar: "BARRA-01", redeemMethod: "scan" });
+
+    expect(result.status).toBe("entregado");
+    expect(ordersRepo.updateStatus).toHaveBeenCalledWith(
+      "order-1",
+      "entregado",
+      expect.objectContaining({ deliveredBy: "barman1", deliveredByBar: "BARRA-01", redeemMethod: "scan" }),
+      "pendiente",
+    );
+  });
+});

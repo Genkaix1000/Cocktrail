@@ -47,7 +47,7 @@ function makeTicketsRepo(overrides?: Partial<TicketsRepository>): TicketsReposit
 function makeOrdersService(): OrdersService {
   return {
     getOrder: vi.fn(),
-    updateOrderStatus: vi.fn(),
+    markDelivered: vi.fn(),
   } as unknown as OrdersService;
 }
 
@@ -98,11 +98,16 @@ describe("TicketsService.redeemTicket", () => {
     const order = makeOrder({ status: "pendiente" });
     vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
     vi.mocked(ordersService.getOrder).mockResolvedValue(order);
-    vi.mocked(ordersService.updateOrderStatus).mockResolvedValueOnce({ ...order, status: "entregado" });
+    vi.mocked(ordersService.markDelivered).mockResolvedValueOnce({ ...order, status: "entregado" });
 
     const result = await service.redeemTicket(ticket.code, "barman1", { method: "scan" });
 
-    expect(ordersService.updateOrderStatus).toHaveBeenCalledTimes(1);
+    expect(ordersService.markDelivered).toHaveBeenCalledTimes(1);
+    expect(ordersService.markDelivered).toHaveBeenCalledWith(
+      order.id,
+      "barman1",
+      expect.objectContaining({ redeemMethod: "scan" }),
+    );
     expect(result.status).toBe("entregado");
     expect(ticketsRepo.updateRedemption).toHaveBeenCalledWith(
       ticket.code,
@@ -111,23 +116,26 @@ describe("TicketsService.redeemTicket", () => {
     );
   });
 
-  it("tira Conflict si el pedido está 'cancelado' (no se puede entregar)", async () => {
+  it("tira Conflict si el pedido está 'cancelado' (no se puede entregar) — propagado desde markDelivered", async () => {
     const ticket = makeTicket();
     const order = makeOrder({ status: "cancelado" });
     vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
     vi.mocked(ordersService.getOrder).mockResolvedValue(order);
+    vi.mocked(ordersService.markDelivered).mockRejectedValue(
+      new Error("El pedido está en un estado (cancelado) que no se puede entregar."),
+    );
 
     await expect(service.redeemTicket(ticket.code, "barman1")).rejects.toThrow(/no se puede entregar/);
     expect(ticketsRepo.updateRedemption).not.toHaveBeenCalled();
   });
 
-  it("transiciona la orden ANTES de marcar el ticket canjeado (orden es el gate atómico de la carrera)", async () => {
+  it("transiciona la orden (vía markDelivered) ANTES de marcar el ticket canjeado (orden es el gate atómico de la carrera)", async () => {
     const ticket = makeTicket();
     const order = makeOrder({ status: "pendiente" });
     const callOrder: string[] = [];
     vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
     vi.mocked(ordersService.getOrder).mockResolvedValue(order);
-    vi.mocked(ordersService.updateOrderStatus).mockImplementation(async () => {
+    vi.mocked(ordersService.markDelivered).mockImplementation(async () => {
       callOrder.push("orders");
       return { ...order, status: "entregado" };
     });
@@ -146,7 +154,7 @@ describe("TicketsService.redeemTicket", () => {
     const order = makeOrder({ status: "pendiente" });
     vi.mocked(ticketsRepo.findByCode).mockResolvedValue(ticket);
     vi.mocked(ordersService.getOrder).mockResolvedValue(order);
-    vi.mocked(ordersService.updateOrderStatus).mockRejectedValue(
+    vi.mocked(ordersService.markDelivered).mockRejectedValue(
       new Error("Transición inválida: entregado → entregado (el pedido cambió de estado durante la operación)."),
     );
 
@@ -159,7 +167,7 @@ describe("TicketsService.redeemTicket", () => {
     const readable = ticket.code.split("-")[0];
     vi.mocked(ticketsRepo.findByReadable).mockResolvedValue(ticket);
     vi.mocked(ordersService.getOrder).mockResolvedValue(makeOrder({ status: "pendiente" }));
-    vi.mocked(ordersService.updateOrderStatus).mockResolvedValueOnce(makeOrder({ status: "entregado" }));
+    vi.mocked(ordersService.markDelivered).mockResolvedValueOnce(makeOrder({ status: "entregado" }));
 
     await service.redeemTicket(readable, "barman1");
 
