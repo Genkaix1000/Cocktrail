@@ -182,6 +182,7 @@ export default function DashboardSection({
               delta={deltaTotal}
               icon={TrendingUp}
               color="#10b981"
+              subtitle={`vs. ${lastNightName}`}
             />
             <MetricCard
               label="Tickets Totales"
@@ -189,6 +190,7 @@ export default function DashboardSection({
               delta={deltaTickets}
               icon={Tag}
               color="#3b82f6"
+              subtitle={`vs. ${lastNightName}`}
             />
             <MetricCard
               label="Unidades Vendidas"
@@ -196,6 +198,7 @@ export default function DashboardSection({
               delta={deltaUnits}
               icon={Wine}
               color="#f97316"
+              subtitle={`vs. ${lastNightName}`}
             />
           </div>
 

@@ -11,7 +11,7 @@ export default function MetricCard({
   icon: Icon,
   color,
   sparklineData,
-  subtitle = "vs. ayer"
+  subtitle = "vs. última noche"
 }: {
   label: string;
   value: number;
