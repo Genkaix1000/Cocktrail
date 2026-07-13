@@ -1,0 +1,52 @@
+# kong.yml.template — plantilla versionada de la config declarativa (DB-less) del
+# gateway Supabase. `kong.yml` real (con las apikeys resueltas) se genera a partir de
+# este archivo con `supabase/generate-keys.mjs` — NO se edita `kong.yml` a mano, se
+# edita ESTE template y se vuelve a correr el script. Ver docs/DEPLOY.md.
+#
+# Kong en modo declarativo DB-less NO interpola env vars en el campo `key` de
+# key-auth (ni `${{ }}` de decK ni vault refs), por eso el render se hace ANTES de
+# que Kong arranque (envsubst en el host, ver generate-keys.mjs), no en runtime.
+#
+# Flujo de auth:
+#   - El cliente (@supabase/supabase-js) manda `apikey: <key>` Y
+#     `Authorization: Bearer <key>`.
+#   - key-auth valida el header `apikey` contra estas credenciales (Kong).
+#   - PostgREST lee el `Authorization: Bearer <jwt>`, lo valida con
+#     PGRST_JWT_SECRET y cambia al rol del claim (`service_role` / `anon`).
+_format_version: "3.0"
+_transform: true
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: ${ANON_KEY}
+  - username: service_role
+    keyauth_credentials:
+      - key: ${SERVICE_ROLE_KEY}
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+services:
+  - name: rest-v1
+    _comment: "PostgREST: /rest/v1/* -> http://rest:3000/*"
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon

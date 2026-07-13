@@ -151,14 +151,26 @@ Defaults embebidos en el compose (sirven tal cual para LAN del local):
 Para overridear: `cp supabase/.env.example supabase/.env`, editá, y corré con
 `docker compose --env-file supabase/.env up -d`.
 
-**Rotar el JWT secret** (recomendado si esto algún día sale de la LAN):
+**Rotar las llaves demo por unas propias** (recomendado si esto algún día sale de la LAN):
 
-1. Elegí un secret nuevo (`openssl rand -hex 32`).
-2. Regenerá las apikeys `anon` y `service_role` firmadas con ese secret
-   (cualquier generador JWT HS256; payload `{"role":"...","iss":"supabase-demo","iat":...,"exp":...}`).
-3. Actualizá las 3 llaves en: `supabase/docker/kong.yml`, `supabase/.env`
-   (o el compose) y `apps/api/.env` (`SUPABASE_SERVICE_ROLE_KEY`).
-4. `docker compose down -v && docker compose up -d` (recrea con el secret nuevo).
+```bash
+node supabase/generate-keys.mjs           # primera vez (falla si ya hay keys propias)
+node supabase/generate-keys.mjs --rotate  # para reemplazar unas ya generadas
+```
+
+El script genera `JWT_SECRET`/`ANON_KEY`/`SERVICE_ROLE_KEY` nuevos y únicos, los escribe en
+`supabase/.env`, y renderiza `supabase/docker/kong.yml` (generado, gitignoreado — el archivo
+versionado es `supabase/docker/kong.yml.template`) con `envsubst`. **No edites `kong.yml` a
+mano** — se pisa en el próximo `generate-keys.mjs`.
+
+**Paso obligatorio después de generar/rotar**: copiá el `SERVICE_ROLE_KEY` que imprime el script
+a `apps/api/.env` como `SUPABASE_SERVICE_ROLE_KEY` y reiniciá el backend — si no, el backend sigue
+usando la key vieja y todo el flujo offline-first se rompe con `401`. Después:
+`docker compose down -v && docker compose up -d` (recrea con las keys nuevas).
+
+Si no corrés el script, `docker compose up` sigue funcionando igual que siempre con las demo keys
+(`postinstall` de `pnpm install` las genera automáticamente si `kong.yml` no existe todavía) — no
+es un paso obligatorio para desarrollo local.
 
 ---
 
@@ -171,7 +183,8 @@ Para overridear: `cp supabase/.env.example supabase/.env`, editá, y corré con
 | **service_role** | `...4HviqYnTKiRK-RJvWzgAAuaFiq8--foTrXQpl7HYMU4` (rol `service_role`, la que usa el backend) |
 
 Valores completos en `supabase/.env.example`. Son llaves **de desarrollo local**:
-sirven para la LAN del boliche. No exponer la `service_role` a un cliente público.
+sirven para la LAN del boliche. No exponer la `service_role` a un cliente público. Ver § 7 para
+reemplazarlas por unas propias antes de un deployment que pueda salir de la LAN.
 
 ---
 

@@ -38,3 +38,7 @@ apps/api/src/data/*.json
 # reporte de cobertura de tests (generado por vitest --coverage)
 coverage/
 
+# generado por supabase/generate-keys.mjs desde kong.yml.template (ver
+# docs/specs/hardening-kong-demo-keys.md) — el template SÍ se versiona, esto no.
+supabase/docker/kong.yml
+
