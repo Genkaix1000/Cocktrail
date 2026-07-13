@@ -126,8 +126,12 @@ export default function AdminClient({
     }
   }, []);
 
-  // Fetch history on mount
+  // Fetch history on mount, y de nuevo cada vez que se cierra una noche
+  // (onEventClosed pone historyLoaded en false más arriba) — antes este efecto
+  // tenía deps [] (solo montaje), así que ese "force reload" nunca disparaba
+  // nada y el Historial quedaba en skeleton para siempre tras cerrar la noche.
   useEffect(() => {
+    if (historyLoaded) return;
     eventsService
       .getHistory()
       .then((data) => {
@@ -135,7 +139,7 @@ export default function AdminClient({
         setHistoryLoaded(true);
       })
       .catch(() => {});
-  }, []);
+  }, [historyLoaded]);
 
   const handleTabChange = (tab: string) => {
     const needsSkeleton = 
