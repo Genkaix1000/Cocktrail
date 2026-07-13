@@ -29,7 +29,7 @@ export type Session = {
   expiresAt: number;
 };
 
-const ROLES = new Set<Role>(["admin", "caja", "barman"]);
+const ROLES = new Set<Role>(["admin", "caja"]);
 
 export function verifySession(raw: string | undefined): Session | null {
   if (!raw) return null;

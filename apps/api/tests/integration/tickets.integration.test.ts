@@ -51,15 +51,14 @@ describe("POST /api/tickets/redeem (integración)", () => {
     expect(res.status).toBe(401);
   });
 
-  it("con rol caja (no admin/barman) responde 403", async () => {
+  it("con rol caja (no admin — el rol barman se retiró, el canje ahora es admin-only) responde 403", async () => {
     const cookie = signTestSession("cajera-test", "caja");
     const res = await request(app).post("/api/tickets/redeem").set("Cookie", cookie).send({ code: "AAAAAAAA-00000000" });
     expect(res.status).toBe(403);
   });
 
   it("con un código que no existe responde 404", async () => {
-    const cookie = signTestSession("barman-test", "barman");
-    const res = await request(app).post("/api/tickets/redeem").set("Cookie", cookie).send({ code: "ZZZZZZZZ-00000000" });
+    const res = await request(app).post("/api/tickets/redeem").set("Cookie", adminCookie).send({ code: "ZZZZZZZZ-00000000" });
     expect(res.status).toBe(404);
   });
 
@@ -68,10 +67,9 @@ describe("POST /api/tickets/redeem (integración)", () => {
     const order = await createOrderWithTicket(drink.id);
     expect(order.ticketCode).toBeTruthy();
 
-    const barmanCookie = signTestSession("barman-test", "barman");
     const res = await request(app)
       .post("/api/tickets/redeem")
-      .set("Cookie", barmanCookie)
+      .set("Cookie", adminCookie)
       .send({ code: order.ticketCode, method: "manual" });
 
     expect(res.status).toBe(200);
@@ -83,16 +81,15 @@ describe("POST /api/tickets/redeem (integración)", () => {
     const drink = await createTestDrink();
     const order = await createOrderWithTicket(drink.id);
 
-    const barmanCookie = signTestSession("barman-test", "barman");
     const first = await request(app)
       .post("/api/tickets/redeem")
-      .set("Cookie", barmanCookie)
+      .set("Cookie", adminCookie)
       .send({ code: order.ticketCode });
     expect(first.status).toBe(200);
 
     const second = await request(app)
       .post("/api/tickets/redeem")
-      .set("Cookie", barmanCookie)
+      .set("Cookie", adminCookie)
       .send({ code: order.ticketCode });
     expect(second.status).toBe(409);
   });
@@ -101,15 +98,15 @@ describe("POST /api/tickets/redeem (integración)", () => {
     const drink = await createTestDrink();
     const order = await createOrderWithTicket(drink.id);
 
-    const barman1Cookie = signTestSession("barman1-test", "barman");
-    const barman2Cookie = signTestSession("barman2-test", "barman");
+    const admin1Cookie = signTestSession("admin1-test", "admin");
+    const admin2Cookie = signTestSession("admin2-test", "admin");
 
     // Promise.all (no secuencial): las dos requests llegan al backend prácticamente
     // al mismo tiempo — es la condición real que reproduce la carrera de
     // docs/specs/atomicidad-canje-ticket.md, no un mock que serialice las llamadas.
     const [res1, res2] = await Promise.all([
-      request(app).post("/api/tickets/redeem").set("Cookie", barman1Cookie).send({ code: order.ticketCode }),
-      request(app).post("/api/tickets/redeem").set("Cookie", barman2Cookie).send({ code: order.ticketCode }),
+      request(app).post("/api/tickets/redeem").set("Cookie", admin1Cookie).send({ code: order.ticketCode }),
+      request(app).post("/api/tickets/redeem").set("Cookie", admin2Cookie).send({ code: order.ticketCode }),
     ]);
 
     const statuses = [res1.status, res2.status].sort();
@@ -128,10 +125,9 @@ describe("POST /api/tickets/redeem (integración)", () => {
     const order = await createOrderWithTicket(drink.id);
     const readable = order.ticketCode!.split("-")[0];
 
-    const barmanCookie = signTestSession("barman-test", "barman");
     const res = await request(app)
       .post("/api/tickets/redeem")
-      .set("Cookie", barmanCookie)
+      .set("Cookie", adminCookie)
       .send({ code: readable });
 
     expect(res.status).toBe(200);

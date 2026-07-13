@@ -312,8 +312,7 @@ export default function BarraClient() {
 
   const handleCancelClick = useCallback((order: Order, e: MouseEvent) => {
     e.stopPropagation();
-    const hasCancelPermission = currentUser?.role === "admin" || currentUser?.permissions?.cancelarTickets;
-    if (!hasCancelPermission) return;
+    if (currentUser?.role !== "admin") return;
     setCancelOrder(order);
   }, [currentUser]);
 

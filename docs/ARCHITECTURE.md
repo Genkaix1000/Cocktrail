@@ -190,10 +190,11 @@ que concentra el acceso crudo a `supabaseCloud` (pull cloud→local, push local�
 ## 8. Autenticación y roles
 
 - **Cookie HMAC** `cocktrail_session`: payload `role.username.expiresAt` firmado con HMAC-SHA256 (`AUTH_SECRET`), TTL 12h, `HttpOnly; SameSite=Strict; Secure` en prod. Verificación con `timingSafeEqual`.
-- **Roles**: `admin | caja | barman`. Permisos granulares (`UserPermissions`: `closeNight`, `modifyCarta`, `manageUsers`, `cancelarTickets`, …) persistidos como JSONB por usuario.
-- **Doble fuente de credenciales**: primero `SupabaseUsersRepository` (password hasheada SHA-256); si no, usuarios fallback de `env` (`admin/admin`, `caja/caja`, `barra/barra`).
+- **Roles**: `admin | caja` (el rol `barman` se retiró el 2026-07-13 — ver decisión más abajo). Permisos (`closeNight`, `cancelarTickets`, `historial`, `metricas`) ya **no son editables por usuario**: se calculan puros por rol en `auth.controller.ts` (`GET /api/auth/me`), admin tiene los 4 en `true`, caja solo `cancelarTickets`/`historial`. La columna `permissions JSONB` de `users` sigue existiendo por compatibilidad de schema pero se escribe vacía (`{}`) y no se lee.
+- **Doble fuente de credenciales**: primero `SupabaseUsersRepository` (password hasheada SHA-256); si no, usuarios fallback de `env` (`admin/admin`, `caja/caja`).
 - **Guard backend**: `auth.middleware.ts` (`authMiddleware` + `requireRole`).
 - **Guard frontend**: `apps/web/src/proxy.ts` (Next 16 renombró `middleware.ts` → `proxy.ts`). Verifica la firma HMAC **localmente** con Web Crypto en el Edge runtime (no fetchea al API). Protege `/admin`, `/caja`, `/barra`, `/login` y redirige según rol. **Debe usar `export default function proxy(...)`**.
+- **`/barra` (2026-07-13)**: sin rol dedicado, la pantalla de canje manual de tickets quedó **admin-only** (antes era barman-only a nivel página, lo que con el rol retirado la hubiese dejado inalcanzable). El flujo físico real del local es caja→barra sin app — ver `docs/ROADMAP.md`.
 - **Hardening**: rate limiters por endpoint (incl. `loginLimiter`, la protección real contra fuerza bruta en el login — el captcha aritmético que existía se sacó el 2026-07-13, sistema 100% LAN sin exposición a bots externos), Helmet, CORS whitelist, validación Zod, `AUTH_SECRET` ≥32 chars con fail-fast en prod.
 
 ---

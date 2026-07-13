@@ -3,26 +3,11 @@ import type { Role } from "@cocktrail/shared";
 
 // ── Types ──
 
-export type UserPermissions = {
-  closeNight: boolean;
-  modifyCarta: boolean;
-  manageUsers: boolean;
-  monitoreo: boolean;
-  metricas: boolean;
-  historial: boolean;
-  general: boolean;
-  carta: boolean;
-  pagos: boolean;
-  staff: boolean;
-  cancelarTickets: boolean;
-};
-
 export type StaffUser = {
   id: string;
   username: string;
   passwordHash: string;
   role: Role;
-  permissions: UserPermissions;
   createdAt: number;
 };
 
@@ -57,7 +42,6 @@ type UserRow = {
   username: string;
   password_hash: string;
   role: Role;
-  permissions: UserPermissions;
   created_at: string;
 };
 
@@ -67,7 +51,6 @@ function mapRowToUser(row: UserRow): StaffUser {
     username: row.username,
     passwordHash: row.password_hash,
     role: row.role as Role,
-    permissions: row.permissions as UserPermissions,
     createdAt: new Date(row.created_at).getTime(),
   };
 }
@@ -128,7 +111,10 @@ export class SupabaseUsersRepository implements UsersRepository {
         username: user.username,
         password_hash: user.passwordHash,
         role: user.role,
-        permissions: user.permissions,
+        // permissions ya no es un concepto de la app — se calculan por rol
+        // (ver auth.controller.ts /me). La columna sigue NOT NULL en DB, se
+        // satisface con un objeto vacío.
+        permissions: {},
         created_at: new Date(user.createdAt).toISOString(),
       })
       .select()
@@ -148,7 +134,7 @@ export class SupabaseUsersRepository implements UsersRepository {
             username: user.username,
             password_hash: user.passwordHash,
             role: user.role,
-            permissions: user.permissions,
+            permissions: {},
             created_at: new Date(user.createdAt).toISOString(),
           });
         if (cloudError) {
@@ -171,7 +157,7 @@ export class SupabaseUsersRepository implements UsersRepository {
         username: user.username,
         password_hash: user.passwordHash,
         role: user.role,
-        permissions: user.permissions,
+        permissions: {},
       })
       .eq("id", user.id)
       .select()
@@ -190,7 +176,7 @@ export class SupabaseUsersRepository implements UsersRepository {
             username: user.username,
             password_hash: user.passwordHash,
             role: user.role,
-            permissions: user.permissions,
+            permissions: {},
           })
           .eq("id", user.id);
         if (cloudError) {

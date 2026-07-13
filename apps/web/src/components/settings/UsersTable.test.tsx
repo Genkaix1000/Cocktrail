@@ -3,38 +3,23 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import UsersTable from "./UsersTable";
-import type { SafeUser, UserPermissions } from "@/services/users.service";
-
-const NO_PERMISSIONS: UserPermissions = {
-  closeNight: false,
-  modifyCarta: false,
-  manageUsers: false,
-  monitoreo: false,
-  metricas: false,
-  historial: false,
-  general: false,
-  carta: false,
-  pagos: false,
-  staff: false,
-  cancelarTickets: false,
-};
+import type { SafeUser } from "@/services/users.service";
 
 function makeUser(overrides: Partial<SafeUser> = {}): SafeUser {
   return {
     id: "user-1",
-    username: "barman_juan",
-    role: "barman",
-    permissions: { ...NO_PERMISSIONS },
+    username: "cajera_juan",
+    role: "caja",
     createdAt: Date.now(),
     ...overrides,
   };
 }
 
 describe("UsersTable", () => {
-  it("separa usuarios de sistema (admin/caja/barra) del personal de staff", () => {
+  it("separa usuarios de sistema (admin/caja) del personal de staff", () => {
     render(
       <UsersTable
-        users={[makeUser({ id: "sys-1", username: "admin", role: "admin" }), makeUser({ id: "st-1", username: "barman_juan" })]}
+        users={[makeUser({ id: "sys-1", username: "admin", role: "admin" }), makeUser({ id: "st-1", username: "cajera_juan" })]}
         isBosko={false}
         onSelectUser={vi.fn()}
         onDeleteClick={vi.fn()}
@@ -63,7 +48,7 @@ describe("UsersTable", () => {
     const user = userEvent.setup();
     const onSelectUser = vi.fn();
     const onDeleteClick = vi.fn();
-    const staff = makeUser({ id: "st-1", username: "barman_juan" });
+    const staff = makeUser({ id: "st-1", username: "cajera_juan" });
 
     render(
       <UsersTable
@@ -78,7 +63,7 @@ describe("UsersTable", () => {
     expect(onDeleteClick).toHaveBeenCalledWith(staff);
     expect(onSelectUser).not.toHaveBeenCalled();
 
-    await user.click(screen.getByText("barman_juan"));
+    await user.click(screen.getByText("cajera_juan"));
     expect(onSelectUser).toHaveBeenCalledWith(staff);
   });
 });

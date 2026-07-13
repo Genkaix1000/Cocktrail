@@ -47,13 +47,9 @@ export function createEventsController(
           throw new Unauthorized();
         }
 
-        // Check closeNight permission for caja role
+        // Cerrar la noche es admin-only (ya no es un permiso configurable por usuario).
         if (req.session?.role === "caja") {
-          const dbUser = await usersRepo.findByUsername(username);
-          const hasCloseNight = dbUser ? dbUser.permissions.closeNight : false;
-          if (!hasCloseNight) {
-            throw new Forbidden("No tenés permiso para cerrar la noche.");
-          }
+          throw new Forbidden("No tenés permiso para cerrar la noche.");
         }
 
         // Verify password using the same authenticate helper

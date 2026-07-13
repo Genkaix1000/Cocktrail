@@ -6,14 +6,12 @@ import {
   usersService,
   type SafeUser,
   type CreateUserInput,
-  type UserPermissions,
 } from "@/services/users.service";
 import type { Role } from "@cocktrail/shared";
 import { useTheme } from "@/components/ThemeProvider";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import UsersTable from "./UsersTable";
 import UserFormDrawer from "./UserFormDrawer";
-import { INITIAL_PERMISSIONS, PERMISSIONS_BY_ROLE } from "./usuariosConstants";
 
 export default function UsuariosSection() {
   const [users, setUsers] = useState<SafeUser[]>([]);
@@ -46,8 +44,7 @@ export default function UsuariosSection() {
     setEditUser({
       username: "",
       password: "",
-      role: "barman",
-      permissions: { ...INITIAL_PERMISSIONS },
+      role: "caja",
     });
     setError("");
     setModalOpen(true);
@@ -59,7 +56,6 @@ export default function UsuariosSection() {
       username: u.username,
       password: "",
       role: u.role,
-      permissions: { ...INITIAL_PERMISSIONS, ...u.permissions },
     });
     setError("");
     setModalOpen(true);
@@ -88,7 +84,6 @@ export default function UsuariosSection() {
         const payload: Partial<CreateUserInput> = {
           username: editUser.username.trim(),
           role: editUser.role,
-          permissions: editUser.permissions as UserPermissions,
         };
         if (editUser.password?.trim()) {
           payload.password = editUser.password.trim();
@@ -102,8 +97,7 @@ export default function UsuariosSection() {
         const payload: CreateUserInput = {
           username: editUser.username.trim(),
           password: (editUser.password ?? "").trim(),
-          role: (editUser.role ?? "barman") as Role,
-          permissions: editUser.permissions as UserPermissions,
+          role: (editUser.role ?? "caja") as Role,
         };
         const created = await usersService.create(payload);
         setUsers((prev) => [...prev, created]);
@@ -131,45 +125,8 @@ export default function UsuariosSection() {
   }, []);
 
   const handleRoleChange = useCallback((r: Role) => {
-    setEditUser((prev) => {
-      if (!prev) return null;
-      const allowed = PERMISSIONS_BY_ROLE[r] || [];
-      const newPermissions = { ...INITIAL_PERMISSIONS };
-      if (prev.permissions) {
-        allowed.forEach((p) => {
-          if (prev.permissions?.[p]) {
-            newPermissions[p] = true;
-          }
-        });
-      }
-      return { ...prev, role: r, permissions: newPermissions };
-    });
+    setEditUser((prev) => (prev ? { ...prev, role: r } : null));
   }, []);
-
-  const togglePermission = useCallback(
-    (key: keyof UserPermissions) => {
-      setEditUser((prev) => {
-        if (!prev) return null;
-        const currentPermissions = prev.permissions
-          ? { ...prev.permissions }
-          : { ...INITIAL_PERMISSIONS };
-        const val = !currentPermissions[key];
-        const next = { ...currentPermissions, [key]: val };
-
-        if (key === "cancelarTickets" && val) {
-          next.historial = true;
-        }
-        if (key === "historial" && !val) {
-          next.cancelarTickets = false;
-        }
-        return {
-          ...prev,
-          permissions: next,
-        };
-      });
-    },
-    [],
-  );
 
   if (loading) {
     return (
@@ -211,9 +168,8 @@ export default function UsuariosSection() {
         <p className="text-[12px] text-ink-400/80 leading-relaxed">
           <Shield size={13} className="inline mr-1.5 text-ink-400" />
           Los usuarios base (<span className="text-accent font-mono font-semibold">admin</span>,{" "}
-          <span className="text-accent font-mono font-semibold">caja</span>,{" "}
-          <span className="text-accent font-mono font-semibold">barra</span>) se configuran desde las variables de entorno del servidor.
-          Aquí podés crear cuentas adicionales de staff con permisos personalizados.
+          <span className="text-accent font-mono font-semibold">caja</span>) se configuran desde las variables de entorno del servidor.
+          Aquí podés crear cuentas adicionales de staff con rol admin o caja.
         </p>
       </div>
 
@@ -235,7 +191,6 @@ export default function UsuariosSection() {
             onUsernameChange={(username) => setEditUser({ ...editUser, username })}
             onPasswordChange={(password) => setEditUser({ ...editUser, password })}
             onRoleChange={handleRoleChange}
-            onTogglePermission={togglePermission}
             onCancel={closeModal}
             onSave={handleSave}
           />

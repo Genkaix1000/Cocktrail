@@ -20,8 +20,6 @@ const EnvSchema = z.object({
   ADMIN_PASS: z.string().default("admin"),
   CAJA_USER: z.string().default("caja"),
   CAJA_PASS: z.string().default("caja"),
-  BARMAN_USER: z.string().default("barra"),
-  BARMAN_PASS: z.string().default("barra"),
   BAR_CODE: z.string().min(1).max(20).default("BARRA-01"),
   SUPABASE_URL: z.string().url().default("http://127.0.0.1:54321"),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).default("service-role-key-placeholder"),

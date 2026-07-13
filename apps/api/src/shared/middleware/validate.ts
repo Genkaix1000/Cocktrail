@@ -109,33 +109,8 @@ export const UpdateDrinkSchema = z.object({
 export const CreateUserSchema = z.object({
   username: z.string().min(1, "Usuario requerido").max(50, "Usuario demasiado largo").trim(),
   password: z.string().min(4, "Contraseña demasiado corta").max(128, "Contraseña demasiado larga"),
-  role: z.enum(["admin", "caja", "barman"], {
+  role: z.enum(["admin", "caja"], {
     errorMap: () => ({ message: "Rol inválido" }),
-  }),
-  permissions: z.object({
-    closeNight: z.boolean().default(false),
-    modifyCarta: z.boolean().default(false),
-    manageUsers: z.boolean().default(false),
-    monitoreo: z.boolean().default(false),
-    metricas: z.boolean().default(false),
-    historial: z.boolean().default(false),
-    general: z.boolean().default(false),
-    carta: z.boolean().default(false),
-    pagos: z.boolean().default(false),
-    staff: z.boolean().default(false),
-    cancelarTickets: z.boolean().default(false),
-  }).default({
-    closeNight: false,
-    modifyCarta: false,
-    manageUsers: false,
-    monitoreo: false,
-    metricas: false,
-    historial: false,
-    general: false,
-    carta: false,
-    pagos: false,
-    staff: false,
-    cancelarTickets: false,
   }),
 });
 
@@ -162,20 +137,7 @@ export const UpdateConfigSchema = z.object({
 export const UpdateUserSchema = z.object({
   username: z.string().min(1, "Usuario requerido").max(50, "Usuario demasiado largo").trim().optional(),
   password: z.string().min(4, "Contraseña demasiado corta").max(128, "Contraseña demasiado larga").optional(),
-  role: z.enum(["admin", "caja", "barman"], {
+  role: z.enum(["admin", "caja"], {
     errorMap: () => ({ message: "Rol inválido" }),
-  }).optional(),
-  permissions: z.object({
-    closeNight: z.boolean().optional(),
-    modifyCarta: z.boolean().optional(),
-    manageUsers: z.boolean().optional(),
-    monitoreo: z.boolean().optional(),
-    metricas: z.boolean().optional(),
-    historial: z.boolean().optional(),
-    general: z.boolean().optional(),
-    carta: z.boolean().optional(),
-    pagos: z.boolean().optional(),
-    staff: z.boolean().optional(),
-    cancelarTickets: z.boolean().optional(),
   }).optional(),
 });

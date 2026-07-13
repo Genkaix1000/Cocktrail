@@ -85,8 +85,7 @@ export default function PendingOrdersList({
           ) : (
             <ul className="divide-y divide-ink-800/60">
               {pendingOrders.map((o) => {
-                const hasCancelPermission =
-                  currentUser?.role === "admin" || currentUser?.permissions?.cancelarTickets;
+                const hasCancelPermission = currentUser?.role === "admin";
                 const statusMeta = getPendingStatus(o.status);
                 return (
                   <li

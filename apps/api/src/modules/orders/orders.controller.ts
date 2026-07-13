@@ -4,14 +4,11 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { COOKIE_NAME, verifySession } from "../auth/session.js";
 import { validate, CreateOrderSchema, UpdateOrderStatusSchema } from "../../shared/middleware/validate.js";
 import { orderLimiter } from "../../shared/middleware/rate-limit.js";
-import type { UsersRepository } from "../users/users.repository.js";
-import { Forbidden } from "../../shared/errors/http-errors.js";
 import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 import type { OrderStatus } from "@cocktrail/shared";
 
 export function createOrdersController(
   service: OrdersService,
-  usersRepo: UsersRepository,
   auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
 ): Router {
   const router = Router();
@@ -72,7 +69,7 @@ export function createOrdersController(
   });
 
   // GET /api/orders/active — pedidos activos (staff only)
-  router.get("/active", authMiddleware, requireRole("admin", "caja", "barman"), async (_req, res, next) => {
+  router.get("/active", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
     try {
       res.json(await service.getActiveOrders());
     } catch (err) {
@@ -95,24 +92,14 @@ export function createOrdersController(
   });
 
   // PATCH /api/orders/:id — cambiar estado (staff only)
-  router.patch("/:id", authMiddleware, requireRole("admin", "caja", "barman"), validate(UpdateOrderStatusSchema), async (req, res, next) => {
+  router.patch("/:id", authMiddleware, requireRole("admin", "caja"), validate(UpdateOrderStatusSchema), async (req, res, next) => {
     try {
       const { status } = req.body;
       const username = req.session?.username || "desconocido";
-      const role = req.session?.role;
 
-      // If they want to cancel, check if they have cancelarTickets permission
-      if (status === "cancelado") {
-        if (role !== "admin") {
-          const dbUser = await usersRepo.findByUsername(username);
-          const hasCancel = dbUser
-            ? dbUser.permissions.cancelarTickets
-            : (role === "barman" ? true : false); // default barman has it, default caja doesn't
-          if (!hasCancel) {
-            throw new Forbidden("No tenés permiso para cancelar tickets.");
-          }
-        }
-      }
+      // Cancelar tickets está permitido para cualquier staff autenticado
+      // (admin/caja) — antes era un permiso configurable por usuario, pero
+      // todos los roles reales ya lo tenían en true por default.
 
       const order = await service.updateOrderStatus(req.params.id as string, status, username);
 

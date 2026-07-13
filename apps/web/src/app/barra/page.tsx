@@ -19,8 +19,8 @@ export default function BarraPage() {
           router.push("/login");
           return;
         }
-        if (user.role !== "barman") {
-          const dest = user.role === "admin" ? "/admin" : "/caja";
+        if (user.role !== "admin") {
+          const dest = user.role === "caja" ? "/caja" : "/login";
           router.push(dest);
           return;
         }

@@ -7,8 +7,9 @@ type MeResponse = {
   username: string;
   permissions: {
     closeNight: boolean;
-    modifyCarta: boolean;
-    manageUsers: boolean;
+    cancelarTickets: boolean;
+    historial: boolean;
+    metricas: boolean;
   };
 } | null;
 

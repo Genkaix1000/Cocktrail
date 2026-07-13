@@ -17,7 +17,7 @@ export function createSystemController(
   const router = Router();
 
   // GET /api/system/logs — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
-  router.get("/logs", authMiddleware, requireRole("admin", "caja", "barman"), async (_req, res, next) => {
+  router.get("/logs", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
     try {
       const logs = await AuditLogsService.getLatest(10);
       res.json(logs);
@@ -27,7 +27,7 @@ export function createSystemController(
   });
 
   // GET /api/system/status — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
-  router.get("/status", authMiddleware, requireRole("admin", "caja", "barman"), systemStatusLimiter, async (_req, res, next) => {
+  router.get("/status", authMiddleware, requireRole("admin", "caja"), systemStatusLimiter, async (_req, res, next) => {
     try {
       const status = await systemService.getStatus();
       res.json(status);
@@ -37,7 +37,7 @@ export function createSystemController(
   });
 
   // POST /api/system/sync — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
-  router.post("/sync", authMiddleware, requireRole("admin", "caja", "barman"), async (_req, res, next) => {
+  router.post("/sync", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
     try {
       // 1. Pull Master Data
       await syncService.pullMasterData();

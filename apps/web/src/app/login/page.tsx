@@ -17,9 +17,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSelectGenericRole = (role: "admin" | "caja" | "barman") => {
-    const genericUsername = role === "barman" ? "barra" : role;
-    setUsername(genericUsername);
+  const handleSelectGenericRole = (role: "admin" | "caja") => {
+    setUsername(role);
     setPassword("");
     setError(null);
 
@@ -38,7 +37,7 @@ export default function LoginPage() {
     try {
       const data = await authService.login(username, password);
       // Redirect based on the authenticated role
-      const dest = data.role === "admin" ? "/admin" : data.role === "caja" ? "/caja" : "/barra";
+      const dest = data.role === "admin" ? "/admin" : "/caja";
       router.push(dest);
       router.refresh();
     } catch (err) {

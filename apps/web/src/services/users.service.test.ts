@@ -27,20 +27,7 @@ describe("usersService", () => {
     const input: CreateUserInput = {
       username: "nueva",
       password: "1234",
-      role: "barman",
-      permissions: {
-        closeNight: false,
-        modifyCarta: false,
-        manageUsers: false,
-        monitoreo: false,
-        metricas: false,
-        historial: false,
-        general: false,
-        carta: false,
-        pagos: false,
-        staff: false,
-        cancelarTickets: false,
-      },
+      role: "caja",
     };
     mockedApiFetch.mockResolvedValueOnce({ id: "u1" } as SafeUser);
 

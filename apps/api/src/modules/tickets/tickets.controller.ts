@@ -16,7 +16,7 @@ export function createTicketsController(
   router.post(
     "/redeem",
     authMiddleware,
-    requireRole("admin", "barman"),
+    requireRole("admin"),
     ticketLimiter,
     validate(RedeemTicketSchema),
     async (req, res, next) => {

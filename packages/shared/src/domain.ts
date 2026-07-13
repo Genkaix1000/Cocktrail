@@ -1,4 +1,4 @@
-export type Role = "admin" | "caja" | "barman";
+export type Role = "admin" | "caja";
 export type CustomTheme = {
   backgroundColor: string;
   surfaceColor: string;

@@ -1,10 +1,15 @@
 "use client";
 
 import { Trash2, UserPlus } from "lucide-react";
+import type { Role } from "@cocktrail/shared";
 import type { SafeUser } from "@/services/users.service";
-import { ROLE_META } from "./usuariosConstants";
 
-const SYSTEM_USERNAMES = ["admin", "caja", "barra"];
+const ROLE_META: Record<Role, { label: string; color: string; bg: string }> = {
+  admin: { label: "Administrador", color: "text-blue", bg: "bg-blue-soft" },
+  caja: { label: "Cajero", color: "text-amber", bg: "bg-amber-soft" },
+};
+
+const SYSTEM_USERNAMES = ["admin", "caja"];
 
 type Props = {
   users: SafeUser[];
@@ -30,7 +35,7 @@ export default function UsersTable({ users, selectedUserId, isBosko, onSelectUse
             const roleMeta = ROLE_META[u.role] || { label: u.role, color: "text-ink-300", bg: "bg-ink-800" };
             const isSelected = selectedUserId === u.id;
             const badgeClass = isBosko
-              ? (u.role === "admin" ? "text-accent bg-accent-soft border border-accent/20" : u.role === "caja" ? "text-amber bg-amber-soft" : "text-green bg-green-soft")
+              ? (u.role === "admin" ? "text-accent bg-accent-soft border border-accent/20" : "text-amber bg-amber-soft")
               : `${roleMeta.bg} ${roleMeta.color}`;
 
             return (
@@ -100,7 +105,7 @@ export default function UsersTable({ users, selectedUserId, isBosko, onSelectUse
               const roleMeta = ROLE_META[u.role] || { label: u.role, color: "text-ink-300", bg: "bg-ink-800" };
               const isSelected = selectedUserId === u.id;
               const badgeClass = isBosko
-                ? (u.role === "admin" ? "text-accent bg-accent-soft border border-accent/20" : u.role === "caja" ? "text-amber bg-amber-soft" : "text-green bg-green-soft")
+                ? (u.role === "admin" ? "text-accent bg-accent-soft border border-accent/20" : "text-amber bg-amber-soft")
                 : `${roleMeta.bg} ${roleMeta.color}`;
 
               return (

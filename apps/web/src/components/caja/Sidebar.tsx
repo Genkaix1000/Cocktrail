@@ -11,16 +11,9 @@ type CurrentUser = {
   username: string;
   permissions: {
     closeNight: boolean;
-    modifyCarta: boolean;
-    manageUsers: boolean;
-    monitoreo: boolean;
-    metricas: boolean;
-    historial: boolean;
-    general: boolean;
-    carta: boolean;
-    pagos: boolean;
-    staff: boolean;
     cancelarTickets: boolean;
+    historial: boolean;
+    metricas: boolean;
   };
 };
 

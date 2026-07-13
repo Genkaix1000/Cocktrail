@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import UsuariosSection from "./UsuariosSection";
-import { usersService, type SafeUser, type UserPermissions } from "@/services/users.service";
+import { usersService, type SafeUser } from "@/services/users.service";
 
 // UsuariosSection habla directo con usersService (list/create/update/delete),
 // así que mockeamos el servicio completo, mismo patrón que LogsSection.test.tsx.
@@ -30,26 +30,11 @@ vi.mock("@/components/ThemeProvider", () => ({
 
 const mockedUsersService = vi.mocked(usersService);
 
-const NO_PERMISSIONS: UserPermissions = {
-  closeNight: false,
-  modifyCarta: false,
-  manageUsers: false,
-  monitoreo: false,
-  metricas: false,
-  historial: false,
-  general: false,
-  carta: false,
-  pagos: false,
-  staff: false,
-  cancelarTickets: false,
-};
-
 function makeUser(overrides: Partial<SafeUser> = {}): SafeUser {
   return {
     id: "user-1",
-    username: "barman_juan",
-    role: "barman",
-    permissions: { ...NO_PERMISSIONS },
+    username: "cajera_juan",
+    role: "caja",
     createdAt: Date.now(),
     ...overrides,
   };
@@ -61,22 +46,18 @@ beforeEach(() => {
 
 describe("UsuariosSection", () => {
   it("lista los usuarios de staff traídos del servicio", async () => {
-    mockedUsersService.list.mockResolvedValue([makeUser({ username: "barman_juan" })]);
+    mockedUsersService.list.mockResolvedValue([makeUser({ username: "cajera_juan" })]);
 
     render(<UsuariosSection />);
 
-    expect(await screen.findByText("barman_juan")).toBeInTheDocument();
+    expect(await screen.findByText("cajera_juan")).toBeInTheDocument();
     expect(mockedUsersService.list).toHaveBeenCalledTimes(1);
   });
 
-  it("crea un usuario nuevo mapeando los checkboxes de permisos al payload esperado", async () => {
+  it("crea un usuario nuevo con rol por defecto caja", async () => {
     const user = userEvent.setup();
     mockedUsersService.list.mockResolvedValue([]);
-    const created = makeUser({
-      id: "user-new",
-      username: "nuevo_barman",
-      permissions: { ...NO_PERMISSIONS, cancelarTickets: true, historial: true },
-    });
+    const created = makeUser({ id: "user-new", username: "nueva_cajera" });
     mockedUsersService.create.mockResolvedValue(created);
 
     render(<UsuariosSection />);
@@ -84,32 +65,28 @@ describe("UsuariosSection", () => {
 
     await user.click(screen.getByRole("button", { name: /Agregar/i }));
 
-    await user.type(screen.getByPlaceholderText("nombre_operador"), "  nuevo_barman  ");
+    await user.type(screen.getByPlaceholderText("nombre_operador"), "  nueva_cajera  ");
     await user.type(screen.getByPlaceholderText("Mínimo 4 caracteres"), "  clave123  ");
-
-    // Rol por defecto es "barman"; su único permiso disponible es cancelarTickets.
-    await user.click(screen.getByText("Cancelar tickets"));
 
     await user.click(screen.getByRole("button", { name: /^Crear$/i }));
 
     await waitFor(() =>
       expect(mockedUsersService.create).toHaveBeenCalledWith({
-        username: "nuevo_barman",
+        username: "nueva_cajera",
         password: "clave123",
-        role: "barman",
-        permissions: { ...NO_PERMISSIONS, cancelarTickets: true, historial: true },
+        role: "caja",
       }),
     );
 
     expect(await screen.findByText("Cambios guardados")).toBeInTheDocument();
-    expect(await screen.findByText("nuevo_barman")).toBeInTheDocument();
+    expect(await screen.findByText("nueva_cajera")).toBeInTheDocument();
   });
 
-  it("edita un usuario existente y envía solo los campos modificados", async () => {
+  it("edita un usuario existente cambiando el rol", async () => {
     const user = userEvent.setup();
     const existing = makeUser({ id: "user-edit", username: "cajera_ana", role: "caja" });
     mockedUsersService.list.mockResolvedValue([existing]);
-    const updated = { ...existing, permissions: { ...existing.permissions, metricas: true } };
+    const updated = { ...existing, role: "admin" as const };
     mockedUsersService.update.mockResolvedValue(updated);
 
     render(<UsuariosSection />);
@@ -118,36 +95,35 @@ describe("UsuariosSection", () => {
 
     expect(screen.getByText("Editar Usuario")).toBeInTheDocument();
 
-    await user.click(screen.getByText("Métricas"));
+    await user.click(screen.getByText("Administrador"));
     await user.click(screen.getByRole("button", { name: /^Guardar$/i }));
 
     await waitFor(() =>
       expect(mockedUsersService.update).toHaveBeenCalledWith("user-edit", {
         username: "cajera_ana",
-        role: "caja",
-        permissions: { ...existing.permissions, metricas: true },
+        role: "admin",
       }),
     );
   });
 
   it("borra un usuario de staff vía SafeDeleteModal tras confirmar el username exacto", async () => {
     const user = userEvent.setup();
-    const existing = makeUser({ id: "user-del", username: "barman_del" });
+    const existing = makeUser({ id: "user-del", username: "cajera_del" });
     mockedUsersService.list.mockResolvedValue([existing]);
     mockedUsersService.delete.mockResolvedValue({ ok: true });
 
     render(<UsuariosSection />);
 
-    await screen.findByText("barman_del");
+    await screen.findByText("cajera_del");
 
     await user.click(screen.getByTitle("Eliminar usuario"));
 
-    const dialogInput = screen.getByPlaceholderText("barman_del");
-    await user.type(dialogInput, "barman_del");
+    const dialogInput = screen.getByPlaceholderText("cajera_del");
+    await user.type(dialogInput, "cajera_del");
     await user.click(screen.getByRole("button", { name: /^Eliminar$/i }));
 
     await waitFor(() => expect(mockedUsersService.delete).toHaveBeenCalledWith("user-del"));
-    await waitFor(() => expect(screen.queryByText("barman_del")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("cajera_del")).not.toBeInTheDocument());
   });
 
   it("no permite eliminar cuentas del sistema (botón deshabilitado)", async () => {

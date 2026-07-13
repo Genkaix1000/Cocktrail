@@ -3,7 +3,6 @@ import type { Role } from "@cocktrail/shared";
 import type {
   UsersRepository,
   SafeUser,
-  UserPermissions,
   StaffUser,
 } from "./users.repository.js";
 import { hashPassword } from "./users.repository.js";
@@ -14,62 +13,17 @@ const SYSTEM_USERS: SafeUser[] = [
     id: "system-admin",
     username: "admin",
     role: "admin",
-    permissions: {
-      closeNight: true,
-      modifyCarta: true,
-      manageUsers: true,
-      monitoreo: true,
-      metricas: true,
-      historial: true,
-      general: true,
-      carta: true,
-      pagos: true,
-      staff: true,
-      cancelarTickets: true,
-    },
     createdAt: 1782229602710,
   },
   {
     id: "system-caja",
     username: "caja",
     role: "caja",
-    permissions: {
-      closeNight: false,
-      modifyCarta: false,
-      manageUsers: false,
-      monitoreo: false,
-      metricas: false,
-      historial: true,
-      general: false,
-      carta: false,
-      pagos: false,
-      staff: false,
-      cancelarTickets: true,
-    },
-    createdAt: 1782229602710,
-  },
-  {
-    id: "system-barra",
-    username: "barra",
-    role: "barman",
-    permissions: {
-      closeNight: false,
-      modifyCarta: false,
-      manageUsers: false,
-      monitoreo: false,
-      metricas: false,
-      historial: false,
-      general: false,
-      carta: false,
-      pagos: false,
-      staff: false,
-      cancelarTickets: true,
-    },
     createdAt: 1782229602710,
   },
 ];
 
-const RESERVED_NAMES = ["admin", "caja", "barra"];
+const RESERVED_NAMES = ["admin", "caja"];
 
 export class UsersService {
   constructor(private repo: UsersRepository) {}
@@ -88,7 +42,6 @@ export class UsersService {
     username: string;
     password: string;
     role: Role;
-    permissions: UserPermissions;
   }): Promise<SafeUser> {
     const cleanUsername = input.username.trim();
     if (RESERVED_NAMES.includes(cleanUsername.toLowerCase())) {
@@ -104,17 +57,11 @@ export class UsersService {
       throw new Conflict(`Ya existe un usuario con el nombre "${cleanUsername}"`);
     }
 
-    const cleanPermissions = { ...input.permissions };
-    if (cleanPermissions.cancelarTickets) {
-      cleanPermissions.historial = true;
-    }
-
     const user: StaffUser = {
       id: randomUUID(),
       username: cleanUsername,
       passwordHash: hashPassword(input.password),
       role: input.role,
-      permissions: cleanPermissions,
       createdAt: Date.now(),
     };
 
@@ -130,7 +77,6 @@ export class UsersService {
       username?: string;
       password?: string;
       role?: Role;
-      permissions?: Partial<UserPermissions>;
     }
   ): Promise<SafeUser> {
     if (id.startsWith("system-")) {
@@ -164,17 +110,6 @@ export class UsersService {
 
     if (input.role) {
       existing.role = input.role;
-    }
-
-    if (input.permissions) {
-      const merged = {
-        ...existing.permissions,
-        ...input.permissions,
-      };
-      if (merged.cancelarTickets) {
-        merged.historial = true;
-      }
-      existing.permissions = merged;
     }
 
     await this.repo.update(existing);

@@ -20,7 +20,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
   };
 }
 
-const adminUser = { role: "admin", username: "admin1", permissions: { cancelarTickets: true } };
+const adminUser = { role: "admin", username: "admin1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -98,7 +98,7 @@ describe("PendingOrdersList", () => {
       <PendingOrdersList
         pendingOrders={[order]}
         notifications={[]}
-        currentUser={{ role: "barman", username: "b1", permissions: { cancelarTickets: false } }}
+        currentUser={{ role: "caja", username: "b1" }}
         onSelectOrder={vi.fn()}
         onCancelClick={vi.fn()}
         onDismissNotification={vi.fn()}

@@ -43,47 +43,12 @@ export function createAuthController(usersRepo: UsersRepository): Router {
       return;
     }
 
-    // Determine permissions
-    let permissions = {
-      closeNight: false,
-      modifyCarta: false,
-      manageUsers: false,
-      monitoreo: false,
-      metricas: false,
-      historial: false,
-      general: false,
-      carta: false,
-      pagos: false,
-      staff: false,
-      cancelarTickets: false,
-    };
-
-    if (session.role === "admin") {
-      permissions = {
-        closeNight: true,
-        modifyCarta: true,
-        manageUsers: true,
-        monitoreo: true,
-        metricas: true,
-        historial: true,
-        general: true,
-        carta: true,
-        pagos: true,
-        staff: true,
-        cancelarTickets: true,
-      };
-    } else {
-      const dbUser = await usersRepo.findByUsername(session.username);
-      if (dbUser) {
-        permissions = { ...permissions, ...dbUser.permissions };
-      } else if (session.role === "caja") {
-        permissions.closeNight = false;
-        permissions.metricas = false;
-        permissions.historial = true;
-      } else if (session.role === "barman") {
-        permissions.cancelarTickets = true;
-      }
-    }
+    // Permisos derivados 100% del rol — ya no son editables por usuario
+    // (ver docs/ARCHITECTURE.md §8).
+    const permissions =
+      session.role === "admin"
+        ? { closeNight: true, cancelarTickets: true, historial: true, metricas: true }
+        : { closeNight: false, cancelarTickets: true, historial: true, metricas: false };
 
     res.json({
       role: session.role,

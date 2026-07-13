@@ -49,23 +49,35 @@ describe("GET /api/auth/me", () => {
     expect(res.body).toBeNull();
   });
 
-  it("con sesión admin devuelve permisos completos", async () => {
+  it("con sesión admin devuelve los 4 permisos en true", async () => {
     const cookie = signTestSession("admin-test", "admin");
     const res = await request(app).get("/api/auth/me").set("Cookie", cookie);
     expect(res.status).toBe(200);
     expect(res.body.role).toBe("admin");
-    expect(res.body.permissions.manageUsers).toBe(true);
+    expect(res.body.permissions).toEqual({
+      closeNight: true,
+      cancelarTickets: true,
+      historial: true,
+      metricas: true,
+    });
   });
 
-  it("con sesión de un usuario real, resuelve permisos desde la tabla users", async () => {
-    const user = await createTestAdmin({ role: "caja", permissions: { cancelarTickets: true } });
+  it("con sesión caja, los permisos se derivan del rol (no de la fila en users)", async () => {
+    // Los permisos ya no son editables por usuario — da igual qué fila exista en
+    // users, caja siempre resuelve el mismo mapa fijo.
+    const user = await createTestAdmin({ role: "caja" });
     const cookie = signTestSession(user.username, "caja");
     const res = await request(app).get("/api/auth/me").set("Cookie", cookie);
     expect(res.status).toBe(200);
-    expect(res.body.permissions.cancelarTickets).toBe(true);
+    expect(res.body.permissions).toEqual({
+      closeNight: false,
+      cancelarTickets: true,
+      historial: true,
+      metricas: false,
+    });
   });
 
-  it("con sesión de rol caja fallback (sin fila en users), aplica los defaults de rol", async () => {
+  it("con sesión de rol caja fallback (sin fila en users), aplica los mismos defaults de rol", async () => {
     const cookie = signTestSession("caja-fallback", "caja");
     const res = await request(app).get("/api/auth/me").set("Cookie", cookie);
     expect(res.status).toBe(200);

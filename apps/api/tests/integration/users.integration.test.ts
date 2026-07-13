@@ -36,7 +36,6 @@ describe("users (integración)", () => {
         username: "nueva-cajera",
         password: "secreto123",
         role: "caja",
-        permissions: { closeNight: false, modifyCarta: false, manageUsers: false, monitoreo: false, metricas: false, historial: false, general: false, carta: false, pagos: false, staff: false, cancelarTickets: false },
       });
     expect(res.status).toBe(201);
     expect(res.body).not.toHaveProperty("passwordHash");
@@ -53,16 +52,23 @@ describe("users (integración)", () => {
         username: "admin",
         password: "cualquiera123",
         role: "admin",
-        permissions: { closeNight: true, modifyCarta: true, manageUsers: true, monitoreo: true, metricas: true, historial: true, general: true, carta: true, pagos: true, staff: true, cancelarTickets: true },
       });
     expect(res.status).toBe(409);
   });
 
+  it("POST rechaza un rol inválido (barman ya no existe)", async () => {
+    const res = await request(app)
+      .post("/api/users")
+      .set("Cookie", adminCookie)
+      .send({ username: "nuevo-barman", password: "cualquiera123", role: "barman" });
+    expect(res.status).toBe(400);
+  });
+
   it("PATCH actualiza el rol de un usuario real", async () => {
     const user = await createTestAdmin({ role: "caja" });
-    const res = await request(app).patch(`/api/users/${user.id}`).set("Cookie", adminCookie).send({ role: "barman" });
+    const res = await request(app).patch(`/api/users/${user.id}`).set("Cookie", adminCookie).send({ role: "admin" });
     expect(res.status).toBe(200);
-    expect(res.body.role).toBe("barman");
+    expect(res.body.role).toBe("admin");
   });
 
   it("PATCH rechaza modificar un usuario de sistema", async () => {

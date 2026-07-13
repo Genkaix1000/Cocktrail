@@ -1,11 +1,15 @@
 "use client";
 
 import { Shield, X } from "lucide-react";
-import type { CreateUserInput, UserPermissions } from "@/services/users.service";
+import type { CreateUserInput } from "@/services/users.service";
 import type { Role } from "@cocktrail/shared";
-import { ROLE_META, PERMISSIONS_BY_ROLE, PERMISSION_LABELS } from "./usuariosConstants";
 
-const SYSTEM_USERNAMES = ["admin", "caja", "barra"];
+const ROLE_META: Record<Role, { label: string }> = {
+  admin: { label: "Administrador" },
+  caja: { label: "Cajero" },
+};
+
+const SYSTEM_USERNAMES = ["admin", "caja"];
 
 type EditUser = Partial<CreateUserInput> & { id?: string };
 
@@ -17,7 +21,6 @@ type Props = {
   onUsernameChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onRoleChange: (role: Role) => void;
-  onTogglePermission: (key: keyof UserPermissions) => void;
   onCancel: () => void;
   onSave: () => void;
 };
@@ -30,7 +33,6 @@ export default function UserFormDrawer({
   onUsernameChange,
   onPasswordChange,
   onRoleChange,
-  onTogglePermission,
   onCancel,
   onSave,
 }: Props) {
@@ -97,9 +99,9 @@ export default function UserFormDrawer({
         {/* Role */}
         <div className="space-y-1.5">
           <label className="text-[14px] font-semibold text-ink-100 block">Rol</label>
-          <div className="grid grid-cols-3 gap-2">
-            {(["admin", "caja", "barman"] as Role[]).map((r) => {
-              const meta = ROLE_META[r] || { label: r, color: "text-ink-300", bg: "bg-ink-800" };
+          <div className="grid grid-cols-2 gap-2">
+            {(["admin", "caja"] as Role[]).map((r) => {
+              const meta = ROLE_META[r] || { label: r };
               const isSelected = editUser.role === r;
               const activeStyle = isBosko
                 ? "bg-accent/15 text-accent border border-accent/35 font-bold shadow-sm"
@@ -122,37 +124,6 @@ export default function UserFormDrawer({
                 >
                   {meta.label}
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Permissions */}
-        <div className="space-y-2">
-          <label className="text-[14px] font-semibold text-ink-100 block">
-            Permisos asignados
-          </label>
-          <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 no-scrollbar">
-            {(PERMISSIONS_BY_ROLE[editUser.role || "barman"] || []).map((key: keyof UserPermissions) => {
-              const label = PERMISSION_LABELS[key];
-              return (
-                <label
-                  key={key}
-                  className={`flex items-center gap-3 p-3 rounded-xl border border-transparent select-none transition-all duration-200 ${
-                    isEditSystemUser
-                      ? "bg-ink-850/20 text-ink-400 cursor-not-allowed"
-                      : "bg-ink-850/50 cursor-pointer hover:bg-ink-800 hover:border-accent/10"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    disabled={isEditSystemUser}
-                    checked={editUser.permissions?.[key] || false}
-                    onChange={() => !isEditSystemUser && onTogglePermission(key)}
-                    className={`w-4.5 h-4.5 rounded border-ink-600 bg-ink-850 text-accent accent-accent transition-all ${isEditSystemUser ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
-                  />
-                  <span className="text-[13px] font-medium">{label}</span>
-                </label>
               );
             })}
           </div>

@@ -20,7 +20,8 @@ sin depender de internet, con caja + reconciliación a la nube al cerrar la noch
 - [x] Operación **offline-first** (si no hay nube, todo sigue funcionando).
 - [x] **Boot autocurativo** (levanta `supabase start` / `docker compose` solo).
 - [x] **Auto-cierre por día calendario** (zona AR).
-- [x] 3 roles (`admin/caja/barman`) con permisos granulares + captcha + rate limiting.
+- [x] 3 roles (`admin/caja/barman`) con permisos granulares + captcha + rate limiting. *(el rol
+  `barman` y los permisos granulares editables se retiraron el 2026-07-13 — ver Fase 3 y Fase 7.)*
 - [x] **Mercado Pago real** (Point/Posnet físico).
 - [x] Real-time por SSE (KDS barra, ticket cliente, totales admin).
 - [x] Tickets con código HMAC + canje (escáner o manual).
@@ -55,14 +56,19 @@ sin depender de internet, con caja + reconciliación a la nube al cerrar la noch
 
 > 📌 **Nota — `/carta`, el ticket virtual y `/barra` quedan fuera de la validación hasta la Fase 7**:
 > las tres pantallas del **flujo digital del cliente** (`/carta` para armar el pedido por QR, la pantalla
-> del ticket con estado en vivo, y `/barra` para que el barman lo canjee) **están programadas y el
-> código corre**, pero **no se van a validar/probar ahora** — el acceso rápido a `/barra` en `/login`
-> directamente está deshabilitado (no aparece en "Accesos Rápidos"; el rol `barman` sigue existiendo
-> en el backend).
+> del ticket con estado en vivo, y `/barra` para canjear el ticket) **están programadas y el
+> código corre**, pero **no se van a validar/probar ahora**.
 >
-> **Por qué**: ese flujo completo (carta → ticket → barra) se va a **rediseñar junto con la Fase 7**
-> (pedido online), incluyendo cómo se sincroniza un pedido creado en la web con la barra local. No
-> tiene sentido validarlo dos veces — se prueba una sola vez, ya rediseñado, al cerrar esa fase.
+> **Actualización 2026-07-13**: se retiró el rol `barman` por completo (nunca tuvo uso real — el
+> flujo físico del local es caja→barra sin app, y sus permisos "granulares" no diferían de los de
+> caja salvo en el papel). `/barra` sigue existiendo como pantalla de canje manual, pero ahora es
+> **admin-only** en vez de tener un login dedicado. El ítem de Fase 7 "reactivar acceso rápido de
+> barman" queda superado por esta decisión — ver la entrada de Fase 7 más abajo.
+>
+> **Por qué (el rediseño en sí)**: ese flujo completo (carta → ticket → barra) se va a **rediseñar
+> junto con la Fase 7** (pedido online), incluyendo cómo se sincroniza un pedido creado en la web con
+> la barra local y quién/cómo lo canjea — probablemente sin volver a un rol dedicado. No tiene
+> sentido validarlo dos veces — se prueba una sola vez, ya rediseñado, al cerrar esa fase.
 >
 > **Qué se prueba en cambio, ahora**: el flujo real del local es **caja → barra físico** (sin apps):
 > el cliente pide el trago en la barra/caja, la cajera lo carga y cobra en `/caja`, imprime el ticket
@@ -597,7 +603,11 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 - [ ] Auth de la zona cloud (las cookies HMAC LAN no sirven cross-origin contra un host cloud).
 - [ ] Reconciliación de tragos online al **cerrar la caja** (juntar lo online con lo presencial en el resumen de la noche).
 - [ ] Mercado Pago **online** (Checkout Pro / QR / Bricks) además del Point físico — usar el plugin oficial de MP (ver `docs/AGENTS.md`). Incluye el QR real (Orders API, ver R14) que el Posnet físico no puede mostrar.
-- [ ] **Reactivar `/barra`**: sumar de nuevo el acceso rápido de barman en `/login` y verificar E2E el flujo completo (pedido online → ticket en el celular → barman lo lee/canjea en `/barra` → reconciliación).
+- [ ] **Rediseñar el canje en `/barra`**: el rol `barman` se retiró (2026-07-13, decisión: solo
+  `admin`/`caja`), así que ya no hay "acceso rápido de barman" para reactivar. Al encarar esta fase
+  hay que decidir de nuevo quién/cómo canjea el ticket en barra (¿caja lo hace desde `/caja`?, ¿un
+  código de local compartido sin login?, ¿se recupera un rol dedicado?) y verificar E2E el flujo
+  completo (pedido online → ticket en el celular → canje en `/barra` → reconciliación).
 
 ---
 

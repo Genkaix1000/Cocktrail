@@ -113,6 +113,6 @@ if (isMainModule) {
   console.log("\n✅ Listo. Filas borradas:", deleted);
   console.log(
     '   La tabla "users" se re-siembra sola con el admin default en el próximo boot del server ' +
-      "(ensureLocalMasterDataSeeded). El login de admin/caja/barman sigue funcionando igual — no depende de esa tabla.",
+      "(ensureLocalMasterDataSeeded). El login de admin/caja sigue funcionando igual — no depende de esa tabla.",
   );
 }

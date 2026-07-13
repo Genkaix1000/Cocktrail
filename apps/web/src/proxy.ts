@@ -13,7 +13,7 @@ export const config = {
 };
 
 const COOKIE_NAME = "cocktrail_session";
-const ROLES = new Set(["admin", "caja", "barman"]);
+const ROLES = new Set(["admin", "caja"]);
 
 /**
  * Valida la cookie firmada LOCALMENTE en el Edge runtime de Next.js
@@ -100,12 +100,12 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // /barra → requiere barman o admin
+  // /barra → requiere admin (canje manual, ya no hay rol "barman" dedicado)
   if (pathname === "/barra" || pathname.startsWith("/barra/")) {
     if (!session) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-    if (session.role !== "barman" && session.role !== "admin") {
+    if (session.role !== "admin") {
       const home = session.role === "caja" ? "/caja" : "/login";
       return NextResponse.redirect(new URL(home, request.url));
     }
@@ -114,7 +114,7 @@ export default async function proxy(request: NextRequest) {
 
   // /login → si ya estás logueado, redirigir a tu home
   if (pathname === "/login" && session) {
-    const home = session.role === "admin" ? "/admin" : session.role === "caja" ? "/caja" : "/barra";
+    const home = session.role === "admin" ? "/admin" : "/caja";
     return NextResponse.redirect(new URL(home, request.url));
   }
 

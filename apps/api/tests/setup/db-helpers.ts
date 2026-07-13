@@ -3,7 +3,6 @@ import { supabase } from "../../src/shared/supabase.js";
 import { signSession, COOKIE_NAME } from "../../src/modules/auth/session.js";
 import { hashPassword } from "../../src/modules/users/users.repository.js";
 import type { Role } from "@cocktrail/shared";
-import type { UserPermissions } from "../../src/modules/users/users.repository.js";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -33,26 +32,11 @@ export async function cleanAuditLogs(): Promise<void> {
   if (error) throw error;
 }
 
-const FULL_PERMISSIONS: UserPermissions = {
-  closeNight: true,
-  modifyCarta: true,
-  manageUsers: true,
-  monitoreo: true,
-  metricas: true,
-  historial: true,
-  general: true,
-  carta: true,
-  pagos: true,
-  staff: true,
-  cancelarTickets: true,
-};
-
 /** Crea un usuario de test en la tabla `users` (password sin hashear para login por API). */
 export async function createTestAdmin(opts?: {
   username?: string;
   password?: string;
   role?: Role;
-  permissions?: Partial<UserPermissions>;
 }): Promise<{ id: string; username: string; password: string; role: Role }> {
   const username = opts?.username ?? `test-admin-${randomUUID().slice(0, 8)}`;
   const password = opts?.password ?? "test-password-123";
@@ -65,7 +49,9 @@ export async function createTestAdmin(opts?: {
       username,
       password_hash: hashPassword(password),
       role,
-      permissions: { ...FULL_PERMISSIONS, ...opts?.permissions },
+      // permissions ya no es un concepto de la app (se calculan por rol) — la
+      // columna sigue NOT NULL en DB, se satisface con un objeto vacío.
+      permissions: {},
     })
     .select()
     .single();

@@ -14,5 +14,4 @@ export type FlashData = {
 export type CurrentUser = {
   role: string;
   username: string;
-  permissions: { cancelarTickets?: boolean; [key: string]: unknown };
 } | null;

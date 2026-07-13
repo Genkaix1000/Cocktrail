@@ -63,11 +63,21 @@ describe("orders (integración)", () => {
       expect(res.status).toBe(401);
     });
 
-    it("GET /api/orders/active con rol barman responde 200", async () => {
-      const cookie = signTestSession("barman-test", "barman");
+    it("GET /api/orders/active con rol caja responde 200", async () => {
+      const cookie = signTestSession("cajera-test", "caja");
       const res = await request(app).get("/api/orders/active").set("Cookie", cookie);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it("una cookie con rol 'barman' (retirado) ya no es una sesión válida (401)", async () => {
+      // verifySession rechaza el rol antes de siquiera chequear la firma HMAC
+      // (ROLES set ya no incluye "barman"), así que alcanza con el formato.
+      const { COOKIE_NAME } = await import("../../src/modules/auth/session.js");
+      const expiresAt = Date.now() + 60_000;
+      const cookie = `${COOKIE_NAME}=barman.barman-test.${expiresAt}.deadbeef`;
+      const res = await request(app).get("/api/orders/active").set("Cookie", cookie);
+      expect(res.status).toBe(401);
     });
 
     it("GET /api/orders/log con rol caja (no admin) responde 403", async () => {
@@ -111,21 +121,21 @@ describe("orders (integración)", () => {
       expect(res.status).toBe(409);
     });
 
-    it("un barman puede cancelar (default: barman tiene permiso)", async () => {
+    it("un admin puede cancelar", async () => {
       const drink = await createTestDrink();
       const created = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo" });
-      const cookie = signTestSession("barman-test", "barman");
-      const res = await request(app).patch(`/api/orders/${created.body.id}`).set("Cookie", cookie).send({ status: "cancelado" });
+      const res = await request(app).patch(`/api/orders/${created.body.id}`).set("Cookie", adminCookie).send({ status: "cancelado" });
       expect(res.status).toBe(200);
       expect(res.body.status).toBe("cancelado");
     });
 
-    it("una caja sin usuario en la tabla users no tiene permiso de cancelar por default (403)", async () => {
+    it("una caja puede cancelar aunque no exista en la tabla users (cancelarTickets ya no es un permiso configurable, es fijo por rol)", async () => {
       const drink = await createTestDrink();
       const created = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo" });
       const cookie = signTestSession("cajera-sin-permiso", "caja");
       const res = await request(app).patch(`/api/orders/${created.body.id}`).set("Cookie", cookie).send({ status: "cancelado" });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("cancelado");
     });
   });
 });
