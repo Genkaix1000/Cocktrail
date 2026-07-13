@@ -5,7 +5,7 @@ import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { TicketsRepository } from "../tickets/tickets.repository.js";
 import type { EventsRepository } from "../events/events.repository.js";
-import type { CloudSyncRepository } from "./cloud-sync.repository.js";
+import type { CloudSyncRepository, SyncTableResult } from "./cloud-sync.repository.js";
 import type { EventTotals, NightEvent } from "@cocktrail/shared";
 import { computeTotals } from "../../shared/utils/totals.js";
 import { supabase } from "../../shared/supabase.js";
@@ -13,6 +13,14 @@ import { supabase } from "../../shared/supabase.js";
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
 }
+
+export type RestoreResult = {
+  nightEvents: SyncTableResult;
+  orders: SyncTableResult;
+  tickets: SyncTableResult;
+  cashSales: SyncTableResult;
+  auditLogs: SyncTableResult;
+};
 
 export class SyncService {
   constructor(
@@ -216,5 +224,65 @@ export class SyncService {
     }
 
     return { successCount, failedCount };
+  }
+
+  /**
+   * Restore completo cloud → local: trae TODO el historial disponible en Supabase Cloud
+   * (noches cerradas + sus pedidos/tickets/cierres de caja + auditoría) y hace merge/upsert
+   * por id en local — nunca destructivo, nunca borra nada que ya esté en local. Gana la
+   * versión de cloud en conflicto. Pensado como recuperación de emergencia (botón manual en
+   * /admin), no como parte del sync automático. Ver docs/specs/restaurar-backup-desde-cloud.md.
+   *
+   * Nunca lanza para abortar todo: cada tabla se intenta independientemente, un fallo en una
+   * no impide intentar las demás (criterio 7 de la spec — parcial persiste, sin rollback).
+   */
+  async restoreFromCloud(): Promise<RestoreResult> {
+    if (!this.cloudSyncRepo.isConfigured()) {
+      const notConfigured: SyncTableResult = { ok: 0, failed: 0, error: "Supabase Cloud no está configurada." };
+      return {
+        nightEvents: notConfigured,
+        orders: notConfigured,
+        tickets: notConfigured,
+        cashSales: notConfigured,
+        auditLogs: notConfigured,
+      };
+    }
+
+    // Orden importa: night_events primero (gate real de integridad referencial para
+    // orders/tickets/cash_sales, ver docs/specs/restaurar-backup-desde-cloud.md).
+    // Cada pull ya maneja sus propios errores internamente y no lanza — el try/catch acá
+    // es defensa en profundidad ante un fallo inesperado, para que uno no tumbe al resto.
+    const safePull = async (label: string, fn: () => Promise<SyncTableResult>): Promise<SyncTableResult> => {
+      try {
+        return await fn();
+      } catch (err: any) {
+        console.error(`[SyncService] restoreFromCloud: fallo inesperado en ${label}:`, err);
+        return { ok: 0, failed: 0, error: err?.message || String(err) };
+      }
+    };
+
+    const nightEvents = await safePull("night_events", () => this.cloudSyncRepo.pullNightEvents());
+    const orders = await safePull("orders", () => this.cloudSyncRepo.pullOrders());
+    const tickets = await safePull("tickets", () => this.cloudSyncRepo.pullTickets());
+    const cashSales = await safePull("cash_sales", () => this.cloudSyncRepo.pullCashSales());
+    const auditLogs = await safePull("audit_logs", () => this.cloudSyncRepo.pullAuditLogs());
+
+    return { nightEvents, orders, tickets, cashSales, auditLogs };
+  }
+
+  /**
+   * Sube toda la auditoría local a cloud. Fire-and-forget (nunca lanza) — mismo criterio
+   * que `syncEventToCloudBackground`: un fallo acá no debe impedir que la noche cierre.
+   */
+  async pushAuditLogsIfConfigured(): Promise<void> {
+    if (!this.cloudSyncRepo.isConfigured()) return;
+    try {
+      const result = await this.cloudSyncRepo.pushAuditLogs();
+      if (result.failed > 0) {
+        console.error(`[SyncService] Push de audit_logs a cloud con errores: ${result.error}`);
+      }
+    } catch (err) {
+      console.error("[SyncService] Falló el push de audit_logs a cloud:", err);
+    }
   }
 }

@@ -59,6 +59,31 @@ export function createSystemController(
     }
   });
 
+  // POST /api/system/restore — solo admin (blast radius mayor que /sync: gana cloud en
+  // conflicto, puede pisar datos locales recientes). Re-autentica con contraseña, mismo
+  // patrón que /shutdown. Ver docs/specs/restaurar-backup-desde-cloud.md.
+  router.post("/restore", authMiddleware, requireRole("admin"), async (req, res, next) => {
+    try {
+      const { password } = req.body;
+      const username = req.session?.username;
+      if (!username || !password) {
+        res.status(401).json({ error: "Faltan credenciales para restaurar." });
+        return;
+      }
+
+      const authenticated = await authenticate(username, password, usersRepo);
+      if (!authenticated) {
+        res.status(401).json({ error: "Contraseña incorrecta." });
+        return;
+      }
+
+      const result = await syncService.restoreFromCloud();
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // POST /api/system/shutdown
   router.post("/shutdown", async (req, res, next) => {
     const { username, password } = req.body;

@@ -54,6 +54,7 @@ function makeSyncService() {
   return {
     syncAllPendingEvents: vi.fn().mockResolvedValue({ successCount: 0, failedCount: 0 }),
     pushEventData: vi.fn().mockResolvedValue(true),
+    pushAuditLogsIfConfigured: vi.fn().mockResolvedValue(undefined),
   } as any;
 }
 

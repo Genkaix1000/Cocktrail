@@ -11,6 +11,7 @@ import {
   ChevronRight,
   FileText,
   KeyRound,
+  CloudDownload,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
@@ -31,6 +32,7 @@ import { authService } from "@/services/auth.service";
 import CartaSection from "@/components/settings/CartaSection";
 import PagosSection from "@/components/settings/PagosSection";
 import UsuariosSection from "@/components/settings/UsuariosSection";
+import SistemaSection from "@/components/settings/SistemaSection";
 
 import DashboardSection from "@/components/admin/DashboardSection";
 import HistorialSection from "@/components/admin/HistorialSection";
@@ -255,6 +257,8 @@ export default function AdminClient({
         return ["Administración", "Configuración", "Mercado Pago"];
       case "usuarios":
         return ["Administración", "Configuración", "Gestión de Staff"];
+      case "sistema":
+        return ["Administración", "Configuración", "Sistema"];
       default:
         return ["Administración"];
     }
@@ -428,6 +432,17 @@ export default function AdminClient({
                     <CreditCard size={13} strokeWidth={1.8} />
                   </div>
                   <span className={`text-[13.5px] ${navLabelClass("pagos")}`}>Mercado Pago</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("sistema")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-200 cursor-pointer ${navBtnClass("sistema")}`}
+                >
+                  <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 ${navIconClass("sistema")}`}>
+                    <CloudDownload size={13} strokeWidth={1.8} />
+                  </div>
+                  <span className={`text-[13.5px] ${navLabelClass("sistema")}`}>Sistema</span>
                 </button>
               </div>
             )}
@@ -618,6 +633,13 @@ export default function AdminClient({
           {activeTab === "usuarios" && (
             <div key="usuarios" className="animate-dashboard-in">
               <UsuariosSection />
+            </div>
+          )}
+
+          {/* TAB 9: SETTINGS SISTEMA (restore de emergencia desde cloud) */}
+          {activeTab === "sistema" && (
+            <div key="sistema" className="animate-dashboard-in">
+              <SistemaSection />
             </div>
           )}
 

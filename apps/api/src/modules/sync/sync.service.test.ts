@@ -94,6 +94,12 @@ function makeCloudSyncRepo(overrides?: Partial<CloudSyncRepository>): CloudSyncR
     pushOrders: vi.fn().mockResolvedValue(undefined),
     pushTickets: vi.fn().mockResolvedValue(undefined),
     pushCashSales: vi.fn().mockResolvedValue(undefined),
+    pullNightEvents: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pullOrders: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pullTickets: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pullCashSales: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pushAuditLogs: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pullAuditLogs: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     ...overrides,
   };
 }
@@ -260,5 +266,88 @@ describe("SyncService.syncAllPendingEvents", () => {
     const result = await service.syncAllPendingEvents();
 
     expect(result).toEqual({ successCount: 0, failedCount: 1 });
+  });
+});
+
+describe("SyncService.restoreFromCloud", () => {
+  it("sin Supabase Cloud configurada, devuelve error claro en las 5 tablas sin intentar nada", async () => {
+    const cloudSyncRepo = makeCloudSyncRepo({ isConfigured: vi.fn().mockReturnValue(false) });
+    const service = makeService({ cloudSyncRepo });
+
+    const result = await service.restoreFromCloud();
+
+    expect(result.nightEvents.error).toMatch(/no está configurada/);
+    expect(result.orders.error).toMatch(/no está configurada/);
+    expect(cloudSyncRepo.pullNightEvents).not.toHaveBeenCalled();
+  });
+
+  it("éxito total: llama las 5 tablas en orden (night_events primero) y devuelve sus resultados", async () => {
+    const callOrder: string[] = [];
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pullNightEvents: vi.fn().mockImplementation(async () => { callOrder.push("nightEvents"); return { ok: 3, failed: 0 }; }),
+      pullOrders: vi.fn().mockImplementation(async () => { callOrder.push("orders"); return { ok: 10, failed: 0 }; }),
+      pullTickets: vi.fn().mockImplementation(async () => { callOrder.push("tickets"); return { ok: 10, failed: 0 }; }),
+      pullCashSales: vi.fn().mockImplementation(async () => { callOrder.push("cashSales"); return { ok: 2, failed: 0 }; }),
+      pullAuditLogs: vi.fn().mockImplementation(async () => { callOrder.push("auditLogs"); return { ok: 5, failed: 0 }; }),
+    });
+    const service = makeService({ cloudSyncRepo });
+
+    const result = await service.restoreFromCloud();
+
+    expect(callOrder).toEqual(["nightEvents", "orders", "tickets", "cashSales", "auditLogs"]);
+    expect(result).toEqual({
+      nightEvents: { ok: 3, failed: 0 },
+      orders: { ok: 10, failed: 0 },
+      tickets: { ok: 10, failed: 0 },
+      cashSales: { ok: 2, failed: 0 },
+      auditLogs: { ok: 5, failed: 0 },
+    });
+  });
+
+  it("falla parcial: si night_events falla, igual intenta las demás tablas (sin abortar)", async () => {
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pullNightEvents: vi.fn().mockResolvedValue({ ok: 0, failed: 3, error: "cloud caída" }),
+      pullOrders: vi.fn().mockResolvedValue({ ok: 5, failed: 0 }),
+    });
+    const service = makeService({ cloudSyncRepo });
+
+    const result = await service.restoreFromCloud();
+
+    expect(result.nightEvents).toEqual({ ok: 0, failed: 3, error: "cloud caída" });
+    expect(result.orders).toEqual({ ok: 5, failed: 0 }); // se intentó igual
+    expect(cloudSyncRepo.pullOrders).toHaveBeenCalled();
+  });
+
+  it("si un pull tira una excepción inesperada, no tumba el resto (defensa en profundidad)", async () => {
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pullNightEvents: vi.fn().mockRejectedValue(new Error("bug inesperado")),
+      pullOrders: vi.fn().mockResolvedValue({ ok: 5, failed: 0 }),
+    });
+    const service = makeService({ cloudSyncRepo });
+
+    const result = await service.restoreFromCloud();
+
+    expect(result.nightEvents.error).toMatch(/bug inesperado/);
+    expect(result.orders).toEqual({ ok: 5, failed: 0 });
+  });
+});
+
+describe("SyncService.pushAuditLogsIfConfigured", () => {
+  it("sin cloud configurada, no llama al repo", async () => {
+    const cloudSyncRepo = makeCloudSyncRepo({ isConfigured: vi.fn().mockReturnValue(false) });
+    const service = makeService({ cloudSyncRepo });
+
+    await service.pushAuditLogsIfConfigured();
+
+    expect(cloudSyncRepo.pushAuditLogs).not.toHaveBeenCalled();
+  });
+
+  it("nunca lanza, incluso si pushAuditLogs tira", async () => {
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pushAuditLogs: vi.fn().mockRejectedValue(new Error("cloud caída")),
+    });
+    const service = makeService({ cloudSyncRepo });
+
+    await expect(service.pushAuditLogsIfConfigured()).resolves.toBeUndefined();
   });
 });

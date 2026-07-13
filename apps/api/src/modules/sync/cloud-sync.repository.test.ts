@@ -79,3 +79,96 @@ describe("SupabaseCloudSyncRepository.pullUsers", () => {
     expect(result).toEqual({ count: 0 });
   });
 });
+
+describe("SupabaseCloudSyncRepository.pullNightEvents", () => {
+  it("mapea explícito: fuerza status='cerrado', descarta totals (cloud-only), marca synced", async () => {
+    cloudResults.set("night_events", {
+      data: [{ id: "e1", started_at: "2026-01-01T00:00:00Z", closed_at: "2026-01-01T05:00:00Z", order_counter: 3, totals: { total: 100 }, closed_by: "admin" }],
+      error: null,
+    });
+    localResults.set("night_events", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullNightEvents();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+  });
+
+  it("si el upsert local falla, reporta failed con el error", async () => {
+    cloudResults.set("night_events", { data: [{ id: "e1", started_at: "x", closed_at: null, order_counter: 0, totals: {}, closed_by: null }], error: null });
+    localResults.set("night_events", { data: null, error: { message: "constraint violation" } });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullNightEvents();
+
+    expect(result.ok).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.error).toMatch(/constraint violation/);
+  });
+
+  it("sin cloud configurada, no hace nada", async () => {
+    cloudConfigured = false;
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pullNightEvents()).toEqual({ ok: 0, failed: 0 });
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pullOrders", () => {
+  it("con datos en cloud y upsert OK, devuelve ok=N", async () => {
+    cloudResults.set("orders", { data: [{ id: "o1", event_id: "e1" }, { id: "o2", event_id: "e1" }], error: null });
+    localResults.set("orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    expect(await repo.pullOrders()).toEqual({ ok: 2, failed: 0 });
+  });
+
+  it("si el upsert falla por FK (night_event no restaurada), el error queda distinguible", async () => {
+    cloudResults.set("orders", { data: [{ id: "o1", event_id: "e-inexistente" }], error: null });
+    localResults.set("orders", { data: null, error: { message: 'insert or update on table "orders" violates foreign key constraint' } });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullOrders();
+
+    expect(result.failed).toBe(1);
+    expect(result.error).toMatch(/no llegó de cloud/);
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pullTickets / pullCashSales", () => {
+  it("pullTickets: passthrough directo, ok=N", async () => {
+    cloudResults.set("tickets", { data: [{ id: "t1" }], error: null });
+    localResults.set("tickets", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pullTickets()).toEqual({ ok: 1, failed: 0 });
+  });
+
+  it("pullCashSales: passthrough directo, ok=N", async () => {
+    cloudResults.set("cash_sales", { data: [{ id: "c1" }, { id: "c2" }], error: null });
+    localResults.set("cash_sales", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pullCashSales()).toEqual({ ok: 2, failed: 0 });
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pushAuditLogs / pullAuditLogs", () => {
+  it("pushAuditLogs sube toda la tabla local a cloud", async () => {
+    localResults.set("audit_logs", { data: [{ id: "a1", action: "order.created" }], error: null });
+    cloudResults.set("audit_logs", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    expect(await repo.pushAuditLogs()).toEqual({ ok: 1, failed: 0 });
+  });
+
+  it("pushAuditLogs sin logs locales, no hace nada", async () => {
+    localResults.set("audit_logs", { data: [], error: null });
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pushAuditLogs()).toEqual({ ok: 0, failed: 0 });
+  });
+
+  it("pullAuditLogs trae de cloud y hace upsert local", async () => {
+    cloudResults.set("audit_logs", { data: [{ id: "a1", action: "order.created" }], error: null });
+    localResults.set("audit_logs", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pullAuditLogs()).toEqual({ ok: 1, failed: 0 });
+  });
+});

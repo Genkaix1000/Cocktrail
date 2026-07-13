@@ -166,12 +166,14 @@ que concentra el acceso crudo a `supabaseCloud` (pull cloud→local, push local�
 - **`pushEventData(eventId)`** — **Local → Cloud**. Sube un `night_event` cerrado + sus `orders` + `tickets` + `cash_sales`. Marca `sync_status` `pending → synced/failed` en la tabla local. Calcula totales con `computeTotals` y los guarda en `night_events.totals` (cloud).
 - **`syncAllPendingEvents()`** — recorre noches cerradas locales con `sync_status != 'synced'` y las reintenta.
 - **`ensureLocalMasterDataSeeded()`** — siembra admin/drinks en local en cada boot (sin tocar la nube).
+- **`pushAuditLogsIfConfigured()`** — **Local → Cloud**, fire-and-forget. Sube `audit_logs` completo a cloud vía upsert; nunca lanza (se llama junto al push de cada cierre de noche, `events.service.ts`).
+- **`restoreFromCloud()`** — **Cloud → Local, merge/upsert (gana cloud en conflicto, no borra nada local)**. Restore de emergencia para cuando una tabla local se vació o corrompió (motivado por un incidente real: `drinks` se vació en silencio por un bug de sync ya arreglado). Trae `night_events` (forzando `status: "cerrado"`, descartando `totals` que es cloud-only) → `orders` → `tickets` → `cash_sales` → `audit_logs`, en ese orden, cada tabla en su propio try/catch para que una falla no aborte el resto. Devuelve un `RestoreResult` con `{ok, failed, error?}` por tabla — nunca un booleano (lección directa del incidente de `drinks`). Expuesto en `POST /api/system/restore` (rol `admin` únicamente, re-pide contraseña) y en `/admin` → Configuración → Sistema.
 
 **Cuándo corre:**
 - Al **cerrar la noche** (`events.service.closeEvent` → sync en background).
 - Al **arrancar** (`eventsService.initialize` → `syncAllPendingEvents` en background).
 - **Auto-cierre**: si al bootear hay un evento `activo` de un día calendario anterior (zona `America/Argentina/Buenos_Aires`), lo cierra automáticamente y lo empuja.
-- **Manual**: `POST /api/system/sync`.
+- **Manual**: `POST /api/system/sync` (local→cloud) y `POST /api/system/restore` (cloud→local, botón "Restaurar desde backup" en `/admin`).
 
 ---
 

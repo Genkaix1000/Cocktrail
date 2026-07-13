@@ -495,6 +495,16 @@ quedan explícitamente afuera de esta ronda — ver sus secciones.
   (`AdminClient.tsx`, `useEffect` de fetch con deps `[]` que nunca se re-disparaba).
 - [ ] **Limpieza de lint a nivel repo** (R11) → spec
   [`limpieza-lint-repo.md`](./specs/limpieza-lint-repo.md).
+- [x] **Restore de emergencia desde Supabase Cloud** → spec
+  [`restaurar-backup-desde-cloud.md`](./specs/restaurar-backup-desde-cloud.md) (done, 2026-07-13).
+  Motivado por el incidente real de `drinks` de esta misma sesión (ver bugfix arriba): no había
+  ninguna forma de recuperar el historial local si se corrompía, salvo intervención manual con
+  `curl` directo a Supabase. Se agregó `SyncService.restoreFromCloud()` (merge/upsert cloud→local,
+  gana cloud en conflicto, no borra nada local) para `night_events`/`orders`/`tickets`/
+  `cash_sales`/`audit_logs`, expuesto en `POST /api/system/restore` (rol `admin`, re-pide
+  contraseña) y en `/admin` → Configuración → Sistema (botón "Restaurar desde backup"). De paso se
+  sumó `pushAuditLogsIfConfigured()`: `audit_logs` no se sincronizaba a cloud en ningún sentido
+  hasta ahora.
 - [x] **R6 resuelto**: `next-env.d.ts` y `apps/api/src/data/*.json` — confirmado (2026-07-13) que
   ya no están trackeados en git y `.gitignore` ya los cubre; los `.json` de `data/` ni siquiera
   existen más (reemplazados por `.ts`). No hacía falta ningún cambio.

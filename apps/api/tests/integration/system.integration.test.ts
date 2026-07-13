@@ -46,6 +46,40 @@ describe("system (integración)", () => {
     }, 10000);
   });
 
+  describe("POST /api/system/restore", () => {
+    it("sin sesión responde 401", async () => {
+      const res = await request(app).post("/api/system/restore").send({ password: "admin" });
+      expect(res.status).toBe(401);
+    });
+
+    it("con sesión de rol caja (no admin) responde 403 — blast radius mayor que /sync", async () => {
+      const cajaCookie = signTestSession("cajera-test", "caja");
+      const res = await request(app).post("/api/system/restore").set("Cookie", cajaCookie).send({ password: "admin" });
+      expect(res.status).toBe(403);
+    });
+
+    it("con password incorrecta responde 401", async () => {
+      const res = await request(app).post("/api/system/restore").set("Cookie", adminCookie).send({ password: "mal" });
+      expect(res.status).toBe(401);
+    });
+
+    it("con credenciales válidas, devuelve un RestoreResult bien formado (una entrada por tabla, nunca un booleano solo) — no un crash", async () => {
+      // Ojo: este entorno SÍ tiene Supabase Cloud real configurada (dotenv v17 hace
+      // cascada de .env además de .env.test) — mismo comportamiento que ya tenía el
+      // test existente de POST /api/system/sync. No se afirma nada sobre si cada tabla
+      // tuvo éxito o no (depende del estado real de la cuenta cloud del usuario en el
+      // momento de correr los tests), solo que la forma de la respuesta es la esperada.
+      const res = await request(app).post("/api/system/restore").set("Cookie", adminCookie).send({ password: "admin" });
+      expect(res.status).toBe(200);
+      for (const key of ["nightEvents", "orders", "tickets", "cashSales", "auditLogs"] as const) {
+        expect(res.body[key]).toHaveProperty("ok");
+        expect(res.body[key]).toHaveProperty("failed");
+        expect(typeof res.body[key].ok).toBe("number");
+        expect(typeof res.body[key].failed).toBe("number");
+      }
+    }, 15000);
+  });
+
   // /shutdown: SOLO se testean las ramas que retornan ANTES de exec()/process.exit() —
   // enviar credenciales válidas de verdad mataría el proceso del test runner Y bajaría
   // el stack Docker real del dev. No agregar un test de "éxito" acá.

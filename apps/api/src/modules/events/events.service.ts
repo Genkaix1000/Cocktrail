@@ -318,6 +318,10 @@ export class EventsService {
 
   private async syncEventToCloudBackground(event: NightEvent, totals: EventTotals) {
     this.syncService.pushEventData(event.id, event, totals).catch(console.error);
+    // Auditoría también respaldada en cloud, para que sea recuperable ante un desastre
+    // local (ver docs/specs/restaurar-backup-desde-cloud.md) — fire-and-forget, un fallo
+    // acá nunca debe impedir que la noche cierre.
+    this.syncService.pushAuditLogsIfConfigured().catch(console.error);
   }
 
   async seedClosedEvent(summary: EventSummary): Promise<void> {
