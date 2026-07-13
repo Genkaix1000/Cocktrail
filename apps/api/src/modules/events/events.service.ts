@@ -69,10 +69,7 @@ export class EventsService {
           if (eventDate !== todayDate && active.startedAt < Date.now()) {
             console.log(`[EventsService] Active event ${active.id} is from a past day (${eventDate}). Auto-closing on startup...`);
             const closedAt = Date.now();
-            const orders = await this.ordersRepo.listForEvent(active.id);
-            const cashSales = await this.cashSalesRepo.listForEvent(active.id);
-            const totals = computeTotals(orders, cashSales);
-            
+
             active.status = "cerrado";
             active.closedAt = closedAt;
             active.closedBy = "sistema";
@@ -83,9 +80,11 @@ export class EventsService {
               closedBy: "sistema",
             });
 
-            // Sync this event to cloud in background
-            this.syncEventToCloudBackground(active, totals);
-            
+            // No se dispara el push acá: el auto-sync de eventos pendientes que corre
+            // más abajo en este mismo initialize() (syncAllPendingEvents) ya va a
+            // encontrar este evento recién cerrado y subirlo — llamarlo también acá
+            // duplicaba el push en paralelo para el mismo evento en cada arranque.
+
             // Force a new event creation
             active = null;
           }
