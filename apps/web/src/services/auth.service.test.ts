@@ -13,15 +13,15 @@ afterEach(() => {
 });
 
 describe("authService", () => {
-  it("login hace POST a /api/auth/login con username/password/captchaAnswer", async () => {
+  it("login hace POST a /api/auth/login con username/password", async () => {
     const expected = { username: "admin", role: "admin" };
     mockedApiFetch.mockResolvedValueOnce(expected);
 
-    const result = await authService.login("admin", "1234", "7");
+    const result = await authService.login("admin", "1234");
 
     expect(mockedApiFetch).toHaveBeenCalledWith("/api/auth/login", {
       method: "POST",
-      body: { username: "admin", password: "1234", captchaAnswer: "7" },
+      body: { username: "admin", password: "1234" },
     });
     expect(result).toBe(expected);
   });

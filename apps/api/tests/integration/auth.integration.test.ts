@@ -1,14 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
-import { app, captchaService } from "../../src/app.js";
+import { app } from "../../src/app.js";
 import { cleanUsers, createTestAdmin, signTestSession } from "../setup/db-helpers.js";
 
-// req.ip es constante entre requests de supertest (misma conexión local) — el registro
-// de captcha/intentos fallidos es por IP, así que se limpia entre tests para no filtrar
-// estado de un test a otro.
 afterEach(async () => {
-  captchaService.clearFailedAttempts("::ffff:127.0.0.1");
-  captchaService.clearFailedAttempts("127.0.0.1");
   await cleanUsers();
 });
 
@@ -36,16 +31,6 @@ describe("POST /api/auth/login", () => {
     const res = await request(app).post("/api/auth/login").send({ username, password });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ username, role: "caja" });
-  });
-
-  it("después de 3 intentos fallidos exige captcha en el 4to intento", async () => {
-    for (let i = 0; i < 3; i++) {
-      await request(app).post("/api/auth/login").send({ username: "admin", password: "mal" });
-    }
-    const fourth = await request(app).post("/api/auth/login").send({ username: "admin", password: "admin" });
-    expect(fourth.status).toBe(400);
-    expect(fourth.body.captchaRequired).toBe(true);
-    expect(fourth.body.captchaQuestion).toBeTruthy();
   });
 });
 

@@ -13,10 +13,10 @@ type MeResponse = {
 } | null;
 
 export const authService = {
-  login(username: string, password: string, captchaAnswer?: string) {
+  login(username: string, password: string) {
     return apiFetch<LoginResponse>("/api/auth/login", {
       method: "POST",
-      body: { username, password, captchaAnswer },
+      body: { username, password },
     });
   },
 

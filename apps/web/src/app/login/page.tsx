@@ -17,19 +17,11 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Captcha states
-  const [captchaRequired, setCaptchaRequired] = useState(false);
-  const [captchaQuestion, setCaptchaQuestion] = useState("");
-  const [captchaAnswer, setCaptchaAnswer] = useState("");
-
   const handleSelectGenericRole = (role: "admin" | "caja" | "barman") => {
     const genericUsername = role === "barman" ? "barra" : role;
     setUsername(genericUsername);
     setPassword("");
     setError(null);
-    setCaptchaRequired(false);
-    setCaptchaQuestion("");
-    setCaptchaAnswer("");
 
     // Focus password field
     setTimeout(() => {
@@ -44,7 +36,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const data = await authService.login(username, password, captchaRequired ? captchaAnswer : undefined);
+      const data = await authService.login(username, password);
       // Redirect based on the authenticated role
       const dest = data.role === "admin" ? "/admin" : data.role === "caja" ? "/caja" : "/barra";
       router.push(dest);
@@ -52,12 +44,6 @@ export default function LoginPage() {
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
-        const errorData = err.data as { captchaRequired?: boolean; captchaQuestion?: string } | undefined;
-        if (errorData?.captchaRequired) {
-          setCaptchaRequired(true);
-          setCaptchaQuestion(errorData.captchaQuestion || "");
-          setCaptchaAnswer("");
-        }
       } else {
         setError("Error de red");
       }
@@ -195,26 +181,9 @@ export default function LoginPage() {
               />
             </label>
 
-            {/* Captcha challenge */}
-            {captchaRequired && (
-              <label className="flex flex-col gap-2 border border-amber-500/20 bg-amber-500/5 rounded-2xl p-4">
-                <span className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">
-                  Control de Seguridad: {captchaQuestion}
-                </span>
-                <input
-                  type="text"
-                  required
-                  value={captchaAnswer}
-                  onChange={(e) => setCaptchaAnswer(e.target.value)}
-                  className="bg-ink-850 border border-amber-500/30 focus:border-amber-400 rounded-xl px-4 py-3 text-ink-50 outline-none transition-colors text-base font-mono text-center font-bold"
-                  placeholder="Respuesta"
-                />
-              </label>
-            )}
-
             <button
               type="submit"
-              disabled={submitting || !username || !password || (captchaRequired && !captchaAnswer)}
+              disabled={submitting || !username || !password}
               className="mt-2 h-14 bg-blue text-ink-950 font-black rounded-xl text-sm uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <LogIn size={16} strokeWidth={2.5} />

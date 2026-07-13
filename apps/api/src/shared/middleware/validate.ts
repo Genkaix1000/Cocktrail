@@ -23,7 +23,6 @@ export function validate(schema: z.Schema) {
 export const LoginSchema = z.object({
   username: z.string().min(1, "Usuario requerido").max(50, "Usuario demasiado largo").trim(),
   password: z.string().min(1, "Contraseña requerida").max(128, "Contraseña demasiado larga"),
-  captchaAnswer: z.string().optional(),
 });
 
 // 2. Esquema para crear un pedido

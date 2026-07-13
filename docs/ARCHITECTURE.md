@@ -186,7 +186,7 @@ Implementa el modelo "**caja offline, reconcilia al cerrar**":
 - **Doble fuente de credenciales**: primero `SupabaseUsersRepository` (password hasheada SHA-256); si no, usuarios fallback de `env` (`admin/admin`, `caja/caja`, `barra/barra`).
 - **Guard backend**: `auth.middleware.ts` (`authMiddleware` + `requireRole`).
 - **Guard frontend**: `apps/web/src/proxy.ts` (Next 16 renombró `middleware.ts` → `proxy.ts`). Verifica la firma HMAC **localmente** con Web Crypto en el Edge runtime (no fetchea al API). Protege `/admin`, `/caja`, `/barra`, `/login` y redirige según rol. **Debe usar `export default function proxy(...)`**.
-- **Hardening**: captcha aritmético tras 3 logins fallidos por IP, rate limiters por endpoint, Helmet, CORS whitelist, validación Zod, `AUTH_SECRET` ≥32 chars con fail-fast en prod.
+- **Hardening**: rate limiters por endpoint (incl. `loginLimiter`, la protección real contra fuerza bruta en el login — el captcha aritmético que existía se sacó el 2026-07-13, sistema 100% LAN sin exposición a bots externos), Helmet, CORS whitelist, validación Zod, `AUTH_SECRET` ≥32 chars con fail-fast en prod.
 
 ---
 
