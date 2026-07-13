@@ -51,13 +51,6 @@ export type PaymentBreakdown = {
   color: string;
 };
 
-export type OperationalVelocity = {
-  avgReactionTime: number | null; // pagado → preparando (ms)
-  avgPrepTime: number | null; // preparando → listo (ms)
-  avgWaitTime: number | null; // listo → entregado (ms)
-  avgTotalTime: number | null; // pagado → entregado (ms)
-};
-
 export type NightRecord = {
   type: "star_drink";
   label: string;
@@ -120,38 +113,6 @@ export function getLastNightTotals(
   return historyEvents[0]!.totals;
 }
 
-// ─────────────────────── A2: Tasa de Cancelación ───────────────────────
-
-export function computeCancellationRate(orders: Order[]): {
-  rate: number; // 0-100
-  cancelled: number;
-  total: number;
-  lostRevenue: number;
-} {
-  const total = orders.length;
-  const cancelledOrders = orders.filter((o) => o.status === "cancelado");
-  const cancelled = cancelledOrders.length;
-  const lostRevenue = cancelledOrders.reduce((s, o) => s + o.total, 0);
-  const rate = total > 0 ? Math.round((cancelled / total) * 100) : 0;
-  return { rate, cancelled, total, lostRevenue };
-}
-
-// ─────────────────────── A3: Conversión Digital ───────────────────────
-
-export function computeDigitalConversion(
-  orders: Order[],
-  cashSales: CashSale[],
-): {
-  rate: number; // 0-100
-  digitalCount: number;
-  totalOps: number;
-} {
-  const digitalCount = orders.filter((o) => o.status !== "cancelado").length;
-  const totalOps = digitalCount + cashSales.length;
-  const rate = totalOps > 0 ? Math.round((digitalCount / totalOps) * 100) : 0;
-  return { rate, digitalCount, totalOps };
-}
-
 // ─────────────────────── B1: Revenue por Producto ───────────────────────
 
 export function computeProductRevenue(
@@ -170,79 +131,6 @@ export function computeProductRevenue(
       pctQty: totalQty > 0 ? Math.round((d.qty / totalQty) * 100) : 0,
     }))
     .sort((a, b) => b.subtotal - a.subtotal);
-}
-
-// ─────────────────────── B2: Distribución por Método de Pago ───────────────────────
-
-export function computePaymentBreakdown(
-  totals: EventTotals,
-): PaymentBreakdown[] {
-  const webTotal = totals.webTotal;
-  const webCount = totals.webCount;
-
-  const barraTotal =
-    totals.efectivoTotal + totals.qrTotal + totals.debitoTotal;
-  const barraCount =
-    totals.efectivoCount + totals.qrCount + totals.debitoCount;
-
-  const grandTotal = totals.total;
-  const all = [
-    {
-      method: "web",
-      label: "Página Web",
-      total: webTotal,
-      count: webCount,
-      color: "#6db3f2",
-    },
-    {
-      method: "barra",
-      label: "Ventas Barra",
-      total: barraTotal,
-      count: barraCount,
-      color: "#c084fc",
-    },
-  ];
-
-  return all
-    .filter((a) => a.total > 0 || a.count > 0)
-    .map((a) => ({
-      ...a,
-      pct: grandTotal > 0 ? Math.round((a.total / grandTotal) * 100) : 0,
-    }));
-}
-
-// ─────────────────────── B3: Velocidad Operativa ───────────────────────
-
-export function computeOperationalVelocity(
-  orders: Order[],
-): OperationalVelocity {
-  const delivered = orders.filter(
-    (o) => o.status === "entregado" && o.deliveredAt,
-  );
-
-  if (delivered.length === 0) {
-    return {
-      avgReactionTime: null,
-      avgPrepTime: null,
-      avgWaitTime: null,
-      avgTotalTime: null,
-    };
-  }
-
-  let totalTime = 0;
-  let countTotal = 0;
-
-  for (const o of delivered) {
-    totalTime += o.deliveredAt! - o.createdAt;
-    countTotal++;
-  }
-
-  return {
-    avgReactionTime: null,
-    avgPrepTime: null,
-    avgWaitTime: null,
-    avgTotalTime: countTotal > 0 ? totalTime / countTotal : null,
-  };
 }
 
 export function formatDuration(ms: number | null): string {
@@ -348,59 +236,6 @@ export function findPeakHours(slots: HourlySlot[]): {
       byRevenue[0] && byRevenue[0].totalSales > 0 ? byRevenue[0] : null,
     peakOps: byOps[0] && byOps[0].totalCount > 0 ? byOps[0] : null,
   };
-}
-
-// ─────────────────────── C1: Evolución de Noches ───────────────────────
-
-export type NightPoint = {
-  id: string;
-  date: string; // "Vie 6 jun"
-  total: number;
-  web: number;
-  efectivo: number;
-  orderCount: number;
-  closedAt: number;
-};
-
-export function computeNightEvolution(
-  historyEvents: EventSummary[],
-  maxNights = 15,
-): NightPoint[] {
-  const WEEKDAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-  const MONTHS_SHORT = [
-    "ene", "feb", "mar", "abr", "may", "jun",
-    "jul", "ago", "sep", "oct", "nov", "dic",
-  ];
-
-  // historyEvents is sorted newest first; we want oldest first for the chart
-  const sorted = [...historyEvents].reverse().slice(-maxNights);
-
-  return sorted.map((e) => {
-    const d = new Date(e.closedAt ?? e.startedAt);
-    return {
-      id: e.id,
-      date: `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`,
-      total: e.totals.total,
-      web: e.totals.webTotal,
-      efectivo: e.totals.efectivoTotal,
-      orderCount: e.orderCounter,
-      closedAt: e.closedAt ?? e.startedAt,
-    };
-  });
-}
-
-export function computeMovingAverage(
-  points: NightPoint[],
-  window = 3,
-): (number | null)[] {
-  return points.map((_, i) => {
-    if (i < window - 1) return null;
-    let sum = 0;
-    for (let j = i - window + 1; j <= i; j++) {
-      sum += points[j]!.total;
-    }
-    return Math.round(sum / window);
-  });
 }
 
 // ─────────────────────── C3: Records ───────────────────────

@@ -2,7 +2,7 @@
 
 > Estado y plan de trabajo. La arquitectura vigente está en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 > Convención: `[x]` hecho · `[~]` parcial/a verificar · `[ ]` pendiente.
-> Última actualización: 2026-07-05.
+> Última actualización: 2026-07-13.
 
 ---
 
@@ -43,11 +43,11 @@ sin depender de internet, con caja + reconciliación a la nube al cerrar la noch
   encontrados corriendo contra datos reales: `reset-data.ts` abortaba si faltaba una tabla en el
   entorno destino (pasó con `audit_logs` en cloud), y `verify-sync.ts` comparaba mal
   `night_events.totals` (columna cloud-only) contra local.
-- [ ] **Falta la tabla `audit_logs` en Supabase Cloud** (R13, hallazgo 2026-07-10): existe localmente (`supabase/migrations/20260629201500_create_audit_logs.sql`) pero nunca se aplicó en el proyecto cloud real — `select` contra `audit_logs` en cloud devuelve `PGRST205: Could not find the table 'public.audit_logs' in the schema cache`. No rompe el sync de noches (`audit_logs` no es parte de `pushEventData`), pero si se quiere auditoría en cloud algún día, falta correr esa migración ahí.
+- [ ] **Falta la tabla `audit_logs` en Supabase Cloud** (R13, hallazgo 2026-07-10): existe localmente (`supabase/migrations/20260629201500_create_audit_logs.sql`) pero nunca se aplicó en el proyecto cloud real — `select` contra `audit_logs` en cloud devuelve `PGRST205: Could not find the table 'public.audit_logs' in the schema cache`. No rompe el sync de noches (`audit_logs` no es parte de `pushEventData`), pero si se quiere auditoría en cloud algún día, falta correr esa migración ahí (SQL en la migración de arriba, se corre a mano en el SQL Editor de Supabase Cloud — no hay tooling propio del repo para pushear migraciones a cloud todavía).
 - [x] **Panel `/admin` navegable sin noche activa (2026-07-10)** — ver `docs/specs/acceso-admin-sin-noche.md` (done). Antes, entrar a `/admin` sin una noche abierta bloqueaba TODO el panel (solo se veía el formulario de abrir noche, sin sidebar ni acceso a Historial/Configuración/Staff). Ahora el panel completo es navegable siempre; "Abrir noche" pasó a ser un botón más en el sidebar (simétrico a "Cerrar noche"), con opción de generar la palabra clave al azar (`apps/web/src/lib/randomKeyword.ts`, lista curada en español).
-- [ ] **Verificación E2E del flujo demo que SÍ se prueba ahora**: venta directa en **caja** (la cajera elige el trago en `/caja`, cobra — efectivo/Posnet/QR — y se genera el ticket con código) → **cerrar noche** desde `/admin` → **sync** a Supabase Cloud. El cliente retira el trago en barra físicamente, pero eso es logística del local, no un paso de software a validar. *(El flujo de caja→cierre→sync ya se validó de punta a punta el 2026-07-10 con datos reales — ver `activar-sync-cloud.md` — pero solo con pago en efectivo; falta repetirlo con Posnet/QR con la lectora física a mano, y como test formal de Playwright persistido en el repo, no solo verificación manual/ad-hoc.)*
-- [ ] **Tests**: smoke/E2E con Playwright de los **2 flujos activos** (`/caja`, `/admin`) como suite propia del repo (hoy no hay ningún archivo de test Playwright commiteado — las verificaciones E2E de las fases anteriores fueron manuales, con el agente, no tests persistidos). Ver nota abajo sobre qué queda fuera y por qué.
-- [ ] Revisar **atomicidad del canje de ticket** (evitar doble canje bajo concurrencia) — es R3 en la tabla de riesgos, sigue "a verificar".
+- [x] **Cobro real con Posnet validado de punta a punta (2026-07-13)**: el Posnet físico (Point Smart) estaba emparejado a la cuenta pero en `operating_mode: STANDALONE` — no procesaba las intenciones de cobro que le mandaba la API (causa real de "no me llega la orden al Posnet", no un problema de nuestro código). Se pasó a `PDV` vía `PATCH /point/integration-api/devices/{id}` + reinicio físico del device, confirmado con un cobro de prueba real. De paso, 4 fixes en `modules/mercadopago`: `external_reference` único por cobro (antes un string fijo, causaba el error 2205 "queued intent" al cobrar dos veces seguidas), `X-Idempotency-Key`, cancelación automática de intents abandonados desde el frontend (reload/cierre de checkout sin resolver), y la UI de `/caja` ya no muestra "Error en el Posnet" cuando la cancelación es intencional (cajera/cliente cancelan desde el propio dispositivo) — pantalla neutral "Cobro cancelado" en su lugar.
+- [x] **Fix: doble push a Supabase Cloud en el auto-cierre de noche (2026-07-13)**: al arrancar con una noche vieja activa, el auto-cierre disparaba el push a la nube dos veces en paralelo para el mismo evento (una llamada explícita + el auto-sync genérico de pendientes que corre después en el mismo `initialize()`). Se sacó la llamada explícita redundante.
+- [~] **Verificación E2E del flujo demo que SÍ se prueba ahora**: venta directa en **caja** (la cajera elige el trago en `/caja`, cobra — efectivo/Posnet/QR — y se genera el ticket con código) → **cerrar noche** desde `/admin` → **sync** a Supabase Cloud. El cliente retira el trago en barra físicamente, pero eso es logística del local, no un paso de software a validar. *(El flujo de caja→cierre→sync se validó de punta a punta el 2026-07-10 con efectivo, y el cobro con Posnet físico se validó el 2026-07-13 — ver arriba. Decisión 2026-07-13: no se persigue una suite Playwright formal para esto por ahora — las verificaciones manuales/con agente en cada feature se consideran suficiente cobertura por el momento; ver Fase 4.)*
 
 > 📌 **Nota — `/carta`, el ticket virtual y `/barra` quedan fuera de la validación hasta la Fase 7**:
 > las tres pantallas del **flujo digital del cliente** (`/carta` para armar el pedido por QR, la pantalla
@@ -126,8 +126,9 @@ code, módulo por módulo, antes de tocar el frontend. Ver `docs/specs/auditoria
   una implementación in-memory anterior sin callers). `AuditLogsService` inyectado en vez de
   import estático en config/tickets/drinks/orders/users. Varios `any` tipados. `mapRowToEvent`
   extraído (estaba duplicado 5 veces). Seeding de admin/drinks por defecto desduplicado en `sync`.
-- [ ] **Deuda estructural documentada, no resuelta en esta fase** (candidatos para cuando se
-  decida abordarlas, no bloquean nada hoy): `auth.service.ts` mezcla autenticación + firma de
+- [ ] **Deuda estructural documentada, no resuelta en esta fase** → spec
+  [`deuda-estructural-fase2.md`](./specs/deuda-estructural-fase2.md) (2026-07-13, decisión de
+  abordarla antes de la Fase 6): `auth.service.ts` mezcla autenticación + firma de
   sesión + captcha en un archivo; `SyncService` bypasea los repositorios existentes y pega directo
   a Supabase (`users`/`drinks`/`orders`/`cash-sales` duplican el mismo patrón de sync a cloud);
   `emit` (SSE) se llama directo desde `orders.service.ts`/`events.service.ts` en vez de una capa
@@ -231,9 +232,11 @@ tratamiento que Fases 2/3: tests de caracterización + auditoría (`architect-re
   `build` en verde.
 
 **Hallazgos documentados al cierre de esta fase** — **todos resueltos** (la mayoría en la Fase
-3C, `useSSE` centralizado en la feature aparte `usesse-centralizado`) salvo 1 que se mantiene:
-- `CloseNightModal`: la "carga ficticia" de 3.2s con mensajes que no reflejan trabajo real —
-  **deuda que se mantiene**, es una decisión de producto/UX pendiente de revisar, no técnica.
+3C, `useSSE` centralizado en la feature aparte `usesse-centralizado`; la "carga ficticia" de
+`CloseNightModal` en la feature `simplificar-dashboard-admin`, ver más abajo):
+- ~~`CloseNightModal`: la "carga ficticia" de 3.2s con mensajes que no reflejan trabajo real~~
+  (resuelto en "Feature — Simplificar Dashboard de `/admin`" — se sacó la secuencia falsa, el
+  spinner real del botón alcanza).
 - ~~`useSSE` centralizado en los 3 shells~~ (resuelto — ver "Feature — useSSE centralizado" más
   abajo, hecha después de cerrar la Fase 3C).
 - ~~`apps/web/src/services/*.ts` sin auditar~~ (resuelto, Bloque 1: 46 tests nuevos).
@@ -432,13 +435,18 @@ sin cambios de datos/backend/SSE (mismo criterio que `simplificar-dashboard-admi
 
 ---
 
-## Fase 4 — E2E post-refactor 🧪
+## Fase 4 — E2E post-refactor 🧪 *(deprioritizada, 2026-07-13)*
 
 **Objetivo**: una vez que API y Web estén auditadas, pruebas E2E (Playwright, agente
 `e2e-playwright-tester`) de los flujos completos — reemplaza/amplía la verificación manual que hoy
 se hace del flujo caja→admin (ver nota en la Fase actual).
 
-- [ ] Definir alcance ahora que la Fase 3 y la Fase 3B están cerradas.
+**Decisión (2026-07-13)**: no se arranca esta fase por ahora — cada feature de las Fases 2-3C ya
+se verificó de punta a punta manualmente/con el agente `e2e-playwright-tester` al cerrarse, y esa
+cobertura se considera suficiente por el momento. Queda en el roadmap como pendiente formal, no
+como trabajo activo.
+
+- [ ] Definir alcance si se retoma más adelante.
 
 ---
 
@@ -455,6 +463,38 @@ se hace del flujo caja→admin (ver nota en la Fase actual).
 - [x] Bajar la latencia percibida en la operación de caja. Se sacó un delay artificial de 800ms
   (`setTimeout` sin carga real detrás) antes de mostrar el grid de productos en `/caja`.
 - [ ] Detallar el resto con el uso real en el boliche (test en LAN, sin empaquetar todavía).
+
+---
+
+## Deuda pre-Fase 6 🧹 *(en progreso, 2026-07-13)*
+
+**Objetivo**: cerrar los riesgos/deuda reales que quedaron documentados en la tabla de abajo antes
+de arrancar el empaquetado (Fase 6), para no mezclar bugfixes/hardening con el trabajo de
+packaging. Decisión de alcance (2026-07-13): la Fase 4 (E2E formal) y la Fase 7 (pedido online)
+quedan explícitamente afuera de esta ronda — ver sus secciones.
+
+- [ ] **Atomicidad del canje de ticket** (R3, riesgo de doble canje bajo concurrencia) → spec
+  [`atomicidad-canje-ticket.md`](./specs/atomicidad-canje-ticket.md).
+- [ ] **Hardening de Kong / demo keys hardcodeadas** (R7) → spec
+  [`hardening-kong-demo-keys.md`](./specs/hardening-kong-demo-keys.md).
+- [ ] **Deuda estructural de Fase 2** (`SyncService`, `auth.service.ts`, capa SSE, etc.) → spec
+  [`deuda-estructural-fase2.md`](./specs/deuda-estructural-fase2.md) (ver bullet en Fase 2 arriba).
+- [ ] **Limpieza de lint a nivel repo** (R11) → spec
+  [`limpieza-lint-repo.md`](./specs/limpieza-lint-repo.md).
+- [x] **R6 resuelto**: `next-env.d.ts` y `apps/api/src/data/*.json` — confirmado (2026-07-13) que
+  ya no están trackeados en git y `.gitignore` ya los cubre; los `.json` de `data/` ni siquiera
+  existen más (reemplazados por `.ts`). No hacía falta ningún cambio.
+- [x] **R12 resuelto (2026-07-13)**: eliminados de `useAdminAnalytics`/`lib/analytics.ts` los 15
+  campos/funciones sin ningún consumidor real (`maxDrinkQty`, `webTotal`/`webCount`/`webPct`,
+  `barraTotal`/`barraCount`/`barraPct`, `nightEvolution`, `movingAvg`, `cancellationInfo`,
+  `digitalConversion`, `uniqueClients`, `deltaClients`, `operationalVelocity`,
+  `paymentBreakdown`) + los 2 componentes que solo los renderizaban a ellos mismos
+  (`NightEvolutionChart.tsx`, `OperationalVelocity.tsx`, con sus tests — ninguno tenía un
+  consumidor real fuera de su propio test). `tsc --noEmit` + `eslint` + `vitest run` (309/309) en
+  verde.
+- [ ] **R13 — aplicar migración `audit_logs` a Supabase Cloud**: acción manual pendiente (correr
+  el SQL de `supabase/migrations/20260629201500_create_audit_logs.sql` en el SQL Editor del
+  proyecto cloud real) — no bloquea nada del sync hoy, se resuelve cuando el usuario lo confirme.
 
 ---
 
@@ -551,17 +591,17 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 |---|---|---|---|
 | R1 | `docker-compose.yml` levantaba Postgres pelado en `:54321`, pero el cliente espera la REST de Supabase ahí. | El arranque sin Supabase CLI no funcionaba. | ✅ Resuelto (2026-06-30) — stack db+PostgREST+Kong |
 | R2 | `night_events.totals` no está en migraciones locales (solo cloud). | El push de totales asume schema cloud. | ✅ Resuelto (2026-07-10) — confirmado en vivo que la columna existe en el proyecto cloud real |
-| R3 | Canje de ticket podría no ser atómico (read-check-write). | Doble canje bajo concurrencia. | A verificar |
+| R3 | Canje de ticket podría no ser atómico (read-check-write). | Doble canje bajo concurrencia. | En progreso — spec `atomicidad-canje-ticket` |
 | R4 | Código muerto (`data/*.json`, repos `LocalJSON/InMemory`). | Confunde, sugiere persistencia que no se usa. | ✅ Resuelto (2026-06-30) |
 | R5 | Credencial `cajavip/cajavip` hardcodeada en `auth.service.ts`. | Acceso no documentado. | ✅ Resuelto (2026-07-01, Fase 2) — eliminada |
 | R9 | `GET /api/system/logs`, `GET /api/system/status` y `POST /api/system/sync` no tenían **ningún** middleware de auth pese a estar documentados como protegidos por rol `staff`. | Cualquiera en la LAN podía ver audit logs, estado interno del sistema y disparar un sync completo. | ✅ Resuelto (2026-07-01, Fase 2) — agregado `authMiddleware`+`requireRole` |
-| R6 | `next-env.d.ts` y `apps/api/src/data/*.json` aparecen como modificados en runtime. | Ruido en git. | Considerar `.gitignore` |
-| R7 | `supabase/docker/kong.yml` usa las **demo keys públicas** de Supabase (JWT secret demo incluido), hardcodeadas. Kong DB-less **no** interpola env vars en el campo `key` de key-auth (ni `${{}}` de decK ni vault refs), así que no se pueden mover a `.env`. | Para LAN aceptable; si se expone `:54321` a internet = takeover de la DB (secret público). | Abierto — rotar las 3 llaves + JWT_SECRET antes de exponer fuera de LAN; alternativa: render con `envsubst` (la imagen de Kong no lo trae). |
+| R6 | `next-env.d.ts` y `apps/api/src/data/*.json` aparecen como modificados en runtime. | Ruido en git. | ✅ Resuelto (2026-07-13) — ya no están trackeados, `.gitignore` los cubre; los `.json` ni existen más |
+| R7 | `supabase/docker/kong.yml` usa las **demo keys públicas** de Supabase (JWT secret demo incluido), hardcodeadas. Kong DB-less **no** interpola env vars en el campo `key` de key-auth (ni `${{}}` de decK ni vault refs), así que no se pueden mover a `.env`. | Para LAN aceptable; si se expone `:54321` a internet = takeover de la DB (secret público). | En progreso — spec `hardening-kong-demo-keys` |
 | R8 | La impresora térmica **no reporta "sin papel"** — verificado en vivo: con el rollo vacío/sin papel, `GET /api/printer/status` sigue devolviendo `connected: true` y la venta marca `printed: true` aunque no salió nada. La impresora no expone protocolo bidireccional confiable (por eso se evitó CUPS), así que el software solo confirma que el device node existe y acepta la escritura, no que el papel esté presente. | La cajera puede creer que el ticket salió cuando en realidad no imprimió nada (papel agotado). | Abierto — mitigación operativa por ahora: revisar visualmente el rollo antes de empezar el turno. Una detección real requeriría lectura de estado bidireccional (fuera de alcance, ver plan técnico de `docs/specs/impresora-termica.md`). |
 | R10 | 11 componentes de `apps/web/src/components/` (`BrandLogo`, `CashSaleModal`, `CloseNightModal`, `DrinkCard`, `DrinkSkeleton`, `OpenNightModal`, `OSHeadbar`, `SafeDeleteModal`, `ThemeProvider`, `Ticket`, `TicketLive`) estaban sueltos en la raíz en vez de organizados por dominio como el resto del árbol (`admin/`, `caja/`, `barra/`, `analytics/`, `settings/`, `shared/`). | Ninguno funcional — solo hacía más difícil ubicar un componente por convención de carpetas. | ✅ Resuelto (2026-07-04, rama `refactor/reorganizar-componentes-web`) — movidos con `git mv`: `BrandLogo`/`OSHeadbar`/`DrinkCard`/`DrinkSkeleton`/`SafeDeleteModal`/`CloseNightModal` → `shared/`, `CashSaleModal`/`OpenNightModal` → `admin/`, `Ticket`/`TicketLive` → `carta/` (nueva). `ThemeProvider` se queda en la raíz de `components/` (cross-cutting real, lo usa `layout.tsx`). `tsc`+`eslint`+`vitest`(161/161)+`build` en verde. |
-| R11 | `pnpm --filter web lint` sobre **todo** `apps/web` reporta errores preexistentes (reglas `react-hooks/refs`, `react-hooks/purity`, `react-hooks/set-state-in-effect` de una versión más estricta de `eslint-plugin-react-hooks`/reglas del React Compiler). Confirmado (2026-07-05, tras cerrar `simplificar-historial-noches`) que persisten en: `apps/carta/page.tsx`, `LogsSection.tsx`, `AnimatedNumber.tsx`, `Sparkline.tsx`, `Toast.tsx`, `orderStatus.ts` (`QrSection.tsx` salió de la lista porque se eliminó junto con el tab muerto en `simplificar-dashboard-admin`; `HistorialSection.tsx` salió porque la simplificación sacó el código que disparaba el warning). No es una regresión de ninguna fase — las specs siempre corrieron `eslint` solo sobre los archivos tocados, nunca `eslint .` sobre el árbol completo. | Cosmético/mantenibilidad — no rompe build ni tests, pero el criterio "`eslint` en 0" de las specs nunca se cumplió a nivel repo completo. | Abierto — candidato a una fase de limpieza puntual. |
-| R13 | `audit_logs` no existe en el esquema de Supabase Cloud (solo local). Confirmado con `select` real contra el proyecto cloud del usuario: `PGRST205`. | No bloquea el sync de noches (no es parte de `pushEventData`), pero impide tener auditoría en cloud si se necesitara. | Abierto — correr la migración `20260629201500_create_audit_logs.sql` contra cloud si se decide auditar ahí. |
-| R12 | Varios campos de `useAdminAnalytics` (`webTotal`/`webCount`/`webPct`/`barraTotal`/`barraCount`/`barraPct`/`nightEvolution`/`movingAvg`/`cancellationInfo`/`digitalConversion`/`uniqueClients`/`deltaClients`/`operationalVelocity`/`maxDrinkQty`) y el componente `NightEvolutionChart.tsx` no tienen ningún consumidor — detectado durante `simplificar-dashboard-admin` (2026-07-05), confirmado que sigue así tras `simplificar-historial-noches`. | Ninguno funcional — cómputo y bundle innecesarios, ruido al leer el hook. | Abierto — candidato a limpieza en una pasada aparte, no se mezcló con ninguna de las 2 specs de simplificación para no ensuciar su diff. |
+| R11 | `pnpm --filter web lint` sobre **todo** `apps/web` reporta errores preexistentes (reglas `react-hooks/refs`, `react-hooks/purity`, `react-hooks/set-state-in-effect` de una versión más estricta de `eslint-plugin-react-hooks`/reglas del React Compiler). Confirmado (2026-07-05, tras cerrar `simplificar-historial-noches`) que persisten en: `apps/carta/page.tsx`, `LogsSection.tsx`, `AnimatedNumber.tsx`, `Sparkline.tsx`, `Toast.tsx`, `orderStatus.ts` (`QrSection.tsx` salió de la lista porque se eliminó junto con el tab muerto en `simplificar-dashboard-admin`; `HistorialSection.tsx` salió porque la simplificación sacó el código que disparaba el warning). No es una regresión de ninguna fase — las specs siempre corrieron `eslint` solo sobre los archivos tocados, nunca `eslint .` sobre el árbol completo. | Cosmético/mantenibilidad — no rompe build ni tests, pero el criterio "`eslint` en 0" de las specs nunca se cumplió a nivel repo completo. | En progreso — spec `limpieza-lint-repo` |
+| R13 | `audit_logs` no existe en el esquema de Supabase Cloud (solo local). Confirmado con `select` real contra el proyecto cloud del usuario: `PGRST205`. | No bloquea el sync de noches (no es parte de `pushEventData`), pero impide tener auditoría en cloud si se necesitara. | Abierto — acción manual pendiente: correr `20260629201500_create_audit_logs.sql` en el SQL Editor de Supabase Cloud. |
+| R12 | Varios campos de `useAdminAnalytics` (`webTotal`/`webCount`/`webPct`/`barraTotal`/`barraCount`/`barraPct`/`nightEvolution`/`movingAvg`/`cancellationInfo`/`digitalConversion`/`uniqueClients`/`deltaClients`/`operationalVelocity`/`maxDrinkQty`/`paymentBreakdown`) y los componentes `NightEvolutionChart.tsx`/`OperationalVelocity.tsx` no tenían ningún consumidor. | Ninguno funcional — cómputo y bundle innecesarios, ruido al leer el hook. | ✅ Resuelto (2026-07-13) — eliminados los 15 campos/funciones y los 2 componentes huérfanos (con sus tests). `tsc`+`eslint`+`vitest`(309/309) en verde. |
 | R14 | QR real de Mercado Pago (mostrar un código escaneable, vía la Orders API con `type: "qr"` + `external_pos_id`) no está implementado — confirmado con la doc oficial de MP (2026-07-12, spec `cobro-posnet-mercadopago`) que el Posnet físico (Point Integration API) no puede mostrar QR en su pantalla; es un producto distinto atado a otra superficie. | Ninguno hoy (se sacó la opción de UI que prometía algo que no existía). Si se quiere QR real hace falta una pantalla nueva donde mostrarlo y probablemente credenciales/config adicionales. | Abierto — ver también Fase 7 ("Mercado Pago online"), que ya cubre esto como feature futura. |
 | R15 | `modules/mercadopago` sigue sobre la Payment Intents API (legacy) de Mercado Pago, no la Orders API moderna que MP recomienda para nuevas features (spec `cobro-posnet-mercadopago`, 2026-07-12). | Ninguno funcional hoy — el flujo probado en producción con el Posnet real sigue andando. Riesgo a futuro si MP deprecara la API legacy. | Abierto — migración deliberadamente no abordada; el flujo actual es el único probado en vivo y migrar el contrato completo no se justificaba en esa iteración. |
 
