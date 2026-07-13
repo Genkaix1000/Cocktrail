@@ -70,16 +70,36 @@ export function createEventsController(
     },
   );
 
-  // POST /api/events/open — abrir una noche nueva con palabra clave (admin only)
-  router.post("/events/open", authMiddleware, requireRole("admin"), async (req, res, next) => {
-    try {
-      const { keyword } = req.body;
-      if (typeof keyword !== "string") throw new BadRequest("keyword requerida.");
-      res.status(201).json(await service.openEvent(keyword));
-    } catch (err) {
-      next(err);
+  // POST /api/events/open — abrir una noche nueva con palabra clave (admin y caja con permisos)
+  router.post(
+    "/events/open",
+    authMiddleware,
+    requireRole("admin", "caja"),
+    async (req, res, next) => {
+      try {
+        const { keyword } = req.body;
+        if (typeof keyword !== "string") throw new BadRequest("keyword requerida.");
+
+        const username = req.session?.username;
+        if (!username) {
+          throw new Unauthorized();
+        }
+
+        // Check openNight permission for caja role
+        if (req.session?.role === "caja") {
+          const dbUser = await usersRepo.findByUsername(username);
+          const hasOpenNight = dbUser ? dbUser.permissions.openNight : false;
+          if (!hasOpenNight) {
+            throw new Forbidden("No tenés permiso para abrir la noche.");
+          }
+        }
+
+        res.status(201).json(await service.openEvent(keyword));
+      } catch (err) {
+        next(err);
+      }
     }
-  });
+  );
 
   // PATCH /api/events/current/keyword — corregir la clave de la noche activa (admin only)
   router.patch("/events/current/keyword", authMiddleware, requireRole("admin"), async (req, res, next) => {

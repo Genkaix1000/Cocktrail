@@ -105,13 +105,13 @@ export function ThemeProvider({
     const cached = (localStorage.getItem("cocktrail_theme") || "bosko") as Theme;
     const cachedCustom = localStorage.getItem("cocktrail_custom_theme");
     const customThemeVal = cachedCustom ? JSON.parse(cachedCustom) : null;
-    
+
     const cachedUseLogo = localStorage.getItem("cocktrail_use_logo_url") !== "false";
     const cachedLogoUrl = localStorage.getItem("cocktrail_logo_url") || "/bosko.webp";
     const cachedLogoSize = Number(localStorage.getItem("cocktrail_logo_size") || "56");
     const cachedTextLogo = localStorage.getItem("cocktrail_text_logo_value") || "Bosko";
     const cachedTextLogoSize = Number(localStorage.getItem("cocktrail_text_logo_size") || "26");
-    
+
     const key = getIsDarkKey();
     const cachedIsDark = localStorage.getItem(key) !== "false"; // Default true
 
@@ -127,7 +127,7 @@ export function ThemeProvider({
     setLogoSize(cachedLogoSize);
     setTextLogoValue(cachedTextLogo);
     setTextLogoSize(cachedTextLogoSize);
-    
+
     setIsDark(cachedIsDark);
     if (cachedIsDark) {
       document.documentElement.classList.add("dark");
@@ -146,7 +146,7 @@ export function ThemeProvider({
         if (data && data.theme) {
           const newTheme = data.theme;
           const customThemeData = data.customTheme;
-          
+
           setTheme(newTheme);
           setCustomTheme(customThemeData || null);
           setUseLogoUrl(data.useLogoUrl !== false);
@@ -178,7 +178,7 @@ export function ThemeProvider({
     "theme.changed": (data) => {
       const typedTheme = data.theme as Theme;
       const customThemeData = data.customTheme;
-      
+
       setTheme(typedTheme);
       setCustomTheme(customThemeData || null);
       setUseLogoUrl(data.useLogoUrl !== false);

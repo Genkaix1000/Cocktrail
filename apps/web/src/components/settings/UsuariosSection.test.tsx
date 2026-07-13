@@ -42,6 +42,7 @@ const NO_PERMISSIONS: UserPermissions = {
   pagos: false,
   staff: false,
   cancelarTickets: false,
+  openNight: false,
 };
 
 function makeUser(overrides: Partial<SafeUser> = {}): SafeUser {

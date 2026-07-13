@@ -125,6 +125,7 @@ export const CreateUserSchema = z.object({
     pagos: z.boolean().default(false),
     staff: z.boolean().default(false),
     cancelarTickets: z.boolean().default(false),
+    openNight: z.boolean().default(false),
   }).default({
     closeNight: false,
     modifyCarta: false,
@@ -137,6 +138,7 @@ export const CreateUserSchema = z.object({
     pagos: false,
     staff: false,
     cancelarTickets: false,
+    openNight: false,
   }),
 });
 
@@ -178,5 +180,6 @@ export const UpdateUserSchema = z.object({
     pagos: z.boolean().optional(),
     staff: z.boolean().optional(),
     cancelarTickets: z.boolean().optional(),
+    openNight: z.boolean().optional(),
   }).optional(),
 });

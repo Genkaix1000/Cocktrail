@@ -38,3 +38,7 @@ apps/api/src/data/*.json
 # reporte de cobertura de tests (generado por vitest --coverage)
 coverage/
 
+# agentes local
+.agents/LLM.md
+.agents/commands/
+

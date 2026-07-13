@@ -19,11 +19,12 @@ export const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   pagos: "Mercado Pago",
   staff: "Gestión de Staff",
   cancelarTickets: "Cancelar tickets",
+  openNight: "Abrir la noche/caja",
 };
 
 export const PERMISSIONS_BY_ROLE: Record<Role, (keyof UserPermissions)[]> = {
-  admin: ["monitoreo", "metricas", "historial", "carta", "pagos", "staff", "closeNight"],
-  caja: ["metricas", "historial", "closeNight", "cancelarTickets"],
+  admin: ["monitoreo", "metricas", "historial", "carta", "pagos", "staff", "closeNight", "openNight"],
+  caja: ["metricas", "historial", "closeNight", "cancelarTickets", "openNight"],
   barman: ["cancelarTickets"],
 };
 
@@ -39,4 +40,5 @@ export const INITIAL_PERMISSIONS: UserPermissions = {
   pagos: false,
   staff: false,
   cancelarTickets: false,
+  openNight: false,
 };

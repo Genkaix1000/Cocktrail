@@ -308,7 +308,7 @@ export default function AdminClient({
 
     return (
       <aside className={`
-        w-[280px] shrink-0 flex flex-col print:hidden
+        w-[280px] shrink-0 flex flex-col print:hidden relative
         ${isDrawer ? "h-full" : "h-full hidden md:flex"}
         ${sidebarClass}
       `}>
@@ -318,7 +318,7 @@ export default function AdminClient({
         </div>
 
         {/* Scroller layout */}
-        <div className="flex-1 overflow-y-auto flex flex-col gap-6 no-scrollbar">
+        <div className="flex-1 overflow-y-auto flex flex-col gap-6 no-scrollbar pb-[240px]">
           {/* Core Items */}
           <div className="flex flex-col gap-1.5">
             <button
@@ -430,51 +430,55 @@ export default function AdminClient({
           </div>
         </div>
 
-        {event?.status === "activo" && (
-          <div className="px-5 mb-2 shrink-0 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setEditKeywordOpen(true);
-                setMobileMenuOpen(false);
-              }}
-              className="w-full h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-            >
-              <KeyRound size={13} />
-              <span>Clave de la noche</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setModalOpen(true);
-                setMobileMenuOpen(false);
-              }}
-              className="w-full h-10 rounded-xl bg-danger-soft border border-danger-line text-danger flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-            >
-              <Power size={13} />
-              <span>Cerrar noche</span>
-            </button>
-          </div>
-        )}
+        {/* Footer Fijo en la parte inferior */}
+        <div className="absolute bottom-0 left-0 right-0 p-5 border-t border-current/15 bg-ink-950 flex flex-col gap-3.5 z-20 bg-ink-950/95 backdrop-blur-sm">
 
-        {(!event || event.status !== "activo") && (
-          <div className="px-5 mb-2 shrink-0 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setOpenNightOpen(true);
-                setMobileMenuOpen(false);
-              }}
-              className="w-full h-10 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-            >
-              <Power size={13} />
-              <span>Abrir noche</span>
-            </button>
-          </div>
-        )}
+          {event?.status === "activo" && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditKeywordOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              >
+                <KeyRound size={13} />
+                <span>Clave de la noche</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full h-10 rounded-xl bg-danger-soft border border-danger-line text-danger flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              >
+                <Power size={13} />
+                <span>Cerrar noche</span>
+              </button>
+            </div>
+          )}
 
-        {/* Sidebar Profile Card Footer */}
-        <OSProfileFooter onLogout={logout} username={currentUser?.username} role={currentUser?.role} />
+          {(!event || event.status !== "activo") && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenNightOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full h-10 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              >
+                <Power size={13} />
+                <span>Abrir noche</span>
+              </button>
+            </div>
+          )}
+
+          {/* Sidebar Profile Card Footer */}
+          <OSProfileFooter onLogout={logout} username={currentUser?.username} role={currentUser?.role} />
+        </div>
       </aside>
     );
   };
@@ -526,7 +530,7 @@ export default function AdminClient({
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top Header Bar */}
         <header className="h-[60px] px-6 border-b border-ink-800 bg-ink-925 flex items-center justify-between shrink-0 print:hidden">
           {/* Left section: Drawer trigger + Breadcrumbs */}

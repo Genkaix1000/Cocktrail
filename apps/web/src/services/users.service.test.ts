@@ -40,6 +40,7 @@ describe("usersService", () => {
         pagos: false,
         staff: false,
         cancelarTickets: false,
+        openNight: false,
       },
     };
     mockedApiFetch.mockResolvedValueOnce({ id: "u1" } as SafeUser);

@@ -31,6 +31,7 @@ const adminUser = {
     pagos: false,
     staff: false,
     cancelarTickets: false,
+    openNight: true,
   },
 };
 

@@ -41,6 +41,7 @@ function makeDbUser(overrides?: Partial<StaffUser>): StaffUser {
       pagos: false,
       staff: false,
       cancelarTickets: false,
+      openNight: false,
     },
     createdAt: Date.now(),
     ...overrides,

@@ -13,6 +13,7 @@ export type UserPermissions = {
   pagos: boolean;
   staff: boolean;
   cancelarTickets: boolean;
+  openNight: boolean;
 };
 
 export type SafeUser = {

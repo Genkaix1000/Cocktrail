@@ -26,6 +26,7 @@ const PERMS = {
   pagos: false,
   staff: false,
   cancelarTickets: false,
+  openNight: false,
 };
 
 function makeDbUser(overrides?: Partial<StaffUser>): StaffUser {

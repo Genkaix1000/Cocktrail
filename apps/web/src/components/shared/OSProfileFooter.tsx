@@ -8,10 +8,11 @@ type Props = {
   onLogout: () => void | Promise<void>;
   username?: string;
   role?: string;
+  isCollapsed?: boolean;
 };
 
 /** Sesión del sidebar (avatar/nombre/rol + toggle de tema + logout con confirmación). */
-export function OSProfileFooter({ onLogout, username, role }: Props) {
+export function OSProfileFooter({ onLogout, username, role, isCollapsed = false }: Props) {
   const { theme, toggleDark, isDark } = useTheme();
   const isBosko = theme === "bosko";
   const [showConfirmLogout, setShowConfirmLogout] = useState(false);
@@ -25,6 +26,31 @@ export function OSProfileFooter({ onLogout, username, role }: Props) {
 
   const textClass = isBosko ? "text-white" : "text-ink-50";
   const subtextClass = isBosko ? "text-white/50" : "text-ink-500";
+
+  if (isCollapsed) {
+    return (
+      <div
+        className="mt-auto pt-4 border-t flex flex-col items-center gap-3 w-full"
+        style={{ borderColor: isBosko ? "rgba(255,255,255,0.1)" : "var(--ink-800)" }}
+      >
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold uppercase text-[11px] shrink-0 select-none ${avatarClass}`} title={`${username} (${role})`}>
+          {initials}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm("¿Cerrar sesión?")) {
+              onLogout();
+            }
+          }}
+          className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#18181b] border border-[#27272a] hover:bg-red-950/20 hover:border-red-500/35 text-[#a1a1aa] hover:text-red-400 transition-all cursor-pointer active:scale-90"
+          title="Cerrar Sesión"
+        >
+          <LogOut size={14} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
