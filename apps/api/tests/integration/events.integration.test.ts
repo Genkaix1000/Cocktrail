@@ -21,10 +21,10 @@ describe("events (integración)", () => {
       expect(res.status).toBe(401);
     });
 
-    it("con rol caja (no admin) responde 403", async () => {
+    it("con rol caja también permite abrir la noche (no requiere permiso configurable)", async () => {
       const cookie = signTestSession("cajera-test", "caja");
       const res = await request(app).post("/api/events/open").set("Cookie", cookie).send({ keyword: "clave" });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it("sin keyword responde 400", async () => {

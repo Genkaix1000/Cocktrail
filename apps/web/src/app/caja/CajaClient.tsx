@@ -1,6 +1,6 @@
 "use client";
 
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, Power } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { OSHeadbar } from "@/components/shared/OSHeadbar";
 import { useMemo, useState, useEffect } from "react";
@@ -40,6 +40,22 @@ export default function CajaClient({ drinks }: Props) {
   const [activeTab, setActiveTab] = useState<"venta" | "historial" | "metricas">("venta");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Collapsible sidebar state (persists in localStorage)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("isSidebarCollapsed") === "true";
+    }
+    return false;
+  });
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("isSidebarCollapsed", String(next));
+      return next;
+    });
+  };
+
   // Authenticated user state
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
@@ -53,6 +69,27 @@ export default function CajaClient({ drinks }: Props) {
 
   // Close night modal state
   const [closeModalOpen, setCloseModalOpen] = useState(false);
+
+  // Open night state (Caja cerrada screen)
+  const [openNightKeyword, setOpenNightKeyword] = useState("");
+  const [openNightError, setOpenNightError] = useState<string | null>(null);
+  const [openingNight, setOpeningNight] = useState(false);
+
+  async function handleOpenNightSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!openNightKeyword.trim()) return;
+    setOpeningNight(true);
+    setOpenNightError(null);
+    try {
+      await eventsService.openEvent(openNightKeyword.trim());
+      router.refresh();
+      window.location.reload();
+    } catch (err) {
+      setOpenNightError(err instanceof Error ? err.message : "Error al abrir la noche");
+    } finally {
+      setOpeningNight(false);
+    }
+  }
 
   const { event, orders, cashSales, summary, setSummary, upsertOrder } = useEventState({
     onEventClosed: () => setCloseModalOpen(true),
@@ -141,6 +178,8 @@ export default function CajaClient({ drinks }: Props) {
         testPrint={testPrint}
         printerTestMessage={printerTestMessage}
         handleLogout={handleLogout}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
       />
 
       {/* Mobile Drawer Overlay - Visible on Mobile when opened */}
@@ -193,6 +232,13 @@ export default function CajaClient({ drinks }: Props) {
               </span>
             </nav>
 
+            {event?.status === "activo" && event.keyword && (
+              <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-accent/10 border border-accent/25 rounded-full text-[10px] font-mono font-black text-accent select-all ml-4">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                CLAVE: {event.keyword}
+              </div>
+            )}
+
             <span className="sm:hidden text-[9px] font-bold uppercase tracking-[0.2em] text-ink-300 truncate">
               {activeTab === "venta" ? "Nueva Venta" : activeTab === "metricas" ? "Métricas" : "Historial"}
             </span>
@@ -216,32 +262,83 @@ export default function CajaClient({ drinks }: Props) {
 
         {/* Content Tabs */}
         <div className="flex-1 flex overflow-hidden min-h-0 relative">
+          {!event || event.status === "cerrado" ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 bg-ink-950 text-center select-none animate-in fade-in duration-300">
+              <div className="w-20 h-20 rounded-3xl bg-ink-900 border border-ink-800 flex items-center justify-center text-ink-500 mb-6 shadow-lg animate-pulse">
+                <Power size={36} className="text-ink-400" />
+              </div>
+              <h2 className="text-3xl font-black text-ink-50 tracking-tight mb-2">Caja Cerrada</h2>
+              <p className="text-ink-400 text-sm max-w-sm mb-8 leading-relaxed font-serif-italic">
+                No hay ninguna noche activa en el sistema. Para empezar a cobrar, es necesario iniciar una nueva jornada.
+              </p>
 
-          {/* TAB 1: NUEVA VENTA */}
-          <div className={activeTab === "venta" ? "flex-1 flex overflow-hidden min-h-0 w-full" : "hidden"}>
-            <VentaSection drinks={drinks} printer={ventaPrinter} />
-          </div>
+              {/* Abrir la noche está permitido para cualquier staff autenticado (admin/caja). */}
+              {currentUser ? (
+                <div className="w-full max-w-sm bg-ink-900 border border-ink-800 rounded-[24px] p-6 shadow-xl flex flex-col gap-4 text-left animate-in zoom-in-95 duration-200">
+                  <h3 className="font-bold text-sm text-ink-100 uppercase tracking-wider">Abrir Caja / Noche</h3>
+                  {openNightError && (
+                    <div className="bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-xs">
+                      {openNightError}
+                    </div>
+                  )}
+                  <form onSubmit={handleOpenNightSubmit} className="flex flex-col gap-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-ink-400">Palabra Clave (Keyword)</span>
+                      <input
+                        type="text"
+                        required
+                        value={openNightKeyword}
+                        onChange={(e) => setOpenNightKeyword(e.target.value.toLowerCase())}
+                        placeholder="ej: gin, tonic, campari..."
+                        className="w-full h-11 bg-ink-950 border border-ink-800 focus:border-accent rounded-xl px-3 text-sm text-ink-50 outline-none transition-all placeholder:text-ink-600 font-mono"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={openingNight}
+                      className="ct-checkout-btn w-full h-11 font-black rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all mt-2"
+                    >
+                      {openingNight ? "Iniciando..." : "Abrir Noche / Evento"}
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <div className="px-5 py-4 bg-ink-900/50 border border-ink-850 rounded-2xl max-w-sm flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-danger animate-pulse shrink-0" />
+                  <p className="text-xs text-ink-400 text-left leading-relaxed">
+                    Cargando sesión…
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* TAB 1: NUEVA VENTA */}
+              <div className={activeTab === "venta" ? "flex-1 flex overflow-hidden min-h-0 w-full" : "hidden"}>
+                <VentaSection drinks={drinks} printer={ventaPrinter} />
+              </div>
 
-          {/* TAB 2: HISTORIAL DE VENTAS */}
-          <div className={activeTab === "historial" ? "flex-1 overflow-y-auto p-5 md:p-6 bg-ink-950 min-h-0 w-full" : "hidden"}>
-            <HistorialSection
-              orders={activeNightOrders}
-              currentUser={currentUser}
-              printer={ventaPrinter}
-              onOrderUpdated={upsertOrder}
-            />
-          </div>
+              {/* TAB 2: HISTORIAL DE VENTAS */}
+              <div className={activeTab === "historial" ? "flex-1 overflow-y-auto p-5 md:p-6 bg-ink-950 min-h-0 w-full" : "hidden"}>
+                <HistorialSection
+                  orders={activeNightOrders}
+                  currentUser={currentUser}
+                  printer={ventaPrinter}
+                  onOrderUpdated={upsertOrder}
+                />
+              </div>
 
-          {/* TAB 3: METRICAS */}
-          <div className={activeTab === "metricas" ? "flex-1 overflow-y-auto p-5 md:p-6 bg-ink-950 min-h-0 w-full animate-in fade-in duration-200" : "hidden"}>
-            <MetricasSection
-              event={event}
-              activeNightOrders={activeNightOrders}
-              activeNightCashSales={activeNightCashSales}
-              totals={totals}
-            />
-          </div>
-
+              {/* TAB 3: METRICAS */}
+              <div className={activeTab === "metricas" ? "flex-1 overflow-y-auto p-5 md:p-6 bg-ink-950 min-h-0 w-full animate-in fade-in duration-200" : "hidden"}>
+                <MetricasSection
+                  event={event}
+                  activeNightOrders={activeNightOrders}
+                  activeNightCashSales={activeNightCashSales}
+                  totals={totals}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 

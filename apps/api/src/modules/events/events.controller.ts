@@ -66,16 +66,24 @@ export function createEventsController(
     },
   );
 
-  // POST /api/events/open — abrir una noche nueva con palabra clave (admin only)
-  router.post("/events/open", authMiddleware, requireRole("admin"), async (req, res, next) => {
-    try {
-      const { keyword } = req.body;
-      if (typeof keyword !== "string") throw new BadRequest("keyword requerida.");
-      res.status(201).json(await service.openEvent(keyword));
-    } catch (err) {
-      next(err);
+  // POST /api/events/open — abrir una noche nueva con palabra clave (admin y caja con permisos)
+  router.post(
+    "/events/open",
+    authMiddleware,
+    requireRole("admin", "caja"),
+    async (req, res, next) => {
+      try {
+        const { keyword } = req.body;
+        if (typeof keyword !== "string") throw new BadRequest("keyword requerida.");
+
+        // Abrir la noche está permitido para cualquier staff autenticado
+        // (admin/caja) — no es un permiso configurable por usuario.
+        res.status(201).json(await service.openEvent(keyword));
+      } catch (err) {
+        next(err);
+      }
     }
-  });
+  );
 
   // PATCH /api/events/current/keyword — corregir la clave de la noche activa (admin only)
   router.patch("/events/current/keyword", authMiddleware, requireRole("admin"), async (req, res, next) => {

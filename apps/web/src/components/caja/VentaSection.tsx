@@ -23,7 +23,6 @@ import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { gsap } from "gsap";
 
 import DrinkCard from "@/components/shared/DrinkCard";
-import ProductSearch from "@/components/caja/ProductSearch";
 import { drinkIcon } from "@/lib/icons";
 import { ApiError } from "@/services/api-client";
 import { mercadopagoService } from "@/services/mercadopago.service";
@@ -42,6 +41,100 @@ type Props = {
   };
 };
 
+type SwipeableCartItemProps = {
+  drink: Drink;
+  qty: number;
+  onAdd: () => void;
+  onRemove: () => void;
+  onRemoveAll: () => void;
+};
+
+function SwipeableCartItem({ drink, qty, onAdd, onRemove, onRemoveAll }: SwipeableCartItemProps) {
+  const [startX, setStartX] = useState(0);
+  const [currentX, setCurrentX] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setStartX(e.touches[0].clientX);
+    setSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!swiping) return;
+    const diff = e.touches[0].clientX - startX;
+    if (diff > 0) { // only swipe to the right
+      setCurrentX(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setSwiping(false);
+    if (currentX > 120) {
+      setIsRemoving(true);
+      setTimeout(() => {
+        onRemoveAll();
+      }, 150);
+    } else {
+      setCurrentX(0);
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-xl bg-ink-950 shrink-0">
+      {/* Background deletion reveal indicator */}
+      <div 
+        className="absolute inset-0 bg-danger/20 flex items-center pl-4 text-danger transition-opacity duration-150"
+        style={{ opacity: currentX > 20 ? 1 : 0 }}
+      >
+        <Trash2 size={16} className="animate-bounce" style={{ animationDuration: '0.6s' }} />
+      </div>
+      {/* Foreground item card */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          transform: `translateX(${isRemoving ? "100%" : `${currentX}px`})`,
+          transition: swiping ? "none" : "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+        }}
+        className="bg-ink-900 border border-ink-800 rounded-xl p-3 flex flex-col gap-2 relative z-10 select-none touch-pan-y"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[13px] font-bold text-ink-50 leading-tight line-clamp-2 flex-1">
+            {drink.name}
+          </span>
+          <span className="font-mono text-sm font-black text-accent tabular shrink-0">
+            ${(drink.price * qty).toLocaleString("es-AR")}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-ink-400 font-mono">
+            ${drink.price.toLocaleString("es-AR")} c/u
+          </span>
+          <div className="flex items-center gap-1 bg-ink-950 border border-ink-800 rounded-md">
+            <button
+              onClick={onRemove}
+              className="w-7 h-7 flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-white/5 rounded-l-md active:scale-90 transition-all cursor-pointer"
+              aria-label="Restar"
+            >
+              <Minus size={12} strokeWidth={3} />
+            </button>
+            <span className="text-xs font-black text-ink-50 tabular w-5 text-center">{qty}</span>
+            <button
+              onClick={onAdd}
+              className="w-7 h-7 flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-white/5 rounded-r-md active:scale-90 transition-all cursor-pointer"
+              aria-label="Sumar"
+            >
+              <Plus size={12} strokeWidth={3} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CompactDrinkCard({
   drink,
   qty,
@@ -56,19 +149,28 @@ function CompactDrinkCard({
   onRemove: () => void;
 }) {
   const [imageBroken, setImageBroken] = useState(false);
+  const [isClicked, setIsClicked] = useState(false);
   const isFeatured = drink.promo || drink.trending;
   const showImage = isFeatured && Boolean(drink.image) && !imageBroken;
   const active = qty > 0;
 
-  const cardBorderClass = active
-    ? "border-green/60 shadow-[0_0_0_1px_var(--success-soft)]"
-    : "border-ink-800 hover:border-accent/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300";
+  const handleAdd = () => {
+    setIsClicked(true);
+    setTimeout(() => setIsClicked(false), 150);
+    onAdd();
+  };
+
+  const cardBorderClass = isClicked
+    ? "border-accent bg-accent/15 shadow-[0_0_20px_rgba(109,179,242,0.45)] scale-[1.03]"
+    : active
+      ? "border-green/60 shadow-[0_0_0_1px_var(--success-soft)] hover:border-green/80 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+      : "border-ink-800 hover:border-accent/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300";
 
   const focusRingClass = focused ? "ring-2 ring-blue ring-offset-2 ring-offset-ink-950" : "";
 
   return (
     <div
-      onClick={onAdd}
+      onClick={handleAdd}
       className={`group relative bg-ink-900 border rounded-xl p-3 flex flex-col gap-2.5 cursor-pointer ${cardBorderClass} ${focusRingClass}`}
     >
       {drink.promo && (
@@ -100,7 +202,7 @@ function CompactDrinkCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-0.5 min-h-[44px]">
+      <div className="flex flex-col gap-0.5 h-[52px] justify-between">
         <span className="text-[13px] font-bold text-ink-50 leading-tight line-clamp-2">
           {drink.name}
         </span>
@@ -111,7 +213,7 @@ function CompactDrinkCard({
 
       {qty === 0 ? (
         <button
-          onClick={(e) => { e.stopPropagation(); onAdd(); }}
+          onClick={(e) => { e.stopPropagation(); handleAdd(); }}
           className="h-9 rounded-lg bg-green-soft hover:brightness-125 border border-green-line text-green flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
         >
           <Plus size={14} strokeWidth={3} />
@@ -187,6 +289,42 @@ export default function VentaSection({ drinks, printer }: Props) {
 
   // Estados del carrito
   const [cart, setCart] = useState<Record<number, number>>({});
+  const [undoItem, setUndoItem] = useState<{ drinkId: number; qty: number; name: string } | null>(null);
+
+  useEffect(() => {
+    if (undoItem) {
+      const timer = setTimeout(() => {
+        setUndoItem(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [undoItem]);
+
+  const removeAllFromCart = (id: number) => {
+    setCart((prev) => {
+      const next = { ...prev };
+      const qty = next[id];
+      if (qty) {
+        const d = drinks.find((x) => x.id === id);
+        if (d) {
+          setUndoItem({ drinkId: id, qty, name: d.name });
+        }
+        delete next[id];
+      }
+      return next;
+    });
+  };
+
+  const handleUndoDelete = () => {
+    if (undoItem) {
+      setCart((prev) => ({
+        ...prev,
+        [undoItem.drinkId]: (prev[undoItem.drinkId] || 0) + undoItem.qty
+      }));
+      setUndoItem(null);
+    }
+  };
+
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   // GSAP stagger entrance on load complete
@@ -207,14 +345,26 @@ export default function VentaSection({ drinks, printer }: Props) {
     }
   }, [loadingProducts]);
 
+  const [sortBy, setSortBy] = useState<"alfabeto" | "tendencia" | "precio">("alfabeto");
+
   const sortedDrinks = useMemo(() => {
-    return [...drinks].sort((a, b) => {
-      const catA = a.promo ? 1 : a.trending ? 2 : 3;
-      const catB = b.promo ? 1 : b.trending ? 2 : 3;
-      if (catA !== catB) return catA - catB;
-      return a.name.localeCompare(b.name);
-    });
-  }, [drinks]);
+    const list = [...drinks];
+    if (sortBy === "alfabeto") {
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (sortBy === "tendencia") {
+      return list.sort((a, b) => {
+        const catA = a.promo ? 1 : a.trending ? 2 : 3;
+        const catB = b.promo ? 1 : b.trending ? 2 : 3;
+        if (catA !== catB) return catA - catB;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    if (sortBy === "precio") {
+      return list.sort((a, b) => a.price - b.price);
+    }
+    return list;
+  }, [drinks, sortBy]);
 
   const filteredDrinks = sortedDrinks;
 
@@ -385,9 +535,44 @@ export default function VentaSection({ drinks, printer }: Props) {
         {/* Products column */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Buscador de productos por teclado (solo desktop, no reemplaza el grid táctil) */}
-          <div className="hidden lg:block px-5 pt-5">
-            <ProductSearch drinks={drinks} onSelect={addToCart} />
+          {/* Ordenar y Filtrar (Mobile y Desktop) */}
+          <div className="flex items-center gap-3 px-5 pt-5 pb-1 select-none w-full shrink-0">
+            <span className="text-[10px] font-black uppercase tracking-wider text-ink-500 shrink-0">Ordenar:</span>
+            <div className="flex items-center gap-1 bg-ink-950 p-0.5 rounded-lg border border-ink-800 overflow-x-auto no-scrollbar shrink-0">
+              <button
+                type="button"
+                onClick={() => setSortBy("alfabeto")}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                  sortBy === "alfabeto"
+                    ? "bg-accent/15 text-accent font-black"
+                    : "text-ink-400 hover:text-ink-100 hover:bg-white/5"
+                }`}
+              >
+                Alfabeto
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortBy("tendencia")}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                  sortBy === "tendencia"
+                    ? "bg-accent/15 text-accent font-black"
+                    : "text-ink-400 hover:text-ink-100 hover:bg-white/5"
+                }`}
+              >
+                Tendencia
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortBy("precio")}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                  sortBy === "precio"
+                    ? "bg-accent/15 text-accent font-black"
+                    : "text-ink-400 hover:text-ink-100 hover:bg-white/5"
+                }`}
+              >
+                Precio
+              </button>
+            </div>
           </div>
 
           {/* Grid scrollable */}
@@ -395,13 +580,13 @@ export default function VentaSection({ drinks, printer }: Props) {
             {loadingProducts ? (
               <>
                 {/* Mobile Skeletons */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 lg:hidden animate-pulse">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:hidden animate-pulse">
                   {Array.from({ length: 6 }).map((_, idx) => (
                     <DrinkSkeleton key={idx} />
                   ))}
                 </div>
                 {/* Desktop Skeletons */}
-                <div className="hidden lg:grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 animate-pulse">
+                <div className="hidden md:grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 animate-pulse">
                   {Array.from({ length: 10 }).map((_, idx) => (
                     <CompactDrinkSkeleton key={idx} />
                   ))}
@@ -414,7 +599,7 @@ export default function VentaSection({ drinks, printer }: Props) {
             ) : (
               <>
                 {/* Mobile Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 lg:hidden">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:hidden">
                   {filteredDrinks.map((d) => (
                     <div key={d.id} className="drink-card-anim opacity-0">
                       <DrinkCard
@@ -429,7 +614,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                   ))}
                 </div>
                 {/* Desktop Grid */}
-                <div className="hidden lg:grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+                <div className="hidden md:grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   {filteredDrinks.map((d, idx) => (
                     <div key={d.id} className="drink-card-anim opacity-0">
                       <CompactDrinkCard
@@ -448,7 +633,7 @@ export default function VentaSection({ drinks, printer }: Props) {
 
           {/* Mobile/Tablet Sticky Bottom Bar */}
           {totalItems > 0 && (
-            <div className="lg:hidden shrink-0 border-t border-ink-800 bg-ink-925/90 backdrop-blur-md px-5 py-3 flex items-center justify-between shadow-[0_-4px_24px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-300">
+            <div className="md:hidden shrink-0 border-t border-ink-800 bg-ink-925/90 backdrop-blur-md px-5 py-3 flex items-center justify-between shadow-[0_-4px_24px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-300">
               <div
                 onClick={() => setIsCartOpen(true)}
                 className="flex flex-col text-left cursor-pointer group"
@@ -472,31 +657,33 @@ export default function VentaSection({ drinks, printer }: Props) {
           )}
         </div>
 
-        {/* Sidebar cart (lg+ only) */}
-        <aside className="hidden lg:flex w-[380px] xl:w-[420px] flex-col border-l border-ink-800 bg-ink-925 shrink-0 h-full">
-          <div ref={shoppingBagRef} className="px-5 py-4 border-b border-ink-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingBag size={16} className="text-green" />
-              <span className="text-[11px] font-black uppercase tracking-[0.22em] text-ink-50">
+        {/* Sidebar cart (md+ only) */}
+        <aside className="hidden md:flex w-[320px] xl:w-[350px] flex-col border-l border-ink-800 bg-ink-925 shrink-0 h-full relative">
+          <div ref={shoppingBagRef} className="px-4 py-3.5 border-b border-ink-800 flex items-center justify-between gap-1.5 shrink-0 bg-ink-950/20">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <ShoppingBag size={15} className="text-green shrink-0" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-ink-50 truncate">
                 Pedido actual
               </span>
               <span className="font-mono text-[10px] text-ink-400 px-1.5 py-0.5 bg-ink-850 border border-ink-800 rounded tabular">
                 {totalItems}
               </span>
             </div>
-            {totalItems > 0 && (
-              <button
-                onClick={clearCart}
-                className="text-ink-400 hover:text-danger p-1.5 rounded-md hover:bg-danger/10 transition-all cursor-pointer"
-                title="Vaciar carrito"
-                aria-label="Vaciar carrito"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {totalItems > 0 && (
+                <button
+                  onClick={clearCart}
+                  className="text-ink-400 hover:text-danger p-1.5 rounded-md hover:bg-danger/10 transition-all cursor-pointer"
+                  title="Vaciar carrito"
+                  aria-label="Vaciar carrito"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2 min-h-0">
+          <div className="flex-1 overflow-y-auto px-3 pt-3 pb-36 flex flex-col gap-2 min-h-0">
             {cartEntries.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center gap-3 px-6 py-12">
                 <div className="w-14 h-14 rounded-2xl bg-ink-850 border border-ink-800 flex items-center justify-center">
@@ -511,50 +698,26 @@ export default function VentaSection({ drinks, printer }: Props) {
               </div>
             ) : (
               cartEntries.map(({ drink, qty }) => (
-                <div
+                <SwipeableCartItem
                   key={drink.id}
-                  className="bg-ink-900 border border-ink-800 rounded-xl p-3 flex flex-col gap-2"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[13px] font-bold text-ink-50 leading-tight line-clamp-2 flex-1">
-                      {drink.name}
-                    </span>
-                    <span className="font-mono text-sm font-black text-accent tabular shrink-0">
-                      ${(drink.price * qty).toLocaleString("es-AR")}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-ink-400 font-mono">
-                      ${drink.price.toLocaleString("es-AR")} c/u
-                    </span>
-                    <div className="flex items-center gap-1 bg-ink-950 border border-ink-800 rounded-md">
-                      <button
-                        onClick={() => removeFromCart(drink.id)}
-                        className="w-7 h-7 flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-white/5 rounded-l-md active:scale-90 transition-all cursor-pointer"
-                        aria-label="Restar"
-                      >
-                        <Minus size={12} strokeWidth={3} />
-                      </button>
-                      <span className="text-xs font-black text-ink-50 tabular w-5 text-center">{qty}</span>
-                      <button
-                        onClick={() => addToCart(drink.id)}
-                        className="w-7 h-7 flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-white/5 rounded-r-md active:scale-90 transition-all cursor-pointer"
-                        aria-label="Sumar"
-                      >
-                        <Plus size={12} strokeWidth={3} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  drink={drink}
+                  qty={qty}
+                  onAdd={() => addToCart(drink.id)}
+                  onRemove={() => removeFromCart(drink.id)}
+                  onRemoveAll={() => removeAllFromCart(drink.id)}
+                />
               ))
             )}
           </div>
 
-          <div className="px-5 py-4 border-t border-ink-800 bg-ink-925 flex flex-col gap-3 shrink-0">
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400">
-                Total
-              </span>
+          <div className="fixed bottom-0 right-0 w-[320px] xl:w-[350px] px-5 py-4 border-t border-l border-ink-800 bg-ink-925/90 backdrop-blur-md flex flex-col gap-3 z-20">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-1.5">
+                <Receipt size={14} className="text-ink-400" />
+                <span className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400">
+                  Total
+                </span>
+              </div>
               <span className="font-serif-italic text-3xl font-black tabular text-green">
                 ${totalPrice.toLocaleString("es-AR")}
               </span>
@@ -574,7 +737,7 @@ export default function VentaSection({ drinks, printer }: Props) {
 
       {/* ── Modal 1: Carrito de Caja (sólo mobile) ── */}
       {isCartOpen && (
-        <div onClick={() => setIsCartOpen(false)} className="lg:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md p-4">
+        <div onClick={() => setIsCartOpen(false)} className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md p-4">
           <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-10">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-black text-ink-50">Pedido Actual</h2>
@@ -623,9 +786,9 @@ export default function VentaSection({ drinks, printer }: Props) {
             if (isPosInProgress) return;
             closeCheckout();
           }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
         >
-          <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-10 flex flex-col max-h-[90vh]">
+          <div onClick={(e) => e.stopPropagation()} className={`bg-ink-900 border border-ink-800 w-full ${paymentMethod === "efectivo" && !latestOrder && posnetStatus !== "error" ? "max-w-2xl" : "max-w-md"} rounded-[32px] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh] transition-all duration-300`}>
 
             {latestOrder ? (
               // Vista Éxito / Ticket (con animación elástica GSAP)
@@ -859,44 +1022,42 @@ export default function VentaSection({ drinks, printer }: Props) {
 
                 {!paymentMethod ? (
                   // Selección de Método de Pago
-                  <div className="flex flex-col gap-6 overflow-y-auto pr-1">
-                    <div className="flex flex-col gap-1 mb-2">
-                      <span className="text-xs uppercase tracking-widest font-bold text-ink-400">Total a cobrar</span>
-                      <span className="text-4xl font-black text-accent">${totalPrice.toLocaleString("es-AR")}</span>
+                  <div className="flex flex-col gap-6 overflow-y-auto pr-1 items-center text-center py-2 w-full">
+                    <div className="w-full bg-ink-950/40 border border-ink-800 rounded-3xl p-5 flex flex-col items-center justify-center gap-1.5 relative overflow-hidden shadow-inner shrink-0">
+                      {/* Glow effect */}
+                      <div className="absolute -top-10 -left-10 w-24 h-24 bg-accent/5 rounded-full blur-2xl pointer-events-none" />
+                      <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-accent/5 rounded-full blur-2xl pointer-events-none" />
+                      
+                      <div className="w-10 h-10 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-1 shrink-0">
+                        <Receipt size={18} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-ink-400">Total a cobrar</span>
+                      <div className="flex items-center gap-1.5 justify-center">
+                        <span className="text-3xl font-black text-accent tracking-tight">${totalPrice.toLocaleString("es-AR")}</span>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-4">
-                      <h3 className="text-xs uppercase tracking-widest font-bold text-ink-400">Caja Directa / Mostrador</h3>
+                    <div className="grid grid-cols-2 gap-4 w-full mt-2">
                       <button
                         disabled={submitting}
                         onClick={() => setPaymentMethod("efectivo")}
-                        className="relative w-full h-16 rounded-2xl bg-ink-950 border border-ink-800 flex items-center px-4 gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer text-left disabled:opacity-50"
+                        className="h-32 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center shrink-0">
-                          <Banknote size={22} />
+                        <div className="w-12 h-12 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center shrink-0">
+                          <Banknote size={26} />
                         </div>
-                        <div>
-                          <p className="font-bold text-sm text-ink-50">Efectivo</p>
-                          <p className="text-[10px] text-ink-400">Cobro manual y cálculo de vuelto</p>
-                        </div>
-                        <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">1</span>
+                        <span className="font-bold text-sm text-ink-50">Efectivo</span>
                       </button>
-                    </div>
 
-                    <div className="flex flex-col gap-3 pt-4 border-t border-ink-850">
-                      <h3 className="text-xs uppercase tracking-widest font-bold text-ink-400 flex items-center gap-1.5">
-                        Cobro Posnet Mercado Pago
-                      </h3>
                       <button
                         disabled={submitting}
                         onClick={() => startPosnetPayment("debito")}
-                        className="relative h-24 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        className="h-32 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center">
-                          <CreditCard size={22} />
+                        <div className="w-12 h-12 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center shrink-0">
+                          <CreditCard size={26} />
                         </div>
-                        <span className="font-bold text-xs text-ink-50 text-center">Tarjeta</span>
-                        <span className="absolute top-2 right-2 font-mono text-[9px] text-ink-500 border border-ink-800 rounded px-1">2</span>
+                        <span className="font-bold text-sm text-ink-50">Tarjeta</span>
                       </button>
                     </div>
                   </div>
@@ -904,44 +1065,73 @@ export default function VentaSection({ drinks, printer }: Props) {
                   // Confirmar Método Elegido
                   <div className="flex flex-col gap-6 overflow-y-auto pr-1">
                     <div className="flex justify-between items-center p-4 bg-ink-950 rounded-2xl border border-ink-800">
-                      <span className="text-sm font-bold text-ink-300">Total</span>
+                      <div className="flex items-center gap-2">
+                        <Receipt size={15} className="text-ink-400" />
+                        <span className="text-sm font-bold text-ink-300">Total</span>
+                      </div>
                       <span className="text-2xl font-black text-accent">${totalPrice.toLocaleString("es-AR")}</span>
                     </div>
 
                     {paymentMethod === "efectivo" && (
-                      <div className="flex flex-col gap-4">
-                        <label className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs uppercase tracking-widest font-bold text-ink-400">Monto Recibido</span>
-                            <button
-                              type="button"
-                              onClick={() => handleChangeCash(String(totalPrice))}
-                              className="h-7 px-2.5 rounded-md bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 text-[10px] font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
-                            >
-                              Monto exacto <span className="opacity-60 normal-case">(E)</span>
-                            </button>
+                      <div className="flex flex-col gap-5">
+                        {/* Split 2-column layout: Left (Input) | Right (Change) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          
+                          {/* Col 1: Monto Recibido */}
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between h-7">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-ink-400">Monto Recibido</span>
+                              <button
+                                type="button"
+                                onClick={() => handleChangeCash(String(totalPrice))}
+                                className="h-7 px-2.5 rounded-md bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 text-[10px] font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
+                              >
+                                Monto exacto <span className="opacity-60 normal-case">(E)</span>
+                              </button>
+                            </div>
+                            <div className="flex flex-col items-center justify-center py-5 bg-ink-950 border border-ink-800 rounded-2xl relative h-[90px]">
+                              <div className="relative w-full max-w-[200px] flex items-center justify-center">
+                                <span className="text-2xl font-black text-ink-400 mr-2 select-none">$</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  value={displayCashValue}
+                                  onChange={(e) => handleChangeCash(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      if (canConfirmCash && !submitting) {
+                                        confirmOrder();
+                                      }
+                                    }
+                                  }}
+                                  style={{ fontSize: displayCashValue.length > 5 ? `${Math.max(18, 38 - (displayCashValue.length - 5) * 3)}px` : "38px" }}
+                                  className="w-full bg-transparent text-center font-black text-ink-50 outline-none pb-1 placeholder:text-ink-700"
+                                  placeholder="0"
+                                  autoFocus
+                                />
+                              </div>
+                            </div>
                           </div>
-                          <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-ink-400">$</span>
-                            <input
-                              type="text"
-                              value={displayCashValue}
-                              onChange={(e) => handleChangeCash(e.target.value)}
-                              className="w-full h-14 bg-ink-950 border border-ink-800 focus:border-accent rounded-xl pl-10 pr-4 text-xl font-bold text-ink-50 outline-none transition-all duration-200"
-                              placeholder="0"
-                              autoFocus
-                            />
-                          </div>
-                        </label>
 
-                        <div className={`flex justify-between items-center p-4 rounded-2xl border ${canConfirmCash ? 'bg-green-soft border-green-line' : 'bg-ink-950 border-ink-800'}`}>
-                          <span className="text-sm font-bold text-ink-300">Vuelto a entregar</span>
-                          <span className={`text-2xl font-black ${canConfirmCash ? 'text-green' : 'text-ink-500'}`}>
-                            ${canConfirmCash ? change.toLocaleString("es-AR") : "0"}
-                          </span>
+                          {/* Col 2: Vuelto a entregar */}
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center h-7">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-ink-400">Vuelto a entregar</span>
+                            </div>
+                            <div className={`flex flex-col items-center justify-center rounded-2xl border h-[90px] transition-all ${canConfirmCash ? 'bg-green-soft border-green-line' : 'bg-ink-950 border-ink-800'}`}>
+                              <span className="text-[10px] uppercase font-black tracking-wider text-ink-400 mb-0.5">Vuelto</span>
+                              <span className={`text-3xl font-black ${canConfirmCash ? 'text-green' : 'text-ink-500'}`}>
+                                ${canConfirmCash ? change.toLocaleString("es-AR") : "0"}
+                              </span>
+                            </div>
+                          </div>
+
                         </div>
 
-                        <div className="mt-4 pt-6 border-t border-ink-800 shrink-0 flex flex-col gap-2.5">
+                        {/* Confirm Button & Errors */}
+                        <div className="mt-1 pt-4 border-t border-ink-800 shrink-0 flex flex-col gap-2.5">
                           {saleError && (
                             <div className="bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-sm">
                               {saleError}
@@ -1133,6 +1323,22 @@ export default function VentaSection({ drinks, printer }: Props) {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Undo Delete Toast */}
+      {undoItem && (
+        <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-top-5 fade-in duration-300">
+          <div className="flex items-center gap-3 px-4 py-3 bg-ink-900 border border-ink-800 rounded-2xl shadow-2xl text-xs font-bold text-ink-50">
+            <span className="text-ink-400">Eliminado:</span>
+            <span>{undoItem.name} x{undoItem.qty}</span>
+            <button
+              onClick={handleUndoDelete}
+              className="ml-2 px-2.5 py-1 bg-accent/15 hover:bg-accent/25 text-accent border border-accent/20 hover:border-accent/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+            >
+              Deshacer
+            </button>
           </div>
         </div>
       )}

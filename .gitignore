@@ -42,3 +42,7 @@ coverage/
 # docs/specs/hardening-kong-demo-keys.md) — el template SÍ se versiona, esto no.
 supabase/docker/kong.yml
 
+# agentes local
+.agents/LLM.md
+.agents/commands/
+

@@ -26,3 +26,25 @@ if (typeof window !== "undefined" && !window.matchMedia) {
       dispatchEvent: () => false,
     }) as unknown as MediaQueryList;
 }
+
+// polyfill localStorage for jsdom environments where it might be undefined or restricted
+if (typeof window !== "undefined") {
+  if (!window.localStorage) {
+    const mockStorage: Record<string, string> = {};
+    const storage = {
+      getItem: (key: string) => mockStorage[key] ?? null,
+      setItem: (key: string, value: string) => { mockStorage[key] = String(value); },
+      removeItem: (key: string) => { delete mockStorage[key]; },
+      clear: () => { Object.keys(mockStorage).forEach((key) => delete mockStorage[key]); },
+      length: 0,
+      key: (index: number) => Object.keys(mockStorage)[index] ?? null,
+    };
+    Object.defineProperty(storage, "length", {
+      get: () => Object.keys(mockStorage).length,
+    });
+    window.localStorage = storage;
+  }
+  if (typeof globalThis !== "undefined" && !globalThis.localStorage) {
+    (globalThis as any).localStorage = window.localStorage;
+  }
+}

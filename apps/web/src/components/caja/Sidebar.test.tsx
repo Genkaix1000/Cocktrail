@@ -21,16 +21,9 @@ const adminUser = {
   username: "cajera1",
   permissions: {
     closeNight: true,
-    modifyCarta: false,
-    manageUsers: false,
-    monitoreo: false,
-    metricas: true,
+    cancelarTickets: true,
     historial: true,
-    general: false,
-    carta: false,
-    pagos: false,
-    staff: false,
-    cancelarTickets: false,
+    metricas: true,
   },
 };
 

@@ -2,7 +2,7 @@
 
 import { Minus, Plus, GlassWater, Beer, Zap, Droplet, Wine, Martini, Citrus, CupSoda, BottleWine } from "lucide-react";
 import Image from "next/image";
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 
 /* ── Icon map (fallback if no image) ──────────────────── */
 const ICON_MAP: Record<string, ComponentType<{ size?: number; className?: string; strokeWidth?: number }>> = {
@@ -83,8 +83,11 @@ export default function DrinkCard({
 }: DrinkCardProps) {
   const isRegular = variant === "regular";
   const IconComponent = icon ? ICON_MAP[icon] ?? GlassWater : null;
+  const [isClicked, setIsClicked] = useState(false);
 
   const handleActivate = () => {
+    setIsClicked(true);
+    setTimeout(() => setIsClicked(false), 150);
     if (onAdd) onAdd();
   };
 
@@ -93,10 +96,12 @@ export default function DrinkCard({
     return (
       <div
         onClick={handleActivate}
-        className={`flex items-center justify-between p-3 rounded-2xl border backdrop-blur-md transition-all active:scale-[0.98] cursor-pointer ${
-          quantity > 0
-            ? "border-[var(--primary-base)] shadow-[0_0_15px_var(--primary-soft)] bg-[var(--primary-soft)]"
-            : "border-white/10 bg-white/5"
+        className={`flex items-center justify-between p-3 rounded-2xl border backdrop-blur-md transition-all duration-150 cursor-pointer ${
+          isClicked
+            ? "scale-[1.03] border-accent bg-accent/15 shadow-[0_0_20px_rgba(109,179,242,0.45)]"
+            : quantity > 0
+              ? "border-[var(--primary-base)] shadow-[0_0_15px_var(--primary-soft)] bg-[var(--primary-soft)] hover:scale-[1.02] active:scale-[0.98]"
+              : "border-white/10 bg-white/5 hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
         }`}
       >
         <div className="flex items-center gap-4 min-w-0">
@@ -130,10 +135,12 @@ export default function DrinkCard({
   return (
     <div
       onClick={handleActivate}
-      className={`relative flex flex-col rounded-2xl border bg-white/5 overflow-hidden cursor-pointer active:scale-[0.98] transition-all min-h-[180px] ${
-        quantity > 0
-          ? "border-[var(--primary-base)] shadow-[0_0_20px_var(--primary-soft)]"
-          : "border-white/10"
+      className={`relative flex flex-col rounded-2xl border bg-white/5 overflow-hidden cursor-pointer transition-all duration-150 min-h-[180px] ${
+        isClicked
+          ? "scale-[1.03] border-accent shadow-[0_0_20px_rgba(109,179,242,0.45)]"
+          : quantity > 0
+            ? "border-[var(--primary-base)] shadow-[0_0_20px_var(--primary-soft)] hover:scale-[1.02] active:scale-[0.98]"
+            : "border-white/10 hover:border-white/20 hover:scale-[1.02] active:scale-[0.98]"
       }`}
     >
       {/* Background Image */}
