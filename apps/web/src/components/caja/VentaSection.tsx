@@ -675,8 +675,37 @@ export default function VentaSection({ drinks, printer }: Props) {
                 </div>
               </div>
             ) : posnetStatus === "error" ? (
-              // Vista de Error / Dispositivo Ocupado o General
-              posnetErrorMessage === "busy_device" ? (
+              // Vista de Error / Dispositivo Ocupado / Cancelado a propósito / General
+              posnetErrorMessage === "cancelled_by_device" ? (
+                // Cancelación intencional (cajera o cliente cancelaron desde el propio
+                // Posnet) — no es una falla del sistema, así que no lleva el ícono/tono
+                // de error rojo.
+                <div className="flex flex-col items-center justify-center py-8 gap-5 text-center animate-in fade-in zoom-in-95">
+                  <div className="w-16 h-16 rounded-full bg-ink-850 border border-ink-750 flex items-center justify-center text-ink-300 shrink-0">
+                    <CreditCard size={30} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-ink-50 mb-1.5">Cobro cancelado</h2>
+                    <p className="text-ink-400 text-sm px-4 leading-relaxed">
+                      Se canceló el cobro desde el Posnet.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setPosnetStatus("idle");
+                      setPaymentMethod(null);
+                      setPaymentIntentState(null);
+                      setPosnetErrorMessage(null);
+                      setCurrentIntentId(null);
+                    }}
+                    className="w-full h-12 bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider cursor-pointer hover:bg-ink-800 flex items-center justify-center gap-2 mt-2"
+                  >
+                    <ArrowLeft size={14} />
+                    Volver Atrás
+                  </button>
+                </div>
+              ) : posnetErrorMessage === "busy_device" ? (
                 <div className="flex flex-col items-center justify-center py-6 gap-4 text-center animate-in fade-in zoom-in-95">
                   <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-500 shrink-0">
                     <Loader2 size={32} className="animate-spin text-amber-500" />

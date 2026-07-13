@@ -158,7 +158,10 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
           setPosnetStatus("error");
           setCurrentIntentId(null);
           setPaymentIntentState(null);
-          setPosnetErrorMessage("El cobro fue cancelado en el Posnet.");
+          // Sentinel (no un mensaje de error real, ver "busy_device" más arriba): la
+          // cajera o el cliente cancelaron a propósito desde el dispositivo — no es una
+          // falla del sistema, así que la UI lo muestra distinto de un error genérico.
+          setPosnetErrorMessage("cancelled_by_device");
         }
       } catch (err) {
         console.error("Error polling MP status:", err);

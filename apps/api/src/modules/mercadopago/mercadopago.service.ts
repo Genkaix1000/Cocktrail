@@ -175,6 +175,13 @@ export class MercadoPagoService {
           additional_info: {
             external_reference: buildExternalReference(description),
           },
+          // Experimental (ver env.MP_POINT_PAYMENT_TYPE): la doc legacy de Point Integration
+          // API documenta un objeto "payment.type" ("credit_card" | "debit_card") pero no
+          // confirma si elimina la pantalla intermedia "Tarjetas" del Posnet. Se manda solo
+          // si está seteado para no cambiar el comportamiento actual por default.
+          ...(env.MP_POINT_PAYMENT_TYPE
+            ? { payment: { type: env.MP_POINT_PAYMENT_TYPE, installments: 1 } }
+            : {}),
         }),
       },
       "Error al crear la intención de pago en el Posnet",

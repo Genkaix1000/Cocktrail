@@ -117,7 +117,7 @@ describe("useCheckout — cobro Posnet", () => {
     });
 
     expect(result.current.posnetStatus).toBe("error");
-    expect(result.current.posnetErrorMessage).toBe("El cobro fue cancelado en el Posnet.");
+    expect(result.current.posnetErrorMessage).toBe("cancelled_by_device");
     expect(mockedOrdersService.create).not.toHaveBeenCalled();
   });
 

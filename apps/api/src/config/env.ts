@@ -31,6 +31,12 @@ const EnvSchema = z.object({
   // Mercado Pago
   MP_ACCESS_TOKEN: z.string().optional(),
   MP_POS_DEVICE_ID: z.string().optional(),
+  // Experimental: fuerza el tipo de tarjeta en el payment-intent para intentar saltear
+  // la pantalla intermedia "Tarjetas" del Posnet (ver docs/ARCHITECTURE.md §11). Sin
+  // confirmar en la doc oficial de MP que efectivamente salta la pantalla — probar en
+  // el dispositivo real antes de asumir que funciona. Si se deja sin setear, el body
+  // no incluye "payment" y el comportamiento es el de siempre.
+  MP_POINT_PAYMENT_TYPE: z.enum(["credit_card", "debit_card"]).optional(),
 });
 
 function loadEnv() {
