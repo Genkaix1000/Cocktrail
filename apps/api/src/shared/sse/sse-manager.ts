@@ -27,6 +27,9 @@ export type DomainEvent =
       clubName?: string;
     };
 
+/** Firma inyectable de `emit`, para pasar por constructor en vez de importar el singleton. */
+export type EmitFn = (event: DomainEvent) => void;
+
 const CHANNEL = "domain";
 
 const emitter = new EventEmitter();

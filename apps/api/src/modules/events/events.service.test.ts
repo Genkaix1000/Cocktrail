@@ -55,7 +55,7 @@ function makeService(overrides?: { eventsRepo?: EventsRepository }) {
   const ordersRepo = makeOrdersRepo();
   const cashSalesRepo = makeCashSalesRepo();
   const drinksRepo = makeDrinksRepo();
-  return new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo);
+  return new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, vi.fn());
 }
 
 describe("EventsService.initialize", () => {

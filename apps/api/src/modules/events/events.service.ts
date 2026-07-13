@@ -12,7 +12,7 @@ import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { ConfigRepository } from "../config/config.repository.js";
 import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
 import { computeTotals } from "../../shared/utils/totals.js";
-import { emit } from "../../shared/sse/sse-manager.js";
+import type { EmitFn } from "../../shared/sse/sse-manager.js";
 import { toSafeConfig } from "../config/config.repository.js";
 
 export class EventsService {
@@ -26,6 +26,7 @@ export class EventsService {
     private ordersRepo: OrdersRepository,
     private cashSalesRepo: CashSalesRepository,
     private drinksRepo: DrinksRepository,
+    private emit: EmitFn,
     private configRepo?: ConfigRepository,
   ) {}
 
@@ -164,7 +165,7 @@ export class EventsService {
     };
     await this.eventsRepo.create(newEvent);
     this.event = newEvent;
-    emit({ type: "event.opened", event: newEvent });
+    this.emit({ type: "event.opened", event: newEvent });
     return newEvent;
   }
 
@@ -211,7 +212,7 @@ export class EventsService {
       cashSales,
     };
 
-    emit({ type: "event.closed", summary });
+    this.emit({ type: "event.closed", summary });
 
     // Perform cloud sync in the background
     this.syncEventToCloudBackground(closedEvent, totals);
@@ -263,7 +264,7 @@ export class EventsService {
     }
     const config = this.configRepo ? await this.configRepo.get() : null;
     const customTheme = config ? config.customTheme : null;
-    emit({ type: "theme.changed", theme, customTheme });
+    this.emit({ type: "theme.changed", theme, customTheme });
   }
 
   /**

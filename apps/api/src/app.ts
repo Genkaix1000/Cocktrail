@@ -34,6 +34,7 @@ import { UsersService } from "./modules/users/users.service.js";
 import { SupabaseConfigRepository } from "./modules/config/config.repository.js";
 import { MercadoPagoService } from "./modules/mercadopago/mercadopago.service.js";
 import { PrinterService } from "./modules/printer/printer.service.js";
+import { emit } from "./shared/sse/sse-manager.js";
 
 // Middleware
 import { errorHandler } from "./shared/middleware/error-handler.js";
@@ -51,7 +52,7 @@ const configRepo = new SupabaseConfigRepository();
 const drinksService = new DrinksService(drinksRepo);
 const usersService = new UsersService(usersRepo);
 
-const eventsService = new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, configRepo);
+const eventsService = new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, emit, configRepo);
 
 const printerService = new PrinterService();
 
@@ -60,6 +61,7 @@ const ordersService = new OrdersService(
   drinksRepo,
   async () => eventsService.getCurrentEvent(),
   async () => eventsService.incrementOrderCounter(),
+  emit,
   (orderId: string): string => ticketsService.generateCodeString(orderId),
   async (orderId: string, code: string): Promise<void> => ticketsService.saveTicketForOrder(orderId, code),
   async (order, nightEvent): Promise<void> => {
@@ -82,6 +84,7 @@ const ticketsService = new TicketsService(
 const cashSalesService = new CashSalesService(
   cashSalesRepo,
   async () => eventsService.getCurrentEvent(),
+  emit,
 );
 
 const mpService = new MercadoPagoService();

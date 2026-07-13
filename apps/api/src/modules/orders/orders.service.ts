@@ -3,7 +3,7 @@ import type { NewOrderInput, Order, OrderStatus, NightEvent } from "@cocktrail/s
 import type { OrdersRepository } from "./orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
-import { emit } from "../../shared/sse/sse-manager.js";
+import type { EmitFn } from "../../shared/sse/sse-manager.js";
 
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pendiente: ["entregado", "cancelado"],
@@ -23,6 +23,7 @@ export class OrdersService {
     private drinksRepo: DrinksRepository,
     private getActiveEvent: () => Promise<NightEvent | null>,
     private incrementOrderCounter: (eventId: string) => Promise<number>,
+    private emit: EmitFn,
     private generateTicketCodeString?: (orderId: string) => string,
     private saveTicket?: (orderId: string, code: string) => Promise<void>,
     private printTicket?: (order: Order, nightEvent: NightEvent) => Promise<void>,
@@ -88,7 +89,7 @@ export class OrdersService {
       }
     }
 
-    emit({ type: "order.created", order });
+    this.emit({ type: "order.created", order });
     return { ...order, printed };
   }
 
@@ -136,7 +137,7 @@ export class OrdersService {
         `Transición inválida: ${current?.status ?? "desconocido"} → ${status} (el pedido cambió de estado durante la operación).`,
       );
     }
-    emit({ type: "order.updated", order: updated });
+    this.emit({ type: "order.updated", order: updated });
     return updated;
   }
 

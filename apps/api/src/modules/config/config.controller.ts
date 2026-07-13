@@ -4,13 +4,14 @@ import { toSafeConfig } from "./config.repository.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, UpdateConfigSchema } from "../../shared/middleware/validate.js";
 import type { EventsService } from "../events/events.service.js";
-import { emit } from "../../shared/sse/sse-manager.js";
+import { emit as realEmit, type EmitFn } from "../../shared/sse/sse-manager.js";
 import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
 
 export function createConfigController(
   repo: ConfigRepository,
   eventsService?: EventsService,
   auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
+  emit: EmitFn = realEmit,
 ): Router {
   const router = Router();
 

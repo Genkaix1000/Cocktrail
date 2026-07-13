@@ -66,21 +66,21 @@ describe("OrdersService.createOrder", () => {
   it("tira Conflict si no hay evento activo", async () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo();
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => null, async () => 1);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => null, async () => 1, vi.fn());
     await expect(service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" })).rejects.toThrow(/no se abrió la noche/);
   });
 
   it("tira BadRequest si no hay items", async () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo();
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn());
     await expect(service.createOrder({ items: [], paymentMethod: "efectivo" })).rejects.toThrow(/items/);
   });
 
   it("tira NotFound si el drink no existe", async () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo({ findById: vi.fn().mockResolvedValue(undefined) });
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn());
     await expect(
       service.createOrder({ items: [{ drinkId: 99, qty: 1 }], paymentMethod: "efectivo" }),
     ).rejects.toThrow(/no existe/);
@@ -89,7 +89,7 @@ describe("OrdersService.createOrder", () => {
   it("tira Conflict si el drink no está disponible", async () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo({ findById: vi.fn().mockResolvedValue({ ...DRINK, available: false }) });
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn());
     await expect(
       service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }),
     ).rejects.toThrow(/no está disponible/);
@@ -98,7 +98,7 @@ describe("OrdersService.createOrder", () => {
   it("crea el pedido, calcula el total y usa createdBy='Cliente' por default", async () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo({ findById: vi.fn().mockResolvedValue(DRINK) });
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 3);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 3, vi.fn());
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 2 }], paymentMethod: "efectivo" });
 
@@ -112,7 +112,7 @@ describe("OrdersService.createOrder", () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo({ findById: vi.fn().mockResolvedValue(DRINK) });
     const printTicket = vi.fn().mockResolvedValue(undefined);
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, undefined, undefined, printTicket);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn(), undefined, undefined, printTicket);
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" });
 
@@ -124,7 +124,7 @@ describe("OrdersService.createOrder", () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo({ findById: vi.fn().mockResolvedValue(DRINK) });
     const printTicket = vi.fn().mockResolvedValue(undefined);
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, undefined, undefined, printTicket);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn(), undefined, undefined, printTicket);
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
@@ -136,7 +136,7 @@ describe("OrdersService.createOrder", () => {
     const ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo({ findById: vi.fn().mockResolvedValue(DRINK) });
     const printTicket = vi.fn().mockRejectedValue(new Error("sin papel"));
-    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, undefined, undefined, printTicket);
+    const service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn(), undefined, undefined, printTicket);
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
@@ -152,7 +152,7 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
   beforeEach(() => {
     ordersRepo = makeOrdersRepo();
     const drinksRepo = makeDrinksRepo();
-    service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1);
+    service = new OrdersService(ordersRepo, drinksRepo, async () => ACTIVE_EVENT, async () => 1, vi.fn());
   });
 
   it("tira NotFound si el pedido no existe", async () => {

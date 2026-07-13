@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { CashSale, NewCashSaleInput, NightEvent } from "@cocktrail/shared";
 import type { CashSalesRepository } from "./cash-sales.repository.js";
 import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
-import { emit } from "../../shared/sse/sse-manager.js";
+import type { EmitFn } from "../../shared/sse/sse-manager.js";
 
 export class CashSalesService {
   constructor(
     private repo: CashSalesRepository,
     private getActiveEvent: () => Promise<NightEvent | null>,
+    private emit: EmitFn,
   ) {}
 
   async addCashSale(input: NewCashSaleInput, addedBy: string): Promise<CashSale> {
@@ -26,7 +27,7 @@ export class CashSalesService {
     };
 
     await this.repo.add(cashSale, event.id);
-    emit({ type: "cash_sale.added", cashSale });
+    this.emit({ type: "cash_sale.added", cashSale });
     return cashSale;
   }
 
