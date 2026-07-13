@@ -35,7 +35,15 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
       return { count: 0 };
     }
     if (!data || data.length === 0) return { count: 0 };
-    await supabase.from("users").upsert(data);
+    const { error: upsertError } = await supabase.from("users").upsert(data);
+    if (upsertError) {
+      // No propagar count>0 si el upsert LOCAL falló — si no, el caller (pullMasterData)
+      // cree que ya sincronizó bien y ni loguea el error de verdad ni cae al fallback de
+      // seed. Este bug real dejó la tabla local de drinks vacía en silencio (ver
+      // docs/ROADMAP.md, fix 2026-07-13) hasta el próximo sync manual.
+      console.error("[SupabaseCloudSyncRepository] Error escribiendo users en local (upsert):", upsertError.message);
+      return { count: 0 };
+    }
     return { count: data.length };
   }
 
@@ -47,7 +55,11 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
       return { count: 0 };
     }
     if (!data || data.length === 0) return { count: 0 };
-    await supabase.from("drinks").upsert(data);
+    const { error: upsertError } = await supabase.from("drinks").upsert(data);
+    if (upsertError) {
+      console.error("[SupabaseCloudSyncRepository] Error escribiendo drinks en local (upsert):", upsertError.message);
+      return { count: 0 };
+    }
     return { count: data.length };
   }
 
