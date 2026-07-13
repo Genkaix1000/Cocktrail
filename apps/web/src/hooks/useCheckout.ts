@@ -48,12 +48,34 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isSubmittingRef = useRef(false);
+  // Espejo de currentIntentId accesible desde closures que no pueden depender
+  // del state (cleanup de unmount) sin re-suscribirse en cada cambio.
+  const intentIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    intentIdRef.current = currentIntentId;
+  }, [currentIntentId]);
+
+  // Best-effort: cancela en el device cualquier intención que haya quedado
+  // activa (no confirmada/no cerrada) cuando se abandona el cobro por afuera
+  // del flujo normal de éxito/cancelación explícita — cerrar el modal a mitad
+  // de camino, recargar la página, navegar a otra pantalla. Sin esto el
+  // device queda con la intención en cola y el próximo cobro tira 2205.
+  const cancelActiveIntent = useCallback(() => {
+    const id = intentIdRef.current;
+    if (!id) return;
+    intentIdRef.current = null;
+    Promise.resolve(mercadopagoService.cancelPosIntent(id)).catch((err) => {
+      console.error("No se pudo cancelar la intención de pago abandonada:", err);
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      cancelActiveIntent();
     };
-  }, []);
+  }, [cancelActiveIntent]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -74,6 +96,11 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   const canConfirmCash = receivedAmount !== "" && change >= 0;
 
   const handleOpenCheckout = useCallback(() => {
+    // Si quedó una intención activa de un cobro anterior sin cerrar (ej. la
+    // cajera abrió y abandonó un cobro Posnet sin pasar por el botón X ni
+    // Escape), cancelarla antes de resetear el estado — si no, el device
+    // queda en cola y el próximo createPosIntent tira 2205.
+    cancelActiveIntent();
     setIsCheckoutOpen(true);
     setPaymentMethod(null);
     setReceivedAmount("");
@@ -81,7 +108,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     setCurrentIntentId(null);
     setLatestOrder(null);
     stopPolling();
-  }, [stopPolling]);
+  }, [stopPolling, cancelActiveIntent]);
 
   const confirmOrder = useCallback(async () => {
     if (isSubmittingRef.current || submitting || totalItems === 0 || !paymentMethod) return;

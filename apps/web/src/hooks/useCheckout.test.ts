@@ -71,6 +71,7 @@ function setupHook() {
 describe("useCheckout — cobro Posnet", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "CANCELED" });
   });
 
   afterEach(() => {
@@ -157,5 +158,72 @@ describe("useCheckout — cobro Posnet", () => {
 
     expect(result.current.posnetStatus).toBe("error");
     expect(result.current.posnetErrorMessage).toContain("Error al consultar el estado del cobro");
+  });
+
+  it("desmontar el componente con un intent activo lo cancela en el device", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
+    mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "CANCELED" });
+
+    const { result, unmount } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+
+    expect(result.current.currentIntentId).toBe("intent-1");
+
+    unmount();
+
+    expect(mockedMercadopagoService.cancelPosIntent).toHaveBeenCalledWith("intent-1");
+  });
+
+  it("desmontar sin ningún intent activo no llama a cancelPosIntent", async () => {
+    const { unmount } = setupHook();
+
+    unmount();
+
+    expect(mockedMercadopagoService.cancelPosIntent).not.toHaveBeenCalled();
+  });
+
+  it("desmontar después de un cobro FINISHED no cancela (el intent ya está cerrado)", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "FINISHED" });
+    mockedOrdersService.create.mockResolvedValue(makeOrder());
+
+    const { result, unmount } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(result.current.currentIntentId).toBeNull();
+
+    unmount();
+
+    expect(mockedMercadopagoService.cancelPosIntent).not.toHaveBeenCalled();
+  });
+
+  it("handleOpenCheckout cancela un intent activo abandonado antes de resetear el estado", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
+    mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "CANCELED" });
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    expect(result.current.currentIntentId).toBe("intent-1");
+
+    act(() => {
+      result.current.handleOpenCheckout();
+    });
+
+    expect(mockedMercadopagoService.cancelPosIntent).toHaveBeenCalledWith("intent-1");
+    expect(result.current.currentIntentId).toBeNull();
   });
 });

@@ -62,6 +62,85 @@ describe("MercadoPagoService", () => {
       await expect(service.createPaymentIntent(1000)).rejects.toBeTruthy();
       expect(fetch).not.toHaveBeenCalled();
     });
+
+    it("manda un external_reference único (basado en timestamp) en additional_info", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+
+      await service.createPaymentIntent(1000);
+
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse((call[1] as RequestInit).body as string);
+      expect(body.additional_info.external_reference).toMatch(/^cocktrail-\d+$/);
+    });
+
+    it("dos llamadas seguidas generan external_reference distintos", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+      mockFetchOnce({ ok: true, body: { id: "intent-2", status: "OPEN" } });
+
+      const dateNowSpy = vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValueOnce(2000);
+      await service.createPaymentIntent(1000);
+      await service.createPaymentIntent(1000);
+      dateNowSpy.mockRestore();
+
+      const [firstCall, secondCall] = vi.mocked(fetch).mock.calls;
+      const firstBody = JSON.parse((firstCall[1] as RequestInit).body as string);
+      const secondBody = JSON.parse((secondCall[1] as RequestInit).body as string);
+      expect(firstBody.additional_info.external_reference).not.toBe(secondBody.additional_info.external_reference);
+    });
+
+    it("manda la description saneada (sin acentos ni espacios) dentro de external_reference", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+
+      await service.createPaymentIntent(1000, "2x Fernet con Coca, 1x Gin Tónic");
+
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse((call[1] as RequestInit).body as string);
+      expect(body.additional_info.external_reference).toMatch(/^cocktrail-\d+-2x-Fernet-con-Coca-1x-Gin-Tonic$/);
+      expect(body.additional_info.external_reference.length).toBeLessThanOrEqual(64);
+    });
+
+    it("manda X-Idempotency-Key en la request", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+
+      await service.createPaymentIntent(1000);
+
+      const call = vi.mocked(fetch).mock.calls[0];
+      const headers = (call[1] as RequestInit).headers as Record<string, string>;
+      expect(headers["X-Idempotency-Key"]).toBeTruthy();
+    });
+
+    it("ante un 2205 con el id de la intención en cola, la cancela y reintenta una vez", async () => {
+      mockFetchOnce({
+        ok: false,
+        status: 409,
+        body: { message: "Device has a queued payment intent", error: "2205", payment_intent_id: "intent-vieja" },
+      });
+      mockFetchOnce({ ok: true, body: { status: "CANCELED" } }); // cancelPaymentIntent
+      mockFetchOnce({ ok: true, body: { id: "intent-nueva", status: "OPEN" } }); // reintento
+
+      const result = await service.createPaymentIntent(1000);
+
+      expect(result).toEqual({ id: "intent-nueva", status: "OPEN" });
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(fetch).toHaveBeenNthCalledWith(
+        2,
+        "https://api.mercadopago.com/point/integration-api/devices/device-1/payment-intents/intent-vieja",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+
+    it("ante un 2205 sin id de intención en el error, propaga el error tal cual (sin inventar recuperación)", async () => {
+      mockFetchOnce({
+        ok: false,
+        status: 409,
+        body: { message: "Device has a queued payment intent", error: "2205" },
+      });
+
+      await expect(service.createPaymentIntent(1000)).rejects.toMatchObject({
+        message: expect.stringContaining("Error al crear la intención de pago en el Posnet"),
+      });
+      expect(fetch).toHaveBeenCalledTimes(1); // no reintenta sin poder cancelar la vieja
+    });
   });
 
   describe("cancelPaymentIntent", () => {

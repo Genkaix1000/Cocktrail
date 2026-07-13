@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { env } from "../../config/env.js";
 import { Conflict } from "../../shared/errors/http-errors.js";
 
@@ -30,6 +31,73 @@ export function mapPaymentStatusToNormalized(mpPaymentStatus: string): "FINISHED
   return "PENDING";
 }
 
+/**
+ * Conflict enriquecido con el payload de error crudo de MP, para que
+ * createPaymentIntent pueda inspeccionar el código (ej. 2205 "queued
+ * intent") sin volver a parsear el mensaje de texto.
+ */
+export class MpApiError extends Conflict {
+  constructor(message: string, readonly mpCode: string, readonly mpData: unknown) {
+    super(message);
+    this.name = "MpApiError";
+  }
+}
+
+function isQueuedIntentError(err: unknown): err is MpApiError {
+  if (!(err instanceof MpApiError)) return false;
+  return err.mpCode === "2205" || err.message.includes("2205") || err.message.toLowerCase().includes("queued intent");
+}
+
+/**
+ * La Point Integration API no tiene un campo "description" propio en el
+ * payment-intent (confirmado contra la doc oficial: additional_info solo
+ * admite external_reference, print_on_terminal y ticket_number). Por eso el
+ * texto descriptivo del cobro se mete adentro de external_reference, que
+ * además tiene que ser único por cobro para no pisar reintentos. MP limita
+ * external_reference a 64 caracteres y solo letras/números/guiones.
+ */
+function buildExternalReference(description?: string): string {
+  const base = `cocktrail-${Date.now()}`;
+  if (!description) return base;
+
+  const sanitized = description
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // sacar acentos (ej. "Fernét" -> "Fernet")
+    .replace(/[^a-zA-Z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return `${base}-${sanitized}`.slice(0, 64);
+}
+
+/**
+ * Best-effort: si algún día MP agrega el id de la intención en cola dentro
+ * del payload de error 2205, lo tomamos de acá. HOY la doc pública de la
+ * Point Integration API no documenta ese campo (el error 409 solo trae
+ * status/error/message/cause, sin el id de la intención bloqueante) ni existe
+ * un endpoint para consultar "cuál es la intención activa de este device" sin
+ * conocer ya su id. Si no lo encontramos, devolvemos undefined y
+ * createPaymentIntent no intenta auto-recuperarse (ver comentario ahí).
+ */
+function extractQueuedIntentId(mpData: unknown): string | undefined {
+  if (!mpData || typeof mpData !== "object") return undefined;
+  const data = mpData as Record<string, unknown>;
+
+  const direct = data.payment_intent_id ?? data.id;
+  if (typeof direct === "string") return direct;
+
+  const cause = Array.isArray(data.cause) ? data.cause : [];
+  for (const c of cause) {
+    if (!c || typeof c !== "object") continue;
+    const causeData = (c as Record<string, unknown>).data;
+    if (causeData && typeof causeData === "object") {
+      const id = (causeData as Record<string, unknown>).payment_intent_id ?? (causeData as Record<string, unknown>).id;
+      if (typeof id === "string") return id;
+    }
+  }
+
+  return undefined;
+}
+
 export class MercadoPagoService {
   private readonly baseUrl = "https://api.mercadopago.com";
 
@@ -54,25 +122,59 @@ export class MercadoPagoService {
       console.error(`MP Error (${path}):`, errData);
       const mpMessage = errData?.message || response.statusText;
       const mpError = errData?.error || "";
-      throw new Conflict(`${errorMessage}: ${mpMessage} (MP Code: ${mpError})`);
+      throw new MpApiError(`${errorMessage}: ${mpMessage} (MP Code: ${mpError})`, mpError, errData);
     }
 
     return response.json();
   }
 
-  async createPaymentIntent(amount: number): Promise<MpPaymentIntentResponse> {
+  /**
+   * Crea la intención de cobro en el Posnet. Si el device ya tiene una
+   * intención en cola (error 2205), intenta cancelarla y reintenta UNA sola
+   * vez — sin esto, dos cobros seguidos siempre chocan (ver docs/ARCHITECTURE.md §11).
+   */
+  async createPaymentIntent(amount: number, description?: string): Promise<MpPaymentIntentResponse> {
     this.assertConfigured();
+
+    const attempt = () => this.createPaymentIntentAttempt(amount, description);
+
+    try {
+      return await attempt();
+    } catch (err) {
+      if (!isQueuedIntentError(err)) throw err;
+
+      const queuedIntentId = extractQueuedIntentId(err.mpData);
+      if (!queuedIntentId) {
+        // No hay forma de recuperar el id de la intención bloqueante: ni el error 2205 lo
+        // trae, ni existe (en la doc pública de la Point Integration API) un endpoint para
+        // "consultar la intención activa de este device" sin conocerlo de antemano. Se
+        // propaga el error tal cual para que la cajera vea el mensaje claro de siempre.
+        throw err;
+      }
+
+      try {
+        await this.cancelPaymentIntent(queuedIntentId);
+      } catch (cancelErr) {
+        console.error(`No se pudo cancelar la intención en cola ${queuedIntentId} antes de reintentar:`, cancelErr);
+        throw err; // se prioriza el error original (2205), más claro para la cajera
+      }
+      return attempt(); // reintento único, no hay loop
+    }
+  }
+
+  private createPaymentIntentAttempt(amount: number, description?: string): Promise<MpPaymentIntentResponse> {
     const deviceId = env.MP_POS_DEVICE_ID;
 
     return this.pointApiRequest<MpPaymentIntentResponse>(
       `/point/integration-api/devices/${deviceId}/payment-intents`,
       {
         method: "POST",
+        headers: { "X-Idempotency-Key": randomUUID() },
         body: JSON.stringify({
           amount: Math.round(amount * 100),
           additional_info: {
-            external_reference: "Cobro Cocktrail"
-          }
+            external_reference: buildExternalReference(description),
+          },
         }),
       },
       "Error al crear la intención de pago en el Posnet",
