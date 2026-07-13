@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { useEventState } from "./useEventState";
 import { FakeEventSource } from "@/lib/__testUtils__/fakeEventSource";
 import { eventsService } from "@/services/events.service";
-import type { CashSale, EventSummary, NightEvent, Order } from "@cocktrail/shared";
+import type { EventSummary, NightEvent, Order } from "@cocktrail/shared";
 
 vi.mock("@/services/events.service", () => ({
   eventsService: {
@@ -25,17 +25,6 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     status: "pendiente",
     createdAt: Date.now(),
     createdBy: "caja1",
-    ...overrides,
-  };
-}
-
-function makeCashSale(overrides: Partial<CashSale> = {}): CashSale {
-  return {
-    id: "cash-1",
-    amount: 1000,
-    description: "Venta",
-    addedBy: "caja1",
-    createdAt: Date.now(),
     ...overrides,
   };
 }
@@ -62,7 +51,6 @@ function makeSummary(overrides: Partial<EventSummary> = {}): EventSummary {
       drinksSold: [], total: 0,
     },
     orders: [],
-    cashSales: [],
     ...overrides,
   };
 }
@@ -75,7 +63,6 @@ beforeEach(() => {
     event: null,
     drinks: [],
     orders: [],
-    cashSales: [],
     totals: {
       webTotal: 0, webCount: 0, efectivoTotal: 0, efectivoCount: 0,
       qrTotal: 0, qrCount: 0, debitoTotal: 0, debitoCount: 0,
@@ -93,15 +80,13 @@ describe("useEventState", () => {
   it("arranca con los valores de `initial` cuando se pasan (caso AdminClient)", () => {
     const seedEvent = makeNightEvent();
     const seedOrders = [makeOrder({ id: "seed-1" })];
-    const seedCashSales = [makeCashSale({ id: "seed-cash" })];
 
     const { result } = renderHook(() =>
-      useEventState({ initial: { event: seedEvent, orders: seedOrders, cashSales: seedCashSales } }),
+      useEventState({ initial: { event: seedEvent, orders: seedOrders } }),
     );
 
     expect(result.current.event).toEqual(seedEvent);
     expect(result.current.orders).toEqual(seedOrders);
-    expect(result.current.cashSales).toEqual(seedCashSales);
   });
 
   it("arranca en null/[] sin `initial` (caso CajaClient)", () => {
@@ -109,7 +94,6 @@ describe("useEventState", () => {
 
     expect(result.current.event).toBeNull();
     expect(result.current.orders).toEqual([]);
-    expect(result.current.cashSales).toEqual([]);
   });
 
   it("order.created hace upsert por id: agrega si es nuevo", () => {
@@ -132,17 +116,6 @@ describe("useEventState", () => {
     expect(result.current.orders[0].status).toBe("entregado");
   });
 
-  it("cash_sale.added hace upsert por id en cashSales", () => {
-    const { result } = renderHook(() => useEventState());
-    const es = FakeEventSource.instances.at(-1)!;
-
-    act(() => es.emit("cash_sale.added", { cashSale: makeCashSale({ id: "c1" }) }));
-    act(() => es.emit("cash_sale.added", { cashSale: makeCashSale({ id: "c1", amount: 500 }) }));
-
-    expect(result.current.cashSales).toHaveLength(1);
-    expect(result.current.cashSales[0].amount).toBe(500);
-  });
-
   it("event.opened setea el evento y dispara refetch", async () => {
     const { result } = renderHook(() => useEventState());
     const es = FakeEventSource.instances.at(-1)!;
@@ -152,7 +125,6 @@ describe("useEventState", () => {
       event: newEvent,
       drinks: [],
       orders: [makeOrder({ id: "refetched" })],
-      cashSales: [],
       totals: {
         webTotal: 0, webCount: 0, efectivoTotal: 0, efectivoCount: 0,
         qrTotal: 0, qrCount: 0, debitoTotal: 0, debitoCount: 0,
@@ -196,7 +168,6 @@ describe("useEventState", () => {
 
     act(() => es.emit("order.created", { order: makeOrder({ id: "o1" }) }));
     act(() => es.emit("order.updated", { order: makeOrder({ id: "o1" }) }));
-    act(() => es.emit("cash_sale.added", { cashSale: makeCashSale({ id: "c1" }) }));
 
     // onOpen también cuenta como actividad (ver siguiente test) — se resetea acá.
     onActivity.mockClear();

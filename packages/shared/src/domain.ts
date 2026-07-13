@@ -55,14 +55,6 @@ export type Order = {
   redeemMethod?: "scan" | "manual";
 };
 
-export type CashSale = {
-  id: string;
-  amount: number;
-  description: string;
-  addedBy: string;
-  createdAt: number;
-};
-
 export type EventStatus = "activo" | "cerrado";
 
 export type NightEvent = {
@@ -98,15 +90,9 @@ export type EventTotals = {
 export type EventSummary = NightEvent & {
   totals: EventTotals;
   orders: Order[];
-  cashSales: CashSale[];
 };
 
 export type NewOrderInput = {
   items: { drinkId: number; qty: number }[];
   paymentMethod: PaymentMethod;
-};
-
-export type NewCashSaleInput = {
-  amount: number;
-  description: string;
 };

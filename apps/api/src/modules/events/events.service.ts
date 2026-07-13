@@ -7,7 +7,6 @@ import type {
 } from "@cocktrail/shared";
 import type { EventsRepository } from "./events.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
-import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { ConfigRepository } from "../config/config.repository.js";
 import type { SyncService } from "../sync/sync.service.js";
@@ -25,7 +24,6 @@ export class EventsService {
   constructor(
     private eventsRepo: EventsRepository,
     private ordersRepo: OrdersRepository,
-    private cashSalesRepo: CashSalesRepository,
     private drinksRepo: DrinksRepository,
     private emit: EmitFn,
     private syncService: SyncService,
@@ -141,10 +139,9 @@ export class EventsService {
 
   async getEventTotals(): Promise<EventTotals> {
     await this.ensureInitialized();
-    if (!this.event) return computeTotals([], []);
+    if (!this.event) return computeTotals([]);
     const orders = await this.ordersRepo.listForEvent(this.event.id);
-    const cashSales = await this.cashSalesRepo.listForEvent(this.event.id);
-    return computeTotals(orders, cashSales);
+    return computeTotals(orders);
   }
 
   async openEvent(keyword: string): Promise<NightEvent> {
@@ -191,8 +188,7 @@ export class EventsService {
 
     const closedAt = Date.now();
     const orders = await this.ordersRepo.listForEvent(this.event.id);
-    const cashSales = await this.cashSalesRepo.listForEvent(this.event.id);
-    const totals = computeTotals(orders, cashSales);
+    const totals = computeTotals(orders);
 
     // Update status to closed
     this.event.status = "cerrado";
@@ -209,7 +205,6 @@ export class EventsService {
       ...closedEvent,
       totals,
       orders,
-      cashSales,
     };
 
     this.emit({ type: "event.closed", summary });
@@ -230,9 +225,8 @@ export class EventsService {
     const summaries: EventSummary[] = [];
     for (const ev of closed) {
       const orders = await this.ordersRepo.listForEvent(ev.id);
-      const cashSales = await this.cashSalesRepo.listForEvent(ev.id);
-      const totals = computeTotals(orders, cashSales);
-      
+      const totals = computeTotals(orders);
+
       // Auto-cleanup: If a closed night has $0 total, delete it permanently from the database
       if (totals.total === 0) {
         console.log(`[EventsService] Night event ${ev.id} has $0 total. Automatically deleting from database...`);
@@ -249,7 +243,6 @@ export class EventsService {
         ...ev,
         totals,
         orders,
-        cashSales,
       });
     }
     return summaries;
@@ -304,13 +297,11 @@ export class EventsService {
     await this.ensureInitialized();
     const drinks = await this.drinksRepo.list();
     const orders = this.event ? await this.ordersRepo.listForEvent(this.event.id) : [];
-    const cashSales = this.event ? await this.cashSalesRepo.listForEvent(this.event.id) : [];
-    const totals = computeTotals(orders, cashSales);
+    const totals = computeTotals(orders);
     return {
       event: this.event,
       drinks,
       orders,
-      cashSales,
       totals,
       activeTheme: this.activeTheme,
     };
@@ -338,10 +329,6 @@ export class EventsService {
 
     for (const o of summary.orders) {
       await this.ordersRepo.create(o, event.id);
-    }
-
-    for (const cs of summary.cashSales) {
-      await this.cashSalesRepo.add(cs, event.id);
     }
   }
 }

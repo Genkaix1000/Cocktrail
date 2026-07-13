@@ -9,7 +9,6 @@ import { generalLimiter } from "./shared/middleware/rate-limit.js";
 import { createAuthController } from "./modules/auth/auth.controller.js";
 import { createDrinksController } from "./modules/drinks/drinks.controller.js";
 import { createOrdersController } from "./modules/orders/orders.controller.js";
-import { createCashSalesController } from "./modules/cash-sales/cash-sales.controller.js";
 import { createEventsController } from "./modules/events/events.controller.js";
 import { createSSEController } from "./modules/sse/sse.controller.js";
 import { createTicketsController } from "./modules/tickets/tickets.controller.js";
@@ -25,8 +24,6 @@ import { SupabaseOrdersRepository } from "./modules/orders/orders.repository.js"
 import { OrdersService } from "./modules/orders/orders.service.js";
 import { SupabaseTicketsRepository } from "./modules/tickets/tickets.repository.js";
 import { TicketsService } from "./modules/tickets/tickets.service.js";
-import { SupabaseCashSalesRepository } from "./modules/cash-sales/cash-sales.repository.js";
-import { CashSalesService } from "./modules/cash-sales/cash-sales.service.js";
 import { SupabaseEventsRepository } from "./modules/events/events.repository.js";
 import { EventsService } from "./modules/events/events.service.js";
 import { SupabaseUsersRepository } from "./modules/users/users.repository.js";
@@ -48,7 +45,6 @@ import { errorHandler } from "./shared/middleware/error-handler.js";
 const drinksRepo = new SupabaseDrinksRepository();
 const eventsRepo = new SupabaseEventsRepository();
 const ordersRepo = new SupabaseOrdersRepository();
-const cashSalesRepo = new SupabaseCashSalesRepository();
 const ticketsRepo = new SupabaseTicketsRepository();
 const usersRepo = new SupabaseUsersRepository();
 const configRepo = new SupabaseConfigRepository();
@@ -57,9 +53,9 @@ const drinksService = new DrinksService(drinksRepo);
 const usersService = new UsersService(usersRepo);
 
 const cloudSyncRepo = new SupabaseCloudSyncRepository();
-const syncService = new SyncService(usersRepo, drinksRepo, ordersRepo, cashSalesRepo, ticketsRepo, eventsRepo, cloudSyncRepo);
+const syncService = new SyncService(usersRepo, drinksRepo, ordersRepo, ticketsRepo, eventsRepo, cloudSyncRepo);
 
-const eventsService = new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, emit, syncService, configRepo);
+const eventsService = new EventsService(eventsRepo, ordersRepo, drinksRepo, emit, syncService, configRepo);
 
 const printerService = new PrinterService();
 
@@ -86,12 +82,6 @@ const ticketsService = new TicketsService(
   ticketsRepo,
   ordersService,
   env.AUTH_SECRET,
-);
-
-const cashSalesService = new CashSalesService(
-  cashSalesRepo,
-  async () => eventsService.getCurrentEvent(),
-  emit,
 );
 
 const mpService = new MercadoPagoService();
@@ -149,7 +139,6 @@ import { createSystemController } from "./modules/system/system.controller.js";
 app.use("/api/auth", createAuthController(usersRepo));
 app.use("/api/drinks", createDrinksController(drinksService));
 app.use("/api/orders", createOrdersController(ordersService));
-app.use("/api/cash-sales", createCashSalesController(cashSalesService));
 app.use("/api/events", createSSEController());
 app.use("/api/tickets", createTicketsController(ticketsService));
 app.use("/api/users", createUsersController(usersService));

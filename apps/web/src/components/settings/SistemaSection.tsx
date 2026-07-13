@@ -10,7 +10,6 @@ const TABLE_LABELS: Record<keyof RestoreResult, string> = {
   nightEvents: "Noches",
   orders: "Pedidos",
   tickets: "Tickets",
-  cashSales: "Ingresos de caja",
   auditLogs: "Auditoría",
 };
 
@@ -33,7 +32,7 @@ function TableResultRow({ label, result }: { label: string; result: SyncTableRes
 
 /**
  * Sección "Sistema" de Configuración en /admin — restore de emergencia desde Supabase
- * Cloud (noches/pedidos/tickets/caja/auditoría). Motivado por un incidente real: la
+ * Cloud (noches/pedidos/tickets/auditoría). Motivado por un incidente real: la
  * carta local se vació en silencio por un bug de sync, sin ninguna forma de
  * recuperarla desde /admin. Ver docs/specs/restaurar-backup-desde-cloud.md.
  */
@@ -83,7 +82,7 @@ export default function SistemaSection() {
           <span>Sistema</span>
         </h1>
         <p className="text-[13px] text-ink-400/80 mt-1">
-          Trae de la nube todo el historial (noches, pedidos, tickets, caja y auditoría) y lo
+          Trae de la nube todo el historial (noches, pedidos, tickets y auditoría) y lo
           suma a lo que ya tenés acá. No borra nada local.
         </p>
       </div>

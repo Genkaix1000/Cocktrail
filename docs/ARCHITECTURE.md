@@ -141,7 +141,7 @@ Al arrancar, el server **abre el puerto HTTP primero** y luego intenta conectar 
 El "flag" que decide *single backend* vs *local+cloud* es simplemente **la presencia de las env `SUPABASE_CLOUD_*`**.
 
 ### Esquema (`supabase/migrations/`)
-- `20240101000000_schema.sql` — `night_events` (status, `order_counter`, `sync_status`, `synced_at`), `orders` (items JSONB, total, payment_method, status, ticket_code, campos de cancelación/entrega), `tickets` (code único, redención), `cash_sales`.
+- `20240101000000_schema.sql` — `night_events` (status, `order_counter`, `sync_status`, `synced_at`), `orders` (items JSONB, total, payment_method, status, ticket_code, campos de cancelación/entrega), `tickets` (code único, redención), `cash_sales` (tabla sin uso — la feature de "venta manual de barra" nunca se conectó a una UI y se retiró del código el 2026-07-13; la tabla queda sin tocar en DB, no se migra).
 - `20240102000000_edge_sync.sql` — datos maestros: `users` (password_hash, role, permissions JSONB), `drinks`, `app_config` (theme, branding, `mercado_pago` JSONB, club, logo).
 - `20260626175947_add_closed_by.sql` — `night_events.closed_by`.
 - `20260629201500_create_audit_logs.sql` — `audit_logs` (action, description, operator, created_at).
@@ -155,7 +155,7 @@ El "flag" que decide *single backend* vs *local+cloud* es simplemente **la prese
 ## 6. Sincronización local ↔ nube (`modules/sync/sync.service.ts`)
 
 Implementa el modelo "**caja offline, reconcilia al cerrar**". `SyncService` recibe los
-repositorios locales ya auditados (`Users`/`Drinks`/`Orders`/`CashSales`/`Tickets`/
+repositorios locales ya auditados (`Users`/`Drinks`/`Orders`/`Tickets`/
 `EventsRepository`) y un `CloudSyncRepository` (`modules/sync/cloud-sync.repository.ts`) por
 constructor — no pega directo a `supabase`/`supabaseCloud`, salvo el seed local-only de datos
 demo (a propósito: evita el dual-write a cloud que hacen `UsersRepository.create()`/
@@ -163,11 +163,11 @@ demo (a propósito: evita el dual-write a cloud que hacen `UsersRepository.creat
 que concentra el acceso crudo a `supabaseCloud` (pull cloud→local, push local→cloud bulk).
 
 - **`pullMasterData()`** — **Cloud → Local**. Baja `users` y `drinks` y hace `upsert` en local. Si no hay nada en ningún lado, siembra admin + drinks por defecto.
-- **`pushEventData(eventId)`** — **Local → Cloud**. Sube un `night_event` cerrado + sus `orders` + `tickets` + `cash_sales`. Marca `sync_status` `pending → synced/failed` en la tabla local. Calcula totales con `computeTotals` y los guarda en `night_events.totals` (cloud).
+- **`pushEventData(eventId)`** — **Local → Cloud**. Sube un `night_event` cerrado + sus `orders` + `tickets`. Marca `sync_status` `pending → synced/failed` en la tabla local. Calcula totales con `computeTotals` y los guarda en `night_events.totals` (cloud).
 - **`syncAllPendingEvents()`** — recorre noches cerradas locales con `sync_status != 'synced'` y las reintenta.
 - **`ensureLocalMasterDataSeeded()`** — siembra admin/drinks en local en cada boot (sin tocar la nube).
 - **`pushAuditLogsIfConfigured()`** — **Local → Cloud**, fire-and-forget. Sube `audit_logs` completo a cloud vía upsert; nunca lanza (se llama junto al push de cada cierre de noche, `events.service.ts`).
-- **`restoreFromCloud()`** — **Cloud → Local, merge/upsert (gana cloud en conflicto, no borra nada local)**. Restore de emergencia para cuando una tabla local se vació o corrompió (motivado por un incidente real: `drinks` se vació en silencio por un bug de sync ya arreglado). Trae `night_events` (forzando `status: "cerrado"`, descartando `totals` que es cloud-only) → `orders` → `tickets` → `cash_sales` → `audit_logs`, en ese orden, cada tabla en su propio try/catch para que una falla no aborte el resto. Devuelve un `RestoreResult` con `{ok, failed, error?}` por tabla — nunca un booleano (lección directa del incidente de `drinks`). Expuesto en `POST /api/system/restore` (rol `admin` únicamente, re-pide contraseña) y en `/admin` → Configuración → Sistema.
+- **`restoreFromCloud()`** — **Cloud → Local, merge/upsert (gana cloud en conflicto, no borra nada local)**. Restore de emergencia para cuando una tabla local se vació o corrompió (motivado por un incidente real: `drinks` se vació en silencio por un bug de sync ya arreglado). Trae `night_events` (forzando `status: "cerrado"`, descartando `totals` que es cloud-only) → `orders` → `tickets` → `audit_logs`, en ese orden, cada tabla en su propio try/catch para que una falla no aborte el resto. Devuelve un `RestoreResult` con `{ok, failed, error?}` por tabla — nunca un booleano (lección directa del incidente de `drinks`). Expuesto en `POST /api/system/restore` (rol `admin` únicamente, re-pide contraseña) y en `/admin` → Configuración → Sistema.
 
 **Cuándo corre:**
 - Al **cerrar la noche** (`events.service.closeEvent` → sync en background).

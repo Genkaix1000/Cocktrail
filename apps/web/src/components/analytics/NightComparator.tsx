@@ -384,9 +384,9 @@ function NightDetailView({
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Pedidos / Ventas</span>
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Pedidos</span>
             <span className="font-mono text-[14px] text-ink-200">
-              {night.orderCounter} / {night.cashSalesCount}
+              {night.orderCounter}
             </span>
           </div>
         </div>
@@ -443,8 +443,8 @@ function NightDetailView({
                 <span className="text-ink-300">${session.totals.efectivoTotal.toLocaleString("es-AR")} ({session.totals.efectivoCount})</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Pedidos / Ventas</span>
-                <span className="text-ink-300">{session.orderCounter} / {session.cashSales.length}</span>
+                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Pedidos</span>
+                <span className="text-ink-300">{session.orderCounter}</span>
               </div>
             </div>
           </div>

@@ -3,16 +3,15 @@
 import { TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type { CashSale, NightEvent, Order } from "@cocktrail/shared";
+import type { NightEvent, Order } from "@cocktrail/shared";
 import type { computeTotals } from "@/lib/totals";
 
 type Totals = ReturnType<typeof computeTotals>;
 
 type Props = {
   event: NightEvent | null;
-  /** Órdenes/ventas en efectivo de la noche activa, ya filtradas por el shell. */
+  /** Órdenes de la noche activa, ya filtradas por el shell. */
   activeNightOrders: Order[];
-  activeNightCashSales: CashSale[];
   totals: Totals;
 };
 
@@ -24,7 +23,7 @@ type Props = {
  * `totalDrinkUnits`, `totalOps`, `avgTicket`) era exclusiva de esta vista en
  * el shell original — se movió acá completa.
  */
-export default function MetricasSection({ event, activeNightOrders, activeNightCashSales, totals }: Props) {
+export default function MetricasSection({ event, activeNightOrders, totals }: Props) {
   const [activeHoverSlot, setActiveHoverSlot] = useState<number | null>(null);
 
   const totalDrinkUnits = useMemo(() => {
@@ -48,11 +47,8 @@ export default function MetricasSection({ event, activeNightOrders, activeNightC
     const slots: {
       label: string;
       hour: number;
-      digitalSales: number;
-      digitalCount: number;
-      cashSales: number;
-      cashCount: number;
       totalSales: number;
+      totalCount: number;
     }[] = [];
 
     // Generar exactamente 10 franjas horarias a partir de la hora de inicio del evento
@@ -63,11 +59,8 @@ export default function MetricasSection({ event, activeNightOrders, activeNightC
       slots.push({
         label: `${String(hr).padStart(2, "0")}:00`,
         hour: hr,
-        digitalSales: 0,
-        digitalCount: 0,
-        cashSales: 0,
-        cashCount: 0,
         totalSales: 0,
+        totalCount: 0,
       });
     }
 
@@ -77,25 +70,13 @@ export default function MetricasSection({ event, activeNightOrders, activeNightC
       const hr = orderDate.getHours();
       const slot = slots.find((s) => s.hour === hr);
       if (slot) {
-        slot.digitalSales += order.total;
-        slot.digitalCount += 1;
         slot.totalSales += order.total;
-      }
-    }
-
-    for (const sale of activeNightCashSales) {
-      const saleDate = new Date(sale.createdAt);
-      const hr = saleDate.getHours();
-      const slot = slots.find((s) => s.hour === hr);
-      if (slot) {
-        slot.cashSales += sale.amount;
-        slot.cashCount += 1;
-        slot.totalSales += sale.amount;
+        slot.totalCount += 1;
       }
     }
 
     return slots;
-  }, [event, activeNightOrders, activeNightCashSales]);
+  }, [event, activeNightOrders]);
 
   const maxHourSales = useMemo(() => {
     if (hourlyData.length === 0) return 1000;
@@ -168,22 +149,11 @@ export default function MetricasSection({ event, activeNightOrders, activeNightC
                       Franja: {slot.label} a {String((slot.hour + 1) % 24).padStart(2, "0")}:00 hs
                     </span>
                     <div className="flex justify-between text-[11px] text-ink-100 mt-1">
-                      <span>Digitales:</span>
-                      <span className="font-mono font-bold">${slot.digitalSales.toLocaleString("es-AR")}</span>
-                    </div>
-                    <div className="flex justify-between text-[9px] text-ink-500">
-                      <span>({slot.digitalCount} pedidos)</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] text-ink-100 mt-1">
-                      <span>Barra:</span>
-                      <span className="font-mono font-bold">${slot.cashSales.toLocaleString("es-AR")}</span>
-                    </div>
-                    <div className="flex justify-between text-[9px] text-ink-500">
-                      <span>({slot.cashCount} ventas)</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] font-bold border-t border-ink-800 pt-1.5 mt-1.5 text-accent">
                       <span>Total:</span>
-                      <span className="font-mono">${slot.totalSales.toLocaleString("es-AR")}</span>
+                      <span className="font-mono font-bold">${slot.totalSales.toLocaleString("es-AR")}</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-ink-500">
+                      <span>({slot.totalCount} pedidos)</span>
                     </div>
                   </div>
                 )}

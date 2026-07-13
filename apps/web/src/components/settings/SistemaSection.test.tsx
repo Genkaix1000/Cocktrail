@@ -19,7 +19,6 @@ function makeResult(overrides: Partial<RestoreResult> = {}): RestoreResult {
     nightEvents: { ok: 3, failed: 0 },
     orders: { ok: 10, failed: 0 },
     tickets: { ok: 10, failed: 0 },
-    cashSales: { ok: 2, failed: 0 },
     auditLogs: { ok: 5, failed: 0 },
     ...overrides,
   };

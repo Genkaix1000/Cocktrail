@@ -71,7 +71,7 @@ describe("compareEventSync", () => {
 
     expect(result.ok).toBe(true);
     expect(result.mismatches).toEqual([]);
-    expect(result.summary).toEqual({ orders: 1, tickets: 1, cashSales: 0, totals: { total: 2500 } });
+    expect(result.summary).toEqual({ orders: 1, tickets: 1, totals: { total: 2500 } });
   });
 
   it("ok:false si el evento no llegó a cloud todavía", async () => {

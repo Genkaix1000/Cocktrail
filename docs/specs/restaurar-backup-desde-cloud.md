@@ -3,6 +3,12 @@
 **Estado**: done
 **Fecha**: 2026-07-13
 
+> 📌 **Actualización 2026-07-13 (más tarde el mismo día)**: `cash_sales` se retiró del
+> código (feature muerta, nunca conectada a una UI — ver `docs/ROADMAP.md`). El resto de
+> este documento queda como registro histórico de cómo se diseñó la feature en su
+> momento (5 tablas); `RestoreResult` hoy tiene 4 claves (`nightEvents`/`orders`/
+> `tickets`/`auditLogs`), no 5.
+
 ---
 
 ## Problema / Por qué

@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import type {
-  CashSale,
   EventSummary,
   NightEvent,
   Order,
@@ -18,7 +17,6 @@ import { API_URL } from "@/config/env";
 export type DomainEventHandlers = Partial<{
   "order.created": (data: { order: Order }) => void;
   "order.updated": (data: { order: Order }) => void;
-  "cash_sale.added": (data: { cashSale: CashSale }) => void;
   "event.closed": (data: { summary: EventSummary }) => void;
   "event.opened": (data: { event: NightEvent }) => void;
   "theme.changed": (data: {

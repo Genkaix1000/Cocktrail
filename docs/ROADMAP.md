@@ -511,6 +511,17 @@ quedan explícitamente afuera de esta ronda — ver sus secciones.
   contraseña) y en `/admin` → Configuración → Sistema (botón "Restaurar desde backup"). De paso se
   sumó `pushAuditLogsIfConfigured()`: `audit_logs` no se sincronizaba a cloud en ningún sentido
   hasta ahora.
+- [x] **Eliminado `cash_sales`** (2026-07-13, más tarde el mismo día): feature "venta manual de
+  barra" completa en el backend (tabla, repo, service, controller, push/pull a cloud, evento SSE
+  `cash_sale.added`) pero el botón que debía abrirla en `/caja` (`CashSaleModal`) nunca se conectó
+  a nada — confirmado por grep, cero referencias en todo `apps/web/src`. La tabla estaba vacía en
+  local y en cloud; las ventas en efectivo reales del usuario ya viven en `orders`
+  (`payment_method: "efectivo"`). Se retiró todo el código de aplicación (módulo backend,
+  DI en `app.ts`, push/pull en sync, `RestoreResult` pasó de 5 a 4 tablas, tipo `CashSale` de
+  `packages/shared`, estado/listener SSE en `useEventState`, columnas de UI en
+  `MetricasSection`/`NightComparator`/`HistorialSection`) — la tabla `cash_sales` en Postgres
+  queda sin tocar (mismo criterio que la columna `permissions`: nada más apunta a ella, no vale
+  la pena migrar schema en cloud sin supervisión para esto).
 - [x] **R6 resuelto**: `next-env.d.ts` y `apps/api/src/data/*.json` — confirmado (2026-07-13) que
   ya no están trackeados en git y `.gitignore` ya los cubre; los `.json` de `data/` ni siquiera
   existen más (reemplazados por `.ts`). No hacía falta ningún cambio.

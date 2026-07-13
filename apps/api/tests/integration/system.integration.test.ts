@@ -71,7 +71,7 @@ describe("system (integración)", () => {
       // momento de correr los tests), solo que la forma de la respuesta es la esperada.
       const res = await request(app).post("/api/system/restore").set("Cookie", adminCookie).send({ password: "admin" });
       expect(res.status).toBe(200);
-      for (const key of ["nightEvents", "orders", "tickets", "cashSales", "auditLogs"] as const) {
+      for (const key of ["nightEvents", "orders", "tickets", "auditLogs"] as const) {
         expect(res.body[key]).toHaveProperty("ok");
         expect(res.body[key]).toHaveProperty("failed");
         expect(typeof res.body[key].ok).toBe("number");

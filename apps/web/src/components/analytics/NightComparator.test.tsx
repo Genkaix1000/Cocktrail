@@ -14,7 +14,6 @@ function makeSession(overrides: Partial<EventSummary> = {}): EventSummary {
     closedAt: Date.now(),
     orderCounter: 10,
     orders: [],
-    cashSales: [],
     totals: {
       webTotal: 40000,
       webCount: 4,
@@ -40,7 +39,6 @@ function makeNight(overrides: Partial<UnifiedNightDay> = {}): UnifiedNightDay {
     closedAt: session.closedAt!,
     sessions: [session],
     orderCounter: session.orderCounter,
-    cashSalesCount: session.cashSales.length,
     totals: session.totals,
     ...overrides,
   };

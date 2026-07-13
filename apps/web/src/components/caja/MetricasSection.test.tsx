@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import MetricasSection from "./MetricasSection";
 import { computeTotals } from "@/lib/totals";
 
-import type { CashSale, NightEvent, Order } from "@cocktrail/shared";
+import type { NightEvent, Order } from "@cocktrail/shared";
 
 function makeOrder(overrides: Partial<Order> = {}): Order {
   return {
@@ -17,17 +17,6 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     status: "entregado",
     createdAt: Date.now(),
     createdBy: "cajera1",
-    ...overrides,
-  };
-}
-
-function makeCashSale(overrides: Partial<CashSale> = {}): CashSale {
-  return {
-    id: "sale-1",
-    amount: 3000,
-    description: "Venta de barra",
-    addedBy: "cajera1",
-    createdAt: Date.now(),
     ...overrides,
   };
 }
@@ -45,15 +34,13 @@ function makeEvent(overrides: Partial<NightEvent> = {}): NightEvent {
 describe("MetricasSection", () => {
   it("renderiza los 3 widgets de estadísticas con los totales calculados", () => {
     const orders = [makeOrder()];
-    const cashSales = [makeCashSale()];
-    const totals = computeTotals(orders, cashSales);
+    const totals = computeTotals(orders);
     const event = makeEvent();
 
     render(
       <MetricasSection
         event={event}
         activeNightOrders={orders}
-        activeNightCashSales={cashSales}
         totals={totals}
       />,
     );
@@ -67,13 +54,12 @@ describe("MetricasSection", () => {
   });
 
   it("muestra guion en la hora pico cuando no hay evento activo", () => {
-    const totals = computeTotals([], []);
+    const totals = computeTotals([]);
 
     render(
       <MetricasSection
         event={null}
         activeNightOrders={[]}
-        activeNightCashSales={[]}
         totals={totals}
       />,
     );
@@ -83,14 +69,13 @@ describe("MetricasSection", () => {
 
   it("renderiza el gráfico de facturación por hora", () => {
     const orders = [makeOrder()];
-    const totals = computeTotals(orders, []);
+    const totals = computeTotals(orders);
     const event = makeEvent();
 
     render(
       <MetricasSection
         event={event}
         activeNightOrders={orders}
-        activeNightCashSales={[]}
         totals={totals}
       />,
     );

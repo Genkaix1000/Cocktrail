@@ -26,7 +26,6 @@ const summary: EventSummary = {
   orderCounter: 4,
   totals,
   orders: [],
-  cashSales: [],
 };
 
 function baseProps(overrides: Partial<React.ComponentProps<typeof CloseNightModal>> = {}) {

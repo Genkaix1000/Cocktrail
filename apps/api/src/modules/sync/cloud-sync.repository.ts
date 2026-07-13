@@ -1,5 +1,5 @@
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
-import type { CashSale, EventTotals, NightEvent, Order } from "@cocktrail/shared";
+import type { EventTotals, NightEvent, Order } from "@cocktrail/shared";
 import type { Ticket } from "../tickets/tickets.repository.js";
 
 /**
@@ -49,12 +49,10 @@ export interface CloudSyncRepository {
   pushNightEvent(event: NightEvent, totals: EventTotals): Promise<void>;
   pushOrders(eventId: string, orders: Order[]): Promise<void>;
   pushTickets(tickets: Ticket[]): Promise<void>;
-  pushCashSales(eventId: string, cashSales: CashSale[]): Promise<void>;
   /** Restore completo (cloud → local), no destructivo, merge/upsert por id. */
   pullNightEvents(): Promise<SyncTableResult>;
   pullOrders(): Promise<SyncTableResult>;
   pullTickets(): Promise<SyncTableResult>;
-  pullCashSales(): Promise<SyncTableResult>;
   pushAuditLogs(): Promise<SyncTableResult>;
   pullAuditLogs(): Promise<SyncTableResult>;
 }
@@ -156,20 +154,6 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
     if (error) throw error;
   }
 
-  async pushCashSales(eventId: string, cashSales: CashSale[]): Promise<void> {
-    if (!supabaseCloud || cashSales.length === 0) return;
-    const rows = cashSales.map((c) => ({
-      id: c.id,
-      event_id: eventId,
-      amount: c.amount,
-      description: c.description,
-      added_by: c.addedBy,
-      created_at: new Date(c.createdAt).toISOString(),
-    }));
-    const { error } = await supabaseCloud.from("cash_sales").upsert(rows);
-    if (error) throw error;
-  }
-
   /**
    * Restore de `night_events` cloud → local. Mapeo EXPLÍCITO (no passthrough como
    * users/drinks): confirmado en vivo (2026-07-13) que la tabla cloud NO tiene columna
@@ -232,17 +216,6 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
       return { ok: 0, failed: 0, error: error.message };
     }
     return batchUpsertLocal("tickets", data ?? []);
-  }
-
-  /** Restore de `cash_sales` cloud → local. Columnas 1:1 con local, passthrough. */
-  async pullCashSales(): Promise<SyncTableResult> {
-    if (!supabaseCloud) return { ok: 0, failed: 0 };
-    const { data, error } = await supabaseCloud.from("cash_sales").select("*");
-    if (error) {
-      console.error("[SupabaseCloudSyncRepository] Error descargando cash_sales:", error.message);
-      return { ok: 0, failed: 0, error: error.message };
-    }
-    return batchUpsertLocal("cash_sales", data ?? []);
   }
 
   /**

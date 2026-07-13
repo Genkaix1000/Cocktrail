@@ -2,7 +2,6 @@ import { randomUUID, createHash } from "node:crypto";
 import type { UsersRepository } from "../users/users.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
-import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { TicketsRepository } from "../tickets/tickets.repository.js";
 import type { EventsRepository } from "../events/events.repository.js";
 import type { CloudSyncRepository, SyncTableResult } from "./cloud-sync.repository.js";
@@ -18,7 +17,6 @@ export type RestoreResult = {
   nightEvents: SyncTableResult;
   orders: SyncTableResult;
   tickets: SyncTableResult;
-  cashSales: SyncTableResult;
   auditLogs: SyncTableResult;
 };
 
@@ -27,7 +25,6 @@ export class SyncService {
     private usersRepo: UsersRepository,
     private drinksRepo: DrinksRepository,
     private ordersRepo: OrdersRepository,
-    private cashSalesRepo: CashSalesRepository,
     private ticketsRepo: TicketsRepository,
     private eventsRepo: EventsRepository,
     private cloudSyncRepo: CloudSyncRepository,
@@ -174,11 +171,7 @@ export class SyncService {
         await this.cloudSyncRepo.pushTickets(tickets);
       }
 
-      // 5. Obtener y subir Cash Sales
-      const cashSales = await this.cashSalesRepo.listForEvent(eventId);
-      await this.cloudSyncRepo.pushCashSales(eventId, cashSales);
-
-      // 6. Marcar como sincronizado localmente
+      // 5. Marcar como sincronizado localmente
       await this.eventsRepo.updateSyncStatus(eventId, "synced", Date.now());
 
       console.log(`[SyncService] ☁️✅ Evento ${eventId} subido a la nube correctamente.`);
@@ -208,8 +201,7 @@ export class SyncService {
     for (const event of pendingEvents) {
       try {
         const orders = await this.ordersRepo.listForEvent(event.id);
-        const cashSales = await this.cashSalesRepo.listForEvent(event.id);
-        const totals = computeTotals(orders, cashSales);
+        const totals = computeTotals(orders);
 
         const synced = await this.pushEventData(event.id, event, totals);
         if (synced) {
@@ -228,7 +220,7 @@ export class SyncService {
 
   /**
    * Restore completo cloud → local: trae TODO el historial disponible en Supabase Cloud
-   * (noches cerradas + sus pedidos/tickets/cierres de caja + auditoría) y hace merge/upsert
+   * (noches cerradas + sus pedidos/tickets + auditoría) y hace merge/upsert
    * por id en local — nunca destructivo, nunca borra nada que ya esté en local. Gana la
    * versión de cloud en conflicto. Pensado como recuperación de emergencia (botón manual en
    * /admin), no como parte del sync automático. Ver docs/specs/restaurar-backup-desde-cloud.md.
@@ -243,13 +235,12 @@ export class SyncService {
         nightEvents: notConfigured,
         orders: notConfigured,
         tickets: notConfigured,
-        cashSales: notConfigured,
         auditLogs: notConfigured,
       };
     }
 
     // Orden importa: night_events primero (gate real de integridad referencial para
-    // orders/tickets/cash_sales, ver docs/specs/restaurar-backup-desde-cloud.md).
+    // orders/tickets, ver docs/specs/restaurar-backup-desde-cloud.md).
     // Cada pull ya maneja sus propios errores internamente y no lanza — el try/catch acá
     // es defensa en profundidad ante un fallo inesperado, para que uno no tumbe al resto.
     const safePull = async (label: string, fn: () => Promise<SyncTableResult>): Promise<SyncTableResult> => {
@@ -264,10 +255,9 @@ export class SyncService {
     const nightEvents = await safePull("night_events", () => this.cloudSyncRepo.pullNightEvents());
     const orders = await safePull("orders", () => this.cloudSyncRepo.pullOrders());
     const tickets = await safePull("tickets", () => this.cloudSyncRepo.pullTickets());
-    const cashSales = await safePull("cash_sales", () => this.cloudSyncRepo.pullCashSales());
     const auditLogs = await safePull("audit_logs", () => this.cloudSyncRepo.pullAuditLogs());
 
-    return { nightEvents, orders, tickets, cashSales, auditLogs };
+    return { nightEvents, orders, tickets, auditLogs };
   }
 
   /**

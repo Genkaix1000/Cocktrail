@@ -15,7 +15,7 @@ import {
   computeMonthlyDelta,
 } from "@/lib/analytics";
 
-import type { CashSale, EventSummary, EventTotals, Order } from "@cocktrail/shared";
+import type { EventSummary, EventTotals, Order } from "@cocktrail/shared";
 
 /**
  * Hook compartido con todos los valores derivados de analytics que consumen
@@ -27,7 +27,6 @@ export function useAdminAnalytics(
   totals: EventTotals,
   eventStartedAt: number | undefined,
   orders: Order[],
-  cashSales: CashSale[],
   historyEvents: EventSummary[],
 ) {
   return useMemo(() => {
@@ -57,7 +56,7 @@ export function useAdminAnalytics(
 
     // 3. Dashboards (B)
     const _productRevenue = computeProductRevenue(totals.drinksSold);
-    const _hourlySlots = computeHourlySlots({ startedAt: eventStartedAt ?? 0 }, orders, cashSales);
+    const _hourlySlots = computeHourlySlots({ startedAt: eventStartedAt ?? 0 }, orders);
     // reduce en vez de Math.max(...array): un spread revienta el call stack
     // si _hourlySlots llega a tener miles de franjas (ver computeHourlySlots).
     const _maxHourSales = _hourlySlots.reduce((max, s) => Math.max(max, s.totalSales), 1000);
@@ -86,7 +85,7 @@ export function useAdminAnalytics(
       deltaTickets: _deltaTickets,
       deltaUnits: _deltaUnits,
     };
-  }, [totals, eventStartedAt, orders, cashSales, historyEvents]);
+  }, [totals, eventStartedAt, orders, historyEvents]);
 }
 
 export type AdminAnalytics = ReturnType<typeof useAdminAnalytics>;

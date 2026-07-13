@@ -7,7 +7,6 @@
 
 import type {
   Order,
-  CashSale,
   EventSummary,
   EventTotals,
   DrinkSold,
@@ -27,8 +26,6 @@ export type HourlySlot = {
   hour: number;
   digitalSales: number;
   digitalCount: number;
-  cashSales: number;
-  cashCount: number;
   totalSales: number;
   totalCount: number;
 };
@@ -86,7 +83,6 @@ export type UnifiedNightDay = {
     drinksSold: DrinkSold[];
   };
   orderCounter: number;
-  cashSalesCount: number;
 };
 
 // ─────────────────────── A1: Delta Comparativo ───────────────────────
@@ -150,13 +146,9 @@ export function formatDuration(ms: number | null): string {
 export function computeHourlySlots(
   event: { startedAt: number },
   orders: Order[],
-  cashSales: CashSale[],
 ): HourlySlot[] {
   const activeOrders = orders.filter((o) => o.status !== "cancelado");
-  const allTimestamps = [
-    ...activeOrders.map((o) => new Date(o.createdAt).getTime()),
-    ...cashSales.map((s) => new Date(s.createdAt).getTime()),
-  ];
+  const allTimestamps = activeOrders.map((o) => new Date(o.createdAt).getTime());
 
   let minTime = event.startedAt;
   let maxTime = Date.now();
@@ -192,8 +184,6 @@ export function computeHourlySlots(
       hour: hr,
       digitalSales: 0,
       digitalCount: 0,
-      cashSales: 0,
-      cashCount: 0,
       totalSales: 0,
       totalCount: 0,
     });
@@ -206,17 +196,6 @@ export function computeHourlySlots(
       slot.digitalSales += order.total;
       slot.digitalCount += 1;
       slot.totalSales += order.total;
-      slot.totalCount += 1;
-    }
-  }
-
-  for (const sale of cashSales) {
-    const hr = new Date(sale.createdAt).getHours();
-    const slot = slots.find((s) => s.hour === hr);
-    if (slot) {
-      slot.cashSales += sale.amount;
-      slot.cashCount += 1;
-      slot.totalSales += sale.amount;
       slot.totalCount += 1;
     }
   }

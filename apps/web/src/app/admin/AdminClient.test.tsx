@@ -73,14 +73,14 @@ beforeEach(() => {
 
 describe("AdminClient", () => {
   it("renderiza el panel completo (sidebar + Dashboard) cuando no hay noche activa", async () => {
-    render(<AdminClient initialEvent={null} initialOrders={[]} initialCashSales={[]} />);
+    render(<AdminClient initialEvent={null} initialOrders={[]} />);
 
     expect(await screen.findByText("DashboardSection")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Abrir noche/i })).toBeInTheDocument();
   });
 
   it("muestra el botón Abrir noche (no Clave de la noche/Cerrar noche) cuando no hay noche activa", async () => {
-    render(<AdminClient initialEvent={null} initialOrders={[]} initialCashSales={[]} />);
+    render(<AdminClient initialEvent={null} initialOrders={[]} />);
 
     await screen.findByText("DashboardSection");
     expect(screen.getByRole("button", { name: /Abrir noche/i })).toBeInTheDocument();
@@ -93,7 +93,6 @@ describe("AdminClient", () => {
       <AdminClient
         initialEvent={makeNightEvent()}
         initialOrders={[]}
-        initialCashSales={[]}
       />,
     );
 
@@ -108,7 +107,7 @@ describe("AdminClient", () => {
     const opened = makeNightEvent({ keyword: "MEDIANOCHE" });
     mockedEventsService.openEvent.mockResolvedValue(opened);
 
-    render(<AdminClient initialEvent={null} initialOrders={[]} initialCashSales={[]} />);
+    render(<AdminClient initialEvent={null} initialOrders={[]} />);
     await screen.findByText("DashboardSection");
 
     await user.click(screen.getByRole("button", { name: /Abrir noche/i }));

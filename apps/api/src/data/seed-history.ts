@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { SEED_DRINKS } from "./drinks.js";
 import { computeTotals } from "../shared/utils/totals.js";
 import type {
-  CashSale,
   EventSummary,
   Order,
   OrderItem,
@@ -52,21 +51,6 @@ function makeOrder(
   };
 }
 
-function makeCashSale(
-  amount: number,
-  description: string,
-  baseDate: number,
-  minutesAfter: number,
-): CashSale {
-  return {
-    id: randomUUID(),
-    amount,
-    description,
-    addedBy: "admin",
-    createdAt: baseDate + minutesAfter * 60 * 1000,
-  };
-}
-
 function buildSummary(params: {
   daysAgo: number;
   durationHours: number;
@@ -75,16 +59,12 @@ function buildSummary(params: {
     items: ReadonlyArray<readonly [number, number]>;
     minute: number;
   }>;
-  cash: ReadonlyArray<{ amount: number; desc: string; minute: number }>;
 }): EventSummary {
   const closedAt = Date.now() - params.daysAgo * DAY;
   const startedAt = closedAt - params.durationHours * HOUR;
 
   const orders = params.orders.map(({ n, items, minute }) =>
     makeOrder(n, items, startedAt, minute),
-  );
-  const cashSales = params.cash.map(({ amount, desc, minute }) =>
-    makeCashSale(amount, desc, startedAt, minute),
   );
 
   return {
@@ -93,9 +73,8 @@ function buildSummary(params: {
     startedAt,
     closedAt,
     orderCounter: orders.length,
-    totals: computeTotals(orders, cashSales),
+    totals: computeTotals(orders),
     orders,
-    cashSales,
   };
 }
 
@@ -119,11 +98,6 @@ export async function seedHistoryDemo(eventsService: EventsService): Promise<voi
         { n: 9, items: [[1, 2], [2, 1]], minute: 245 },
         { n: 10, items: [[6, 2]], minute: 290 },
       ],
-      cash: [
-        { amount: 5500, desc: "Fernet", minute: 60 },
-        { amount: 8000, desc: "2 Vodka Speed", minute: 140 },
-        { amount: 4200, desc: "Gancia", minute: 220 },
-      ],
     }),
     buildSummary({
       daysAgo: 3,
@@ -134,10 +108,6 @@ export async function seedHistoryDemo(eventsService: EventsService): Promise<voi
         { n: 3, items: [[4, 2]], minute: 78 },
         { n: 4, items: [[1, 2]], minute: 120 },
         { n: 5, items: [[5, 1], [7, 1]], minute: 165 },
-      ],
-      cash: [
-        { amount: 5500, desc: "Fernet", minute: 80 },
-        { amount: 3500, desc: "Cerveza", minute: 155 },
       ],
     }),
     buildSummary({
@@ -156,12 +126,6 @@ export async function seedHistoryDemo(eventsService: EventsService): Promise<voi
         { n: 10, items: [[1, 2]], minute: 290 },
         { n: 11, items: [[4, 3], [3, 1]], minute: 325 },
         { n: 12, items: [[1, 1], [2, 1], [6, 1]], minute: 365 },
-      ],
-      cash: [
-        { amount: 11000, desc: "2 Fernet", minute: 50 },
-        { amount: 5500, desc: "Fernet", minute: 130 },
-        { amount: 7000, desc: "2 Cerveza", minute: 200 },
-        { amount: 4800, desc: "Campari", minute: 310 },
       ],
     }),
   ];

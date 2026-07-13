@@ -1,4 +1,4 @@
-import type { CashSale, Order, OrderStatus } from "@cocktrail/shared";
+import type { Order, OrderStatus } from "@cocktrail/shared";
 
 /**
  * Metadata visual de cada status de pedido, compartida entre Ticket (cliente),

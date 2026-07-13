@@ -62,7 +62,6 @@ beforeEach(() => {
     event: null,
     drinks: [],
     orders: [],
-    cashSales: [],
     totals: { total: 0, byPaymentMethod: {} } as never,
     activeTheme: "bosko" as never,
   });
@@ -116,8 +115,7 @@ describe("TicketLive", () => {
       event: null,
       drinks: [],
       orders: [refreshedOrder],
-      cashSales: [],
-      totals: { total: 0, byPaymentMethod: {} } as never,
+        totals: { total: 0, byPaymentMethod: {} } as never,
       activeTheme: "bosko" as never,
     });
 

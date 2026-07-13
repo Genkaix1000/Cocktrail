@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { EventsService } from "./events.service.js";
 import type { EventsRepository } from "./events.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
-import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { NightEvent } from "@cocktrail/shared";
 
@@ -31,14 +30,6 @@ function makeOrdersRepo(overrides?: Partial<OrdersRepository>): OrdersRepository
   } as unknown as OrdersRepository;
 }
 
-function makeCashSalesRepo(overrides?: Partial<CashSalesRepository>): CashSalesRepository {
-  return {
-    add: vi.fn(),
-    listForEvent: vi.fn().mockResolvedValue([]),
-    ...overrides,
-  } as unknown as CashSalesRepository;
-}
-
 function makeDrinksRepo(): DrinksRepository {
   return {
     list: vi.fn().mockResolvedValue([]),
@@ -61,9 +52,8 @@ function makeSyncService() {
 function makeService(overrides?: { eventsRepo?: EventsRepository }) {
   const eventsRepo = overrides?.eventsRepo ?? makeEventsRepo();
   const ordersRepo = makeOrdersRepo();
-  const cashSalesRepo = makeCashSalesRepo();
   const drinksRepo = makeDrinksRepo();
-  return new EventsService(eventsRepo, ordersRepo, cashSalesRepo, drinksRepo, vi.fn(), makeSyncService());
+  return new EventsService(eventsRepo, ordersRepo, drinksRepo, vi.fn(), makeSyncService());
 }
 
 describe("EventsService.initialize", () => {

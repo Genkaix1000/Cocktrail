@@ -14,7 +14,7 @@ import type { EventSummary, EventTotals } from "@cocktrail/shared";
 // a mano sus campos derivados (mismo patrón que DashboardSection.test.tsx).
 function computeAnalytics(totals: EventTotals, historyEvents: EventSummary[] = []) {
   const { result } = renderHook(() =>
-    useAdminAnalytics(totals, Date.now() - 60 * 60 * 1000, [], [], historyEvents),
+    useAdminAnalytics(totals, Date.now() - 60 * 60 * 1000, [], historyEvents),
   );
   return result.current;
 }
@@ -49,7 +49,6 @@ function makeNight(overrides: Partial<EventSummary> = {}): EventSummary {
       drinksSold: [{ drinkId: 1, name: "Fernet", qty: 4, subtotal: 15000 }],
     },
     orders: [],
-    cashSales: [],
     ...overrides,
   };
 }

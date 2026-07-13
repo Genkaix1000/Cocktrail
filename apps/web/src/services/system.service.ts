@@ -6,7 +6,6 @@ export type RestoreResult = {
   nightEvents: SyncTableResult;
   orders: SyncTableResult;
   tickets: SyncTableResult;
-  cashSales: SyncTableResult;
   auditLogs: SyncTableResult;
 };
 

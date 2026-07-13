@@ -4,23 +4,22 @@ import { render, renderHook, screen } from "@testing-library/react";
 import DashboardSection from "./DashboardSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 
-import type { CashSale, EventSummary, EventTotals, NightEvent, Order } from "@cocktrail/shared";
+import type { EventSummary, EventTotals, NightEvent, Order } from "@cocktrail/shared";
 
 // DashboardSection no hace fetch propio: todo el estado le llega por props
-// (event/orders/cashSales/totals/etc.) y los valores derivados de analytics
-// le llegan ya calculados por prop (AdminClient llama useAdminAnalytics una
-// sola vez y lo pasa hacia abajo — ver hallazgo de architect-reviewer). Acá
-// reutilizamos el hook real vía renderHook en vez de mockear a mano sus ~30
-// campos derivados.
+// (event/orders/totals/etc.) y los valores derivados de analytics le llegan
+// ya calculados por prop (AdminClient llama useAdminAnalytics una sola vez y
+// lo pasa hacia abajo — ver hallazgo de architect-reviewer). Acá reutilizamos
+// el hook real vía renderHook en vez de mockear a mano sus ~30 campos
+// derivados.
 function computeAnalytics(
   totals: EventTotals,
   event: NightEvent | null,
   orders: Order[],
-  cashSales: CashSale[],
   historyEvents: EventSummary[] = [],
 ) {
   const { result } = renderHook(() =>
-    useAdminAnalytics(totals, event?.startedAt, orders, cashSales, historyEvents),
+    useAdminAnalytics(totals, event?.startedAt, orders, historyEvents),
   );
   return result.current;
 }
@@ -48,7 +47,6 @@ const baseEvent: NightEvent = {
 function makeProps(overrides: {
   event?: NightEvent | null;
   orders?: Order[];
-  cashSales?: CashSale[];
   totals?: EventTotals;
   historyEvents?: EventSummary[];
   customPaymentBreakdown?: any[];
@@ -60,14 +58,13 @@ function makeProps(overrides: {
 } = {}) {
   const event = overrides.event !== undefined ? overrides.event : baseEvent;
   const orders = (overrides.orders ?? []) as Order[];
-  const cashSales = (overrides.cashSales ?? []) as CashSale[];
   const totals = overrides.totals ?? emptyTotals;
   const historyEvents = overrides.historyEvents ?? [];
 
-  const { event: _, orders: __, cashSales: ___, ...componentProps } = overrides;
+  const { event: _, orders: __, ...componentProps } = overrides;
 
   return {
-    analytics: computeAnalytics(totals, event, orders, cashSales, historyEvents),
+    analytics: computeAnalytics(totals, event, orders, historyEvents),
     totals,
     historyEvents,
     customPaymentBreakdown: [],

@@ -134,19 +134,12 @@ describe("SupabaseCloudSyncRepository.pullOrders", () => {
   });
 });
 
-describe("SupabaseCloudSyncRepository.pullTickets / pullCashSales", () => {
+describe("SupabaseCloudSyncRepository.pullTickets", () => {
   it("pullTickets: passthrough directo, ok=N", async () => {
     cloudResults.set("tickets", { data: [{ id: "t1" }], error: null });
     localResults.set("tickets", { data: null, error: null });
     const repo = new SupabaseCloudSyncRepository();
     expect(await repo.pullTickets()).toEqual({ ok: 1, failed: 0 });
-  });
-
-  it("pullCashSales: passthrough directo, ok=N", async () => {
-    cloudResults.set("cash_sales", { data: [{ id: "c1" }, { id: "c2" }], error: null });
-    localResults.set("cash_sales", { data: null, error: null });
-    const repo = new SupabaseCloudSyncRepository();
-    expect(await repo.pullCashSales()).toEqual({ ok: 2, failed: 0 });
   });
 });
 

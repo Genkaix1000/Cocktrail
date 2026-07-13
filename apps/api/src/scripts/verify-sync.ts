@@ -6,7 +6,6 @@ export type SyncCompareResult = {
   summary?: {
     orders: number;
     tickets: number;
-    cashSales: number;
     totals: unknown;
   };
 };
@@ -30,15 +29,9 @@ async function fetchTickets(client: SupabaseClient, orderIds: string[]) {
   return (data ?? []) as Array<Record<string, unknown>>;
 }
 
-async function fetchCashSales(client: SupabaseClient, eventId: string) {
-  const { data, error } = await client.from("cash_sales").select("*").eq("event_id", eventId);
-  if (error) throw new Error(`No se pudo leer cash_sales: ${error.message}`);
-  return (data ?? []) as Array<Record<string, unknown>>;
-}
-
 /**
  * Compara un night_event cerrado entre local y cloud: existencia, totales,
- * y que orders/tickets/cash_sales matcheen en cantidad y campos clave
+ * y que orders/tickets matcheen en cantidad y campos clave
  * (id/total/payment_method/status para orders). No modifica nada, solo
  * lee de los dos clientes.
  */
@@ -110,23 +103,12 @@ export async function compareEventSync(
     mismatches.push(`cantidad de tickets no coincide: local=${localTickets.length} cloud=${cloudTickets.length}`);
   }
 
-  const [localCashSales, cloudCashSales] = await Promise.all([
-    fetchCashSales(localClient, eventId),
-    fetchCashSales(cloudClient, eventId),
-  ]);
-  if (localCashSales.length !== cloudCashSales.length) {
-    mismatches.push(
-      `cantidad de cash_sales no coincide: local=${localCashSales.length} cloud=${cloudCashSales.length}`,
-    );
-  }
-
   return {
     ok: mismatches.length === 0,
     mismatches,
     summary: {
       orders: localOrders.length,
       tickets: localTickets.length,
-      cashSales: localCashSales.length,
       totals: cloudEvent.totals,
     },
   };
@@ -194,7 +176,7 @@ if (isMainModule) {
   const result = await verifyWithRetries(supabase, supabaseCloud, eventId);
 
   if (result.ok) {
-    console.log(`✅ Sync verificado: ${result.summary?.orders} orders, ${result.summary?.tickets} tickets, ${result.summary?.cashSales} cash_sales — coinciden entre local y cloud.`);
+    console.log(`✅ Sync verificado: ${result.summary?.orders} orders, ${result.summary?.tickets} tickets — coinciden entre local y cloud.`);
   } else {
     console.error("❌ El sync no coincide:");
     for (const m of result.mismatches) console.error(`   - ${m}`);

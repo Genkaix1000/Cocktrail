@@ -91,7 +91,7 @@ export default function CajaClient({ drinks }: Props) {
     }
   }
 
-  const { event, orders, cashSales, summary, setSummary, upsertOrder } = useEventState({
+  const { event, orders, summary, setSummary, upsertOrder } = useEventState({
     onEventClosed: () => setCloseModalOpen(true),
   });
 
@@ -99,11 +99,6 @@ export default function CajaClient({ drinks }: Props) {
     if (!event) return orders;
     return orders.filter((o) => o.createdAt >= event.startedAt);
   }, [orders, event]);
-
-  const activeNightCashSales = useMemo(() => {
-    if (!event) return cashSales;
-    return cashSales.filter((c) => c.createdAt >= event.startedAt);
-  }, [cashSales, event]);
 
   // Fetch current user details
   useEffect(() => {
@@ -132,8 +127,8 @@ export default function CajaClient({ drinks }: Props) {
   }
 
   const totals = useMemo(
-    () => computeTotals(activeNightOrders, activeNightCashSales),
-    [activeNightOrders, activeNightCashSales],
+    () => computeTotals(activeNightOrders),
+    [activeNightOrders],
   );
 
   const pendingDeliveries = useMemo(
@@ -333,7 +328,6 @@ export default function CajaClient({ drinks }: Props) {
                 <MetricasSection
                   event={event}
                   activeNightOrders={activeNightOrders}
-                  activeNightCashSales={activeNightCashSales}
                   totals={totals}
                 />
               </div>

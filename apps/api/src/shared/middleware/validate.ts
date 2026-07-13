@@ -41,12 +41,6 @@ export const CreateOrderSchema = z.object({
   }),
 });
 
-// 3. Esquema para registrar venta en efectivo (barra)
-export const CreateCashSaleSchema = z.object({
-  amount: z.number().positive("El monto debe ser un número positivo"),
-  description: z.string().min(1, "La descripción es requerida").max(500, "Descripción demasiado larga").trim(),
-});
-
 // 4. Esquema para cambiar tema de la noche
 export const ThemeSchema = z.object({
   theme: z.enum(["bosko"], {

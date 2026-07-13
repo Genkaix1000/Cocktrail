@@ -1,6 +1,5 @@
 import { apiFetch } from "./api-client";
 import type {
-  CashSale,
   CustomTheme,
   Drink,
   EventSummary,
@@ -14,7 +13,6 @@ type StateSnapshot = {
   event: NightEvent | null;
   drinks: Drink[];
   orders: Order[];
-  cashSales: CashSale[];
   totals: EventTotals;
   activeTheme: Theme;
 };

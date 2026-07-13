@@ -3,14 +3,13 @@ import { SyncService } from "./sync.service.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
-import type { CashSalesRepository } from "../cash-sales/cash-sales.repository.js";
 import type { TicketsRepository } from "../tickets/tickets.repository.js";
 import type { EventsRepository } from "../events/events.repository.js";
 import type { CloudSyncRepository } from "./cloud-sync.repository.js";
 import { computeTotals } from "../../shared/utils/totals.js";
 import type { NightEvent } from "@cocktrail/shared";
 
-const EMPTY_TOTALS = computeTotals([], []);
+const EMPTY_TOTALS = computeTotals([]);
 
 function makeUsersRepo(overrides?: Partial<UsersRepository>): UsersRepository {
   return {
@@ -49,15 +48,6 @@ function makeOrdersRepo(overrides?: Partial<OrdersRepository>): OrdersRepository
   } as unknown as OrdersRepository;
 }
 
-function makeCashSalesRepo(overrides?: Partial<CashSalesRepository>): CashSalesRepository {
-  return {
-    add: vi.fn(),
-    listForEvent: vi.fn().mockResolvedValue([]),
-    clear: vi.fn(),
-    ...overrides,
-  };
-}
-
 function makeTicketsRepo(overrides?: Partial<TicketsRepository>): TicketsRepository {
   return {
     create: vi.fn(),
@@ -93,11 +83,9 @@ function makeCloudSyncRepo(overrides?: Partial<CloudSyncRepository>): CloudSyncR
     pushNightEvent: vi.fn().mockResolvedValue(undefined),
     pushOrders: vi.fn().mockResolvedValue(undefined),
     pushTickets: vi.fn().mockResolvedValue(undefined),
-    pushCashSales: vi.fn().mockResolvedValue(undefined),
     pullNightEvents: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pullOrders: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pullTickets: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
-    pullCashSales: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pushAuditLogs: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pullAuditLogs: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     ...overrides,
@@ -108,7 +96,6 @@ function makeService(overrides?: {
   usersRepo?: UsersRepository;
   drinksRepo?: DrinksRepository;
   ordersRepo?: OrdersRepository;
-  cashSalesRepo?: CashSalesRepository;
   ticketsRepo?: TicketsRepository;
   eventsRepo?: EventsRepository;
   cloudSyncRepo?: CloudSyncRepository;
@@ -117,7 +104,6 @@ function makeService(overrides?: {
     overrides?.usersRepo ?? makeUsersRepo(),
     overrides?.drinksRepo ?? makeDrinksRepo(),
     overrides?.ordersRepo ?? makeOrdersRepo(),
-    overrides?.cashSalesRepo ?? makeCashSalesRepo(),
     overrides?.ticketsRepo ?? makeTicketsRepo(),
     overrides?.eventsRepo ?? makeEventsRepo(),
     overrides?.cloudSyncRepo ?? makeCloudSyncRepo(),
@@ -270,7 +256,7 @@ describe("SyncService.syncAllPendingEvents", () => {
 });
 
 describe("SyncService.restoreFromCloud", () => {
-  it("sin Supabase Cloud configurada, devuelve error claro en las 5 tablas sin intentar nada", async () => {
+  it("sin Supabase Cloud configurada, devuelve error claro en las 4 tablas sin intentar nada", async () => {
     const cloudSyncRepo = makeCloudSyncRepo({ isConfigured: vi.fn().mockReturnValue(false) });
     const service = makeService({ cloudSyncRepo });
 
@@ -281,25 +267,23 @@ describe("SyncService.restoreFromCloud", () => {
     expect(cloudSyncRepo.pullNightEvents).not.toHaveBeenCalled();
   });
 
-  it("éxito total: llama las 5 tablas en orden (night_events primero) y devuelve sus resultados", async () => {
+  it("éxito total: llama las 4 tablas en orden (night_events primero) y devuelve sus resultados", async () => {
     const callOrder: string[] = [];
     const cloudSyncRepo = makeCloudSyncRepo({
       pullNightEvents: vi.fn().mockImplementation(async () => { callOrder.push("nightEvents"); return { ok: 3, failed: 0 }; }),
       pullOrders: vi.fn().mockImplementation(async () => { callOrder.push("orders"); return { ok: 10, failed: 0 }; }),
       pullTickets: vi.fn().mockImplementation(async () => { callOrder.push("tickets"); return { ok: 10, failed: 0 }; }),
-      pullCashSales: vi.fn().mockImplementation(async () => { callOrder.push("cashSales"); return { ok: 2, failed: 0 }; }),
       pullAuditLogs: vi.fn().mockImplementation(async () => { callOrder.push("auditLogs"); return { ok: 5, failed: 0 }; }),
     });
     const service = makeService({ cloudSyncRepo });
 
     const result = await service.restoreFromCloud();
 
-    expect(callOrder).toEqual(["nightEvents", "orders", "tickets", "cashSales", "auditLogs"]);
+    expect(callOrder).toEqual(["nightEvents", "orders", "tickets", "auditLogs"]);
     expect(result).toEqual({
       nightEvents: { ok: 3, failed: 0 },
       orders: { ok: 10, failed: 0 },
       tickets: { ok: 10, failed: 0 },
-      cashSales: { ok: 2, failed: 0 },
       auditLogs: { ok: 5, failed: 0 },
     });
   });

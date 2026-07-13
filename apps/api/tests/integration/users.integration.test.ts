@@ -33,7 +33,7 @@ describe("users (integración)", () => {
       .post("/api/users")
       .set("Cookie", adminCookie)
       .send({
-        username: "nueva-cajera",
+        username: "test-nueva-cajera",
         password: "secreto123",
         role: "caja",
       });
@@ -41,7 +41,7 @@ describe("users (integración)", () => {
     expect(res.body).not.toHaveProperty("passwordHash");
 
     const list = await request(app).get("/api/users").set("Cookie", adminCookie);
-    expect(list.body.some((u: any) => u.username === "nueva-cajera")).toBe(true);
+    expect(list.body.some((u: any) => u.username === "test-nueva-cajera")).toBe(true);
   });
 
   it("POST rechaza un nombre reservado (409)", async () => {

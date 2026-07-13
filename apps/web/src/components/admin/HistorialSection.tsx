@@ -102,7 +102,6 @@ export default function HistorialSection({
       const debitoCount = sessions.reduce((sum, s) => sum + (s.totals.debitoCount || 0), 0);
       const total = sessions.reduce((sum, s) => sum + s.totals.total, 0);
       const orderCounter = sessions.reduce((sum, s) => sum + s.orderCounter, 0);
-      const cashSalesCount = sessions.reduce((sum, s) => sum + s.cashSales.length, 0);
 
       const drinksMap: { [drinkId: number]: { drinkId: number; name: string; qty: number; subtotal: number } } = {};
       for (const s of sessions) {
@@ -138,7 +137,6 @@ export default function HistorialSection({
           drinksSold,
         },
         orderCounter,
-        cashSalesCount,
       };
     });
   }, [historyEvents]);

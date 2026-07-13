@@ -40,7 +40,6 @@ import LogsSection from "@/components/admin/LogsSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 
 import type {
-  CashSale,
   EventSummary,
   NightEvent,
   Order,
@@ -50,13 +49,11 @@ import type {
 type Props = {
   initialEvent: NightEvent | null;
   initialOrders: Order[];
-  initialCashSales: CashSale[];
 };
 
 export default function AdminClient({
   initialEvent,
   initialOrders,
-  initialCashSales,
 }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -101,8 +98,8 @@ export default function AdminClient({
     return () => clearTimeout(timer);
   }, []);
 
-  const { event, orders, cashSales, summary, setEvent, setSummary } = useEventState({
-    initial: { event: initialEvent, orders: initialOrders, cashSales: initialCashSales },
+  const { event, orders, summary, setEvent, setSummary } = useEventState({
+    initial: { event: initialEvent, orders: initialOrders },
     onEventClosed: () => {
       setModalOpen(true);
       setHistoryLoaded(false); // Force reload next time history tab is opened
@@ -165,8 +162,8 @@ export default function AdminClient({
   };
 
   const totals = useMemo(
-    () => computeTotals(orders, cashSales),
-    [orders, cashSales],
+    () => computeTotals(orders),
+    [orders],
   );
 
   const pendingDeliveries = useMemo(
@@ -240,7 +237,7 @@ export default function AdminClient({
   // volver a llamar useAdminAnalytics (evitaría recalcular el mismo useMemo
   // varias veces). AdminClient ya no destructura campos individuales: es
   // puro shell, cada vista extrae lo que necesita de `analytics`.
-  const analytics = useAdminAnalytics(totals, event?.startedAt, orders, cashSales, historyEvents);
+  const analytics = useAdminAnalytics(totals, event?.startedAt, orders, historyEvents);
 
   // Breadcrumbs computation
   const breadcrumbs = useMemo(() => {

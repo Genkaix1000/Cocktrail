@@ -1,19 +1,14 @@
 import type {
-  CashSale,
   DrinkSold,
   EventTotals,
   Order,
 } from "@cocktrail/shared";
 
 /**
- * Función pura: agrega los totales de la noche a partir de listas de pedidos
- * y ventas en efectivo. Cancelados se excluyen. Las ventas en efectivo del
- * barman cuentan como efectivo pero NO suman tragos (no tienen items).
+ * Función pura: agrega los totales de la noche a partir de la lista de
+ * pedidos. Cancelados se excluyen.
  */
-export function computeTotals(
-  orders: Order[],
-  cashSales: CashSale[],
-): EventTotals {
+export function computeTotals(orders: Order[]): EventTotals {
   let webTotal = 0;
   let webCount = 0;
   let efectivoTotal = 0;
@@ -57,11 +52,6 @@ export function computeTotals(
         });
       }
     }
-  }
-
-  for (const sale of cashSales) {
-    efectivoTotal += sale.amount;
-    efectivoCount += 1;
   }
 
   return {
