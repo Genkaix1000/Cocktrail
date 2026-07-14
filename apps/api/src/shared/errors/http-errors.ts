@@ -32,7 +32,13 @@ export class NotFound extends Error {
 
 /** 409 — el estado del recurso no permite la operación. */
 export class Conflict extends Error {
-  constructor(message: string) {
+  /**
+   * `code` es un identificador estable y machine-readable (ej. "DEVICE_BUSY")
+   * para que el frontend pueda actuar sin parsear el `message` humano — que
+   * puede cambiar de texto o venir con datos crudos de un proveedor externo
+   * (ver `MpApiError` en mercadopago.service.ts).
+   */
+  constructor(message: string, readonly code?: string) {
     super(message);
     this.name = "Conflict";
   }

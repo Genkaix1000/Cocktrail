@@ -34,7 +34,7 @@ export function errorHandler(
     return;
   }
   if (err instanceof Conflict) {
-    res.status(409).json({ error: err.message });
+    res.status(409).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     return;
   }
   if (err instanceof SyntaxError && "body" in err) {

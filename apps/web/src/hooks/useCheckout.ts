@@ -9,6 +9,11 @@ import type { Drink, Order, PaymentMethod } from "@cocktrail/shared";
 
 type CartEntry = { drink: Drink; qty: number };
 
+/** Reintentos automáticos ante un device "busy" (2205) antes de darse por vencido y
+ * mostrar el error rojo con botón manual. Backoff simple: intento 1 a los 2s, intento 2 a los 4s. */
+const MAX_POSNET_BUSY_RETRIES = 2;
+const posnetBusyRetryDelayMs = (attempt: number) => attempt * 2000;
+
 /** Métodos que se cobran vía Posnet. Hoy solo "debito" — el Posnet físico no puede
  * diferenciar un cobro con QR del resto (ver docs/specs/cobro-posnet-mercadopago.md). */
 type PosnetMethod = Exclude<PaymentMethod, "efectivo" | "qr">;
@@ -39,6 +44,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   const [currentIntentId, setCurrentIntentId] = useState<string | null>(null);
   const [paymentIntentState, setPaymentIntentState] = useState<string | null>(null);
   const [posnetErrorMessage, setPosnetErrorMessage] = useState<string | null>(null);
+  const [posnetRetryAttempt, setPosnetRetryAttempt] = useState(0);
 
   // Pedido recién concretado (para mostrar en pantalla de éxito)
   const [latestOrder, setLatestOrder] = useState<Order | null>(null);
@@ -51,6 +57,10 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   // Espejo de currentIntentId accesible desde closures que no pueden depender
   // del state (cleanup de unmount) sin re-suscribirse en cada cambio.
   const intentIdRef = useRef<string | null>(null);
+  // Contador de reintentos ante device busy (2205) y su timer de backoff, para poder
+  // cancelarlo si se cierra/reabre el modal o se desmonta el componente a mitad de camino.
+  const posnetRetryCountRef = useRef(0);
+  const posnetRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     intentIdRef.current = currentIntentId;
@@ -70,12 +80,20 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     });
   }, []);
 
+  const stopPosnetRetry = useCallback(() => {
+    if (posnetRetryTimeoutRef.current) {
+      clearTimeout(posnetRetryTimeoutRef.current);
+      posnetRetryTimeoutRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      stopPosnetRetry();
       cancelActiveIntent();
     };
-  }, [cancelActiveIntent]);
+  }, [cancelActiveIntent, stopPosnetRetry]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -101,6 +119,9 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     // Escape), cancelarla antes de resetear el estado — si no, el device
     // queda en cola y el próximo createPosIntent tira 2205.
     cancelActiveIntent();
+    stopPosnetRetry();
+    posnetRetryCountRef.current = 0;
+    setPosnetRetryAttempt(0);
     setIsCheckoutOpen(true);
     setPaymentMethod(null);
     setReceivedAmount("");
@@ -108,7 +129,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     setCurrentIntentId(null);
     setLatestOrder(null);
     stopPolling();
-  }, [stopPolling, cancelActiveIntent]);
+  }, [stopPolling, cancelActiveIntent, stopPosnetRetry]);
 
   const confirmOrder = useCallback(async () => {
     if (isSubmittingRef.current || submitting || totalItems === 0 || !paymentMethod) return;
@@ -174,8 +195,14 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     }, 3000);
   }, [cart, clearCart, stopPolling]);
 
-  const startPosnetPayment = useCallback(async (method: PosnetMethod) => {
+  const startPosnetPayment = useCallback(async (method: PosnetMethod, opts?: { isAutoRetry?: boolean }) => {
     if (isSubmittingRef.current || submitting || totalItems === 0) return;
+    if (!opts?.isAutoRetry) {
+      // Intento "fresco" (botón inicial o "Reintentar" manual): arrancar contador de nuevo.
+      stopPosnetRetry();
+      posnetRetryCountRef.current = 0;
+      setPosnetRetryAttempt(0);
+    }
     isSubmittingRef.current = true;
     setSubmitting(true);
     setPaymentMethod(method);
@@ -187,16 +214,24 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
       const intent = await mercadopagoService.createPosIntent(totalPrice, drinksText || "Cobro Cocktrail");
       setCurrentIntentId(intent.id);
       setPaymentIntentState("OPEN");
+      posnetRetryCountRef.current = 0;
+      setPosnetRetryAttempt(0);
 
       startPolling(intent.id, method);
     } catch (err) {
       console.warn("Error creating MP intent (handled):", err);
       const message = err instanceof Error ? err.message : undefined;
+      const dataCode = err instanceof ApiError && err.data && typeof err.data === "object"
+        ? (err.data as { code?: string }).code
+        : undefined;
       const dataError = err instanceof ApiError && err.data && typeof err.data === "object"
         ? (err.data as { error?: string }).error
         : undefined;
       const errString = String(err);
+      // El backend hoy tagea esto como `code: "DEVICE_BUSY"` (ver mercadopago.service.ts); el
+      // match por texto queda de fallback por si corre contra un backend viejo sin el campo.
       const isAlreadyQueued = err instanceof ApiError && err.status === 409 && (
+        dataCode === "DEVICE_BUSY" ||
         message?.includes("queued intent") ||
         message?.includes("2205") ||
         dataError?.includes("queued intent") ||
@@ -205,19 +240,34 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         errString.includes("2205")
       );
 
-      setPosnetStatus("error");
       setCurrentIntentId(null);
       setPaymentIntentState(null);
-      if (isAlreadyQueued) {
+
+      if (isAlreadyQueued && posnetRetryCountRef.current < MAX_POSNET_BUSY_RETRIES) {
+        // Reintento automático con backoff antes de darse por vencido: la intención en
+        // cola en el device suele liberarse sola en unos segundos.
+        const attemptNumber = posnetRetryCountRef.current + 1;
+        posnetRetryCountRef.current = attemptNumber;
+        setPosnetRetryAttempt(attemptNumber);
+        setPosnetStatus("error");
         setPosnetErrorMessage("busy_device");
+        posnetRetryTimeoutRef.current = setTimeout(() => {
+          startPosnetPayment(method, { isAutoRetry: true });
+        }, posnetBusyRetryDelayMs(attemptNumber));
+      } else if (isAlreadyQueued) {
+        // Se agotaron los reintentos automáticos: ya no es ambiguo, es un error real que
+        // necesita intervención (la cajera decide reintentar de nuevo o cancelar).
+        setPosnetStatus("error");
+        setPosnetErrorMessage("busy_device_exhausted");
       } else {
+        setPosnetStatus("error");
         setPosnetErrorMessage(message || "Error al iniciar cobro con Posnet. Verifique la conexión o configuración.");
       }
     } finally {
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
-  }, [cartEntries, startPolling, submitting, totalItems, totalPrice]);
+  }, [cartEntries, startPolling, stopPosnetRetry, submitting, totalItems, totalPrice]);
 
   return {
     isCheckoutOpen,
@@ -234,6 +284,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     setPaymentIntentState,
     posnetErrorMessage,
     setPosnetErrorMessage,
+    posnetRetryAttempt,
     latestOrder,
     saleError,
     displayCashValue,
@@ -246,6 +297,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     startPolling,
     stopPolling,
     startPosnetPayment,
+    stopPosnetRetry,
   };
 }
 

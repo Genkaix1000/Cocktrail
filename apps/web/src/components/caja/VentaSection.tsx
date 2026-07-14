@@ -407,6 +407,7 @@ export default function VentaSection({ drinks, printer }: Props) {
     setPaymentIntentState,
     posnetErrorMessage,
     setPosnetErrorMessage,
+    posnetRetryAttempt,
     latestOrder,
     saleError,
     displayCashValue,
@@ -418,6 +419,7 @@ export default function VentaSection({ drinks, printer }: Props) {
     startPolling,
     stopPolling,
     startPosnetPayment,
+    stopPosnetRetry,
   } = useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCart });
 
   const { reprintTicket, printError, reprinting } = printer;
@@ -878,6 +880,11 @@ export default function VentaSection({ drinks, printer }: Props) {
                     <p className="text-ink-400 text-sm px-4 leading-relaxed">
                       Si no se visualiza el cobro en el Posnet, apretá:
                     </p>
+                    {posnetRetryAttempt > 0 && (
+                      <p className="text-amber-500 text-[10px] font-bold uppercase tracking-wider mt-1.5">
+                        Reintentando automáticamente… (intento {posnetRetryAttempt} de 2)
+                      </p>
+                    )}
                   </div>
 
                   {/* Visual representation of PAX A910 Android navigation buttons with highlighted Home button */}
@@ -909,6 +916,46 @@ export default function VentaSection({ drinks, printer }: Props) {
                   <div className="w-full flex flex-col gap-2.5 mt-2 shrink-0">
                     <button
                       onClick={() => {
+                        stopPosnetRetry();
+                        setPosnetStatus("idle");
+                        setPaymentMethod(null);
+                        setPaymentIntentState(null);
+                        setPosnetErrorMessage(null);
+                        setCurrentIntentId(null);
+                      }}
+                      className="w-full h-12 bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider cursor-pointer hover:bg-ink-800 flex items-center justify-center gap-2"
+                    >
+                      <ArrowLeft size={14} />
+                      Volver Atrás
+                    </button>
+                  </div>
+                </div>
+              ) : posnetErrorMessage === "busy_device_exhausted" ? (
+                // Se agotaron los reintentos automáticos ante device busy (2205): a diferencia
+                // de "busy_device" (ambar, todavía reintentando solo) esto ya es un error real
+                // que necesita que la cajera decida — tono rojo, sin ambigüedad.
+                <div className="flex flex-col items-center justify-center py-8 gap-5 text-center animate-in fade-in zoom-in-95">
+                  <div className="w-16 h-16 rounded-full bg-danger-soft border border-danger-line flex items-center justify-center text-danger shrink-0">
+                    <X size={32} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-ink-50 mb-1.5">El Posnet sigue ocupado</h2>
+                    <p className="text-ink-400 text-sm px-4 leading-relaxed">
+                      Quedó una cobranza anterior sin cerrar en el dispositivo y no se pudo liberar sola.
+                      Revisá la pantalla del Posnet (cancelala ahí si hace falta) y reintentá.
+                    </p>
+                  </div>
+
+                  <div className="w-full flex flex-col gap-2.5 mt-2 shrink-0">
+                    <button
+                      onClick={() => startPosnetPayment("debito")}
+                      className="ct-checkout-btn w-full h-12 font-black rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      Reintentar
+                    </button>
+                    <button
+                      onClick={() => {
+                        stopPosnetRetry();
                         setPosnetStatus("idle");
                         setPaymentMethod(null);
                         setPaymentIntentState(null);
@@ -937,6 +984,7 @@ export default function VentaSection({ drinks, printer }: Props) {
 
                   <button
                     onClick={() => {
+                      stopPosnetRetry();
                       setPosnetStatus("idle");
                       setPaymentMethod(null);
                       setPaymentIntentState(null);
