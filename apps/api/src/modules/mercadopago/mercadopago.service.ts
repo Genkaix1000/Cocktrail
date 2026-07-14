@@ -269,9 +269,12 @@ export class MercadoPagoService {
    * "OPEN" — es decir, que el Posnet físico la haya recibido y esté
    * mostrando la pantalla de cobro. Esto detecta el caso real de hoy (device
    * vinculado y en modo PDV, pero con el canal de push a MP colgado) que
-   * checkDeviceConnection no puede ver. Cancela la intención de prueba
-   * apenas confirma que llegó (o al agotar el timeout), para no dejarla
-   * colgada ni cobrar nada real.
+   * checkDeviceConnection no puede ver. Si el Posnet la muestra en pantalla
+   * (pasa a ON_TERMINAL), MP ya no permite cancelarla por API (error 103:
+   * "Can't update Intent... current_state [ON_TERMINAL]", confirmado contra
+   * la API real) — en ese caso queda a cargo de la cajera cancelarla a mano
+   * en el propio dispositivo. Solo se auto-cancela por API si nunca salió
+   * de OPEN (no llegó al device), para no dejarla colgada.
    */
   async testDeviceReachability(): Promise<{ reachedDevice: boolean; message: string }> {
     this.assertConfigured();
@@ -303,15 +306,21 @@ export class MercadoPagoService {
       }
     }
 
+    if (reachedDevice) {
+      // MP ya no deja cancelar por API una vez que pasó a ON_TERMINAL (error 103).
+      return {
+        reachedDevice: true,
+        message: "El Posnet recibió la prueba correctamente. Cancelá la operación de $15 desde el propio dispositivo (no se puede cancelar por acá). Listo para cobrar.",
+      };
+    }
+
     try {
       await this.cancelPaymentIntent(intentId);
     } catch (cancelErr) {
       console.error(`No se pudo cancelar la intención de prueba ${intentId}:`, cancelErr);
     }
 
-    return reachedDevice
-      ? { reachedDevice: true, message: "El Posnet recibió la prueba correctamente. Listo para cobrar." }
-      : { reachedDevice: false, message: "El Posnet no respondió en 15 segundos. Reiniciálo y volvé a probar." };
+    return { reachedDevice: false, message: "El Posnet no respondió en 15 segundos. Reiniciálo y volvé a probar." };
   }
 
   async checkDeviceConnection(): Promise<{ connected: boolean; message: string; device?: { model: string; serialNumber: string; operatingMode: string } }> {

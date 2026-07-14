@@ -221,21 +221,18 @@ describe("MercadoPagoService", () => {
       vi.useRealTimers();
     });
 
-    it("detecta que el Posnet recibió la prueba (deja de estar OPEN) y la cancela", async () => {
+    it("detecta que el Posnet recibió la prueba (ON_TERMINAL) y NO intenta cancelarla por API", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-test", status: "OPEN" } }); // createPaymentIntent
       mockFetchOnce({ ok: true, body: { id: "intent-test", status: "ON_TERMINAL" } }); // 1er poll
-      mockFetchOnce({ ok: true, body: { status: "CANCELED" } }); // cancelPaymentIntent
 
       const promise = service.testDeviceReachability();
       await vi.advanceTimersByTimeAsync(2000);
       const result = await promise;
 
-      expect(result).toEqual({ reachedDevice: true, message: "El Posnet recibió la prueba correctamente. Listo para cobrar." });
-      expect(fetch).toHaveBeenNthCalledWith(
-        3,
-        "https://api.mercadopago.com/point/integration-api/devices/device-1/payment-intents/intent-test",
-        expect.objectContaining({ method: "DELETE" }),
-      );
+      expect(result.reachedDevice).toBe(true);
+      expect(result.message).toContain("Cancelá la operación de $15 desde el propio dispositivo");
+      // MP responde 409 (error 103) si se intenta cancelar una intención ya en ON_TERMINAL: no debe intentarlo.
+      expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it("si el device no responde en 15s, devuelve reachedDevice:false y cancela igual", async () => {
