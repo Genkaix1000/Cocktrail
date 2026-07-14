@@ -57,6 +57,9 @@ const baseProps = {
   printerStatus: { connected: true, message: "ok" },
   testPrint: vi.fn(),
   printerTestMessage: null as string | null,
+  posnetStatus: { connected: true, message: "ok", device: { model: "Point Smart", serialNumber: "1", operatingMode: "PDV" } },
+  testPosnet: vi.fn(),
+  posnetTestMessage: null as string | null,
   handleLogout: vi.fn(),
 };
 

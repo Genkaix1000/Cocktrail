@@ -1,10 +1,11 @@
 "use client";
 
-import { History, LayoutDashboard, Power, Printer, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { History, LayoutDashboard, Power, Printer, CreditCard, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { OSProfileFooter } from "@/components/shared/OSProfileFooter";
 import { useThemeSafe } from "@/components/ThemeProvider";
+import type { PosnetDeviceStatus } from "@/services/mercadopago.service";
 import type { NightEvent, Theme } from "@cocktrail/shared";
 
 type CurrentUser = {
@@ -31,6 +32,11 @@ type Props = {
   printerStatus: { connected: boolean; message: string } | null;
   testPrint: () => void | Promise<void>;
   printerTestMessage: string | null;
+  posnetStatus: PosnetDeviceStatus | null;
+  testPosnet: () => void | Promise<void>;
+  posnetTestMessage: string | null;
+  posnetModeWarning?: boolean;
+  testingPosnet?: boolean;
   handleLogout: () => void | Promise<void>;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -54,6 +60,11 @@ export default function CajaSidebar({
   printerStatus,
   testPrint,
   printerTestMessage,
+  posnetStatus,
+  testPosnet,
+  posnetTestMessage,
+  posnetModeWarning = false,
+  testingPosnet = false,
   handleLogout,
   isCollapsed = false,
   onToggleCollapse = () => {},
@@ -265,6 +276,63 @@ export default function CajaSidebar({
           )}
           {printerTestMessage && !collapsed && (
             <p className="text-[10px] text-ink-400 mt-1.5 text-center">{printerTestMessage}</p>
+          )}
+        </div>
+
+        {/* Estado del Posnet (Mercado Pago Point) */}
+        <div className={collapsed ? "px-0 text-center" : "px-1"}>
+          <div className="flex items-center justify-between gap-2 mb-2 w-full">
+            {collapsed ? (
+              <button
+                type="button"
+                onClick={testPosnet}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative mx-auto ${
+                  !posnetStatus?.connected
+                    ? "bg-danger-soft border-danger-line text-danger"
+                    : posnetModeWarning
+                      ? "bg-amber-soft border-amber-line text-amber"
+                      : "bg-green-soft border-green-line text-green"
+                }`}
+                title={
+                  !posnetStatus?.connected
+                    ? "Posnet no encontrado. Click para probar."
+                    : posnetModeWarning
+                      ? "Posnet en modo manual. Click para probar."
+                      : "Posnet conectado y automático. Click para probar."
+                }
+              >
+                <CreditCard size={16} />
+                <span
+                  className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${
+                    !posnetStatus?.connected ? "bg-danger" : posnetModeWarning ? "bg-amber" : "bg-green"
+                  }`}
+                />
+              </button>
+            ) : (
+              <span
+                className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] ${
+                  !posnetStatus?.connected ? "text-danger" : posnetModeWarning ? "text-amber" : "text-green"
+                }`}
+              >
+                <CreditCard size={13} />
+                {!posnetStatus?.connected ? "Posnet no encontrado" : posnetModeWarning ? "Posnet en modo manual" : "Posnet conectado"}
+              </span>
+            )}
+          </div>
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={testPosnet}
+              disabled={testingPosnet}
+              className="w-full h-9 rounded-xl bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+            >
+              {testingPosnet ? "Probando Posnet…" : "Probar Posnet"}
+            </button>
+          )}
+          {posnetTestMessage && !collapsed && (
+            <p className={`text-[10px] mt-1.5 text-center ${posnetModeWarning || !posnetStatus?.connected ? "text-amber" : "text-ink-400"}`}>
+              {posnetTestMessage}
+            </p>
           )}
         </div>
 

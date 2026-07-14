@@ -212,6 +212,59 @@ describe("MercadoPagoService", () => {
     });
   });
 
+  describe("testDeviceReachability", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("detecta que el Posnet recibió la prueba (deja de estar OPEN) y la cancela", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-test", status: "OPEN" } }); // createPaymentIntent
+      mockFetchOnce({ ok: true, body: { id: "intent-test", status: "ON_TERMINAL" } }); // 1er poll
+      mockFetchOnce({ ok: true, body: { status: "CANCELED" } }); // cancelPaymentIntent
+
+      const promise = service.testDeviceReachability();
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await promise;
+
+      expect(result).toEqual({ reachedDevice: true, message: "El Posnet recibió la prueba correctamente. Listo para cobrar." });
+      expect(fetch).toHaveBeenNthCalledWith(
+        3,
+        "https://api.mercadopago.com/point/integration-api/devices/device-1/payment-intents/intent-test",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+
+    it("si el device no responde en 15s, devuelve reachedDevice:false y cancela igual", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-test", status: "OPEN" } }); // create
+      for (let i = 0; i < 10; i++) {
+        mockFetchOnce({ ok: true, body: { id: "intent-test", status: "OPEN" } }); // polls: nunca cambia
+      }
+      mockFetchOnce({ ok: true, body: { status: "CANCELED" } }); // cancel final
+
+      const promise = service.testDeviceReachability();
+      await vi.advanceTimersByTimeAsync(16000);
+      const result = await promise;
+
+      expect(result.reachedDevice).toBe(false);
+      expect(result.message).toContain("no respondió");
+      const lastCall = vi.mocked(fetch).mock.calls.at(-1)!;
+      expect(lastCall[1]).toMatchObject({ method: "DELETE" });
+    });
+
+    it("si falla crear la intención de prueba, devuelve reachedDevice:false sin pollear", async () => {
+      mockFetchOnce({ ok: false, status: 500, body: { message: "error de MP" } });
+
+      const result = await service.testDeviceReachability();
+
+      expect(result.reachedDevice).toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("getPayment", () => {
     it("consulta la Payments API estándar", async () => {
       mockFetchOnce({ ok: true, body: { id: "payment-1", status: "approved" } });

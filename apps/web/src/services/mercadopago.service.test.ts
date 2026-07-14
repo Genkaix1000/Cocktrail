@@ -13,6 +13,28 @@ afterEach(() => {
 });
 
 describe("mercadopagoService", () => {
+  it("getDeviceStatus hace GET a /api/mercadopago/device/status", async () => {
+    mockedApiFetch.mockResolvedValueOnce({
+      connected: true,
+      message: "Posnet vinculado y conectado.",
+      device: { model: "Point Smart", serialNumber: "123", operatingMode: "PDV" },
+    });
+
+    const result = await mercadopagoService.getDeviceStatus();
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/device/status");
+    expect(result.connected).toBe(true);
+  });
+
+  it("testDeviceCharge hace POST a /api/mercadopago/device/test-charge", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ reachedDevice: true, message: "ok" });
+
+    const result = await mercadopagoService.testDeviceCharge();
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/device/test-charge", { method: "POST" });
+    expect(result.reachedDevice).toBe(true);
+  });
+
   it("createPosIntent hace POST a /api/mercadopago/pos/intent con amount/description", async () => {
     mockedApiFetch.mockResolvedValueOnce({ id: "intent-1" });
 

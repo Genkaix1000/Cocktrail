@@ -11,6 +11,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import CloseNightModal from "@/components/shared/CloseNightModal";
 import { computeTotals } from "@/lib/totals";
 import { usePrinterStatus } from "@/hooks/usePrinterStatus";
+import { usePosnetStatus } from "@/hooks/usePosnetStatus";
 import VentaSection from "@/components/caja/VentaSection";
 import HistorialSection from "@/components/caja/HistorialSection";
 import MetricasSection from "@/components/caja/MetricasSection";
@@ -62,6 +63,10 @@ export default function CajaClient({ drinks }: Props) {
   // Estado de la impresora térmica: compartido entre el sidebar, VentaSection
   // (ticket de éxito) y el popup de detalle de HistorialSection (reimpresión).
   const { printerStatus, testPrint, printerTestMessage, reprintTicket, printError, reprinting } = usePrinterStatus();
+
+  // Estado del Posnet (Mercado Pago Point): mismo patrón que la impresora,
+  // vive en el shell para poder mostrarse desde el sidebar en cualquier tab.
+  const { posnetStatus, testPosnet, posnetTestMessage, posnetModeWarning, testingPosnet } = usePosnetStatus();
   const ventaPrinter = useMemo(
     () => ({ reprintTicket, printError, reprinting }),
     [reprintTicket, printError, reprinting],
@@ -172,6 +177,11 @@ export default function CajaClient({ drinks }: Props) {
         printerStatus={printerStatus}
         testPrint={testPrint}
         printerTestMessage={printerTestMessage}
+        posnetStatus={posnetStatus}
+        testPosnet={testPosnet}
+        posnetTestMessage={posnetTestMessage}
+        posnetModeWarning={posnetModeWarning}
+        testingPosnet={testingPosnet}
         handleLogout={handleLogout}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={toggleSidebarCollapse}
@@ -194,6 +204,11 @@ export default function CajaClient({ drinks }: Props) {
               printerStatus={printerStatus}
               testPrint={testPrint}
               printerTestMessage={printerTestMessage}
+              posnetStatus={posnetStatus}
+              testPosnet={testPosnet}
+              posnetTestMessage={posnetTestMessage}
+              posnetModeWarning={posnetModeWarning}
+              testingPosnet={testingPosnet}
               handleLogout={handleLogout}
             />
           </div>

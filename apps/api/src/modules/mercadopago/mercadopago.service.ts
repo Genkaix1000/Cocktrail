@@ -37,11 +37,19 @@ export function mapPaymentStatusToNormalized(mpPaymentStatus: string): "FINISHED
  * intent") sin volver a parsear el mensaje de texto.
  */
 export class MpApiError extends Conflict {
-  constructor(message: string, readonly mpCode: string, readonly mpData: unknown) {
-    super(message);
+  constructor(message: string, readonly mpCode: string, readonly mpData: unknown, code?: string) {
+    super(message, code);
     this.name = "MpApiError";
   }
 }
+
+/**
+ * Código estable que exponemos al frontend (vía `Conflict.code` → error-handler
+ * → `ApiError.data.code`) cuando el device quedó con una intención en cola (2205)
+ * y no pudimos auto-recuperarlo. El frontend usa esto para decidir reintentar/
+ * mostrar error, en vez de tener que parsear el mensaje de texto.
+ */
+const DEVICE_BUSY_CODE = "DEVICE_BUSY";
 
 function isQueuedIntentError(err: unknown): err is MpApiError {
   if (!(err instanceof MpApiError)) return false;
@@ -147,18 +155,30 @@ export class MercadoPagoService {
       if (!queuedIntentId) {
         // No hay forma de recuperar el id de la intención bloqueante: ni el error 2205 lo
         // trae, ni existe (en la doc pública de la Point Integration API) un endpoint para
-        // "consultar la intención activa de este device" sin conocerlo de antemano. Se
-        // propaga el error tal cual para que la cajera vea el mensaje claro de siempre.
-        throw err;
+        // "consultar la intención activa de este device" sin conocerlo de antemano (confirmado
+        // contra la doc oficial de Mercado Pago). Se propaga el error tageado como DEVICE_BUSY
+        // para que el frontend pueda reintentar/mostrar un estado claro sin parsear texto.
+        throw new MpApiError(err.message, err.mpCode, err.mpData, DEVICE_BUSY_CODE);
       }
 
       try {
         await this.cancelPaymentIntent(queuedIntentId);
       } catch (cancelErr) {
         console.error(`No se pudo cancelar la intención en cola ${queuedIntentId} antes de reintentar:`, cancelErr);
-        throw err; // se prioriza el error original (2205), más claro para la cajera
+        // se prioriza el error original (2205), más claro para la cajera, pero tageado igual
+        throw new MpApiError(err.message, err.mpCode, err.mpData, DEVICE_BUSY_CODE);
       }
-      return attempt(); // reintento único, no hay loop
+
+      try {
+        return await attempt(); // reintento único, no hay loop
+      } catch (retryErr) {
+        if (isQueuedIntentError(retryErr)) {
+          // El auto-cancel+retry no alcanzó (ej. el device volvió a encolar algo entre
+          // medio). Se propaga igual tageado para que el frontend sepa que sigue "busy".
+          throw new MpApiError(retryErr.message, retryErr.mpCode, retryErr.mpData, DEVICE_BUSY_CODE);
+        }
+        throw retryErr;
+      }
     }
   }
 
@@ -220,6 +240,78 @@ export class MercadoPagoService {
       { method: "DELETE" },
       "Error al cancelar la intención de pago en el Posnet",
     );
+  }
+
+  /**
+   * NO IMPLEMENTADO A PROPÓSITO: se investigó (doc pública de Mercado Pago,
+   * incluyendo la guía de migración Payment Intent API -> Orders API) si existe
+   * un endpoint para "consultar la intención/orden activa de un device sin
+   * conocer su id de antemano" y NO existe uno documentado hoy. Tampoco lo
+   * resuelve la Orders API nueva (su `POST /v1/orders/{id}/cancel` con header
+   * `x-allow-cancelable-status: at_terminal` permite cancelar incluso una orden
+   * ya enviada a la terminal, pero igual requiere conocer el {id} de antemano).
+   *
+   * El único mecanismo oficial para enterarse de una intención zombie sin
+   * conocer su id es el topic de webhook "Payment Intent" (distinto del topic
+   * "payment"): activándolo en "Tus integraciones" en el panel de Mercado
+   * Pago, sus servidores notifican proactivamente el estado/id de la
+   * intención. Hoy Cocktrail no tiene webhooks de MP conectados (ver
+   * docs/ARCHITECTURE.md §11) — cablear ese topic es la vía recomendada para
+   * resolver esto de raíz, pendiente para cuando se aborden webhooks.
+   */
+
+  /**
+   * Test funcional real (a diferencia de checkDeviceConnection, que solo
+   * consulta metadata de vinculación): manda una intención de cobro mínima
+   * ($15 — la Point Integration API rechaza montos por debajo de 1500
+   * centavos con "amount: Must be greater than or equal to 1500", confirmado
+   * contra la API real) al device y espera a que su estado deje de ser
+   * "OPEN" — es decir, que el Posnet físico la haya recibido y esté
+   * mostrando la pantalla de cobro. Esto detecta el caso real de hoy (device
+   * vinculado y en modo PDV, pero con el canal de push a MP colgado) que
+   * checkDeviceConnection no puede ver. Cancela la intención de prueba
+   * apenas confirma que llegó (o al agotar el timeout), para no dejarla
+   * colgada ni cobrar nada real.
+   */
+  async testDeviceReachability(): Promise<{ reachedDevice: boolean; message: string }> {
+    this.assertConfigured();
+
+    let intent: MpPaymentIntentResponse;
+    try {
+      intent = await this.createPaymentIntent(15, "Prueba de conexion Cocktrail");
+    } catch (err) {
+      return { reachedDevice: false, message: err instanceof Error ? err.message : "Error al crear la intención de prueba." };
+    }
+
+    const intentId = intent.id;
+    if (!intentId) {
+      return { reachedDevice: false, message: "Mercado Pago no devolvió un id para la intención de prueba." };
+    }
+
+    const deadline = Date.now() + 15000;
+    let reachedDevice = false;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      try {
+        const status = await this.getPaymentIntentStatus(intentId);
+        if (status.status !== "OPEN") {
+          reachedDevice = true;
+          break;
+        }
+      } catch {
+        // error transitorio de polling: seguimos intentando hasta el deadline
+      }
+    }
+
+    try {
+      await this.cancelPaymentIntent(intentId);
+    } catch (cancelErr) {
+      console.error(`No se pudo cancelar la intención de prueba ${intentId}:`, cancelErr);
+    }
+
+    return reachedDevice
+      ? { reachedDevice: true, message: "El Posnet recibió la prueba correctamente. Listo para cobrar." }
+      : { reachedDevice: false, message: "El Posnet no respondió en 15 segundos. Reiniciálo y volvé a probar." };
   }
 
   async checkDeviceConnection(): Promise<{ connected: boolean; message: string; device?: { model: string; serialNumber: string; operatingMode: string } }> {

@@ -20,6 +20,24 @@ export function createMercadoPagoController(service: MercadoPagoService): Router
     }
   });
 
+  // GET /api/mercadopago/device/status - Probar conexión y modo del Posnet (análogo a /api/printer/test)
+  router.get("/device/status", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
+    try {
+      res.json(await service.checkDeviceConnection());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /api/mercadopago/device/test-charge - Manda $1 real al Posnet y confirma si lo recibió (se auto-cancela)
+  router.post("/device/test-charge", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
+    try {
+      res.json(await service.testDeviceReachability());
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // GET /api/mercadopago/pos/intent/:id - Consultar si el cliente ya pagó
   router.get("/pos/intent/:id", authMiddleware, requireRole("admin", "caja"), async (req, res, next) => {
     try {
