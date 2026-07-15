@@ -7,14 +7,13 @@ import {
   Tag,
   Activity,
   CalendarDays,
-  Download,
 } from "lucide-react";
 
 import PaymentDonut from "@/components/analytics/PaymentDonut";
 import MetricCard from "@/components/shared/MetricCard";
 import EmptyCard from "@/components/shared/EmptyCard";
 
-import { exportHistoryCSV, downloadCSV } from "@/lib/analytics";
+import { formatNightDateLong } from "@/lib/analytics";
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
 import type { DeltaInfo, ProductRevenue } from "@/lib/analytics";
 import type { LucideIcon } from "lucide-react";
@@ -42,6 +41,9 @@ type Props = {
   activeTab: string;
   isBosko: boolean;
   barColorClass: string;
+  // Sin noche abierta, `totals`/`analytics` vienen de la última noche cerrada
+  // (resuelto en AdminClient) — no se muestran deltas ni la card Comparativa.
+  isNightOpen: boolean;
 };
 
 /**
@@ -60,6 +62,7 @@ export default function DashboardSection({
   activeTab,
   isBosko,
   barColorClass,
+  isNightOpen,
 }: Props) {
   const {
     startedAtStr,
@@ -74,6 +77,9 @@ export default function DashboardSection({
   } = analytics;
 
   const lastNightName = historyEvents.length > 0 ? "Última Noche" : "Noche Anterior";
+  const lastNightLabel = historyEvents.length > 0
+    ? `Noche del ${formatNightDateLong(historyEvents[0]!.closedAt ?? historyEvents[0]!.startedAt)}`
+    : "Sin noches registradas";
 
   return (
     <>
@@ -152,7 +158,9 @@ export default function DashboardSection({
                 </div>
                 <span>Dashboard General</span>
               </h1>
-              <p className="text-[13px] text-ink-400 mt-1">Resumen en tiempo real de tu negocio</p>
+              <p className="text-[13px] text-ink-400 mt-1">
+                {isNightOpen ? "Resumen en tiempo real de tu negocio" : "Resumen de la última noche registrada"}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               {/* Date picker mock selector */}
@@ -160,16 +168,6 @@ export default function DashboardSection({
                 <CalendarDays size={14} className="text-ink-400" />
                 <span>Hoy, {new Date().toLocaleDateString("es-AR", { day: 'numeric', month: 'long' })}</span>
               </div>
-              <button
-                onClick={() => {
-                  const csv = exportHistoryCSV(historyEvents);
-                  downloadCSV(csv, "cocktrail_dashboard_export.csv");
-                }}
-                className="h-10 px-4 rounded-xl bg-ink-800 hover:bg-ink-750 text-ink-100 hover:text-ink-50 text-[11px] font-bold uppercase tracking-[0.08em] flex items-center gap-2 border border-ink-700 transition-all cursor-pointer select-none active:scale-[0.97]"
-              >
-                <Download size={14} />
-                <span>Exportar</span>
-              </button>
             </div>
           </div>
 
@@ -179,26 +177,29 @@ export default function DashboardSection({
               label="Ventas Totales"
               value={totals.total}
               isCurrency
-              delta={deltaTotal}
+              delta={isNightOpen ? deltaTotal : undefined}
               icon={TrendingUp}
               color="#10b981"
               subtitle={`vs. ${lastNightName}`}
+              noDeltaLabel={lastNightLabel}
             />
             <MetricCard
               label="Tickets Totales"
               value={totalOps}
-              delta={deltaTickets}
+              delta={isNightOpen ? deltaTickets : undefined}
               icon={Tag}
               color="#3b82f6"
               subtitle={`vs. ${lastNightName}`}
+              noDeltaLabel={lastNightLabel}
             />
             <MetricCard
               label="Unidades Vendidas"
               value={totalDrinkUnits}
-              delta={deltaUnits}
+              delta={isNightOpen ? deltaUnits : undefined}
               icon={Wine}
               color="#f97316"
               subtitle={`vs. ${lastNightName}`}
+              noDeltaLabel={lastNightLabel}
             />
           </div>
 
@@ -258,44 +259,46 @@ export default function DashboardSection({
             <PaymentDonut breakdown={customPaymentBreakdown} total={totals.total} isBosko={isBosko} />
           </div>
 
-          {/* Row 3: Comparativa (sin sparklines) & Hora Pico */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Comparativa */}
-            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
-              <div className="flex justify-between items-center shrink-0 mb-1">
-                <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-                    <TrendingUp size={13} />
-                  </div>
-                  <span>Comparativa</span>
-                </h3>
-                <span className="text-[10px] font-mono text-ink-400 px-2 py-0.5 bg-ink-800 rounded border border-ink-750">
-                  vs. {lastNightName}
-                </span>
-              </div>
+          {/* Row 3: Comparativa (sin sparklines, solo con noche abierta) & Hora Pico */}
+          <div className={`grid grid-cols-1 gap-5 ${isNightOpen ? "md:grid-cols-2" : ""}`}>
+            {/* Comparativa — no tiene sentido sin una noche en curso */}
+            {isNightOpen && (
+              <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
+                <div className="flex justify-between items-center shrink-0 mb-1">
+                  <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
+                      <TrendingUp size={13} />
+                    </div>
+                    <span>Comparativa</span>
+                  </h3>
+                  <span className="text-[10px] font-mono text-ink-400 px-2 py-0.5 bg-ink-800 rounded border border-ink-750">
+                    vs. {lastNightName}
+                  </span>
+                </div>
 
-              <div className="flex flex-col justify-between flex-1 mt-3">
-                <ComparisonRow
-                  label="Ventas"
-                  icon={TrendingUp}
-                  currentVal={totals.total}
-                  delta={deltaTotal}
-                  isCurrency
-                />
-                <ComparisonRow
-                  label="Tickets"
-                  icon={Tag}
-                  currentVal={totalOps}
-                  delta={deltaTickets}
-                />
-                <ComparisonRow
-                  label="Unidades"
-                  icon={Wine}
-                  currentVal={totalDrinkUnits}
-                  delta={deltaUnits}
-                />
+                <div className="flex flex-col justify-between flex-1 mt-3">
+                  <ComparisonRow
+                    label="Ventas"
+                    icon={TrendingUp}
+                    currentVal={totals.total}
+                    delta={deltaTotal}
+                    isCurrency
+                  />
+                  <ComparisonRow
+                    label="Tickets"
+                    icon={Tag}
+                    currentVal={totalOps}
+                    delta={deltaTickets}
+                  />
+                  <ComparisonRow
+                    label="Unidades"
+                    icon={Wine}
+                    currentVal={totalDrinkUnits}
+                    delta={deltaUnits}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Hora Pico */}
             <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col gap-2 justify-center">
@@ -312,11 +315,23 @@ export default function DashboardSection({
           {/* Bottom footer status */}
           <div className="flex justify-between items-center text-[10px] text-ink-500 pt-2 border-t border-ink-850">
             <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green shadow-[0_0_0_3px_rgba(74,222,128,0.2)] animate-pulse" />
-                Monitoreo Activo
-              </span>
-              <span>Iniciado a las {startedAtStr} hs</span>
+              {isNightOpen ? (
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green shadow-[0_0_0_3px_rgba(74,222,128,0.2)] animate-pulse" />
+                    Monitoreo Activo
+                  </span>
+                  <span>Iniciado a las {startedAtStr} hs</span>
+                </>
+              ) : (
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-ink-600" />
+                    Última Noche Registrada
+                  </span>
+                  <span>Iniciada a las {startedAtStr} hs</span>
+                </>
+              )}
             </div>
             <span>Los datos se actualizan automáticamente en tiempo real (SSE) con respaldo de 30 segundos</span>
           </div>

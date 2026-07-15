@@ -41,6 +41,7 @@ import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 
 import type {
   EventSummary,
+  EventTotals,
   NightEvent,
   Order,
   Role,
@@ -49,6 +50,19 @@ import type {
 type Props = {
   initialEvent: NightEvent | null;
   initialOrders: Order[];
+};
+
+const EMPTY_TOTALS: EventTotals = {
+  webTotal: 0,
+  webCount: 0,
+  efectivoTotal: 0,
+  efectivoCount: 0,
+  qrTotal: 0,
+  qrCount: 0,
+  debitoTotal: 0,
+  debitoCount: 0,
+  drinksSold: [],
+  total: 0,
 };
 
 export default function AdminClient({
@@ -171,47 +185,66 @@ export default function AdminClient({
     [orders],
   );
 
-  const customPaymentBreakdown = useMemo(() => {
-    const effectiveEfectivo = totals.efectivoTotal;
-    const effectiveQR = totals.qrTotal;
-    const effectiveDebito = totals.debitoTotal;
-    const effectiveWeb = totals.webTotal;
+  // Sin noche abierta, el Dashboard no puede alimentarse de `totals`/`orders`
+  // en vivo (quedan en $0, comparados contra la última noche daría "-100%"
+  // engañoso) — en ese caso usa `historyEvents[0]` (última noche cerrada,
+  // ya trae `totals`/`orders` completos) como fuente. Con noche abierta, sin
+  // cambios (comportamiento de siempre). Ver docs/specs/dashboard-sin-noche-abierta.md.
+  const isNightOpen = event?.status === "activo";
+  const lastNight = historyEvents[0] ?? null;
+  const dashboardTotals = useMemo(
+    () => (isNightOpen ? totals : lastNight?.totals ?? EMPTY_TOTALS),
+    [isNightOpen, totals, lastNight],
+  );
+  const dashboardOrders = isNightOpen ? orders : lastNight?.orders ?? [];
+  const dashboardStartedAt = isNightOpen ? event?.startedAt : lastNight?.startedAt;
 
-    return [
+  const customPaymentBreakdown = useMemo(() => {
+    const effectiveEfectivo = dashboardTotals.efectivoTotal;
+    const effectiveQR = dashboardTotals.qrTotal;
+    const effectiveDebito = dashboardTotals.debitoTotal;
+    const effectiveWeb = dashboardTotals.webTotal;
+
+    const breakdown = [
       {
         method: "efectivo",
         label: "Efectivo",
         total: effectiveEfectivo,
-        count: totals.efectivoCount,
-        pct: totals.total > 0 ? Math.round((effectiveEfectivo / totals.total) * 100) : 45,
+        count: dashboardTotals.efectivoCount,
+        pct: dashboardTotals.total > 0 ? Math.round((effectiveEfectivo / dashboardTotals.total) * 100) : 0,
         color: "#10b981"
       },
       {
         method: "tarjeta",
         label: "Tarjeta",
         total: effectiveDebito + effectiveWeb,
-        count: totals.debitoCount + totals.webCount,
-        pct: totals.total > 0 ? Math.round(((effectiveDebito + effectiveWeb) / totals.total) * 100) : 35,
+        count: dashboardTotals.debitoCount + dashboardTotals.webCount,
+        pct: dashboardTotals.total > 0 ? Math.round(((effectiveDebito + effectiveWeb) / dashboardTotals.total) * 100) : 0,
         color: "#3b82f6"
       },
       {
         method: "qr",
         label: "Transferencia / QR",
         total: effectiveQR,
-        count: totals.qrCount,
-        pct: totals.total > 0 ? Math.round((effectiveQR / totals.total) * 100) : 15,
+        count: dashboardTotals.qrCount,
+        pct: dashboardTotals.total > 0 ? Math.round((effectiveQR / dashboardTotals.total) * 100) : 0,
         color: "#a855f7"
       },
       {
         method: "otros",
         label: "Otros",
-        total: Math.max(0, totals.total - (effectiveEfectivo + effectiveQR + effectiveDebito + effectiveWeb)),
+        total: Math.max(0, dashboardTotals.total - (effectiveEfectivo + effectiveQR + effectiveDebito + effectiveWeb)),
         count: 0,
-        pct: totals.total > 0 ? Math.max(0, 100 - (Math.round((effectiveEfectivo / totals.total) * 100) + Math.round(((effectiveDebito + effectiveWeb) / totals.total) * 100) + Math.round((effectiveQR / totals.total) * 100))) : 5,
+        pct: dashboardTotals.total > 0 ? Math.max(0, 100 - (Math.round((effectiveEfectivo / dashboardTotals.total) * 100) + Math.round(((effectiveDebito + effectiveWeb) / dashboardTotals.total) * 100) + Math.round((effectiveQR / dashboardTotals.total) * 100))) : 0,
         color: "#f97316"
       }
-    ].filter(b => b.total > 0 || b.pct > 0);
-  }, [totals]);
+    ];
+
+    // Con total real $0, se muestran los 4 métodos en cero (torta gris +
+    // leyenda en $0/0%) en vez de filtrarlos — filtrar solo tiene sentido
+    // para ocultar canales genuinamente sin uso en una noche con ventas.
+    return dashboardTotals.total > 0 ? breakdown.filter(b => b.total > 0 || b.pct > 0) : breakdown;
+  }, [dashboardTotals]);
 
   async function handleCloseConfirm(password: string) {
     const data = await eventsService.closeEvent(password);
@@ -237,7 +270,7 @@ export default function AdminClient({
   // volver a llamar useAdminAnalytics (evitaría recalcular el mismo useMemo
   // varias veces). AdminClient ya no destructura campos individuales: es
   // puro shell, cada vista extrae lo que necesita de `analytics`.
-  const analytics = useAdminAnalytics(totals, event?.startedAt, orders, historyEvents);
+  const analytics = useAdminAnalytics(dashboardTotals, dashboardStartedAt, dashboardOrders, historyEvents);
 
   // Breadcrumbs computation
   const breadcrumbs = useMemo(() => {
@@ -586,7 +619,7 @@ export default function AdminClient({
           {activeTab === "monitoreo" && (
             <DashboardSection
               analytics={analytics}
-              totals={totals}
+              totals={dashboardTotals}
               historyEvents={historyEvents}
               customPaymentBreakdown={customPaymentBreakdown}
               isFirstLoad={isFirstLoad}
@@ -594,6 +627,7 @@ export default function AdminClient({
               activeTab={activeTab}
               isBosko={isBosko}
               barColorClass={barColorClass}
+              isNightOpen={isNightOpen}
             />
           )}
 

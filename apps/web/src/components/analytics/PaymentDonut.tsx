@@ -112,10 +112,10 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
               key={b.method}
               className="flex items-center gap-3 py-1 border-t border-ink-850 first:border-t-0"
             >
-              {/* Colored dot */}
+              {/* Colored dot — gris cuando no hubo ninguna venta real (total === 0) */}
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: b.color }}
+                style={{ backgroundColor: total === 0 ? "var(--ink-600, #475569)" : b.color }}
               />
               {/* Label */}
               <span className="text-[13px] text-ink-200 flex-1 min-w-0 truncate">

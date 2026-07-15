@@ -11,7 +11,8 @@ export default function MetricCard({
   icon: Icon,
   color,
   sparklineData,
-  subtitle = "vs. última noche"
+  subtitle = "vs. última noche",
+  noDeltaLabel = "EN VIVO",
 }: {
   label: string;
   value: number;
@@ -21,6 +22,8 @@ export default function MetricCard({
   color: string;
   sparklineData?: number[];
   subtitle?: string;
+  /** Texto mostrado cuando no hay `delta` (ej. "Noche del 14 jul" al mostrar la última noche sin comparación) — default "EN VIVO" preserva el comportamiento de siempre. */
+  noDeltaLabel?: string;
 }) {
   const deltaTone = delta?.direction === "down" ? "down" : "up";
   return (
@@ -39,7 +42,7 @@ export default function MetricCard({
             {deltaTone === "up" ? "↑" : "↓"} {delta.label} <span className="text-ink-500 font-normal">{subtitle}</span>
           </span>
         ) : (
-          <span className="text-[11px] text-ink-500 font-normal">EN VIVO</span>
+          <span className="text-[11px] text-ink-500 font-normal">{noDeltaLabel}</span>
         )}
       </div>
 

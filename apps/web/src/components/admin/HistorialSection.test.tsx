@@ -4,8 +4,29 @@ import userEvent from "@testing-library/user-event";
 
 import HistorialSection from "./HistorialSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
+import { useTheme } from "@/components/ThemeProvider";
+import { exportHistorialPdf } from "@/lib/pdfExport";
 
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
+
+vi.mock("@/components/ThemeProvider", () => ({
+  useTheme: vi.fn(),
+}));
+
+vi.mock("@/lib/pdfExport", () => ({
+  exportHistorialPdf: vi.fn(),
+}));
+
+vi.mocked(useTheme).mockReturnValue({
+  theme: "bosko",
+  useLogoUrl: true,
+  logoUrl: "/bosko.webp",
+  logoSize: 56,
+  textLogoValue: "Bosko",
+  textLogoSize: 26,
+  isDark: true,
+  toggleDark: vi.fn(),
+});
 
 // HistorialSection no hace fetch propio: historyEvents/historyLoaded
 // siguen viviendo en AdminClient (el shell) porque useAdminAnalytics y
@@ -115,5 +136,36 @@ describe("HistorialSection", () => {
 
     expect(onRedirectToLogs).toHaveBeenCalledTimes(1);
     expect(onRedirectToLogs).toHaveBeenCalledWith(night.closedAt);
+  });
+
+  it("el botón Exportar genera el PDF con los datos del theme y el historial", async () => {
+    const user = userEvent.setup();
+    const night = makeNight();
+    vi.mocked(exportHistorialPdf).mockResolvedValue(undefined);
+
+    render(<HistorialSection {...makeProps({ historyEvents: [night] })} />);
+
+    const button = screen.getByRole("button", { name: /Exportar/i });
+    await user.click(button);
+
+    expect(exportHistorialPdf).toHaveBeenCalledExactlyOnceWith({
+      historyEvents: [night],
+      isBosko: false,
+      logoUrl: "/bosko.webp",
+      useLogoUrl: true,
+      textLogoValue: "Bosko",
+    });
+  });
+
+  it("muestra un Toast de error si la generación del PDF falla", async () => {
+    const user = userEvent.setup();
+    const night = makeNight();
+    vi.mocked(exportHistorialPdf).mockRejectedValue(new Error("boom"));
+
+    render(<HistorialSection {...makeProps({ historyEvents: [night] })} />);
+
+    await user.click(screen.getByRole("button", { name: /Exportar/i }));
+
+    expect(await screen.findByText("No se pudo generar el PDF. Intentá de nuevo.")).toBeInTheDocument();
   });
 });

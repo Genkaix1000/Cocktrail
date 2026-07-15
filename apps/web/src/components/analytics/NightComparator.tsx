@@ -3,6 +3,7 @@
 import { useId, useState, useMemo } from "react";
 import { GitCompareArrows, ChevronDown, FileText, User } from "lucide-react";
 import type { UnifiedNightDay } from "@/lib/analytics";
+import { formatNightDateLong, formatEventDuration } from "@/lib/analytics";
 import { getAccentColors } from "@/lib/accentColors";
 import { formatHm } from "@/lib/utils";
 
@@ -20,33 +21,13 @@ const MONTHS_SHORT = [
   "ene", "feb", "mar", "abr", "may", "jun",
   "jul", "ago", "sep", "oct", "nov", "dic",
 ];
-const MONTH_NAMES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-];
-
 function formatNightDate(ts: number): string {
   const d = new Date(ts);
   return `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
 }
 
-function formatNightDateLong(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getDate()} de ${MONTH_NAMES[d.getMonth()]}`;
-}
-
 function formatMoney(n: number): string {
   return `$${n.toLocaleString("es-AR")}`;
-}
-
-function formatEventDuration(startedAt: number, closedAt?: number): string {
-  if (!closedAt) return "—";
-  const ms = closedAt - startedAt;
-  const totalMin = Math.round(ms / 60000);
-  const hrs = Math.floor(totalMin / 60);
-  const mins = totalMin % 60;
-  if (hrs === 0) return `${mins}m`;
-  return `${hrs}h ${mins}m`;
 }
 
 function getDurationMs(e: UnifiedNightDay): number | null {
@@ -348,6 +329,10 @@ function NightDetailView({
   isBosko: boolean;
   onRedirectToLogs: (ts: number) => void;
 }) {
+  const topDrink = night.totals.drinksSold[0];
+  const hasSingleSession = night.sessions.length === 1;
+  const singleSession = hasSingleSession ? night.sessions[0] : undefined;
+
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -355,7 +340,14 @@ function NightDetailView({
           Noche del {formatNightDateLong(night.closedAt ?? night.startedAt)}
         </h4>
         <p className="text-[11px] text-ink-400 font-mono mt-0.5">
-          {night.sessions.length} {night.sessions.length === 1 ? "sesión registrada" : "sesiones unificadas"}
+          {hasSingleSession && singleSession ? (
+            <>
+              {formatHm(singleSession.startedAt)} hs → {singleSession.closedAt ? `${formatHm(singleSession.closedAt)} hs` : "Abierto"}
+              {" · "}Cerrado por: {singleSession.closedBy || "desconocido"}
+            </>
+          ) : (
+            <>{night.sessions.length} sesiones unificadas</>
+          )}
         </p>
       </div>
 
@@ -364,7 +356,7 @@ function NightDetailView({
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400 border-b border-ink-850 pb-2">
           Totales Consolidados del Día
         </span>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="flex flex-col gap-0.5">
             <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Recaudado</span>
             <span className="font-mono font-bold text-[20px] text-ink-50">
@@ -384,9 +376,21 @@ function NightDetailView({
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Pedidos</span>
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Tickets Emitidos</span>
             <span className="font-mono text-[14px] text-ink-200">
               {night.orderCounter}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Top Trago</span>
+            <span className="font-mono text-[14px] text-ink-200 truncate">
+              {topDrink ? `${topDrink.name} (×${topDrink.qty})` : "—"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Duración</span>
+            <span className="font-mono text-[14px] text-ink-200">
+              {formatEventDuration(night.startedAt, night.closedAt)}
             </span>
           </div>
         </div>
@@ -406,50 +410,53 @@ function NightDetailView({
         )}
       </div>
 
-      {/* Sessions */}
-      <div className="space-y-4">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400 block mb-1">
-          Detalle de Sesiones Individuales
-        </span>
+      {/* Sessions — solo si hubo reapertura el mismo día; con 1 sola sesión ya se
+          muestra el horario/cerrado-por arriba, repetirlo acá sería ruido. */}
+      {!hasSingleSession && (
+        <div className="space-y-4">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400 block mb-1">
+            Detalle de Sesiones Individuales
+          </span>
 
-        {night.sessions.map((session, sIdx) => (
-          <div key={session.id} className="bg-ink-950/45 border border-ink-850 rounded-2xl p-4 flex flex-col gap-3">
-            <div className="flex justify-between items-center border-b border-ink-850 pb-2.5 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${isBosko ? "bg-[#4ade80]/10 text-[#4ade80]" : "bg-blue/10 text-blue"}`}>
-                  {sIdx + 1}
-                </span>
-                <span className="text-xs font-mono text-ink-300">
-                  {formatHm(session.startedAt)} hs → {session.closedAt ? `${formatHm(session.closedAt)} hs` : "Abierto"}
+          {night.sessions.map((session, sIdx) => (
+            <div key={session.id} className="bg-ink-950/45 border border-ink-850 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex justify-between items-center border-b border-ink-850 pb-2.5 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${isBosko ? "bg-[#4ade80]/10 text-[#4ade80]" : "bg-blue/10 text-blue"}`}>
+                    {sIdx + 1}
+                  </span>
+                  <span className="text-xs font-mono text-ink-300">
+                    {formatHm(session.startedAt)} hs → {session.closedAt ? `${formatHm(session.closedAt)} hs` : "Abierto"}
+                  </span>
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-ink-850 text-ink-300 border border-ink-750">
+                  <User size={11} className="text-ink-400" />
+                  <span>Cerrado por: {session.closedBy || "desconocido"}</span>
                 </span>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-ink-850 text-ink-300 border border-ink-750">
-                <User size={11} className="text-ink-400" />
-                <span>Cerrado por: {session.closedBy || "desconocido"}</span>
-              </span>
-            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Recaudado</span>
-                <span className="text-ink-100 font-bold">${session.totals.total.toLocaleString("es-AR")}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Web</span>
-                <span className="text-ink-300">${session.totals.webTotal.toLocaleString("es-AR")} ({session.totals.webCount})</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Efectivo</span>
-                <span className="text-ink-300">${session.totals.efectivoTotal.toLocaleString("es-AR")} ({session.totals.efectivoCount})</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Pedidos</span>
-                <span className="text-ink-300">{session.orderCounter}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Recaudado</span>
+                  <span className="text-ink-100 font-bold">${session.totals.total.toLocaleString("es-AR")}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Web</span>
+                  <span className="text-ink-300">${session.totals.webTotal.toLocaleString("es-AR")} ({session.totals.webCount})</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Efectivo</span>
+                  <span className="text-ink-300">${session.totals.efectivoTotal.toLocaleString("es-AR")} ({session.totals.efectivoCount})</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Tickets Emitidos</span>
+                  <span className="text-ink-300">{session.orderCounter}</span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex justify-end">
         <button

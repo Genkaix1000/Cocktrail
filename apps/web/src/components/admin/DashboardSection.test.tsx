@@ -55,11 +55,13 @@ function makeProps(overrides: {
   activeTab?: string;
   isBosko?: boolean;
   barColorClass?: string;
+  isNightOpen?: boolean;
 } = {}) {
   const event = overrides.event !== undefined ? overrides.event : baseEvent;
   const orders = (overrides.orders ?? []) as Order[];
   const totals = overrides.totals ?? emptyTotals;
   const historyEvents = overrides.historyEvents ?? [];
+  const isNightOpen = overrides.isNightOpen ?? event?.status === "activo";
 
   const { event: _, orders: __, ...componentProps } = overrides;
 
@@ -74,6 +76,7 @@ function makeProps(overrides: {
     isBosko: false,
     barColorClass: "from-blue/15 to-blue",
     ...componentProps,
+    isNightOpen,
   };
 }
 
@@ -145,5 +148,45 @@ describe("DashboardSection", () => {
     const { container } = render(<DashboardSection {...makeProps({ isFirstLoad: true })} />);
     expect(container.querySelector(".animate-dashboard-in")).not.toBeNull();
     expect(screen.queryByText("Dashboard General")).not.toBeInTheDocument();
+  });
+
+  describe("sin noche abierta", () => {
+    const historyEvents: EventSummary[] = [
+      {
+        id: "evt-prev",
+        status: "cerrado",
+        startedAt: Date.now() - 5 * 60 * 60 * 1000,
+        closedAt: Date.now() - 60 * 60 * 1000,
+        orderCounter: 2,
+        totals: {
+          ...emptyTotals,
+          efectivoTotal: 18801,
+          efectivoCount: 2,
+          total: 18801,
+          drinksSold: [{ drinkId: 1, name: "Vodka con Speed", qty: 1, subtotal: 5000 }],
+        },
+        orders: [],
+      },
+    ];
+
+    it("no muestra la card Comparativa", () => {
+      render(
+        <DashboardSection
+          {...makeProps({ event: null, isNightOpen: false, historyEvents, totals: historyEvents[0]!.totals })}
+        />,
+      );
+      expect(screen.queryByText("Comparativa")).not.toBeInTheDocument();
+    });
+
+    it("no muestra delta ni 'EN VIVO', muestra la fecha de la última noche", () => {
+      render(
+        <DashboardSection
+          {...makeProps({ event: null, isNightOpen: false, historyEvents, totals: historyEvents[0]!.totals })}
+        />,
+      );
+      expect(screen.queryByText("EN VIVO")).not.toBeInTheDocument();
+      expect(screen.queryByText(/^↑|^↓/)).not.toBeInTheDocument();
+      expect(screen.getAllByText(/Noche del/).length).toBeGreaterThan(0);
+    });
   });
 });

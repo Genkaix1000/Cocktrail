@@ -141,6 +141,17 @@ export function formatDuration(ms: number | null): string {
   return `${hours}h ${remainMins}m`;
 }
 
+const NIGHT_MONTH_NAMES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** "14 de julio" — usado en el detalle de una noche (Historial) y en el subtítulo del Dashboard cuando no hay noche abierta. */
+export function formatNightDateLong(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getDate()} de ${NIGHT_MONTH_NAMES[d.getMonth()]}`;
+}
+
 // ─────────────────────── B4: Hourly Heatmap Data ───────────────────────
 
 export function computeHourlySlots(
@@ -362,52 +373,156 @@ function getWeekStart(d: Date): number {
   return start.getTime();
 }
 
-// ─────────────────────── D1: CSV Export ───────────────────────
+// ─────────────────────── C5: Desglose histórico semanal/mensual ───────────────────────
+// A diferencia de computeWeeklyDelta/computeMonthlyDelta (solo semana/mes actual vs.
+// anterior), estas agrupan TODO el historial — usadas por el export a PDF.
 
-export function exportHistoryCSV(historyEvents: EventSummary[]): string {
-  const WEEKDAYS = [
-    "Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado",
-  ];
-  const header =
-    "Fecha,Día,Total,Ventas Web,Ventas Barra,Duración (min),Top 1,Top 2,Top 3";
-  const rows = historyEvents.map((e) => {
-    const d = new Date(e.closedAt ?? e.startedAt);
-    const dateStr = d.toLocaleDateString("es-AR");
-    const dayName = WEEKDAYS[d.getDay()];
-    const duration = e.closedAt
-      ? Math.round((e.closedAt - e.startedAt) / 60000)
-      : 0;
+export function computeWeeklyBreakdown(historyEvents: EventSummary[]): {
+  weekStart: number;
+  weekEnd: number;
+  nightsCount: number;
+  total: number;
+}[] {
+  const weeks = new Map<number, { nightsCount: number; total: number }>();
+  for (const e of historyEvents) {
+    const ts = e.closedAt ?? e.startedAt;
+    const weekStart = getWeekStart(new Date(ts));
+    const acc = weeks.get(weekStart);
+    if (acc) {
+      acc.nightsCount++;
+      acc.total += e.totals.total;
+    } else {
+      weeks.set(weekStart, { nightsCount: 1, total: e.totals.total });
+    }
+  }
 
-    const webSales = e.totals.webTotal;
-    const barraSales = e.totals.efectivoTotal + e.totals.qrTotal + e.totals.debitoTotal;
+  return Array.from(weeks.entries())
+    .map(([weekStart, acc]) => ({
+      weekStart,
+      weekEnd: weekStart + 6 * 24 * 60 * 60 * 1000,
+      nightsCount: acc.nightsCount,
+      total: acc.total,
+    }))
+    .sort((a, b) => b.weekStart - a.weekStart);
+}
 
-    const top3 = e.totals.drinksSold.slice(0, 3).map((t) => `${t.name} (×${t.qty})`);
-    return [
-      dateStr,
-      dayName,
-      e.totals.total,
-      webSales,
-      barraSales,
-      duration,
-      top3[0] ?? "",
-      top3[1] ?? "",
-      top3[2] ?? "",
-    ].join(",");
+export function computeMonthlyBreakdown(historyEvents: EventSummary[]): {
+  monthStart: number;
+  monthLabel: string;
+  nightsCount: number;
+  total: number;
+}[] {
+  const months = new Map<number, { nightsCount: number; total: number }>();
+  for (const e of historyEvents) {
+    const ts = e.closedAt ?? e.startedAt;
+    const d = new Date(ts);
+    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+    const acc = months.get(monthStart);
+    if (acc) {
+      acc.nightsCount++;
+      acc.total += e.totals.total;
+    } else {
+      months.set(monthStart, { nightsCount: 1, total: e.totals.total });
+    }
+  }
+
+  return Array.from(months.entries())
+    .map(([monthStart, acc]) => {
+      const d = new Date(monthStart);
+      return {
+        monthStart,
+        monthLabel: `${NIGHT_MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`,
+        nightsCount: acc.nightsCount,
+        total: acc.total,
+      };
+    })
+    .sort((a, b) => b.monthStart - a.monthStart);
+}
+
+// ─────────────────────── C6: Agrupado por noche (día calendario) ───────────────────────
+
+/**
+ * Unifica todas las sesiones (`EventSummary`) cerradas el mismo día calendario
+ * en un solo `UnifiedNightDay` con totales sumados. Usada por `HistorialSection.tsx`
+ * (selector de detalle/comparación) y por el export a PDF — extraída acá para que
+ * ambos consumidores vean exactamente los mismos números por noche.
+ */
+export function groupNightsByDay(historyEvents: EventSummary[]): UnifiedNightDay[] {
+  const groups: { [dateKey: string]: EventSummary[] } = {};
+  for (const e of historyEvents) {
+    const closedAt = e.closedAt ?? e.startedAt;
+    const dateKey = new Date(closedAt).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+    if (!groups[dateKey]) {
+      groups[dateKey] = [];
+    }
+    groups[dateKey].push(e);
+  }
+
+  return Object.entries(groups).map(([dateKey, sessions]) => {
+    const latestClosedAt = Math.max(...sessions.map(s => s.closedAt ?? s.startedAt));
+    const earliestStartedAt = Math.min(...sessions.map(s => s.startedAt));
+
+    const webTotal = sessions.reduce((sum, s) => sum + s.totals.webTotal, 0);
+    const webCount = sessions.reduce((sum, s) => sum + s.totals.webCount, 0);
+    const efectivoTotal = sessions.reduce((sum, s) => sum + s.totals.efectivoTotal, 0);
+    const efectivoCount = sessions.reduce((sum, s) => sum + s.totals.efectivoCount, 0);
+    const qrTotal = sessions.reduce((sum, s) => sum + (s.totals.qrTotal || 0), 0);
+    const qrCount = sessions.reduce((sum, s) => sum + (s.totals.qrCount || 0), 0);
+    const debitoTotal = sessions.reduce((sum, s) => sum + (s.totals.debitoTotal || 0), 0);
+    const debitoCount = sessions.reduce((sum, s) => sum + (s.totals.debitoCount || 0), 0);
+    const total = sessions.reduce((sum, s) => sum + s.totals.total, 0);
+    const orderCounter = sessions.reduce((sum, s) => sum + s.orderCounter, 0);
+
+    const drinksMap: { [drinkId: number]: { drinkId: number; name: string; qty: number; subtotal: number } } = {};
+    for (const s of sessions) {
+      for (const d of s.totals.drinksSold) {
+        if (!drinksMap[d.drinkId]) {
+          drinksMap[d.drinkId] = { drinkId: d.drinkId, name: d.name, qty: 0, subtotal: 0 };
+        }
+        drinksMap[d.drinkId].qty += d.qty;
+        drinksMap[d.drinkId].subtotal += d.subtotal || 0;
+      }
+    }
+    const drinksSold = Object.values(drinksMap).sort((a, b) => b.qty - a.qty);
+
+    const d = new Date(latestClosedAt);
+    const monthLabel = `${NIGHT_MONTH_NAMES_CAP[d.getMonth()]} ${d.getFullYear()}`;
+
+    return {
+      dateKey,
+      monthLabel,
+      startedAt: earliestStartedAt,
+      closedAt: latestClosedAt,
+      sessions,
+      totals: {
+        total,
+        webTotal,
+        webCount,
+        efectivoTotal,
+        efectivoCount,
+        qrTotal,
+        qrCount,
+        debitoTotal,
+        debitoCount,
+        drinksSold,
+      },
+      orderCounter,
+    };
   });
-
-  return [header, ...rows].join("\n");
 }
 
-export function downloadCSV(csv: string, filename: string): void {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", filename);
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
+const NIGHT_MONTH_NAMES_CAP = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
 
+/** startedAt→closedAt en formato "4h 12m" / "45m" — usado en el detalle de noche (Historial) y el export a PDF. */
+export function formatEventDuration(startedAt: number, closedAt?: number): string {
+  if (!closedAt) return "—";
+  const ms = closedAt - startedAt;
+  const totalMin = Math.round(ms / 60000);
+  const hrs = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  if (hrs === 0) return `${mins}m`;
+  return `${hrs}h ${mins}m`;
+}

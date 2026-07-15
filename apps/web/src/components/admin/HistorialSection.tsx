@@ -11,8 +11,11 @@ import {
 import MetricCard from "@/components/shared/MetricCard";
 import NightRecords from "@/components/analytics/NightRecords";
 import NightComparator from "@/components/analytics/NightComparator";
+import Toast from "@/components/shared/Toast";
 
-import { exportHistoryCSV, downloadCSV } from "@/lib/analytics";
+import { groupNightsByDay } from "@/lib/analytics";
+import { exportHistorialPdf } from "@/lib/pdfExport";
+import { useTheme } from "@/components/ThemeProvider";
 
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
 import type { UnifiedNightDay } from "@/lib/analytics";
@@ -45,10 +48,6 @@ function formatShortDate(ts: number): string {
 function formatDateRange(start: number, end: number): string {
   return `${formatShortDate(start)}–${formatShortDate(end)}`;
 }
-const MONTH_NAMES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
 
 /**
  * Vista "Historial de Noches" del panel admin. `historyEvents`/
@@ -68,6 +67,9 @@ export default function HistorialSection({
   onRedirectToLogs,
 }: Props) {
   const { weeklyDelta, monthlyDelta, allTotal, nightRecords } = analytics;
+  const { logoUrl, useLogoUrl, textLogoValue } = useTheme();
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // `Date.now()` es impuro: se fija una sola vez al montar para calcular los
   // rangos de fecha de "Esta Semana"/"Este Mes" sin variar en renders
@@ -77,69 +79,10 @@ export default function HistorialSection({
   const monthRange = formatDateRange(monthlyDelta.thisMonthStart, now);
 
   // Memoized unified days
-  const unifiedHistoryDays: UnifiedNightDay[] = useMemo(() => {
-    const groups: { [dateKey: string]: EventSummary[] } = {};
-    for (const e of historyEvents) {
-      const closedAt = e.closedAt ?? e.startedAt;
-      const dateKey = new Date(closedAt).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
-      }
-      groups[dateKey].push(e);
-    }
-
-    return Object.entries(groups).map(([dateKey, sessions]) => {
-      const latestClosedAt = Math.max(...sessions.map(s => s.closedAt ?? s.startedAt));
-      const earliestStartedAt = Math.min(...sessions.map(s => s.startedAt));
-
-      const webTotal = sessions.reduce((sum, s) => sum + s.totals.webTotal, 0);
-      const webCount = sessions.reduce((sum, s) => sum + s.totals.webCount, 0);
-      const efectivoTotal = sessions.reduce((sum, s) => sum + s.totals.efectivoTotal, 0);
-      const efectivoCount = sessions.reduce((sum, s) => sum + s.totals.efectivoCount, 0);
-      const qrTotal = sessions.reduce((sum, s) => sum + (s.totals.qrTotal || 0), 0);
-      const qrCount = sessions.reduce((sum, s) => sum + (s.totals.qrCount || 0), 0);
-      const debitoTotal = sessions.reduce((sum, s) => sum + (s.totals.debitoTotal || 0), 0);
-      const debitoCount = sessions.reduce((sum, s) => sum + (s.totals.debitoCount || 0), 0);
-      const total = sessions.reduce((sum, s) => sum + s.totals.total, 0);
-      const orderCounter = sessions.reduce((sum, s) => sum + s.orderCounter, 0);
-
-      const drinksMap: { [drinkId: number]: { drinkId: number; name: string; qty: number; subtotal: number } } = {};
-      for (const s of sessions) {
-        for (const d of s.totals.drinksSold) {
-          if (!drinksMap[d.drinkId]) {
-            drinksMap[d.drinkId] = { drinkId: d.drinkId, name: d.name, qty: 0, subtotal: 0 };
-          }
-          drinksMap[d.drinkId].qty += d.qty;
-          drinksMap[d.drinkId].subtotal += d.subtotal || 0;
-        }
-      }
-      const drinksSold = Object.values(drinksMap).sort((a, b) => b.qty - a.qty);
-
-      const d = new Date(latestClosedAt);
-      const monthLabel = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
-
-      return {
-        dateKey,
-        monthLabel,
-        startedAt: earliestStartedAt,
-        closedAt: latestClosedAt,
-        sessions,
-        totals: {
-          total,
-          webTotal,
-          webCount,
-          efectivoTotal,
-          efectivoCount,
-          qrTotal,
-          qrCount,
-          debitoTotal,
-          debitoCount,
-          drinksSold,
-        },
-        orderCounter,
-      };
-    });
-  }, [historyEvents]);
+  const unifiedHistoryDays: UnifiedNightDay[] = useMemo(
+    () => groupNightsByDay(historyEvents),
+    [historyEvents],
+  );
 
   return (
     <div className="space-y-6 w-full">
@@ -185,17 +128,28 @@ export default function HistorialSection({
             </div>
             {historyEvents.length > 0 && (
               <button
-                onClick={() => {
-                  const csv = exportHistoryCSV(historyEvents);
-                  downloadCSV(csv, "cocktrail_historial.csv");
+                disabled={isExporting}
+                onClick={async () => {
+                  setIsExporting(true);
+                  try {
+                    await exportHistorialPdf({ historyEvents, isBosko, logoUrl, useLogoUrl, textLogoValue });
+                  } catch {
+                    setExportError("No se pudo generar el PDF. Intentá de nuevo.");
+                  } finally {
+                    setIsExporting(false);
+                  }
                 }}
-                className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink-300 hover:text-ink-50 px-2.5 py-1.5 rounded bg-ink-800 border border-ink-700 transition-all cursor-pointer active:scale-95 shrink-0"
+                className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink-300 hover:text-ink-50 px-2.5 py-1.5 rounded bg-ink-800 border border-ink-700 transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download size={12} />
-                <span>Exportar CSV</span>
+                <span>{isExporting ? "Generando..." : "Exportar"}</span>
               </button>
             )}
           </div>
+
+          {exportError && (
+            <Toast variant="error" message={exportError} onClose={() => setExportError(null)} />
+          )}
 
           {/* Grids / Aggregations (Boxed style with sparklines and respective icons) */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

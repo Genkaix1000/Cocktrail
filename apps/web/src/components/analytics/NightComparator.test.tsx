@@ -55,8 +55,35 @@ describe("NightComparator", () => {
   it("con una sola noche, muestra su detalle en vez de pedir una comparación", () => {
     render(<NightComparator nights={[makeNight()]} isBosko={false} onRedirectToLogs={noop} />);
     expect(screen.getByText("Totales Consolidados del Día")).toBeInTheDocument();
-    expect(screen.getByText("Detalle de Sesiones Individuales")).toBeInTheDocument();
     expect(screen.getByText("Ver Auditoría de Tickets")).toBeInTheDocument();
+  });
+
+  it("muestra Tickets Emitidos, Top Trago y Duración en el detalle de una noche", () => {
+    render(<NightComparator nights={[makeNight()]} isBosko={false} onRedirectToLogs={noop} />);
+    expect(screen.getByText("Tickets Emitidos")).toBeInTheDocument();
+    expect(screen.getByText("Top Trago")).toBeInTheDocument();
+    expect(screen.getByText("Fernet con Coca (×5)")).toBeInTheDocument();
+    expect(screen.getByText("Duración")).toBeInTheDocument();
+    expect(screen.getByText("5h 0m")).toBeInTheDocument();
+  });
+
+  it("con una sola sesión, oculta 'Detalle de Sesiones Individuales' (repetiría los mismos totales)", () => {
+    render(<NightComparator nights={[makeNight()]} isBosko={false} onRedirectToLogs={noop} />);
+    expect(screen.queryByText("Detalle de Sesiones Individuales")).not.toBeInTheDocument();
+    // el horario/cerrado-por de esa única sesión se muestra igual, arriba
+    expect(screen.getByText(/Cerrado por: desconocido/)).toBeInTheDocument();
+  });
+
+  it("con 2+ sesiones el mismo día, muestra 'Detalle de Sesiones Individuales'", () => {
+    const sessionA = makeSession({ id: "s1" });
+    const sessionB = makeSession({ id: "s2", closedBy: "cajera1" });
+    const night = makeNight({
+      sessions: [sessionA, sessionB],
+      orderCounter: sessionA.orderCounter + sessionB.orderCounter,
+    });
+    render(<NightComparator nights={[night]} isBosko={false} onRedirectToLogs={noop} />);
+    expect(screen.getByText("Detalle de Sesiones Individuales")).toBeInTheDocument();
+    expect(screen.getByText(/Cerrado por: cajera1/)).toBeInTheDocument();
   });
 
   it("llama a onRedirectToLogs con la fecha de la noche al click en Ver Auditoría de Tickets", async () => {
