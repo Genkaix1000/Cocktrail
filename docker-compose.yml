@@ -59,6 +59,14 @@ services:
       - ./supabase/migrations/20260626175947_add_closed_by.sql:/docker-entrypoint-initdb.d/init-scripts/12-add_closed_by.sql:Z
       - ./supabase/migrations/20260629201500_create_audit_logs.sql:/docker-entrypoint-initdb.d/init-scripts/13-create_audit_logs.sql:Z
       - ./supabase/migrations/20260701000000_add_keyword.sql:/docker-entrypoint-initdb.d/init-scripts/14-add_keyword.sql:Z
+      # Fase 0 — Integración MP (docs/plans/plan-implementacion-mp.md). Orden = deps de FK.
+      - ./supabase/migrations/20260715000000_bars.sql:/docker-entrypoint-initdb.d/init-scripts/15-bars.sql:Z
+      - ./supabase/migrations/20260715000100_mercadopago_sellers.sql:/docker-entrypoint-initdb.d/init-scripts/16-mercadopago_sellers.sql:Z
+      - ./supabase/migrations/20260715000200_mercadopago_cajas.sql:/docker-entrypoint-initdb.d/init-scripts/17-mercadopago_cajas.sql:Z
+      - ./supabase/migrations/20260715000300_mercadopago_cajas_devices.sql:/docker-entrypoint-initdb.d/init-scripts/18-mercadopago_cajas_devices.sql:Z
+      - ./supabase/migrations/20260715000400_oauth_states.sql:/docker-entrypoint-initdb.d/init-scripts/19-oauth_states.sql:Z
+      # pgTAP: solo dev/local, para correr supabase/tests/phase0_schema_test.sql
+      - ./supabase/migrations/20260715000600_pgtap_extension.sql:/docker-entrypoint-initdb.d/init-scripts/20-pgtap_extension.sql:Z
 
   rest:
     image: postgrest/postgrest:v14.12
