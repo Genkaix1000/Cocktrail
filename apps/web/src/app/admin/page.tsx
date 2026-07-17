@@ -15,12 +15,22 @@ export default function AdminPage() {
   const [initialOrders, setInitialOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Preserva ?linked=true del callback OAuth al redirigir a login
+  function redirectToLogin() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("linked")) {
+      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      return;
+    }
+    router.push("/login");
+  }
+
   useEffect(() => {
     authService
       .getMe()
       .then((user) => {
         if (!user) {
-          router.push("/login");
+          redirectToLogin();
           return;
         }
         if (user.role !== "admin") {
@@ -37,11 +47,11 @@ export default function AdminPage() {
             setLoading(false);
           })
           .catch(() => {
-            router.push("/login");
+            redirectToLogin();
           });
       })
       .catch(() => {
-        router.push("/login");
+        redirectToLogin();
       });
   }, [router]);
 

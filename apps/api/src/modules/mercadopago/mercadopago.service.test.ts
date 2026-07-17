@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mapPaymentStatusToNormalized, MercadoPagoService } from "./mercadopago.service.js";
+import type { CredentialsResolverService } from "./credentials-resolver.service.js";
 
 vi.mock("../../config/env.js", () => ({
   env: {
@@ -23,10 +24,14 @@ function mockFetchOnce(response: { ok: boolean; status?: number; body?: unknown 
 
 describe("MercadoPagoService", () => {
   let service: MercadoPagoService;
+  let resolve: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
-    service = new MercadoPagoService();
+    // El resolver (Fase 2) devuelve el token; por defecto el legacy "test-token".
+    resolve = vi.fn().mockResolvedValue("test-token");
+    const resolver = { resolve } as unknown as CredentialsResolverService;
+    service = new MercadoPagoService(resolver);
     env.MP_ACCESS_TOKEN = "test-token";
     env.MP_POS_DEVICE_ID = "device-1";
   });
@@ -36,7 +41,7 @@ describe("MercadoPagoService", () => {
   });
 
   describe("createPaymentIntent", () => {
-    it("crea la intención de pago y devuelve el body de MP", async () => {
+    it("crea la intencion de pago y devuelve el body de MP", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
 
       const result = await service.createPaymentIntent(1000);
@@ -49,21 +54,36 @@ describe("MercadoPagoService", () => {
     });
 
     it("lanza Conflict con el mensaje de MP cuando la respuesta no es ok", async () => {
-      mockFetchOnce({ ok: false, status: 400, body: { message: "monto inválido", error: "bad_request" } });
+      mockFetchOnce({ ok: false, status: 400, body: { message: "monto invalido", error: "bad_request" } });
 
       await expect(service.createPaymentIntent(1000)).rejects.toMatchObject({
-        message: expect.stringContaining("Error al crear la intención de pago en el Posnet"),
+        message: expect.stringContaining("Error al crear la intenci"),
       });
     });
 
-    it("lanza Conflict sin llamar a fetch si falta configuración", async () => {
-      env.MP_ACCESS_TOKEN = "";
+    it("lanza Conflict sin llamar a fetch ni resolver token si falta el device", async () => {
+      env.MP_POS_DEVICE_ID = "";
 
       await expect(service.createPaymentIntent(1000)).rejects.toBeTruthy();
       expect(fetch).not.toHaveBeenCalled();
+      expect(resolve).not.toHaveBeenCalled();
     });
 
-    it("manda un external_reference único (basado en timestamp) en additional_info", async () => {
+    it("resuelve el token con el deviceId del contexto y lo usa en el Authorization", async () => {
+      resolve.mockResolvedValueOnce("AT-device-9");
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+
+      await service.createPaymentIntent(1000, undefined, "PAX_A910__DEVICE-9");
+
+      expect(resolve).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: "PAX_A910__DEVICE-9", allowGlobalFallback: true }),
+      );
+      const call = vi.mocked(fetch).mock.calls[0];
+      const headers = (call[1] as RequestInit).headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer AT-device-9");
+    });
+
+    it("manda un external_reference unico (basado en timestamp) en additional_info", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
 
       await service.createPaymentIntent(1000);
@@ -91,7 +111,8 @@ describe("MercadoPagoService", () => {
     it("manda la description saneada (sin acentos ni espacios) dentro de external_reference", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
 
-      await service.createPaymentIntent(1000, "2x Fernet con Coca, 1x Gin Tónic");
+      // "Gin T\u00f3nic" = "Gin T?nic" (escape para mantener el archivo ASCII-safe).
+      await service.createPaymentIntent(1000, "2x Fernet con Coca, 1x Gin T\u00f3nic");
 
       const call = vi.mocked(fetch).mock.calls[0];
       const body = JSON.parse((call[1] as RequestInit).body as string);
@@ -109,7 +130,7 @@ describe("MercadoPagoService", () => {
       expect(headers["X-Idempotency-Key"]).toBeTruthy();
     });
 
-    it("ante un 2205 con el id de la intención en cola, la cancela y reintenta una vez", async () => {
+    it("ante un 2205 con el id de la intencion en cola, la cancela y reintenta una vez", async () => {
       mockFetchOnce({
         ok: false,
         status: 409,
@@ -129,7 +150,7 @@ describe("MercadoPagoService", () => {
       );
     });
 
-    it("ante un 2205 sin id de intención en el error, propaga el error tal cual (sin inventar recuperación)", async () => {
+    it("ante un 2205 sin id de intencion en el error, propaga el error tal cual (sin inventar recuperacion)", async () => {
       mockFetchOnce({
         ok: false,
         status: 409,
@@ -137,14 +158,14 @@ describe("MercadoPagoService", () => {
       });
 
       await expect(service.createPaymentIntent(1000)).rejects.toMatchObject({
-        message: expect.stringContaining("Error al crear la intención de pago en el Posnet"),
+        message: expect.stringContaining("Error al crear la intenci"),
       });
       expect(fetch).toHaveBeenCalledTimes(1); // no reintenta sin poder cancelar la vieja
     });
   });
 
   describe("cancelPaymentIntent", () => {
-    it("cancela la intención de pago", async () => {
+    it("cancela la intencion de pago", async () => {
       mockFetchOnce({ ok: true, body: { status: "CANCELED" } });
 
       const result = await service.cancelPaymentIntent("intent-1");
@@ -156,18 +177,28 @@ describe("MercadoPagoService", () => {
       mockFetchOnce({ ok: false, status: 404 });
 
       await expect(service.cancelPaymentIntent("intent-1")).rejects.toMatchObject({
-        message: expect.stringContaining("Error al cancelar la intención de pago en el Posnet"),
+        message: expect.stringContaining("Error al cancelar la intenci"),
       });
     });
   });
 
   describe("checkDeviceConnection", () => {
-    it("devuelve connected:false sin llamar a fetch si falta configuración", async () => {
-      env.MP_ACCESS_TOKEN = "";
+    it("devuelve connected:false sin llamar a fetch si falta el device", async () => {
+      env.MP_POS_DEVICE_ID = "";
 
       const result = await service.checkDeviceConnection();
 
       expect(result.connected).toBe(false);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("devuelve connected:false (no lanza) si el resolver no encuentra cuenta", async () => {
+      resolve.mockRejectedValueOnce(new Error("No hay cuenta vinculada"));
+
+      const result = await service.checkDeviceConnection();
+
+      expect(result.connected).toBe(false);
+      expect(result.message).toContain("No hay cuenta vinculada");
       expect(fetch).not.toHaveBeenCalled();
     });
 
@@ -221,7 +252,7 @@ describe("MercadoPagoService", () => {
       vi.useRealTimers();
     });
 
-    it("detecta que el Posnet recibió la prueba (ON_TERMINAL) y NO intenta cancelarla por API", async () => {
+    it("detecta que el Posnet recibio la prueba (ON_TERMINAL) y NO intenta cancelarla por API", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-test", status: "OPEN" } }); // createPaymentIntent
       mockFetchOnce({ ok: true, body: { id: "intent-test", status: "ON_TERMINAL" } }); // 1er poll
 
@@ -230,8 +261,8 @@ describe("MercadoPagoService", () => {
       const result = await promise;
 
       expect(result.reachedDevice).toBe(true);
-      expect(result.message).toContain("Cancelá la operación de $15 desde el propio dispositivo");
-      // MP responde 409 (error 103) si se intenta cancelar una intención ya en ON_TERMINAL: no debe intentarlo.
+      expect(result.message).toContain("desde el propio dispositivo");
+      // MP responde 409 (error 103) si se intenta cancelar una intencion ya en ON_TERMINAL: no debe intentarlo.
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
@@ -247,12 +278,12 @@ describe("MercadoPagoService", () => {
       const result = await promise;
 
       expect(result.reachedDevice).toBe(false);
-      expect(result.message).toContain("no respondió");
+      expect(result.message).toContain("no respondi");
       const lastCall = vi.mocked(fetch).mock.calls.at(-1)!;
       expect(lastCall[1]).toMatchObject({ method: "DELETE" });
     });
 
-    it("si falla crear la intención de prueba, devuelve reachedDevice:false sin pollear", async () => {
+    it("si falla crear la intencion de prueba, devuelve reachedDevice:false sin pollear", async () => {
       mockFetchOnce({ ok: false, status: 500, body: { message: "error de MP" } });
 
       const result = await service.testDeviceReachability();
@@ -263,7 +294,7 @@ describe("MercadoPagoService", () => {
   });
 
   describe("getPayment", () => {
-    it("consulta la Payments API estándar", async () => {
+    it("consulta la Payments API estandar", async () => {
       mockFetchOnce({ ok: true, body: { id: "payment-1", status: "approved" } });
 
       const result = await service.getPayment("payment-1");
@@ -293,7 +324,7 @@ describe("MercadoPagoService", () => {
       expect(result.status).toBe(rawStatus);
     });
 
-    it("resuelve CONFIRMATION_REQUIRED con pago approved como FINISHED, sin intervención manual", async () => {
+    it("resuelve CONFIRMATION_REQUIRED con pago approved como FINISHED, sin intervencion manual", async () => {
       mockFetchOnce({ ok: true, body: { status: "CONFIRMATION_REQUIRED", payment: { id: "payment-1" } } });
       mockFetchOnce({ ok: true, body: { id: "payment-1", status: "approved" } });
 

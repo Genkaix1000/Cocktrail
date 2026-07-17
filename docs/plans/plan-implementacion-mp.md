@@ -12,6 +12,8 @@
 
 Crear las migraciones de Supabase con las 3 tablas del modelo de datos definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Modelo de datos (Cocktrail DB)" más la tabla `oauth_states` que requiere el flujo OAuth.
 
+**Dónde se aplican**: las migraciones corren en **ambos** Supabases (local Docker + Cloud), pero el flujo OAuth (Fase 1) usa exclusivamente **Cloud** para `oauth_states` y `mercadopago_sellers`. Las tablas `mercadopago_cajas` y `mercadopago_cajas_devices` (Fase 3) usan **Local**. Ver [arquitectura](#arquitectura-supabase-oauth-vs-operativo) al final de esta fase.
+
 ### B) ¿Por qué?
 
 El spec define exactamente 3 tablas como modelo de datos de la integración: `mercadopago_sellers` guarda los tokens OAuth de cada vendedor (Bosko), `mercadopago_cajas` persiste el `store_id`, `external_pos_id` y la `qr_image` estática de cada barra, y `mercadopago_cajas_devices` vincula cada caja con su terminal Point física. Sin estas tablas, ninguna fase posterior puede persistir su estado. `oauth_states` es auxiliar para el flujo OAuth (PKCE), con TTL de 10 minutos y una RPC atómica `consume_oauth_state` que consume el state en un solo paso (lee, valida TTL, elimina). Actualmente existen directorios de migración vacíos (`supabase/migrations/20260715000*_*/`) que hay que poblar con el SQL correspondiente. [`docs/mp/api-oauth.md`](../mp/api-oauth.md) provee el schema exacto de `oauth_states` y `mercadopago_sellers`. [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) indica qué campos guardar del response de crear Store y POS (`store_id`, `qr.image`, `qr.template_document`, `external_id`).
@@ -304,6 +306,26 @@ SELECT * FROM finish();
 ROLLBACK;
 ```
 
+### Arquitectura Supabase: OAuth vs Operativo
+
+```
+┌─ OAuth (Fase 1) ─────────────────────────────┐
+│  Express C.1  ──→ supabaseCloud ──→ Cloud     │
+│  Edge Func C.2 ──→ supabaseAdmin ──→ Cloud    │
+│  Tablas: oauth_states, mercadopago_sellers     │
+└───────────────────────────────────────────────┘
+
+┌─ Operativo (Fase 2–7) ───────────────────────┐
+│  Express API ──→ supabase (local Docker)       │
+│  Tablas: bars, mercadopago_cajas,              │
+│          mercadopago_cajas_devices, orders...  │
+│  Solo lectura de sellers desde Cloud para      │
+│  resolver access_token (Fase 2)                │
+└───────────────────────────────────────────────┘
+```
+
+**Por qué**: la Edge Function de callback se deploya en Supabase Cloud y solo puede hablar con Cloud. El resto del sistema (pedidos, productos, tickets) sigue offline-first en Local. Leer `mercadopago_sellers` de Cloud para resolver tokens (Fase 2) no agrega un nuevo punto de falla — el cobro con MP ya requiere internet para hablar con `api.mercadopago.com`.
+
 ### D) Estado de validación — ✅ APROBADO (2026-07-17)
 
 Migraciones creadas en `supabase/migrations/` (orden por dependencias de FK) y cableadas en `docker-compose.yml` (init-scripts `15..20`):
@@ -357,74 +379,306 @@ Implementar el flujo OAuth con PKCE para que Cocktrail obtenga un `access_token`
 
 Es el Paso 1 del onboarding definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Flujo completo de onboarding". Sin el token de Bosko no se puede crear sucursales, cajas ni cobros — todo recurso MP se crea "en nombre de" Bosko usando su token. El refresh proactivo (5–7 días antes del vencimiento) evita que una sesión activa se caiga en medio de un turno, y el `refresh_token` es rotativo y de un solo uso: si no se persiste el nuevo inmediatamente, la sesión queda invalidada (ver [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Refresh Automático de Token").
 
+
 ### C) Implementación
 
-**Docs**: [`docs/mp/api-oauth.md`](../mp/api-oauth.md)
+**Docs**: [`docs/mp/api-oauth.md`](../mp/api-oauth.md) — flujo completo  
+[`docs/mp/api-oauth-best-practices.md`](../mp/api-oauth-best-practices.md) — anti-patrones y checklists
 
-**C.1) `GET /api/mercadopago/oauth/url?barId=BARRA-01`**
+**Arquitectura**: dos piezas separadas con responsabilidades distintas:
 
+| Pieza | Dónde vive | Por qué |
+|-------|-----------|---------|
+| **Inicio** (`GET /oauth/url`) | Ruta Express en `apps/api` | Necesita `authMiddleware + requireRole("admin")` — solo admins inician OAuth. Usa `supabase` service_role (ya disponible en `shared/supabase.ts`). |
+| **Callback** (`GET /oauth/callback`) | Edge Function en `supabase/functions/mp-auth-callback` | Endpoint público sin auth — lo llama el redirect de MP desde el navegador del vendedor. Usa `SUPABASE_SERVICE_ROLE_KEY` para bypasear RLS al escribir `mercadopago_sellers`. |
+
+**C.1) Inicio — `GET /api/mercadopago/oauth/url?barId=...`** (Express)
+
+Archivos a modificar:
+- `apps/api/src/config/env.ts` — agregar `MP_APP_ID`, `MP_CLIENT_SECRET`, `MP_REDIRECT_URI`
+- `apps/api/src/modules/mercadopago/mercadopago.service.ts` — agregar `generateAuthUrl(barId)`
+- `apps/api/src/modules/mercadopago/mercadopago.controller.ts` — agregar ruta
+
+```ts
+// ── mercadopago.service.ts ──
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { supabaseCloud } from "../../shared/supabase.js";
+
+async generateAuthUrl(barId: string): Promise<{ url: string }> {
+  const appId = env.MP_APP_ID;
+  const redirectUri = env.MP_REDIRECT_URI;
+
+  if (!appId || !redirectUri) {
+    throw new Error("Configuración MP OAuth incompleta: faltan MP_APP_ID o MP_REDIRECT_URI");
+  }
+
+  // PKCE: code_verifier (43 chars) → code_challenge (S256)
+  // ⚠ MP solo valida challenge si PKCE está habilitado en el panel de la app
+  const codeVerifier = randomBytes(32).toString("base64url");
+  const codeChallenge = createHash("sha256")
+    .update(codeVerifier)
+    .digest("base64url");
+
+  const state = randomUUID();
+
+  const { error } = await supabaseCloud.from("oauth_states").insert({
+    state,
+    code_verifier: codeVerifier,
+    bar_id: barId,
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+  });
+
+  if (error) {
+    console.error("Error guardando oauth_state:", error);
+    throw new Error("Error al iniciar el flujo OAuth");
+  }
+
+  // ⚠ redirect_uri debe ser estático y coincidir EXACTAMENTE con el configurado en la app de MP.
+  // No se agregan query params extras (MP valida match exacto).
+  const params = new URLSearchParams({
+    client_id:              appId,
+    response_type:          "code",
+    platform_id:            "mp",
+    state:                  state,
+    redirect_uri:           redirectUri,
+    code_challenge:         codeChallenge,
+    code_challenge_method:  "S256",
+  });
+
+  // ⚠ scope no se incluye por defecto. La doc de Authorization Code de MP no
+  // requiere scope explícito. Si en pruebas end-to-end MP no devuelve
+  // refresh_token, agregar: scope: "read write offline_access"
+  return { url: `https://auth.mercadopago.com/authorization?${params.toString()}` };
+}
+
+// ── mercadopago.controller.ts ──
+router.get(
+  "/oauth/url",
+  authMiddleware,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const barId = req.query.barId;
+      if (!barId || typeof barId !== "string") {
+        res.status(400).json({ error: "barId es requerido (query param)" });
+        return;
+      }
+
+      const { url } = await service.generateAuthUrl(barId);
+      res.json({ url });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 ```
-SERVICE: generateOAuthUrl(barId)
-  code_verifier = crypto.randomBytes(32).toString('base64url')
-  code_challenge = SHA256(code_verifier).toString('base64url')
-  state = crypto.randomUUID()
 
-  oauthStatesRepo.insert({ state, code_verifier, bar_id: barId, expires_at: NOW + 10min })
+**C.2) Callback — Edge Function `supabase/functions/mp-auth-callback/index.ts`**
 
-  url = "https://auth.mercadopago.com/authorization"
-    + "?client_id=" + env.MP_APP_ID
-    + "&response_type=code"
-    + "&platform_id=mp"
-    + "&state=" + state
-    + "&redirect_uri=" + env.MP_REDIRECT_URI
-    + "&scope=read write offline_access"     // ⚠ offline_access OBLIGATORIO
-    + "&code_challenge=" + code_challenge
-    + "&code_challenge_method=S256"
+Archivo a crear: `supabase/functions/mp-auth-callback/index.ts`  
+Deploy: `supabase functions deploy mp-auth-callback`  
+**Supabase**: la Edge Function corre en Cloud → `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` apuntan a Cloud. `oauth_states` y `mercadopago_sellers` deben existir en Cloud (las migraciones de Fase 0 se aplicaron en ambos).
 
-  RETURN { url }
+```sql
+-- ⚠ Ejecutar en AMBOS Supabases (Local + Cloud)
+-- Vínculo bar↔seller (establecido al vincular OAuth)
+ALTER TABLE bars ADD COLUMN IF NOT EXISTS seller_user_id TEXT;
+
+-- Datos públicos de la cuenta MP (nombre, email, mostrados en UI)
+ALTER TABLE mercadopago_sellers ADD COLUMN IF NOT EXISTS seller_nickname TEXT;
+ALTER TABLE mercadopago_sellers ADD COLUMN IF NOT EXISTS seller_email TEXT;
 ```
 
-**C.2) `GET /api/mercadopago/oauth/callback?code=...&state=...`**
+**Nota**: `MP_APP_ID` en envs = `client_id` (APPID de la app de MP). Mantener el nombre de variable para consistencia con el resto del módulo, pero tener claro que en las llamadas a MP se usa como `client_id`. Ver [OAuth — Buenas Prácticas](https://www.mercadopago.com.ar/developers/es/docs/checkout-pro/additional-content/your-integrations/credentials/oauth/best-practices) para la lista completa de chequeos.
 
-```
-SERVICE: handleOAuthCallback(code, state)
-  result = oauthStatesRepo.consume(state)
-  IF NOT result → 400 "state inválido/expirado"
+```typescript
+// supabase/functions/mp-auth-callback/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1"
 
-  { code_verifier, bar_id } = result
+serve(async (req: Request) => {
+  try {
+    const url = new URL(req.url)
+    const code = url.searchParams.get("code")
+    const state = url.searchParams.get("state")
 
-  response = POST https://api.mercadopago.com/oauth/token
-    BODY: {
-      client_id:      env.MP_APP_ID,
-      client_secret:  env.MP_CLIENT_SECRET,
-      grant_type:     "authorization_code",
-      code:           code,
-      redirect_uri:   env.MP_REDIRECT_URI,
-      code_verifier:  code_verifier
+    if (!code || !state) {
+      return new Response("Faltan code o state", { status: 400 })
     }
 
-  IF response.error → redirect /dashboard/pagos?error=oauth_failed
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    )
 
-  sellersRepo.upsert({
-    user_id:       response.user_id,
-    access_token:  response.access_token,
-    refresh_token: response.refresh_token,
-    expires_at:    NOW() + (expires_in * INTERVAL '1 second'),
-    status:        'active'
-  })
+    // ── 1) Consumir state vía RPC atómica ──
+    // state es un nonce aleatorio anti-CSRF, NO un business ID.
+    const { data: oauthData, error: consumeError } =
+      await supabaseAdmin.rpc("consume_oauth_state", { p_state: state })
 
-  → redirect /dashboard/pagos?linked=true
+    if (consumeError || !oauthData || oauthData.length === 0) {
+      throw new Error("State inválido o expirado. Reiniciá la vinculación.")
+    }
+
+    const { code_verifier, bar_id } = oauthData[0]
+
+    // ── 2) Intercambiar code por tokens ──
+    // ⚠ Sin Authorization header. Autenticación: client_id + client_secret en body.
+    const mpRedirectUri = Deno.env.get("MP_REDIRECT_URI")
+    const mpClientId = Deno.env.get("MP_APP_ID")
+    const mpClientSecret = Deno.env.get("MP_CLIENT_SECRET")
+
+    if (!mpRedirectUri || !mpClientId || !mpClientSecret) {
+      throw new Error("Configuración MP incompleta: faltan secrets")
+    }
+
+    const tokenResponse = await fetch(
+      "https://api.mercadopago.com/oauth/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: mpClientId,
+          client_secret: mpClientSecret,
+          grant_type: "authorization_code",
+          code: code,
+          redirect_uri: mpRedirectUri,
+          code_verifier: code_verifier,
+        }),
+      }
+    )
+
+    // ⚠ Verificar HTTP status además de tokenData.error
+    // (captura casos donde MP no devuelve JSON válido)
+    if (!tokenResponse.ok) {
+      const body = await tokenResponse.text()
+      console.error("MP /oauth/token HTTP error:", tokenResponse.status, body)
+      throw new Error(`Error HTTP ${tokenResponse.status} al obtener tokens`)
+    }
+
+    const tokenData = await tokenResponse.json()
+
+    if (tokenData.error) {
+      console.error("MP /oauth/token error:", tokenData)
+      throw new Error(tokenData.message || "Error al obtener tokens de Mercado Pago")
+    }
+
+    // ── 3) Persistir en mercadopago_sellers ──
+    // Si expires_in no viene → NOW() para forzar refresh inmediato
+    const expiresAt = tokenData.expires_in
+      ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
+      : new Date().toISOString()
+
+    const { error: dbError } = await supabaseAdmin
+      .from("mercadopago_sellers")
+      .upsert(
+        {
+          user_id: String(tokenData.user_id),
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token ?? null,
+          expires_at: expiresAt,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      )
+
+    if (dbError) throw dbError
+
+    // ── 3b) Vincular bar_id ↔ seller ──
+    if (bar_id) {
+      await supabaseAdmin
+        .from("bars")
+        .update({ seller_user_id: String(tokenData.user_id) })
+        .eq("id", bar_id)
+    }
+
+    // ── 3c) Obtener y persistir datos públicos de la cuenta ──
+    // GET /users/me con el access_token recién obtenido
+    const userResponse = await fetch(
+      "https://api.mercadopago.com/users/me",
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+    )
+    if (userResponse.ok) {
+      const userData = await userResponse.json()
+      await supabaseAdmin
+        .from("mercadopago_sellers")
+        .update({
+          seller_nickname: userData.nickname ?? null,
+          seller_email:    userData.email ?? null,
+        })
+        .eq("user_id", String(tokenData.user_id))
+    }
+    // Si falla GET /users/me, no es crítico — los tokens ya están guardados
+
+    // ── 4) Redirect al frontend con bar_id ──
+    const siteUrl = Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000"
+    const params = new URLSearchParams({ linked: "true" })
+    if (bar_id) params.set("barId", bar_id)
+
+    return Response.redirect(`${siteUrl}/admin?tab=pagos&${params.toString()}`, 302)
+  } catch (error: any) {
+    console.error("mp-auth-callback error:", error.message)
+    const siteUrl = Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000"
+    return Response.redirect(
+      `${siteUrl}/admin?tab=pagos&linked=false&message=${encodeURIComponent(error.message)}`,
+      302
+    )
+  }
+})
 ```
+
+**Secrets en Supabase** (obligatorios para la Edge Function):
+
+```bash
+supabase secrets set MP_APP_ID=...
+supabase secrets set MP_CLIENT_SECRET=...
+supabase secrets set MP_REDIRECT_URI=https://<proyecto>.supabase.co/functions/v1/mp-auth-callback
+supabase secrets set NEXT_PUBLIC_SITE_URL=https://cocktrail.com
+```
+
+**Anti-patrones evitados** (ver [`api-oauth-best-practices.md`](../mp/api-oauth-best-practices.md) para lista completa):
+
+| Anti-patrón | Cómo se evita |
+|---|---|
+| `state` usado como business ID | `randomUUID()` → `bar_id` guardado en `oauth_states`, recuperado vía RPC |
+| `Authorization: Bearer` en `/oauth/token` | Solo `client_id` + `client_secret` en body |
+| `redirect_uri` hardcodeado | `Deno.env.get("MP_REDIRECT_URI")` en ambos lados |
+| `code_verifier` ausente (sin PKCE) | Generado en C.1, recuperado de `oauth_states` en callback |
+| Guardar `public_key` u otros campos no canónicos | Solo `access_token`, `refresh_token`, `user_id`, `expires_at` |
+| CORS innecesario en callback | Callback es redirect de navegador, no XHR — sin CORS |
+| `expires_in` ausente = default enorme | Si no viene → `NOW()` → fuerza refresh inmediato |
 
 **C.3) `refreshTokenIfNeeded(seller)`** — llamado antes de cualquier operación con token
 
+**Docs**: [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Paso 3 — Refresh Automático de Token"  
+[`docs/mp/api-oauth-best-practices.md`](../mp/api-oauth-best-practices.md) § "Anti-patrones"
+
+**⚠ Concurrencia**: el refresh_token es rotativo y de un solo uso. Dos requests concurrentes refrescando el mismo seller pueden "quemar" el token nuevo: el primero refresca y persiste el nuevo, el segundo usa el viejo (ya invalidado) y recibe `invalid_grant`. Solución: lock por seller con `SELECT ... FOR UPDATE`.
+
 ```
 SERVICE: refreshTokenIfNeeded(seller)
-  // expires_at es TIMESTAMPTZ en DB → comparar con fecha, no ms
-  IF seller.expires_at > NOW() + INTERVAL '7 days'
-    RETURN seller.access_token  // faltan >7 días, no refrescar
 
+  // ── 1) Lock y re-chequeo dentro de transacción ──
+  BEGIN TRANSACTION
+
+  // Bloquea el row del seller para evitar refresh concurrente
+  seller = SELECT * FROM mercadopago_sellers
+    WHERE user_id = seller.user_id
+    FOR UPDATE
+
+  // expires_at es TIMESTAMPTZ en DB → comparar con fecha, no ms
+  // Margen configurable (entre 1 y 7 días, default 5)
+  refreshMargin = env.MP_REFRESH_MARGIN_DAYS ?? 5  // días antes del vencimiento
+  IF seller.expires_at > NOW() + (refreshMargin * INTERVAL '1 day')
+    COMMIT
+    RETURN seller.access_token  // todavía no hace falta refrescar
+
+  // ── 2) Refrescar token ──
   response = POST https://api.mercadopago.com/oauth/token
+    HEADERS: Content-Type: application/x-www-form-urlencoded
+    // ⚠ Sin Authorization header
+    // ⚠ Sin redirect_uri (solo para authorization_code, no para refresh_token)
     BODY: {
       client_id:      env.MP_APP_ID,
       client_secret:  env.MP_CLIENT_SECRET,
@@ -432,25 +686,174 @@ SERVICE: refreshTokenIfNeeded(seller)
       refresh_token:  seller.refresh_token
     }
 
+  IF NOT response.ok → THROW "Error HTTP al refrescar token"
   IF response.error == "invalid_grant"
     sellersRepo.update(seller.user_id, { status: 'expired' })
+    COMMIT
     THROW "seller desconectado, re-vincular OAuth"
 
+  // ── 3) Persistir nuevo token y commit ──
   // ⚠ PERSISTIR INMEDIATAMENTE — el refresh_token viejo queda invalidado
   sellersRepo.update(seller.user_id, {
     access_token:  response.access_token,
     refresh_token: response.refresh_token,  // NUEVO — rotativo, un solo uso
-    expires_at:    NOW() + (expires_in * INTERVAL '1 second')
+    expires_at:    NOW() + (response.expires_in * INTERVAL '1 second')
   })
 
+  COMMIT
   RETURN response.access_token
 ```
 
-**C.4) UI**: botón "Vincular Mercado Pago" en `PagosSection.tsx` → redirige a la URL generada por C.1.
+**Notas**:
+- `redirect_uri` **no** se envía en el refresh (la doc de MP lo usa solo para `authorization_code`).
+- Si MP no devuelve `refresh_token`, el sistema tolera `NULL` — el seller quedará sin refresh y eventualmente expirará, forzando re-vinculación.
+- El `FOR UPDATE` dentro de una transacción serializa los refreshes: si dos requests llegan al mismo tiempo, el segundo espera al COMMIT del primero y re-chequea `expires_at` (ya actualizado).
+
+**C.4) UI** — botón "Vincular Mercado Pago" en `PagosSection.tsx`
+
+El botón muestra:
+- **Label**: "Vincular Mercado Pago" (o "Actualizar vinculación" si ya está vinculado)
+- **Icono**: logo minimalista de Mercado Pago (`<img>` o SVG inline, 20×20px, alineado a la izquierda del texto)
+- **Info de cuenta** (si ya vinculada): debajo del botón, un badge sutil con:
+  - `seller_nickname` (ej. "BOSKO BAR")
+  - `seller_email`
+  - `updated_at` con formato relativo ("Vinculado hace 3 días")
+
+Comportamiento:
+- Si `mercadopago_sellers` está vacío → botón "Vincular Mercado Pago" → `GET /api/mercadopago/oauth/url?barId=...` → `window.location.href = url`
+- Si existe un seller `active` → el botón cambia a "Actualizar vinculación" + muestra badge con datos de cuenta
+- Si existe un seller `expired` → el botón muestra "Re-vincular Mercado Pago" en rojo/naranja + badge "Sesión expirada"
+
+Datos que necesita el frontend: un endpoint `GET /api/mercadopago/seller-status?barId=...` que lea de `supabaseCloud` (no de local — los sellers viven en Cloud):
+
+```json
+{
+  "linked": true,
+  "status": "active",
+  "nickname": "BOSKO BAR",
+  "email": "bosko@example.com",
+  "linkedAt": "2026-07-15T22:14:00Z"
+}
+```
 
 **Errores clave**:
-- `invalid_grant` → el refresh token expiró o fue consumido. Marcar seller como `expired` y pedir re-vinculación manual.
-- `offline_access` omitido en scope → MP no devuelve `refresh_token`. El scope es obligatorio.
+- `invalid_grant` → el refresh token expiró o fue consumido (incluye caso de concurrencia: dos refreshes simultáneos). Marcar seller como `expired` y pedir re-vinculación manual. El `FOR UPDATE` previene la mayoría de estos casos.
+- MP no devuelve `refresh_token` → revisar scopes/config en la app de MP. El sistema ya tolera `refresh_token` nulo (el seller queda sin capacidad de refresh y eventualmente expira).
+- `redirect_uri` no coincide → MP rechaza el canje. Asegurar que `MP_REDIRECT_URI` en secrets coincida exactamente con la URL de redireccionamiento configurada en la app de MP. No se envía en refresh (solo en `authorization_code`).
+- PKCE no habilitado en la app de MP → `code_verifier` se ignora silenciosamente. Verificar en panel de MP > tu app > PKCE.
+- "Aplicación no está lista" / "La aplicación no puede conectarse a tu cuenta" → error pre-callback. Ver [`api-oauth-best-practices.md#troubleshooting`](../mp/api-oauth-best-practices.md#troubleshooting-aplicación-no-está-lista--la-aplicación-no-puede-conectarse-a-tu-cuenta): redirect_uri mismatch, app inactiva, o client_id incorrecto.
+
+**C.5) Tests** — por capa
+
+### Unit tests (`generateAuthUrl` service)
+
+Mock: `supabaseCloud.from("oauth_states").insert` exitoso.
+
+```
+1) state es único entre llamadas consecutivas (dos URLs generadas tienen state distinto)
+2) code_verifier cumple longitud entre 43 y 128 caracteres, solo caracteres base64url
+3) code_challenge = SHA256(code_verifier).digest("base64url")
+4) code_challenge_method = "S256" en la URL
+5) La URL contiene client_id, response_type=code, redirect_uri, state, code_challenge, code_challenge_method
+6) El insert a oauth_states lleva expires_at ≈ NOW + 10 min (margen ±1s)
+7) Si MP_APP_ID o MP_REDIRECT_URI no están definidos → throw
+```
+
+### pgTAP (DB/RPC) — se agregan a la suite existente de Fase 0
+
+```
+8)  consume_oauth_state: primer consumo devuelve datos, segundo no devuelve nada
+9)  consume_oauth_state: state expirado no se consume (no devuelve filas)
+10) consume_oauth_state: en concurrencia simulada, solo una sesión obtiene datos
+     -- Se usa pg_try_advisory_lock para simular dos sesiones compitiendo
+```
+
+### Integration tests (Edge Function callback) — `fetch` mockeado
+
+```
+11) Caso OK: POST /oauth/token → 200 { access_token, refresh_token, user_id, expires_in }
+    → verifica upsert en mercadopago_sellers con status='active'
+    → GET /users/me → 200 { nickname, email } → verifica update de seller_nickname, seller_email
+    → redirect a /admin?tab=pagos&linked=true&barId=...
+
+12) Caso error MP: POST /oauth/token → 400 { error: "invalid_grant", message: "..." }
+    → redirect a /admin?tab=pagos&linked=false&message=...
+    → NO persiste seller
+
+13) Caso state inválido/expirado: consume_oauth_state → []
+    → redirect /admin?tab=pagos&linked=false&message=State%20inv%C3%A1lido...
+
+14) Caso GET /users/me falla: token guardado, account info no → redirect OK
+    (la obtención de datos de cuenta no es crítica)
+
+15) Caso sin code o state en query params → 400
+```
+
+### Integration tests (refresh token)
+
+```
+16) expires_at > NOW + umbral → no llama a /oauth/token, devuelve token actual
+17) expires_at < NOW + umbral → llama refresh, persiste nuevo access_token + refresh_token
+18) /oauth/token devuelve invalid_grant → marca status='expired', throw
+19) Concurrencia: dos llamadas simultáneas al refresh del mismo seller
+    → FOR UPDATE serializa: la segunda espera, re-chequea expires_at (ya actualizado),
+      y reutiliza el token sin hacer segunda llamada a MP
+```
+
+### Tests de seguridad
+
+```
+20) RLS mercadopago_sellers: SET LOCAL role anon → SELECT → blocked
+21) RLS mercadopago_sellers: SET LOCAL role authenticated → SELECT → blocked
+22) GET /api/mercadopago/oauth/url sin auth → 401
+23) GET /api/mercadopago/oauth/url con rol caja → 403 (solo admin)
+24) Callback redirect no expone access_token ni refresh_token en la URL
+    (solo flags: linked=true/false, barId, message)
+25) Callback no acepta POST con body arbitrario para crear sellers
+    (solo procesa code+state de query params, y el state se consume una sola vez)
+```
+
+### D) Estado de validación — ✅ APROBADO (local) / ⏳ PENDIENTE (cloud) (2026-07-17)
+
+**Implementación** (flujo cloud, decidido con el usuario):
+- `apps/api/src/modules/mercadopago/mercadopago-oauth.service.ts` — `generateAuthUrl` (PKCE S256, sin `scope` por defecto, redirect_uri estático), `refreshTokenIfNeeded` (form-urlencoded, sin `Authorization`, sin `redirect_uri`, margen `MP_REFRESH_MARGIN_DAYS` default 5, `invalid_grant`→`expired`) y `getSellerStatus`.
+- Repos `oauth-states.repository.ts` + `mercadopago-sellers.repository.ts` usan `mpDb = supabaseCloud ?? supabase` (escriben en Cloud en prod; en dev caen a la DB local que tiene las mismas tablas).
+- `mercadopago-oauth.controller.ts` — `GET /api/mercadopago/oauth/url` (admin, barId requerido) + `GET /api/mercadopago/seller-status` (admin). Wireado en `app.ts`.
+- **Callback = Edge Function** `supabase/functions/mp-auth-callback/index.ts` (nombre alineado a la función ya deployada del usuario): consume state → canjea token (x-www-form-urlencoded) → upsert seller → `/users/me` (nickname/email) → link `bars.seller_user_id` (best-effort) → redirect a **`/admin?tab=pagos`** con `linked=true|false[&message]`.
+- Migración `20260715000500_mp_oauth_cloud_columns.sql` — `bars.seller_user_id`, `mercadopago_sellers.seller_nickname/seller_email` (cableada en `docker-compose.yml`, aplicada a la DB local).
+- Env: `MP_APP_ID`, `MP_CLIENT_SECRET`, `MP_REDIRECT_URI`, `MP_REFRESH_MARGIN_DAYS` (+ `.env.example`).
+- UI: `PagosSection.tsx` — botón Vincular/Actualizar/Re-vincular según `seller-status`, badge (nickname/email/"vinculado hace N días"), manejo de `?linked&message`.
+
+Archivos de test creados:
+- `apps/api/src/modules/mercadopago/mercadopago-oauth.service.test.ts` — unit C.5 #1–7 + refresh #16–18 + `getSellerStatus`.
+- `apps/web/src/components/settings/PagosSection.test.tsx` — UI (botón, estados, callback `linked`/`message`).
+- `supabase/tests/phase1_oauth_rpc_test.sql` — pgTAP C.5 #8–10.
+
+| # | Test | Estado |
+|---|------|--------|
+| 1–7 | Unit `generateAuthUrl` (state único, verifier 43–128 base64url, challenge S256, params, sin scope, TTL 10 min, throw sin config) | ✅ (7/7) |
+| 8–10 | pgTAP `consume_oauth_state` (primer consumo, one-shot, expirado no consume) | ✅ (4/4) |
+| 16–18 | Unit refresh token (umbral 5d, form-urlencoded sin redirect_uri, `invalid_grant`→expired, otro error) | ✅ |
+| — | UI PagosSection (Vincular/Actualizar/Re-vincular, badge, callback params) | ✅ (backend 218/218 · web 15/15 · tsc API+web OK) |
+| 11–15 | Integration callback (Edge Function Deno) | ⏳ Cloud — función `mp-auth-callback` **deployada** (v2, `verify_jwt=false`) en el proyecto Bosko; falta E2E con credenciales MP reales |
+| 19 | Refresh concurrencia `FOR UPDATE` | ⚠ No aplicable con supabase-js/PostgREST (sin pool pg no se puede sostener el lock a través del fetch a MP). Documentado en el service; refresh sin lock (ventana de carrera mínima) |
+| 20–21 | RLS sellers `anon`/`authenticated` | ✅ ya cubierto en Fase 0 (phase0_schema_test #31–32) |
+| 22–23 | Auth `/oauth/url` (401 sin sesión, 403 rol caja) | ✅ por `authMiddleware + requireRole("admin")` (middleware ya testeado) — ⏳ falta integration e2e dedicado |
+| 24–25 | Callback no expone tokens en URL / solo procesa code+state, state one-shot | ✅ por diseño (redirect solo con `linked/message/barId`; state consumido vía RPC) |
+
+**Provisión cloud — ✅ HECHO (2026-07-17, proyecto Bosko `nmdvrmglmnbpoyfjmgab`)**:
+- Migraciones aplicadas: Fase 0 (`bars`, `mercadopago_sellers`+RLS, `mercadopago_cajas`, `mercadopago_cajas_devices`, `oauth_states`+RPC) + Fase 1 (`20260715000500` columnas). Verificado: 5 tablas MP + columnas + RPC.
+- Edge Function `mp-auth-callback` **deployada v2** con `verify_jwt=false` (callback público; CSRF = state one-shot).
+- RPC `consume_oauth_state` endurecida (search_path fijo + `REVOKE EXECUTE FROM anon, authenticated`) → advisors de seguridad MP en verde (solo queda un WARN preexistente en `rls_auto_enable`, ajeno a MP).
+- Probe E2E de la RPC en cloud: insert + consume OK + segundo consumo vacío (one-shot).
+
+**Pendiente (acción del usuario, requiere credenciales que no tengo)**:
+1. **Secrets de la Edge Function** (no hay tool MCP para setearlos): `supabase secrets set MP_APP_ID=... MP_CLIENT_SECRET=... MP_REDIRECT_URI=https://nmdvrmglmnbpoyfjmgab.supabase.co/functions/v1/mp-auth-callback NEXT_PUBLIC_SITE_URL=<url_del_frontend>`.
+2. **Backend** (`apps/api/.env`): `SUPABASE_CLOUD_URL` + `SUPABASE_CLOUD_SERVICE_ROLE_KEY` (para que `generateAuthUrl` escriba el state en el mismo proyecto), y `MP_APP_ID` / `MP_CLIENT_SECRET` / `MP_REDIRECT_URI` (mismo redirect_uri exacto).
+3. **Panel de MP**: registrar ese `redirect_uri` exacto en "Tus integraciones" y habilitar PKCE.
+4. E2E real de vinculación (11–15) una vez cargadas las credenciales.
+
+---
 
 ---
 
@@ -458,56 +861,302 @@ SERVICE: refreshTokenIfNeeded(seller)
 
 ### A) ¿Qué se hace?
 
-Crear un servicio transversal `getAccessTokenForContext(opts)` que resuelva el `access_token` correcto según el contexto de la operación (device, barra, o fallback global).
+Crear un servicio transversal `CredentialsResolverService` que, dado un contexto (`deviceId`, `barId`, etc.), busque al seller dueño en `mercadopago_sellers` (Cloud), refresque su token si está por vencer, y devuelva un `access_token` listo para usar. El `MercadoPagoService` existente (Posnet) se refactoriza para usar este resolver en vez de `env.MP_ACCESS_TOKEN`. Se agrega un middleware Express que extrae los headers contextuales (`X-Device-Id`, `X-Bar-Id`) y los expone en `req.mpContext`.
 
 ### B) ¿Por qué?
 
 El spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Resolución dinámica de credenciales" define 4 niveles de resolución. Hoy el código usa `env.MP_ACCESS_TOKEN` hardcodeado (single-seller, sin OAuth). Para soportar multi-seller y que cada barra/device use el token de su dueño, necesitamos esta capa antes de implementar QR o multi-seller. Sin esto, cualquier operación usaría siempre el token de un solo vendedor, rompiendo el modelo donde cada comercio (Bosko) tiene su propia cuenta.
 
+**Dependencia de Fase 3**: el resolver consulta `mercadopago_cajas` y `mercadopago_cajas_devices` para mapear `barId`/`deviceId` → `seller_user_id`. Estas tablas se pueblan en Fase 3 (provisioning). **Mientras tanto**, los niveles 1 y 2 (por device/barra) simplemente no encuentran datos y el flujo cae a los niveles 3–5 (sellerUserId explícito, fallback global, env). Esto permite implementar Fase 2 antes de Fase 3 sin romper nada: el Posnet sigue usando el fallback global/env como hoy.
+
+**Cloud vs Local**: `mercadopago_sellers` vive en Cloud Supabase (escrito por el callback OAuth de Fase 1). `mercadopago_cajas` y `mercadopago_cajas_devices` viven en Local (son datos operativos). El resolver usa `mpDb` para sellers (cloud-first) y `supabase` para cajas/devices (local). Si Cloud no responde, la resolución de sellers cae a `supabase` local y, si tampoco hay datos ahí, al fallback `env.MP_ACCESS_TOKEN`.
+
 ### C) Implementación
 
-**Archivo**: `apps/api/src/modules/mercadopago/credentials/credentials-resolver.service.ts`
+**C.1) Repositorios nuevos**
 
-```
-SERVICE: getAccessTokenForContext(opts)
-  opts: {
-    deviceId?: string,           // X-Device-Id header
-    barId?: string,              // X-Bar-Id header
-    sellerUserId?: string,       // explícito
-    allowGlobalFallback?: bool   // admin / provisioning
+Dos repositorios que siguen el patrón `interface + class Supabase*Repo` (ver `mercadopago-sellers.repository.ts` como plantilla). Usan `supabase` (local), no `mpDb` — las cajas y devices son datos operativos del local.
+
+**Archivo**: `apps/api/src/modules/mercadopago/mercadopago-cajas.repository.ts`
+
+```ts
+export type Caja = {
+  id: string;
+  barId: string;
+  storeId: string;
+  externalPosId: string;
+  posIdMp: string | null;
+  qrImage: string | null;
+  qrTemplate: string | null;
+  sellerUserId: string;
+  createdAt: string;
+};
+
+export interface MercadoPagoCajasRepository {
+  findByBarId(barId: string): Promise<Caja | null>;
+  findBySellerUserId(sellerUserId: string): Promise<Caja[]>;
+  create(caja: Omit<Caja, "id" | "createdAt">): Promise<Caja>;
+}
+
+export class SupabaseMercadoPagoCajasRepository implements MercadoPagoCajasRepository {
+  async findByBarId(barId: string): Promise<Caja | null> {
+    const { data } = await supabase.from("mercadopago_cajas")
+      .select("*").eq("bar_id", barId).maybeSingle();
+    return data ? mapCajaRow(data) : null;
   }
-
-  seller = NULL
-
-  // 1. Resolver por device (Point/Posnet)
-  IF opts.deviceId
-    device = cajasDevicesRepo.findByDeviceId(opts.deviceId)
-    IF device → seller = sellersRepo.findByUserId(device.caja.seller_user_id)
-
-  // 2. Resolver por barra (QR cobro)
-  IF seller IS NULL AND opts.barId
-    caja = cajasRepo.findByBarId(opts.barId)
-    IF caja → seller = sellersRepo.findByUserId(caja.seller_user_id)
-
-  // 3. Resolver por sellerUserId explícito
-  IF seller IS NULL AND opts.sellerUserId
-    seller = sellersRepo.findByUserId(opts.sellerUserId)
-
-  // 4. Fallback global (admin / provisioning / single-seller)
-  IF seller IS NULL AND opts.allowGlobalFallback
-    seller = sellersRepo.findFirstActive()
-
-  // 5. Fallback legacy env vars (sandbox)
-  IF seller IS NULL
-    RETURN env.MP_ACCESS_TOKEN
-
-  // Refrescar si está por vencer (Fase 1 — C.3)
-  RETURN refreshTokenIfNeeded(seller)
+  async findBySellerUserId(sellerUserId: string): Promise<Caja[]> {
+    const { data } = await supabase.from("mercadopago_cajas")
+      .select("*").eq("seller_user_id", sellerUserId);
+    return (data ?? []).map(mapCajaRow);
+  }
+  async create(caja: Omit<Caja, "id" | "createdAt">): Promise<Caja> {
+    const { data, error } = await supabase.from("mercadopago_cajas")
+      .insert({ ... }).select("*").single();
+    if (error) throw error;
+    return mapCajaRow(data);
+  }
+}
 ```
 
-**Middleware**: `mpAuthMiddleware()` — extrae `X-Device-Id` y `X-Bar-Id` de los headers y los mete en `req.mpContext`. Se monta en las rutas de MP sin reemplazar `authMiddleware`.
+**Archivo**: `apps/api/src/modules/mercadopago/mercadopago-cajas-devices.repository.ts`
 
-**Refactor pendiente**: `MercadoPagoService` (`mercadopago.service.ts`) debe migrar de `env.MP_ACCESS_TOKEN` a `getAccessTokenForContext()`. Las rutas existentes de Posnet (`/pos/intent`, `/device/status`, etc.) deben pasar `deviceId` desde el header.
+```ts
+export type CajaDevice = {
+  id: string;
+  cajaId: string;
+  deviceId: string;
+  deviceUsername: string | null;
+  operatingMode: string | null;
+  // JOIN con caja (el repositorio hace el join internamente)
+  caja?: Caja;
+};
+
+export interface MercadoPagoCajasDevicesRepository {
+  findByDeviceId(deviceId: string): Promise<CajaDevice | null>;
+  findByCajaId(cajaId: string): Promise<CajaDevice | null>;
+  create(device: Omit<CajaDevice, "id">): Promise<CajaDevice>;
+}
+
+export class SupabaseMercadoPagoCajasDevicesRepository implements MercadoPagoCajasDevicesRepository {
+  async findByDeviceId(deviceId: string): Promise<CajaDevice | null> {
+    // JOIN con mercadopago_cajas para acceder a seller_user_id
+    const { data } = await supabase.from("mercadopago_cajas_devices")
+      .select("*, caja:mercadopago_cajas(*)")
+      .eq("device_id", deviceId).maybeSingle();
+    return data ? mapDeviceRow(data) : null;
+  }
+  // ...
+}
+```
+
+**C.2) `CredentialsResolverService`**
+
+**Archivo**: `apps/api/src/modules/mercadopago/credentials-resolver.service.ts`
+
+Patrón de inyección: idéntico a `MercadoPagoOAuthService` — constructor con `private readonly` + config object.
+
+```ts
+import { env } from "../../config/env.js";
+import type { MercadoPagoSellersRepository, Seller } from "../mercadopago-sellers.repository.js";
+import type { MercadoPagoCajasRepository } from "../mercadopago-cajas.repository.js";
+import type { MercadoPagoCajasDevicesRepository } from "../mercadopago-cajas-devices.repository.js";
+import type { MercadoPagoOAuthService } from "../mercadopago-oauth.service.js";
+
+export type CredentialContext = {
+  deviceId?: string;
+  barId?: string;
+  sellerUserId?: string;
+  allowGlobalFallback?: boolean;
+};
+
+export class CredentialsResolverService {
+  constructor(
+    private readonly sellersRepo: MercadoPagoSellersRepository,
+    private readonly cajasRepo: MercadoPagoCajasRepository,
+    private readonly cajasDevicesRepo: MercadoPagoCajasDevicesRepository,
+    private readonly oauthService: MercadoPagoOAuthService,
+  ) {}
+
+  async resolve(context: CredentialContext): Promise<string> {
+    let seller: Seller | null = null;
+
+    // 1. sellerUserId explícito (prioridad máxima — admin/provisioning sabe exactamente
+    //    qué cuenta usar; no debe ser "pisado" por headers de cliente)
+    if (context.sellerUserId) {
+      seller = await this.sellersRepo.findByUserId(context.sellerUserId);
+    }
+
+    // 2. Resolver por device (Point/Posnet)
+    if (!seller && context.deviceId) {
+      const device = await this.cajasDevicesRepo.findByDeviceId(context.deviceId);
+      if (device?.caja?.sellerUserId) {
+        seller = await this.sellersRepo.findByUserId(device.caja.sellerUserId);
+      }
+    }
+
+    // 3. Resolver por barra (QR cobro)
+    if (!seller && context.barId) {
+      const caja = await this.cajasRepo.findByBarId(context.barId);
+      if (caja?.sellerUserId) {
+        seller = await this.cajasRepo.findByUserId(caja.sellerUserId);
+      }
+    }
+
+    // 4. Fallback global (admin / provisioning / single-seller)
+    if (!seller && context.allowGlobalFallback) {
+      seller = await this.sellersRepo.findFirstActive();
+    }
+
+    // 5. Fallback legacy env — solo si allowGlobalFallback está activo.
+    //    Sin fallback automático: no queremos cobrar en el token legacy por
+    //    un header faltante o mal configurado.
+    if (!seller) {
+      if (context.allowGlobalFallback && env.MP_ACCESS_TOKEN) {
+        return env.MP_ACCESS_TOKEN;
+      }
+      throw new Error(
+        "No se encontró ninguna cuenta de Mercado Pago vinculada para este contexto. " +
+        "Verificá la vinculación OAuth en /admin?tab=pagos."
+      );
+    }
+
+    // Validar que el seller esté activo antes de intentar refrescar
+    if (seller.status !== "active") {
+      throw new Error(
+        `La cuenta de Mercado Pago (${seller.userId}) está desconectada. ` +
+        "Volvé a vincularla desde /admin?tab=pagos."
+      );
+    }
+
+    // Validar que el seller tenga refresh_token para poder refrescar proactivamente
+    if (!seller.refreshToken) {
+      throw new Error(
+        `La cuenta de Mercado Pago (${seller.userId}) no tiene refresh_token. ` +
+        "Volvé a vincularla para obtener uno nuevo."
+      );
+    }
+
+    // Refrescar si está por vencer (Fase 1 — C.3).
+    // ⚠ Concurrencia: refreshTokenIfNeeded debe usar lock por seller
+    // (advisory lock o row lock) porque el refresh_token es de un solo uso.
+    return this.oauthService.refreshTokenIfNeeded(seller);
+  }
+}
+```
+
+**Wiring en `app.ts`**:
+
+```ts
+const cajasRepo = new SupabaseMercadoPagoCajasRepository();
+const cajasDevicesRepo = new SupabaseMercadoPagoCajasDevicesRepository();
+const credentialsResolver = new CredentialsResolverService(
+  mpSellersRepo, cajasRepo, cajasDevicesRepo, mpOAuthService
+);
+```
+
+**C.3) Request type extension + middleware**
+
+**Archivo**: `apps/api/src/modules/mercadopago/mp-context.middleware.ts`
+
+```ts
+// Extiende Express Request
+declare global {
+  namespace Express {
+    interface Request {
+      mpContext?: CredentialContext;
+    }
+  }
+}
+
+// Middleware que extrae headers contextuales. Se monta en las rutas de MP
+// sin reemplazar authMiddleware (se usa en cadena: authMiddleware → requireRole → mpContextMiddleware).
+//
+// ⚠ Seguridad: X-Device-Id y X-Bar-Id vienen de headers de cliente. Este
+// middleware SOLO se monta en rutas que ya pasaron por authMiddleware +
+// requireRole("admin","caja"). No se aceptan headers de requests no
+// autenticadas — si alguien sin sesión manda X-Device-Id, la request
+// ya fue rechazada antes de llegar acá.
+export function mpContextMiddleware(req: Request, _res: Response, next: NextFunction) {
+  req.mpContext = {
+    deviceId: req.headers["x-device-id"] as string | undefined,
+    barId: req.headers["x-bar-id"] as string | undefined,
+  };
+  next();
+}
+  };
+  next();
+}
+```
+
+**C.4) Refactor de `MercadoPagoService` (Posnet legacy)**
+
+El servicio Posnet actual debe migrar de `env.MP_ACCESS_TOKEN` al resolver. Cambios puntuales:
+
+| Qué cambia | Cómo |
+|---|---|
+| Constructor | Recibe `CredentialsResolverService` como dependencia |
+| `assertConfigured(requireDevice)` | Deja de leer `env.MP_ACCESS_TOKEN`. Solo valida que `env.MP_POS_DEVICE_ID` exista (si `requireDevice=true`) |
+| `pointApiRequest(path, init, errorMsg)` | Cambia firma: recibe `token: string` como primer parámetro. Header `Authorization: Bearer {token}` en vez de `Bearer ${env.MP_ACCESS_TOKEN}` |
+| `checkDeviceConnection()` | Igual que `pointApiRequest`: recibe token resuelto, lo usa en `Authorization` |
+| `createPaymentIntent(amount, desc, deviceId)` | Nuevo parámetro opcional `deviceId` (viene de `req.mpContext`). Llama a `credentialsResolver.resolve({ deviceId, allowGlobalFallback: true })` antes de `pointApiRequest` |
+| `getPaymentIntentStatus(id, deviceId)` | Ídem — nuevo `deviceId` opcional |
+| `cancelPaymentIntent(id, deviceId)` | Ídem |
+| `testDeviceReachability()` | Ídem — resuelve token antes de operar |
+
+**Rutas en el controller**: agregan `mpContextMiddleware` y pasan `deviceId` al service:
+
+```ts
+// Antes:
+router.post("/pos/intent", authMiddleware, requireRole("admin", "caja"), async (req, res, next) => {
+  const intent = await service.createPaymentIntent(amount, description);
+  // ...
+});
+
+// Después:
+router.post("/pos/intent", authMiddleware, requireRole("admin", "caja"), mpContextMiddleware, async (req, res, next) => {
+  const intent = await service.createPaymentIntent(amount, description, req.mpContext?.deviceId);
+  // ...
+});
+```
+
+**Manejo de `MpApiError`**: la clase `MpApiError` (usada por el Posnet para errores 409 `DEVICE_BUSY`) sigue funcionando igual — el refactor solo cambia de dónde sale el token, no el manejo de errores.
+
+**C.5) Dependencia de Fase 3 y comportamiento mientras tanto**
+
+El resolver necesita `mercadopago_cajas` y `mercadopago_cajas_devices` para los niveles 2 (device) y 3 (barra). Estas tablas existen desde Fase 0 (las migraciones se aplicaron en ambos Supabases) pero están **vacías** hasta que Fase 3 las pueble.
+
+Comportamiento mientras las tablas están vacías — flujo típico de Posnet:
+
+```
+resolve({ deviceId: "PAX_A910__SMART...", allowGlobalFallback: true })
+  1. sellerUserId explícito → no hay → salta
+  2. findByDeviceId("PAX_...") → null (tabla vacía) → salta
+  3. No hay barId → salta
+  4. allowGlobalFallback=true → findFirstActive() en mercadopago_sellers
+     → SI hay seller OAuth activo con refresh_token → refresca y devuelve ✅
+     → NO hay seller → salta
+  5. allowGlobalFallback=true AND env.MP_ACCESS_TOKEN → devuelve token legacy ✅
+     → allowGlobalFallback=false → THROW (no cobrar en cuenta equivocada) ❌
+```
+
+**Prioridad del fallback**: `sellerUserId` explícito tiene prioridad máxima (si alguien lo pasa, sabe exactamente qué cuenta usar). Los headers `X-Device-Id`/`X-Bar-Id` (de cliente) nunca pisan un `sellerUserId` explícito. El fallback legacy (`env.MP_ACCESS_TOKEN`) solo se usa si `allowGlobalFallback=true` — sin él, el resolver lanza error en vez de cobrar silenciosamente en la cuenta equivocada.
+
+### D) Estado de validacion — APROBADO (2026-07-17)
+
+**Implementacion** (todo en `apps/api/src/modules/mercadopago/`):
+- `mercadopago-cajas.repository.ts` + `mercadopago-cajas-devices.repository.ts` — repos nuevos sobre `supabase` (DB local). El repo de devices hace JOIN con `mercadopago_cajas` (`caja:mercadopago_cajas(*)`) para resolver `seller_user_id` en una sola query.
+- `credentials-resolver.service.ts` — `CredentialsResolverService.resolve(context)` con las 5 prioridades: sellerUserId explicito -> device -> barra -> fallback global (`findFirstActive`) -> `env.MP_ACCESS_TOKEN`. Valida `status === "active"` y presencia de `refresh_token`; delega el refresh proactivo en `oauthService.refreshTokenIfNeeded`. Codigos de error estables: `MP_NO_SELLER`, `MP_SELLER_DISCONNECTED`, `MP_SELLER_NO_REFRESH`.
+- `mp-context.middleware.ts` — extrae `X-Device-Id` / `X-Bar-Id` a `req.mpContext`. Se monta en cadena despues de `authMiddleware + requireRole(...)`.
+- Refactor `mercadopago.service.ts` (Posnet): el constructor recibe el resolver; `assertConfigured` ya no lee `MP_ACCESS_TOKEN` (solo valida `MP_POS_DEVICE_ID`); `pointApiRequest` recibe el `token` resuelto; los metodos publicos aceptan un `deviceId` opcional y resuelven el token una sola vez, propagandolo a helpers privados `*WithToken`. Posnet usa `allowGlobalFallback: true`, preservando el comportamiento legacy mientras las tablas de cajas/devices esten vacias (pre-Fase 3).
+- `mercadopago.controller.ts` — todas las rutas del Posnet montan `mpContextMiddleware` y pasan `req.mpContext?.deviceId`.
+- `app.ts` — se cablean `mpCajasRepo`, `mpCajasDevicesRepo` y `credentialsResolver`; `MercadoPagoService` recibe el resolver.
+
+**Tests**:
+- `credentials-resolver.service.test.ts` — 5 niveles de prioridad, throws (`MP_NO_SELLER` / `MP_SELLER_DISCONNECTED` / `MP_SELLER_NO_REFRESH`), no-fallback sin `allowGlobalFallback`, y delegacion en `refreshTokenIfNeeded`.
+- `mercadopago.service.test.ts` — actualizado al nuevo constructor/firmas: resolver mockeado, verificacion de que el `deviceId` del contexto llega al resolver y que el token resuelto va en el `Authorization`, y que un resolver que falla deja `checkDeviceConnection` en `connected:false` (no lanza).
+- Resultado: modulo MP 63/63 en verde; `tsc --noEmit` limpio. (Los 3 archivos de integracion events/orders/tickets fallan por falta de Supabase local — bootstrap `EventsService`, ajeno a MP.)
+
+**Nota de diseno** — el pseudo-codigo del plan tenia `this.cajasRepo.findByUserId` en el nivel 3; se corrigio a `this.sellersRepo.findByUserId` (el `Caja` da el `sellerUserId`, el `Seller` se busca en el repo de sellers).
 
 ---
 

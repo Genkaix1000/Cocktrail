@@ -17,8 +17,20 @@ vi.mock("@/components/ThemeProvider", () => ({
   useTheme: vi.fn(),
 }));
 
+vi.mock("@/services/mercadopago.service", () => ({
+  mercadopagoService: {
+    getOAuthUrl: vi.fn(),
+    getSellerStatus: vi.fn(),
+  },
+}));
+
+import { mercadopagoService } from "@/services/mercadopago.service";
+
 const mockedConfigService = vi.mocked(configService);
 const mockedUseTheme = vi.mocked(useTheme);
+const mockedMpService = vi.mocked(mercadopagoService);
+
+const UNLINKED_STATUS = { linked: false, status: null, nickname: null, email: null, linkedAt: null, displayName: null };
 
 function makeConfig(overrides: Partial<SafeConfig> = {}): SafeConfig {
   return {
@@ -39,6 +51,9 @@ function makeConfig(overrides: Partial<SafeConfig> = {}): SafeConfig {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Reset la URL entre tests (algunos tests la manipulan para simular el callback OAuth).
+  window.history.replaceState({}, "", "/admin?tab=pagos");
+  mockedMpService.getSellerStatus.mockResolvedValue(UNLINKED_STATUS);
   mockedUseTheme.mockReturnValue({
     theme: "bosko",
     useLogoUrl: true,
@@ -154,5 +169,76 @@ describe("PagosSection", () => {
     await user.click(screen.getByRole("button", { name: /Guardar configuración de pagos/i }));
 
     expect(await screen.findByText(/No se pudo guardar la configuración de pagos/i)).toBeInTheDocument();
+  });
+
+  it("muestra el botón de vinculación OAuth y llama al service al hacer click", async () => {
+    const user = userEvent.setup();
+    mockedConfigService.get.mockResolvedValue(makeConfig());
+    // Rechaza para evitar la navegación real (window.location.href) en jsdom.
+    mockedMpService.getOAuthUrl.mockRejectedValue(new Error("boom"));
+
+    render(<PagosSection />);
+    await screen.findByText("Pagos");
+
+    const linkButton = screen.getByRole("button", { name: /^Vincular$/i });
+    await user.click(linkButton);
+
+    await waitFor(() => expect(mockedMpService.getOAuthUrl).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/No se pudo iniciar la vinculación/i)).toBeInTheDocument();
+  });
+
+  it("muestra el toast de éxito cuando vuelve del callback con ?linked=true", async () => {
+    window.history.replaceState({}, "", "/admin?tab=pagos&linked=true");
+    mockedConfigService.get.mockResolvedValue(makeConfig());
+
+    render(<PagosSection />);
+
+    expect(await screen.findByText("Cuenta de Mercado Pago vinculada")).toBeInTheDocument();
+    // El param se limpia de la URL para no repetir el toast al recargar.
+    expect(window.location.search).not.toContain("linked");
+  });
+
+  it("muestra un toast de error cuando vuelve del callback con ?linked=false&message=...", async () => {
+    window.history.replaceState({}, "", "/admin?tab=pagos&linked=false&message=State%20inv%C3%A1lido");
+    mockedConfigService.get.mockResolvedValue(makeConfig());
+
+    render(<PagosSection />);
+
+    expect(await screen.findByText(/No se pudo vincular Mercado Pago: State inválido/i)).toBeInTheDocument();
+  });
+
+  it("muestra los datos de la cuenta y el botón 'Vincular' cuando hay seller activo", async () => {
+    mockedConfigService.get.mockResolvedValue(makeConfig());
+    mockedMpService.getSellerStatus.mockResolvedValue({
+      linked: true,
+      status: "active",
+      nickname: "BOSKO BAR",
+      displayName: "BOSKO BAR",
+      email: "bosko@example.com",
+      linkedAt: new Date().toISOString(),
+    });
+
+    render(<PagosSection />);
+
+    expect(await screen.findByText("BOSKO BAR")).toBeInTheDocument();
+    expect(screen.getByText("bosko@example.com")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Vincular$/i })).toBeInTheDocument();
+  });
+
+  it("muestra el badge de sesión expirada cuando el seller está expired", async () => {
+    mockedConfigService.get.mockResolvedValue(makeConfig());
+    mockedMpService.getSellerStatus.mockResolvedValue({
+      linked: true,
+      status: "expired",
+      nickname: "BOSKO BAR",
+      displayName: "BOSKO BAR",
+      email: null,
+      linkedAt: null,
+    });
+
+    render(<PagosSection />);
+
+    expect(await screen.findByText(/Sesión expirada/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Vincular$/i })).toBeInTheDocument();
   });
 });

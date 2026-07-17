@@ -15,6 +15,7 @@ import { createTicketsController } from "./modules/tickets/tickets.controller.js
 import { createUsersController } from "./modules/users/users.controller.js";
 import { createConfigController } from "./modules/config/config.controller.js";
 import { createMercadoPagoController } from "./modules/mercadopago/mercadopago.controller.js";
+import { createMercadoPagoOAuthController } from "./modules/mercadopago/mercadopago-oauth.controller.js";
 import { createPrinterController } from "./modules/printer/printer.controller.js";
 
 // Services & Repositories
@@ -30,6 +31,12 @@ import { SupabaseUsersRepository } from "./modules/users/users.repository.js";
 import { UsersService } from "./modules/users/users.service.js";
 import { SupabaseConfigRepository } from "./modules/config/config.repository.js";
 import { MercadoPagoService } from "./modules/mercadopago/mercadopago.service.js";
+import { MercadoPagoOAuthService } from "./modules/mercadopago/mercadopago-oauth.service.js";
+import { SupabaseOAuthStatesRepository } from "./modules/mercadopago/oauth-states.repository.js";
+import { SupabaseMercadoPagoSellersRepository } from "./modules/mercadopago/mercadopago-sellers.repository.js";
+import { SupabaseMercadoPagoCajasRepository } from "./modules/mercadopago/mercadopago-cajas.repository.js";
+import { SupabaseMercadoPagoCajasDevicesRepository } from "./modules/mercadopago/mercadopago-cajas-devices.repository.js";
+import { CredentialsResolverService } from "./modules/mercadopago/credentials-resolver.service.js";
 import { PrinterService } from "./modules/printer/printer.service.js";
 import { emit } from "./shared/sse/sse-manager.js";
 import { SupabaseCloudSyncRepository } from "./modules/sync/cloud-sync.repository.js";
@@ -84,7 +91,27 @@ const ticketsService = new TicketsService(
   env.AUTH_SECRET,
 );
 
-const mpService = new MercadoPagoService();
+const oauthStatesRepo = new SupabaseOAuthStatesRepository();
+const mpSellersRepo = new SupabaseMercadoPagoSellersRepository();
+const mpCajasRepo = new SupabaseMercadoPagoCajasRepository();
+const mpCajasDevicesRepo = new SupabaseMercadoPagoCajasDevicesRepository();
+const mpOAuthService = new MercadoPagoOAuthService(oauthStatesRepo, mpSellersRepo, {
+  appId: env.MP_APP_ID,
+  clientSecret: env.MP_CLIENT_SECRET,
+  redirectUri: env.MP_REDIRECT_URI,
+  refreshMarginDays: env.MP_REFRESH_MARGIN_DAYS,
+});
+
+// Fase 2 — resuelve el access_token según contexto (device/barra/seller/env fallback).
+const credentialsResolver = new CredentialsResolverService(
+  mpSellersRepo,
+  mpCajasRepo,
+  mpCajasDevicesRepo,
+  mpOAuthService,
+);
+
+const mpService = new MercadoPagoService(credentialsResolver);
+
 const systemService = new SystemService(eventsRepo, mpService, printerService, supabase, supabaseCloud);
 
 // ── Express App ──
@@ -143,6 +170,7 @@ app.use("/api/events", createSSEController());
 app.use("/api/tickets", createTicketsController(ticketsService));
 app.use("/api/users", createUsersController(usersService));
 app.use("/api/config", createConfigController(configRepo, eventsService));
+app.use("/api/mercadopago", createMercadoPagoOAuthController(mpOAuthService));
 app.use("/api/mercadopago", createMercadoPagoController(mpService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
 app.use("/api/system", createSystemController(usersRepo, systemService, syncService));

@@ -65,8 +65,10 @@ services:
       - ./supabase/migrations/20260715000200_mercadopago_cajas.sql:/docker-entrypoint-initdb.d/init-scripts/17-mercadopago_cajas.sql:Z
       - ./supabase/migrations/20260715000300_mercadopago_cajas_devices.sql:/docker-entrypoint-initdb.d/init-scripts/18-mercadopago_cajas_devices.sql:Z
       - ./supabase/migrations/20260715000400_oauth_states.sql:/docker-entrypoint-initdb.d/init-scripts/19-oauth_states.sql:Z
-      # pgTAP: solo dev/local, para correr supabase/tests/phase0_schema_test.sql
-      - ./supabase/migrations/20260715000600_pgtap_extension.sql:/docker-entrypoint-initdb.d/init-scripts/20-pgtap_extension.sql:Z
+      # Fase 1 — columnas extra del flujo OAuth cloud (bars.seller_user_id, sellers nickname/email)
+      - ./supabase/migrations/20260715000500_mp_oauth_cloud_columns.sql:/docker-entrypoint-initdb.d/init-scripts/20-mp_oauth_cloud_columns.sql:Z
+      # pgTAP: solo dev/local, para correr supabase/tests/*.sql
+      - ./supabase/migrations/20260715000600_pgtap_extension.sql:/docker-entrypoint-initdb.d/init-scripts/21-pgtap_extension.sql:Z
 
   rest:
     image: postgrest/postgrest:v14.12

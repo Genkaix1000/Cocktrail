@@ -1,8 +1,8 @@
 "use client";
 
 import { Lock, LogIn, Shield, Wallet } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
 import { authService } from "@/services/auth.service";
@@ -10,7 +10,21 @@ import { ApiError } from "@/services/api-client";
 import { OSHeadbar } from "@/components/shared/OSHeadbar";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-ink-950">
+        <p className="text-ink-400 text-sm animate-pulse">Cargando…</p>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect");
   const { theme } = useTheme();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -36,8 +50,8 @@ export default function LoginPage() {
 
     try {
       const data = await authService.login(username, password);
-      // Redirect based on the authenticated role
-      const dest = data.role === "admin" ? "/admin" : "/caja";
+      // Si venimos de un redirect OAuth, volver a la URL original
+      const dest = redirect ?? (data.role === "admin" ? "/admin" : "/caja");
       router.push(dest);
       router.refresh();
     } catch (err) {

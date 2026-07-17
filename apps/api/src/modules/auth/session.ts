@@ -56,10 +56,10 @@ export function verifySession(raw: string | undefined): Session | null {
 export function buildSessionCookie(username: string, role: Role): string {
   const { value, maxAgeSeconds } = signSession(username, role);
   const secure = env.NODE_ENV === "production" ? "Secure; " : "";
-  return `${COOKIE_NAME}=${value}; HttpOnly; ${secure}Path=/; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+  return `${COOKIE_NAME}=${value}; HttpOnly; ${secure}Path=/; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
 }
 
 export function buildClearCookie(): string {
   const secure = env.NODE_ENV === "production" ? "Secure; " : "";
-  return `${COOKIE_NAME}=; HttpOnly; ${secure}Path=/; SameSite=Strict; Max-Age=0`;
+  return `${COOKIE_NAME}=; HttpOnly; ${secure}Path=/; SameSite=Lax; Max-Age=0`;
 }

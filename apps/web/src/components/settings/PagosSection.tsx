@@ -1,10 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, CreditCard, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Calendar, Check, CreditCard, Eye, EyeOff, Link2, Loader2, Mail, ShieldCheck, UserRound } from "lucide-react";
 import { configService, type SafeConfig } from "@/services/config.service";
+import { mercadopagoService, type MpSellerStatus } from "@/services/mercadopago.service";
 import { useTheme } from "@/components/ThemeProvider";
 import Toast from "@/components/shared/Toast";
+
+function formatRelative(iso: string | null): string | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const days = Math.floor((Date.now() - then) / (24 * 60 * 60 * 1000));
+  if (days <= 0) return "hoy";
+  if (days === 1) return "hace 1 día";
+  return `hace ${days} días`;
+}
 
 export default function PagosSection() {
   const { theme } = useTheme();
@@ -14,6 +25,9 @@ export default function PagosSection() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkedNotice, setLinkedNotice] = useState(false);
+  const [sellerStatus, setSellerStatus] = useState<MpSellerStatus | null>(null);
 
   const [publicKey, setPublicKey] = useState("");
   const [accessToken, setAccessToken] = useState("");
@@ -28,6 +42,52 @@ export default function PagosSection() {
       setSandbox(c.mercadoPago.sandbox);
       setLoading(false);
     }).catch(() => setLoading(false));
+  }, []);
+
+  const refreshSellerStatus = useCallback(() => {
+    mercadopagoService.getSellerStatus()
+      .then(setSellerStatus)
+      .catch(() => setSellerStatus(null));
+  }, []);
+
+  useEffect(() => {
+    refreshSellerStatus();
+  }, [refreshSellerStatus]);
+
+  // Al volver del callback (Edge Function) MP redirige con ?linked=true|false[&message=...].
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get("linked");
+    if (!linked) return;
+
+    if (linked === "true") {
+      setLinkedNotice(true);
+      refreshSellerStatus();
+    } else {
+      const message = params.get("message");
+      setError(message ? `No se pudo vincular Mercado Pago: ${message}` : "No se pudo vincular Mercado Pago.");
+    }
+
+    // Limpiar los params para no repetir el toast al recargar.
+    params.delete("linked");
+    params.delete("message");
+    params.delete("barId");
+    const qs = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, [refreshSellerStatus]);
+
+  const handleLink = useCallback(async () => {
+    setLinking(true);
+    setError(null);
+    try {
+      const { url } = await mercadopagoService.getOAuthUrl();
+      window.location.href = url;
+    } catch (err) {
+      console.error("Error starting MP OAuth:", err);
+      setError("No se pudo iniciar la vinculación con Mercado Pago. Reintentá en unos segundos.");
+      setLinking(false);
+    }
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -70,32 +130,95 @@ export default function PagosSection() {
         </p>
       </div>
 
-      {/* Status */}
-      <div className={`flex items-center gap-4 p-5 rounded-xl border transition-all duration-200 ${
+      {/* Estado + Vinculación por OAuth */}
+      <div className={`rounded-xl border p-5 space-y-4 transition-all duration-200 ${
         config?.mercadoPago.publicKey
           ? "bg-green-soft border-green-line/30"
           : "bg-ink-900 border-ink-800"
       }`}>
-        <div className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
-          config?.mercadoPago.publicKey
-            ? "bg-green/15 text-green"
-            : "bg-ink-800 text-ink-500"
-        }`}>
-          {config?.mercadoPago.publicKey ? <ShieldCheck size={22} /> : <CreditCard size={22} />}
-        </div>
-        <div>
-          <p className={`text-[14px] font-bold ${
-            config?.mercadoPago.publicKey ? "text-green" : "text-ink-300"
+        {/* Header de estado */}
+        <div className="flex items-center gap-4">
+          <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+            config?.mercadoPago.publicKey
+              ? "bg-green/15 text-green"
+              : "bg-ink-800 text-ink-500"
           }`}>
-            {config?.mercadoPago.publicKey ? "Mercado Pago Vinculado" : "Sin Vincular"}
-          </p>
-          <p className="text-[12px] text-ink-400/80 mt-0.5">
-            {config?.mercadoPago.publicKey
-              ? `Entorno: ${config.mercadoPago.sandbox ? "Sandbox (pruebas)" : "Producción"}`
-              : "Ingresá tus credenciales para habilitar cobros"
-            }
-          </p>
+            {config?.mercadoPago.publicKey ? <ShieldCheck size={22} /> : <CreditCard size={22} />}
+          </div>
+          <div>
+            <p className={`text-[14px] font-bold ${
+              config?.mercadoPago.publicKey ? "text-green" : "text-ink-300"
+            }`}>
+              {config?.mercadoPago.publicKey ? "Mercado Pago Vinculado" : "Sin Vincular"}
+            </p>
+            <p className="text-[12px] text-ink-400/80 mt-0.5">
+              {config?.mercadoPago.publicKey
+                ? `Entorno: ${config.mercadoPago.sandbox ? "Sandbox (pruebas)" : "Producción"}`
+                : "Vinculá tu cuenta para habilitar cobros"
+              }
+            </p>
+          </div>
         </div>
+
+        {/* Datos estructurados de la cuenta vinculada */}
+        {sellerStatus?.linked && (
+          <div className={`rounded-lg border divide-y overflow-hidden ${
+            sellerStatus.status === "expired"
+              ? "bg-orange-500/10 border-orange-500/30 divide-orange-500/20"
+              : "bg-ink-950/25 border-green-line/20 divide-green-line/10"
+          }`}>
+            {sellerStatus.status === "expired" && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <AlertTriangle size={15} className="text-orange-400 shrink-0" />
+                <span className="text-[12px] font-bold text-orange-300">
+                  Sesión expirada — volvé a vincular
+                </span>
+              </div>
+            )}
+            {sellerStatus.displayName && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <UserRound size={15} className="text-ink-500 shrink-0" />
+                <span className="text-[12px] text-ink-200">{sellerStatus.displayName}</span>
+              </div>
+            )}
+            {sellerStatus.email && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <Mail size={15} className="text-ink-500 shrink-0" />
+                <span className="text-[12px] text-ink-200">{sellerStatus.email}</span>
+              </div>
+            )}
+            {formatRelative(sellerStatus.linkedAt) && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <Calendar size={15} className="text-ink-500 shrink-0" />
+                <span className="text-[12px] text-ink-200">
+                  Vinculado {formatRelative(sellerStatus.linkedAt)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(() => {
+          const expired = sellerStatus?.linked && sellerStatus.status === "expired";
+          const label = linking ? "Redirigiendo a Mercado Pago..." : "Vincular";
+          const Icon = linking ? Loader2 : Link2;
+          const colorClass = expired
+            ? "bg-orange-500 text-white hover:brightness-110"
+            : isBosko
+              ? "bg-accent text-ink-950 hover:brightness-110"
+              : "bg-blue text-white hover:brightness-110";
+          return (
+            <button
+              type="button"
+              onClick={handleLink}
+              disabled={linking}
+              className={`h-11 px-6 rounded-xl text-xs font-bold uppercase tracking-[0.12em] transition-all duration-300 flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 ${colorClass}`}
+            >
+              <Icon size={14} strokeWidth={2.5} className={linking ? "animate-spin" : ""} />
+              {label}
+            </button>
+          );
+        })()}
       </div>
 
       {/* Form */}
@@ -206,6 +329,11 @@ export default function PagosSection() {
       {saved && (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast variant="success" message="Cambios guardados" duration={2500} onClose={() => setSaved(false)} />
+        </div>
+      )}
+      {linkedNotice && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="success" message="Cuenta de Mercado Pago vinculada" duration={3000} onClose={() => setLinkedNotice(false)} />
         </div>
       )}
       {error && (

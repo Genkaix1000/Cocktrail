@@ -284,7 +284,7 @@ export default function AdminClient({
       case "carta":
         return ["Administración", "Configuración", "Carta"];
       case "pagos":
-        return ["Administración", "Configuración", "Mercado Pago"];
+        return ["Administración", "Configuración", "Pagos"];
       case "usuarios":
         return ["Administración", "Configuración", "Gestión de Staff"];
       case "sistema":
@@ -461,7 +461,7 @@ export default function AdminClient({
                   <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 ${navIconClass("pagos")}`}>
                     <CreditCard size={13} strokeWidth={1.8} />
                   </div>
-                  <span className={`text-[13.5px] ${navLabelClass("pagos")}`}>Mercado Pago</span>
+                  <span className={`text-[13.5px] ${navLabelClass("pagos")}`}>Pagos</span>
                 </button>
 
                 <button

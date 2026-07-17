@@ -26,9 +26,17 @@ const EnvSchema = z.object({
   SUPABASE_CLOUD_URL: z.string().url().optional(),
   SUPABASE_CLOUD_SERVICE_ROLE_KEY: z.string().optional(),
 
-  // Mercado Pago
+  // Mercado Pago — Posnet/Point legacy (single-seller, sandbox)
   MP_ACCESS_TOKEN: z.string().optional(),
   MP_POS_DEVICE_ID: z.string().optional(),
+
+  // Mercado Pago — OAuth (multi-seller, Fase 1). Credenciales de la app Cocktrail.
+  // Para el split prod/test, apuntar estas 3 a las credenciales del entorno activo.
+  MP_APP_ID: z.string().optional(),          // = client_id (APPID de la app de MP)
+  MP_CLIENT_SECRET: z.string().optional(),
+  MP_REDIRECT_URI: z.string().url().optional(),
+  // Días antes del vencimiento en que se refresca proactivamente el token (1–7, default 5).
+  MP_REFRESH_MARGIN_DAYS: z.coerce.number().min(1).max(7).default(5),
 });
 
 function loadEnv() {

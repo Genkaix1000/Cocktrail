@@ -12,18 +12,28 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 
 -- RPC atómica: lee, valida TTL, elimina — todo en un solo paso.
 -- SECURITY DEFINER para que funcione desde roles con acceso limitado a la tabla.
+-- ⚠ SET search_path fijo: sin esto, una función SECURITY DEFINER es vulnerable a
+-- inyección de search_path (advisor 0011). Con search_path=public, pg_temp la
+-- referencia a oauth_states resuelve siempre a public.oauth_states.
 CREATE OR REPLACE FUNCTION consume_oauth_state(p_state TEXT)
-RETURNS TABLE(code_verifier TEXT, bar_id TEXT) AS $$
+RETURNS TABLE(code_verifier TEXT, bar_id TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   RETURN QUERY
   DELETE FROM oauth_states
   WHERE oauth_states.state = p_state AND oauth_states.expires_at > NOW()
   RETURNING oauth_states.code_verifier, oauth_states.bar_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
--- Solo el backend puede ejecutar la RPC.
-REVOKE EXECUTE ON FUNCTION consume_oauth_state(TEXT) FROM PUBLIC;
+-- Solo el backend (service_role) puede ejecutar la RPC. Revocamos de PUBLIC y
+-- explícitamente de anon/authenticated: en Supabase hay DEFAULT PRIVILEGES que
+-- otorgan EXECUTE a esos roles en cada función nueva (advisors 0028/0029), y
+-- REVOKE FROM PUBLIC no los alcanza.
+REVOKE EXECUTE ON FUNCTION consume_oauth_state(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION consume_oauth_state(TEXT) TO service_role;
 
 -- Tabla de uso exclusivo del backend (service_role). Guarda el code_verifier (PKCE):
