@@ -29,11 +29,8 @@ type UseCheckoutArgs = {
 /**
  * Estado y lógica de checkout/pagos de la Terminal de Caja: selección de
  * método, cobro en efectivo, cobro Posnet (Mercado Pago) con polling de la
- * intención de cobro, y el pedido recién concretado para la pantalla de
- * éxito. Extraído de CajaClient.tsx sin cambios de comportamiento.
- *
- * Nota: `confirmOrderWithMethod` (código muerto, sin callers en el archivo
- * original — confirmado con grep) no se migró.
+ * intención de cobro, cobro QR estático (Fase 4), y el pedido recién
+ * concretado para la pantalla de éxito.
  */
 export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCart }: UseCheckoutArgs) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -45,6 +42,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   const [paymentIntentState, setPaymentIntentState] = useState<string | null>(null);
   const [posnetErrorMessage, setPosnetErrorMessage] = useState<string | null>(null);
   const [posnetRetryAttempt, setPosnetRetryAttempt] = useState(0);
+  const [qrImage, setQrImage] = useState<string | null>(null);
 
   // Pedido recién concretado (para mostrar en pantalla de éxito)
   const [latestOrder, setLatestOrder] = useState<Order | null>(null);
@@ -57,6 +55,8 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   // Espejo de currentIntentId accesible desde closures que no pueden depender
   // del state (cleanup de unmount) sin re-suscribirse en cada cambio.
   const intentIdRef = useRef<string | null>(null);
+  // Distingue Posnet vs QR para el cleanup de abandono (cancel endpoints distintos).
+  const activePaymentKindRef = useRef<"posnet" | "qr" | null>(null);
   // Contador de reintentos ante device busy (2205) y su timer de backoff, para poder
   // cancelarlo si se cierra/reabre el modal o se desmonta el componente a mitad de camino.
   const posnetRetryCountRef = useRef(0);
@@ -66,15 +66,20 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     intentIdRef.current = currentIntentId;
   }, [currentIntentId]);
 
-  // Best-effort: cancela en el device cualquier intención que haya quedado
-  // activa (no confirmada/no cerrada) cuando se abandona el cobro por afuera
-  // del flujo normal de éxito/cancelación explícita — cerrar el modal a mitad
-  // de camino, recargar la página, navegar a otra pantalla. Sin esto el
-  // device queda con la intención en cola y el próximo cobro tira 2205.
+  // Best-effort: cancela en el device / MP cualquier intención/order que haya
+  // quedado activa cuando se abandona el cobro por afuera del flujo normal.
   const cancelActiveIntent = useCallback(() => {
     const id = intentIdRef.current;
+    const kind = activePaymentKindRef.current;
     if (!id) return;
     intentIdRef.current = null;
+    activePaymentKindRef.current = null;
+    if (kind === "qr") {
+      Promise.resolve(mercadopagoService.cancelQrOrder(id)).catch((err) => {
+        console.error("No se pudo cancelar la order QR abandonada:", err);
+      });
+      return;
+    }
     Promise.resolve(mercadopagoService.cancelPosIntent(id)).catch((err) => {
       console.error("No se pudo cancelar la intención de pago abandonada:", err);
     });
@@ -114,10 +119,8 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   const canConfirmCash = receivedAmount !== "" && change >= 0;
 
   const handleOpenCheckout = useCallback(() => {
-    // Si quedó una intención activa de un cobro anterior sin cerrar (ej. la
-    // cajera abrió y abandonó un cobro Posnet sin pasar por el botón X ni
-    // Escape), cancelarla antes de resetear el estado — si no, el device
-    // queda en cola y el próximo createPosIntent tira 2205.
+    // Si quedó una intención/order activa de un cobro anterior sin cerrar,
+    // cancelarla antes de resetear el estado.
     cancelActiveIntent();
     stopPosnetRetry();
     posnetRetryCountRef.current = 0;
@@ -127,6 +130,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     setReceivedAmount("");
     setPosnetStatus("idle");
     setCurrentIntentId(null);
+    setQrImage(null);
     setLatestOrder(null);
     stopPolling();
   }, [stopPolling, cancelActiveIntent, stopPosnetRetry]);
@@ -155,6 +159,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
 
   const startPolling = useCallback((intentId: string, method: PosnetMethod) => {
     stopPolling();
+    activePaymentKindRef.current = "posnet";
 
     pollingRef.current = setInterval(async () => {
       try {
@@ -172,12 +177,14 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
           clearCart();
           setPosnetStatus("idle");
           setCurrentIntentId(null);
+          activePaymentKindRef.current = null;
           setPaymentIntentState(null);
           setPosnetErrorMessage(null);
         } else if (currentState === "CANCELED") {
           stopPolling();
           setPosnetStatus("error");
           setCurrentIntentId(null);
+          activePaymentKindRef.current = null;
           setPaymentIntentState(null);
           // Sentinel (no un mensaje de error real, ver "busy_device" más arriba): la
           // cajera o el cliente cancelaron a propósito desde el dispositivo — no es una
@@ -189,8 +196,58 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         stopPolling();
         setPosnetStatus("error");
         setCurrentIntentId(null);
+        activePaymentKindRef.current = null;
         setPaymentIntentState(null);
         setPosnetErrorMessage("Error al consultar el estado del cobro. Verificá la conexión.");
+      }
+    }, 3000);
+  }, [cart, clearCart, stopPolling]);
+
+  const startQrPolling = useCallback((orderId: string) => {
+    stopPolling();
+    activePaymentKindRef.current = "qr";
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const st = await mercadopagoService.getQrOrderStatus(orderId);
+        if (st.status) {
+          setPaymentIntentState(st.status);
+        }
+
+        if (st.status === "processed") {
+          stopPolling();
+          const items = Object.entries(cart).map(([idStr, qty]) => ({ drinkId: Number(idStr), qty }));
+          const order = await ordersService.create({ items, paymentMethod: "qr" });
+          setLatestOrder(order);
+          clearCart();
+          setPosnetStatus("idle");
+          setCurrentIntentId(null);
+          activePaymentKindRef.current = null;
+          setPaymentIntentState(null);
+          setPosnetErrorMessage(null);
+          setQrImage(null);
+        } else if (st.status === "canceled" || st.status === "expired") {
+          stopPolling();
+          setPosnetStatus("error");
+          setCurrentIntentId(null);
+          activePaymentKindRef.current = null;
+          setPaymentIntentState(null);
+          setQrImage(null);
+          setPosnetErrorMessage(
+            st.status === "expired"
+              ? "La order QR expiró. Volvé a intentar el cobro."
+              : "cancelled_by_device",
+          );
+        }
+      } catch (err) {
+        console.error("Error polling QR order status:", err);
+        stopPolling();
+        setPosnetStatus("error");
+        setCurrentIntentId(null);
+        activePaymentKindRef.current = null;
+        setPaymentIntentState(null);
+        setQrImage(null);
+        setPosnetErrorMessage("Error al consultar el estado del cobro QR. Verificá la conexión.");
       }
     }, 3000);
   }, [cart, clearCart, stopPolling]);
@@ -209,6 +266,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     setPosnetStatus("connecting");
     setPaymentIntentState("CREATING");
     setPosnetErrorMessage(null);
+    setQrImage(null);
     try {
       const drinksText = cartEntries.map((e) => `${e.drink.name} x${e.qty}`).join(", ");
       const intent = await mercadopagoService.createPosIntent(totalPrice, drinksText || "Cobro Cocktrail");
@@ -241,6 +299,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
       );
 
       setCurrentIntentId(null);
+      activePaymentKindRef.current = null;
       setPaymentIntentState(null);
 
       if (isAlreadyQueued && posnetRetryCountRef.current < MAX_POSNET_BUSY_RETRIES) {
@@ -269,6 +328,40 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     }
   }, [cartEntries, startPolling, stopPosnetRetry, submitting, totalItems, totalPrice]);
 
+  const startQrPayment = useCallback(async () => {
+    if (isSubmittingRef.current || submitting || totalItems === 0) return;
+    isSubmittingRef.current = true;
+    setSubmitting(true);
+    setPaymentMethod("qr");
+    setPosnetStatus("connecting");
+    setPaymentIntentState("created");
+    setPosnetErrorMessage(null);
+    setQrImage(null);
+    try {
+      const drinksText = cartEntries.map((e) => `${e.drink.name} x${e.qty}`).join(", ");
+      const created = await mercadopagoService.createQrOrder(
+        totalPrice,
+        drinksText || "Cobro Cocktrail",
+      );
+      setCurrentIntentId(created.orderId);
+      setQrImage(created.qrImage);
+      setPaymentIntentState("created");
+      startQrPolling(created.orderId);
+    } catch (err) {
+      console.warn("Error creating QR order (handled):", err);
+      const message = err instanceof Error ? err.message : undefined;
+      setCurrentIntentId(null);
+      activePaymentKindRef.current = null;
+      setPaymentIntentState(null);
+      setQrImage(null);
+      setPosnetStatus("error");
+      setPosnetErrorMessage(message || "Error al iniciar cobro con QR. Verificá que el PDV esté provisionado.");
+    } finally {
+      isSubmittingRef.current = false;
+      setSubmitting(false);
+    }
+  }, [cartEntries, startQrPolling, submitting, totalItems, totalPrice]);
+
   return {
     isCheckoutOpen,
     setIsCheckoutOpen,
@@ -285,6 +378,8 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     posnetErrorMessage,
     setPosnetErrorMessage,
     posnetRetryAttempt,
+    qrImage,
+    setQrImage,
     latestOrder,
     saleError,
     displayCashValue,
@@ -297,7 +392,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     startPolling,
     stopPolling,
     startPosnetPayment,
+    startQrPayment,
     stopPosnetRetry,
   };
 }
-

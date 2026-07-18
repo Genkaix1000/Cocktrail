@@ -72,6 +72,9 @@ pnpm --filter cocktrail-api db:reset -- --target=cloud            # SIEMPRE pide
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — arquitectura real (fuente de verdad).
 - [`docs/ROADMAP.md`](./docs/ROADMAP.md) — fases, pendientes, riesgos/deuda.
 - [`docs/DEPLOY.md`](./docs/DEPLOY.md) — desplegar en la PC del boliche (Docker + app + LAN).
+- [`docs/mp/`](./docs/mp/) — referencia Mercado Pago (OAuth, Stores/POS, Orders QR/Point, webhooks). Empezá por [`docs/mp/INDEX.md`](./docs/mp/INDEX.md).
+- [`docs/fases-mp/`](./docs/fases-mp/) — plan de implementación MP por fases ([`INDEX`](./docs/fases-mp/INDEX.md)).
+- [`docs/plans/`](./docs/plans/) — planes de trabajo.
 - [`docs/AGENTS.md`](./docs/AGENTS.md) — subagents y skills.
 - [`docs/specs/`](./docs/specs/) — specs de features (SDD nativo).
 - [`AGENTS.md`](./AGENTS.md) / [`CLAUDE.md`](./CLAUDE.md) — reglas para agentes de IA.

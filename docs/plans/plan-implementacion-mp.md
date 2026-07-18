@@ -1,8 +1,9 @@
 # Plan de Implementación — Integración MP
 
-> **Punto de partida obligatorio**: ante cualquier tarea de MP, leer primero [`docs/mp/INDEX.md`](../mp/INDEX.md).  
-> Este plan se basa en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md).  
-> Las Fases se ejecutan en orden secuencial (cada una depende de la anterior).
+> ⚠ **Este archivo ya no es la fuente canónica.** El plan se desarmó en archivos individuales por fase para optimizar tokens.  
+> **Ver [`docs/fases-mp/INDEX.md`](../fases-mp/INDEX.md)** — entrada única con orden de ejecución y enlaces a cada fase.
+>
+> El contenido legacy se mantiene abajo por referencia histórica.
 
 ---
 
@@ -861,110 +862,26 @@ Archivos de test creados:
 
 ### A) ¿Qué se hace?
 
-Crear un servicio transversal `CredentialsResolverService` que, dado un contexto (`deviceId`, `barId`, etc.), busque al seller dueño en `mercadopago_sellers` (Cloud), refresque su token si está por vencer, y devuelva un `access_token` listo para usar. El `MercadoPagoService` existente (Posnet) se refactoriza para usar este resolver en vez de `env.MP_ACCESS_TOKEN`. Se agrega un middleware Express que extrae los headers contextuales (`X-Device-Id`, `X-Bar-Id`) y los expone en `req.mpContext`.
+Crear un servicio `CredentialsResolverService` que obtenga un `access_token` válido del único vendedor vinculado (single-seller), refrescándolo proactivamente si está por vencer. El `MercadoPagoService` existente (Posnet) se refactoriza para usar este resolver en vez de `env.MP_ACCESS_TOKEN` directo.
 
 ### B) ¿Por qué?
 
-El spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Resolución dinámica de credenciales" define 4 niveles de resolución. Hoy el código usa `env.MP_ACCESS_TOKEN` hardcodeado (single-seller, sin OAuth). Para soportar multi-seller y que cada barra/device use el token de su dueño, necesitamos esta capa antes de implementar QR o multi-seller. Sin esto, cualquier operación usaría siempre el token de un solo vendedor, rompiendo el modelo donde cada comercio (Bosko) tiene su propia cuenta.
+El modelo operativo de Cocktrail es **single-seller**: un solo comercio (Bosko) recibe todo el dinero, independientemente de cuántas barras o cajeras operen. No hay multi-seller. Hoy el código usa `env.MP_ACCESS_TOKEN` hardcodeado — con OAuth (Fase 1), el token vive en `mercadopago_sellers` (Cloud) y debe refrescarse proactivamente. El resolver abstrae esa complejidad para que el resto del módulo MP (Posnet, futuro QR) solo pida `credentialsResolver.resolve()` y reciba un token listo.
 
-**Dependencia de Fase 3**: el resolver consulta `mercadopago_cajas` y `mercadopago_cajas_devices` para mapear `barId`/`deviceId` → `seller_user_id`. Estas tablas se pueblan en Fase 3 (provisioning). **Mientras tanto**, los niveles 1 y 2 (por device/barra) simplemente no encuentran datos y el flujo cae a los niveles 3–5 (sellerUserId explícito, fallback global, env). Esto permite implementar Fase 2 antes de Fase 3 sin romper nada: el Posnet sigue usando el fallback global/env como hoy.
-
-**Cloud vs Local**: `mercadopago_sellers` vive en Cloud Supabase (escrito por el callback OAuth de Fase 1). `mercadopago_cajas` y `mercadopago_cajas_devices` viven en Local (son datos operativos). El resolver usa `mpDb` para sellers (cloud-first) y `supabase` para cajas/devices (local). Si Cloud no responde, la resolución de sellers cae a `supabase` local y, si tampoco hay datos ahí, al fallback `env.MP_ACCESS_TOKEN`.
+**Cloud vs Local**: `mercadopago_sellers` vive en Cloud (escrito por el callback OAuth). El resolver usa `mpDb` (cloud-first, ver `shared/supabase.ts`). Si Cloud no está disponible, `mpDb` cae a `supabase` local y, si tampoco hay sellers ahí, al fallback `env.MP_ACCESS_TOKEN` (legacy, solo si `allowGlobalFallback=true`).
 
 ### C) Implementación
 
-**C.1) Repositorios nuevos**
-
-Dos repositorios que siguen el patrón `interface + class Supabase*Repo` (ver `mercadopago-sellers.repository.ts` como plantilla). Usan `supabase` (local), no `mpDb` — las cajas y devices son datos operativos del local.
-
-**Archivo**: `apps/api/src/modules/mercadopago/mercadopago-cajas.repository.ts`
-
-```ts
-export type Caja = {
-  id: string;
-  barId: string;
-  storeId: string;
-  externalPosId: string;
-  posIdMp: string | null;
-  qrImage: string | null;
-  qrTemplate: string | null;
-  sellerUserId: string;
-  createdAt: string;
-};
-
-export interface MercadoPagoCajasRepository {
-  findByBarId(barId: string): Promise<Caja | null>;
-  findBySellerUserId(sellerUserId: string): Promise<Caja[]>;
-  create(caja: Omit<Caja, "id" | "createdAt">): Promise<Caja>;
-}
-
-export class SupabaseMercadoPagoCajasRepository implements MercadoPagoCajasRepository {
-  async findByBarId(barId: string): Promise<Caja | null> {
-    const { data } = await supabase.from("mercadopago_cajas")
-      .select("*").eq("bar_id", barId).maybeSingle();
-    return data ? mapCajaRow(data) : null;
-  }
-  async findBySellerUserId(sellerUserId: string): Promise<Caja[]> {
-    const { data } = await supabase.from("mercadopago_cajas")
-      .select("*").eq("seller_user_id", sellerUserId);
-    return (data ?? []).map(mapCajaRow);
-  }
-  async create(caja: Omit<Caja, "id" | "createdAt">): Promise<Caja> {
-    const { data, error } = await supabase.from("mercadopago_cajas")
-      .insert({ ... }).select("*").single();
-    if (error) throw error;
-    return mapCajaRow(data);
-  }
-}
-```
-
-**Archivo**: `apps/api/src/modules/mercadopago/mercadopago-cajas-devices.repository.ts`
-
-```ts
-export type CajaDevice = {
-  id: string;
-  cajaId: string;
-  deviceId: string;
-  deviceUsername: string | null;
-  operatingMode: string | null;
-  // JOIN con caja (el repositorio hace el join internamente)
-  caja?: Caja;
-};
-
-export interface MercadoPagoCajasDevicesRepository {
-  findByDeviceId(deviceId: string): Promise<CajaDevice | null>;
-  findByCajaId(cajaId: string): Promise<CajaDevice | null>;
-  create(device: Omit<CajaDevice, "id">): Promise<CajaDevice>;
-}
-
-export class SupabaseMercadoPagoCajasDevicesRepository implements MercadoPagoCajasDevicesRepository {
-  async findByDeviceId(deviceId: string): Promise<CajaDevice | null> {
-    // JOIN con mercadopago_cajas para acceder a seller_user_id
-    const { data } = await supabase.from("mercadopago_cajas_devices")
-      .select("*, caja:mercadopago_cajas(*)")
-      .eq("device_id", deviceId).maybeSingle();
-    return data ? mapDeviceRow(data) : null;
-  }
-  // ...
-}
-```
-
-**C.2) `CredentialsResolverService`**
+**C.1) `CredentialsResolverService`**
 
 **Archivo**: `apps/api/src/modules/mercadopago/credentials-resolver.service.ts`
-
-Patrón de inyección: idéntico a `MercadoPagoOAuthService` — constructor con `private readonly` + config object.
 
 ```ts
 import { env } from "../../config/env.js";
 import type { MercadoPagoSellersRepository, Seller } from "../mercadopago-sellers.repository.js";
-import type { MercadoPagoCajasRepository } from "../mercadopago-cajas.repository.js";
-import type { MercadoPagoCajasDevicesRepository } from "../mercadopago-cajas-devices.repository.js";
 import type { MercadoPagoOAuthService } from "../mercadopago-oauth.service.js";
 
 export type CredentialContext = {
-  deviceId?: string;
-  barId?: string;
   sellerUserId?: string;
   allowGlobalFallback?: boolean;
 };
@@ -972,55 +889,34 @@ export type CredentialContext = {
 export class CredentialsResolverService {
   constructor(
     private readonly sellersRepo: MercadoPagoSellersRepository,
-    private readonly cajasRepo: MercadoPagoCajasRepository,
-    private readonly cajasDevicesRepo: MercadoPagoCajasDevicesRepository,
     private readonly oauthService: MercadoPagoOAuthService,
   ) {}
 
-  async resolve(context: CredentialContext): Promise<string> {
+  async resolve(context: CredentialContext = {}): Promise<string> {
     let seller: Seller | null = null;
 
-    // 1. sellerUserId explícito (prioridad máxima — admin/provisioning sabe exactamente
-    //    qué cuenta usar; no debe ser "pisado" por headers de cliente)
+    // 1. sellerUserId explícito (admin/provisioning — prioridad máxima)
     if (context.sellerUserId) {
       seller = await this.sellersRepo.findByUserId(context.sellerUserId);
     }
 
-    // 2. Resolver por device (Point/Posnet)
-    if (!seller && context.deviceId) {
-      const device = await this.cajasDevicesRepo.findByDeviceId(context.deviceId);
-      if (device?.caja?.sellerUserId) {
-        seller = await this.sellersRepo.findByUserId(device.caja.sellerUserId);
-      }
-    }
-
-    // 3. Resolver por barra (QR cobro)
-    if (!seller && context.barId) {
-      const caja = await this.cajasRepo.findByBarId(context.barId);
-      if (caja?.sellerUserId) {
-        seller = await this.cajasRepo.findByUserId(caja.sellerUserId);
-      }
-    }
-
-    // 4. Fallback global (admin / provisioning / single-seller)
-    if (!seller && context.allowGlobalFallback) {
+    // 2. Seller activo por defecto (único vendedor vinculado vía OAuth)
+    if (!seller) {
       seller = await this.sellersRepo.findFirstActive();
     }
 
-    // 5. Fallback legacy env — solo si allowGlobalFallback está activo.
-    //    Sin fallback automático: no queremos cobrar en el token legacy por
-    //    un header faltante o mal configurado.
+    // 3. Fallback legacy env vars — solo si allowGlobalFallback
     if (!seller) {
       if (context.allowGlobalFallback && env.MP_ACCESS_TOKEN) {
         return env.MP_ACCESS_TOKEN;
       }
       throw new Error(
-        "No se encontró ninguna cuenta de Mercado Pago vinculada para este contexto. " +
-        "Verificá la vinculación OAuth en /admin?tab=pagos."
+        "No hay ninguna cuenta de Mercado Pago vinculada. " +
+        "Vinculala desde /admin?tab=pagos."
       );
     }
 
-    // Validar que el seller esté activo antes de intentar refrescar
+    // Validar que el seller esté activo antes de refrescar
     if (seller.status !== "active") {
       throw new Error(
         `La cuenta de Mercado Pago (${seller.userId}) está desconectada. ` +
@@ -1028,7 +924,7 @@ export class CredentialsResolverService {
       );
     }
 
-    // Validar que el seller tenga refresh_token para poder refrescar proactivamente
+    // Validar que tenga refresh_token para refrescar proactivamente
     if (!seller.refreshToken) {
       throw new Error(
         `La cuenta de Mercado Pago (${seller.userId}) no tiene refresh_token. ` +
@@ -1047,19 +943,57 @@ export class CredentialsResolverService {
 **Wiring en `app.ts`**:
 
 ```ts
-const cajasRepo = new SupabaseMercadoPagoCajasRepository();
-const cajasDevicesRepo = new SupabaseMercadoPagoCajasDevicesRepository();
-const credentialsResolver = new CredentialsResolverService(
-  mpSellersRepo, cajasRepo, cajasDevicesRepo, mpOAuthService
-);
+const credentialsResolver = new CredentialsResolverService(mpSellersRepo, mpOAuthService);
 ```
 
-**C.3) Request type extension + middleware**
+**C.2) Refactor de `MercadoPagoService` (Posnet legacy)**
+
+El servicio Posnet debe migrar de `env.MP_ACCESS_TOKEN` al resolver. Cambios puntuales:
+
+| Qué cambia | Cómo |
+|---|---|
+| Constructor | Recibe `CredentialsResolverService` como dependencia |
+| `assertConfigured(requireDevice)` | Deja de leer `env.MP_ACCESS_TOKEN`. Solo valida `env.MP_POS_DEVICE_ID` si `requireDevice=true` |
+| `pointApiRequest(token, path, init, errorMsg)` | Cambia firma: recibe `token: string` como primer parámetro. Header `Authorization: Bearer {token}` en vez de `Bearer ${env.MP_ACCESS_TOKEN}` |
+| `checkDeviceConnection()` | Llama a `credentialsResolver.resolve({ allowGlobalFallback: true })` antes de hacer el fetch. Usa el token resuelto en `Authorization` |
+| `createPaymentIntent(amount, desc)` | Llama a `credentialsResolver.resolve({ allowGlobalFallback: true })` antes de `pointApiRequest` |
+| `getPaymentIntentStatus(id)` | Ídem |
+| `cancelPaymentIntent(id)` | Ídem |
+| `testDeviceReachability()` | Ídem |
+
+Ejemplo del cambio en `createPaymentIntent`:
+
+```ts
+// Antes:
+async createPaymentIntent(amount: number, description?: string) {
+  this.assertConfigured();
+  const response = await this.pointApiRequest<MpPaymentIntentResponse>(
+    `/point/integration-api/devices/${env.MP_POS_DEVICE_ID}/payment-intents`,
+    { method: "POST", body: JSON.stringify({ amount, ... }) },
+    "Error al crear intención de cobro"
+  );
+}
+
+// Después:
+async createPaymentIntent(amount: number, description?: string) {
+  this.assertConfigured();
+  const token = await this.credentialsResolver.resolve({ allowGlobalFallback: true });
+  const response = await this.pointApiRequest<MpPaymentIntentResponse>(
+    token,
+    `/point/integration-api/devices/${env.MP_POS_DEVICE_ID}/payment-intents`,
+    { method: "POST", body: JSON.stringify({ amount, ... }) },
+    "Error al crear intención de cobro"
+  );
+}
+```
+
+**C.3) Middleware `mpContextMiddleware`**
 
 **Archivo**: `apps/api/src/modules/mercadopago/mp-context.middleware.ts`
 
+En modo single-seller no hay headers `X-Device-Id`/`X-Bar-Id` que extraer. El middleware existe para documentar el patrón y extender `Express.Request` con `mpContext`, dejando preparada la infraestructura por si en el futuro se agregan headers contextuales.
+
 ```ts
-// Extiende Express Request
 declare global {
   namespace Express {
     interface Request {
@@ -1068,209 +1002,265 @@ declare global {
   }
 }
 
-// Middleware que extrae headers contextuales. Se monta en las rutas de MP
-// sin reemplazar authMiddleware (se usa en cadena: authMiddleware → requireRole → mpContextMiddleware).
-//
-// ⚠ Seguridad: X-Device-Id y X-Bar-Id vienen de headers de cliente. Este
-// middleware SOLO se monta en rutas que ya pasaron por authMiddleware +
-// requireRole("admin","caja"). No se aceptan headers de requests no
-// autenticadas — si alguien sin sesión manda X-Device-Id, la request
-// ya fue rechazada antes de llegar acá.
-export function mpContextMiddleware(req: Request, _res: Response, next: NextFunction) {
-  req.mpContext = {
-    deviceId: req.headers["x-device-id"] as string | undefined,
-    barId: req.headers["x-bar-id"] as string | undefined,
-  };
-  next();
-}
-  };
+// Se monta después de authMiddleware + requireRole.
+export function mpContextMiddleware(_req: Request, _res: Response, next: NextFunction) {
   next();
 }
 ```
 
-**C.4) Refactor de `MercadoPagoService` (Posnet legacy)**
-
-El servicio Posnet actual debe migrar de `env.MP_ACCESS_TOKEN` al resolver. Cambios puntuales:
-
-| Qué cambia | Cómo |
-|---|---|
-| Constructor | Recibe `CredentialsResolverService` como dependencia |
-| `assertConfigured(requireDevice)` | Deja de leer `env.MP_ACCESS_TOKEN`. Solo valida que `env.MP_POS_DEVICE_ID` exista (si `requireDevice=true`) |
-| `pointApiRequest(path, init, errorMsg)` | Cambia firma: recibe `token: string` como primer parámetro. Header `Authorization: Bearer {token}` en vez de `Bearer ${env.MP_ACCESS_TOKEN}` |
-| `checkDeviceConnection()` | Igual que `pointApiRequest`: recibe token resuelto, lo usa en `Authorization` |
-| `createPaymentIntent(amount, desc, deviceId)` | Nuevo parámetro opcional `deviceId` (viene de `req.mpContext`). Llama a `credentialsResolver.resolve({ deviceId, allowGlobalFallback: true })` antes de `pointApiRequest` |
-| `getPaymentIntentStatus(id, deviceId)` | Ídem — nuevo `deviceId` opcional |
-| `cancelPaymentIntent(id, deviceId)` | Ídem |
-| `testDeviceReachability()` | Ídem — resuelve token antes de operar |
-
-**Rutas en el controller**: agregan `mpContextMiddleware` y pasan `deviceId` al service:
+En el controller, el patrón queda preparado:
 
 ```ts
-// Antes:
-router.post("/pos/intent", authMiddleware, requireRole("admin", "caja"), async (req, res, next) => {
-  const intent = await service.createPaymentIntent(amount, description);
-  // ...
-});
-
-// Después:
 router.post("/pos/intent", authMiddleware, requireRole("admin", "caja"), mpContextMiddleware, async (req, res, next) => {
-  const intent = await service.createPaymentIntent(amount, description, req.mpContext?.deviceId);
-  // ...
+  const intent = await service.createPaymentIntent(amount, description);
+  res.json(intent);
 });
 ```
 
-**Manejo de `MpApiError`**: la clase `MpApiError` (usada por el Posnet para errores 409 `DEVICE_BUSY`) sigue funcionando igual — el refactor solo cambia de dónde sale el token, no el manejo de errores.
-
-**C.5) Dependencia de Fase 3 y comportamiento mientras tanto**
-
-El resolver necesita `mercadopago_cajas` y `mercadopago_cajas_devices` para los niveles 2 (device) y 3 (barra). Estas tablas existen desde Fase 0 (las migraciones se aplicaron en ambos Supabases) pero están **vacías** hasta que Fase 3 las pueble.
-
-Comportamiento mientras las tablas están vacías — flujo típico de Posnet:
-
-```
-resolve({ deviceId: "PAX_A910__SMART...", allowGlobalFallback: true })
-  1. sellerUserId explícito → no hay → salta
-  2. findByDeviceId("PAX_...") → null (tabla vacía) → salta
-  3. No hay barId → salta
-  4. allowGlobalFallback=true → findFirstActive() en mercadopago_sellers
-     → SI hay seller OAuth activo con refresh_token → refresca y devuelve ✅
-     → NO hay seller → salta
-  5. allowGlobalFallback=true AND env.MP_ACCESS_TOKEN → devuelve token legacy ✅
-     → allowGlobalFallback=false → THROW (no cobrar en cuenta equivocada) ❌
-```
-
-**Prioridad del fallback**: `sellerUserId` explícito tiene prioridad máxima (si alguien lo pasa, sabe exactamente qué cuenta usar). Los headers `X-Device-Id`/`X-Bar-Id` (de cliente) nunca pisan un `sellerUserId` explícito. El fallback legacy (`env.MP_ACCESS_TOKEN`) solo se usa si `allowGlobalFallback=true` — sin él, el resolver lanza error en vez de cobrar silenciosamente en la cuenta equivocada.
-
-### D) Estado de validacion — APROBADO (2026-07-17)
-
-**Implementacion** (todo en `apps/api/src/modules/mercadopago/`):
-- `mercadopago-cajas.repository.ts` + `mercadopago-cajas-devices.repository.ts` — repos nuevos sobre `supabase` (DB local). El repo de devices hace JOIN con `mercadopago_cajas` (`caja:mercadopago_cajas(*)`) para resolver `seller_user_id` en una sola query.
-- `credentials-resolver.service.ts` — `CredentialsResolverService.resolve(context)` con las 5 prioridades: sellerUserId explicito -> device -> barra -> fallback global (`findFirstActive`) -> `env.MP_ACCESS_TOKEN`. Valida `status === "active"` y presencia de `refresh_token`; delega el refresh proactivo en `oauthService.refreshTokenIfNeeded`. Codigos de error estables: `MP_NO_SELLER`, `MP_SELLER_DISCONNECTED`, `MP_SELLER_NO_REFRESH`.
-- `mp-context.middleware.ts` — extrae `X-Device-Id` / `X-Bar-Id` a `req.mpContext`. Se monta en cadena despues de `authMiddleware + requireRole(...)`.
-- Refactor `mercadopago.service.ts` (Posnet): el constructor recibe el resolver; `assertConfigured` ya no lee `MP_ACCESS_TOKEN` (solo valida `MP_POS_DEVICE_ID`); `pointApiRequest` recibe el `token` resuelto; los metodos publicos aceptan un `deviceId` opcional y resuelven el token una sola vez, propagandolo a helpers privados `*WithToken`. Posnet usa `allowGlobalFallback: true`, preservando el comportamiento legacy mientras las tablas de cajas/devices esten vacias (pre-Fase 3).
-- `mercadopago.controller.ts` — todas las rutas del Posnet montan `mpContextMiddleware` y pasan `req.mpContext?.deviceId`.
-- `app.ts` — se cablean `mpCajasRepo`, `mpCajasDevicesRepo` y `credentialsResolver`; `MercadoPagoService` recibe el resolver.
-
-**Tests**:
-- `credentials-resolver.service.test.ts` — 5 niveles de prioridad, throws (`MP_NO_SELLER` / `MP_SELLER_DISCONNECTED` / `MP_SELLER_NO_REFRESH`), no-fallback sin `allowGlobalFallback`, y delegacion en `refreshTokenIfNeeded`.
-- `mercadopago.service.test.ts` — actualizado al nuevo constructor/firmas: resolver mockeado, verificacion de que el `deviceId` del contexto llega al resolver y que el token resuelto va en el `Authorization`, y que un resolver que falla deja `checkDeviceConnection` en `connected:false` (no lanza).
-- Resultado: modulo MP 63/63 en verde; `tsc --noEmit` limpio. (Los 3 archivos de integracion events/orders/tickets fallan por falta de Supabase local — bootstrap `EventsService`, ajeno a MP.)
-
-**Nota de diseno** — el pseudo-codigo del plan tenia `this.cajasRepo.findByUserId` en el nivel 3; se corrigio a `this.sellersRepo.findByUserId` (el `Caja` da el `sellerUserId`, el `Seller` se busca en el repo de sellers).
-
----
-
-## Fase 3 — Provisionamiento (Sucursal + Cajas)
+## Fase 3 — Provisionamiento (Sucursal + Cajas + UI)
 
 ### A) ¿Qué se hace?
 
-Crear endpoints para: 1) crear una Store (sucursal) en la cuenta MP del vendedor, 2) crear un POS (caja) con su QR estático, y 3) vincular una terminal Point a una caja. Todo orquestado en un endpoint `/onboard`.
+Backend: crear endpoints para gestionar la Store (sucursal), cajas/POS con QR estático, y vinculación de terminals Point/Posnet. Frontend: un panel "PDV" en `/admin?tab=pdv` que muestra el estado de la sucursal y permite administrar cajas y Posnets con un grid CRUD siguiendo el patrón de `CartaSection`.
 
 ### B) ¿Por qué?
 
-Es el Paso 2 del onboarding definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Provisionamiento". Sin Store y POS no existe la caja en MP, y sin la caja no hay `external_pos_id` → no se puede crear una order QR después. El `location` de la Store es obligatorio y afecta cálculos fiscales (ver [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Sucursal"). El `fixed_amount: true` en el POS es obligatorio para integraciones programadas donde el vendedor controla el monto. El QR que devuelve MP al crear el POS es **estático e inmutable** — se guarda una vez y se imprime en la barra.
+Es el Paso 2 del onboarding definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Provisionamiento". Sin Store y POS no existe la caja en MP, y sin la caja no hay `external_pos_id` → no se puede crear una order QR después. El `location` de la Store es obligatorio y afecta cálculos fiscales (ver [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Sucursal"). El QR que devuelve MP al crear el POS es **estático e inmutable** — se guarda una vez y se imprime en la barra.
 
-### C) Implementación
+**Modelo operativo**: Cocktrail tiene 1 sola barra (`BARRA-01`/"Barra VIP"). La sucursal se crea automáticamente al onboardear (Fase 1). La UI de PDV muestra solo esta barra y su Posnet vinculado. El botón "+ Nueva barra" existe pero muestra una advertencia de que la funcionalidad multi-barra no está disponible todavía (está mapeado al `BAR_CODE` actual, no es dinámico).
+
+### C) Backend — Endpoints de Provisionamiento
 
 **Docs**: [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md)
 
-**C.1) `POST /api/mercadopago/provisioning/store`**
+**C.1) Store (sucursal) — se crea automáticamente, no desde la UI**
+
+La sucursal es Bosko — el comercio dueño del dinero vinculado vía OAuth. Se crea **una sola vez** como parte del onboarding. La UI solo muestra su estado.
 
 ```
-SERVICE: createStore(opts)
-  seller = sellersRepo.findActive()
-  token = refreshTokenIfNeeded(seller)
-
-  external_id = "COCKTRAIL-SUC-{opts.barId}"
-
-  response = POST https://api.mercadopago.com/users/{seller.user_id}/stores
-    Authorization: Bearer {token}
-    BODY: {
-      name:        opts.name,
-      external_id: external_id,
-      location: {
-        street_number: opts.address.streetNumber,
-        street_name:   opts.address.streetName,
-        city_name:     opts.address.city,       // ⚠ debe coincidir con catálogo MP
-        state_name:    opts.address.state,       // ⚠ idem
-        latitude:      opts.address.lat,
-        longitude:     opts.address.lng,
-        reference:     opts.address.reference
-      }
-    }
-
-  RETURN { store_id: response.id }
+POST /api/mercadopago/provisioning/store
+  BODY: { barId, name, address }
+  → POST /users/{seller.user_id}/stores (MP)
+  → guarda store_id en mercadopago_cajas
 ```
 
-**Errores clave**:
-- `INVALID_LOCATION` (400) → `city_name` no coincide con el catálogo de ciudades del `state_name`. Usar exactamente los nombres del catálogo de Mercado Libre.
-- `Forbidden` (403) → `user_id` del path no coincide con el dueño del token.
-
-**C.2) `POST /api/mercadopago/provisioning/pos`**
+**C.2) POS (caja) — CRUD completo desde la UI**
 
 ```
-SERVICE: createPos(opts)
-  external_pos_id = "COCKTRAIL-BAR-{opts.barId}"
-  token = getAccessTokenForContext({ barId: opts.barId, allowGlobalFallback: true })
+GET    /api/mercadopago/provisioning/cajas
+  → lista todas las cajas del seller desde mercadopago_cajas
+  → devuelve: [{ id, barId, posIdMp, externalPosId, qrImage, device? }]
 
-  response = POST https://api.mercadopago.com/pos
-    Authorization: Bearer {token}
-    BODY: {
-      name:              opts.posName,
-      fixed_amount:      true,               // ⚠ OBLIGATORIO para integración programada
-      store_id:          opts.storeId,
-      external_store_id: "COCKTRAIL-SUC-{opts.barId}",
-      external_id:       external_pos_id
-    }
+POST   /api/mercadopago/provisioning/pos
+  BODY: { barId, name }
+  → credentialsResolver.resolve({ allowGlobalFallback: true })
+  → POST /pos (MP) con fixed_amount=true, store_id, external_store_id, external_id
+  → guarda en mercadopago_cajas (pos_id_mp, qr_image, qr_template, external_pos_id, seller_user_id)
 
-  // Guardar en DB — el QR es estático, no cambia
-  cajasRepo.create({
-    bar_id:          opts.barId,
-    store_id:        opts.storeId,
-    external_pos_id: external_pos_id,
-    pos_id_mp:       response.id,
-    qr_image:        response.qr.image,
-    qr_template:     response.qr.template_document,
-    seller_user_id:  seller.user_id
-  })
-
-  RETURN { pos_id: response.id, qr_image: response.qr.image, caja_id: cajaDb.id }
+DELETE /api/mercadopago/provisioning/pos/:id
+  → elimina de mercadopago_cajas (cascada: devices huérfanos se limpian)
+  → NOTA: no se cancela en MP (el POS queda; MP no tiene endpoint DELETE /pos)
 ```
 
-**C.3) `POST /api/mercadopago/provisioning/link-device`**
+**C.3) Device (Posnet) — vincular/desvincular**
 
 ```
-SERVICE: linkDeviceToCaja(opts)
-  caja = cajasRepo.findById(opts.cajaId)
+POST   /api/mercadopago/provisioning/device
+  BODY: { cajaId, deviceId, deviceUsername }
+  → verifica que el device existe en MP (GET /point/integration-api/devices/{id})
+  → inserta en mercadopago_cajas_devices (UNIQUE caja_id + UNIQUE device_id)
 
-  // Verificar que el device existe y está activo en MP
-  device = GET https://api.mercadopago.com/point/integration-api/devices/{opts.deviceId}
-    Authorization: Bearer {token}
+DELETE /api/mercadopago/provisioning/device/:id
+  → elimina de mercadopago_cajas_devices
 
-  cajasDevicesRepo.create({
-    caja_id:         opts.cajaId,
-    device_id:       opts.deviceId,
-    device_username: opts.deviceUsername,
-    operating_mode:  device.operating_mode
-  })
+GET    /api/mercadopago/provisioning/devices
+  → lista todos los devices vinculados con su caja
 ```
 
-**C.4) `POST /api/mercadopago/provisioning/onboard`** — orquestador
+### D) Frontend — Panel PDV
+
+**Arquitectura de componentes** (siguiendo el patrón `CartaSection`):
 
 ```
-SERVICE: onboard(opts)
-  seller = sellersRepo.findFirstActive()
-  IF NOT seller → 409 "Vinculá una cuenta MP primero (Fase 1)"
+┌─ AdminClient.tsx ──────────────────────────────────────────┐
+│  Sidebar: "PDV" tab (ícono Store)                          │
+│  activeTab === "pdv" → <PdvSection />                      │
+└────────────────────────────────────────────────────────────┘
 
-  store  = createStore({ barId, name, address })
-  pos    = createPos({ barId, storeId: store.store_id, posName })
-  device = opts.deviceId ? linkDeviceToCaja({ cajaId: pos.caja_id, ... }) : NULL
-
-  RETURN { store, pos, device }
+┌─ PdvSection.tsx ───────────────────────────────────────────┐
+│  Estado: cajas[], devices[], loading, error, saved, ...    │
+│                                                             │
+│  ┌─ Header ───────────────────────────────────────────┐   │
+│  │  ícono + "Puntos de Venta" + badge "1 PDV activo"  │   │
+│  │  botón "+ Nueva barra" (con tooltip/badge)          │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌─ Sucursal Card ────────────────────────────────────┐   │
+│  │  Estado: "Vinculada — Bosko Bar (store_id: 1234567)"│   │
+│  │  o "Pendiente — ejecutá el onboarding"              │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌─ PDV Table ────────────────────────────────────────┐   │
+│  │  Columnas: Barra | QR | Posnet | Acciones           │   │
+│  │  ───────────────────────────────────────────────    │   │
+│  │  Barra VIP         QR: 📋 copiar    PAX_A910__X     │   │
+│  │  BARRA-01               ─── Ver QR  Apodo: Caja 1   │   │
+│  │                                    [✕ desvincular]  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  {modalOpen && <PdvFormModal ... />}                        │
+│  {saved && <Toast ... />}                                   │
+│  {deleteConfirm && <SafeDeleteModal ... />}                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
----
+**D.1) `PdvSection.tsx`** — section shell
 
+```tsx
+// Estado
+const [cajas, setCajas] = useState<CajaRow[]>([]);
+const [loading, setLoading] = useState(true);
+const [error, setError] = useState<string | null>(null);
+const [modalOpen, setModalOpen] = useState(false);
+const [editCaja, setEditCaja] = useState<PdvForm | null>(null);
+const [saving, setSaving] = useState(false);
+const [saved, setSaved] = useState(false);
+const [deleteConfirm, setDeleteConfirm] = useState<CajaRow | null>(null);
+
+// Carga inicial
+useEffect(() => { loadData(); }, []);
+
+async function loadData() {
+  const [cajasData, devicesData] = await Promise.all([
+    pdvService.listCajas(),
+    pdvService.listDevices(),
+  ]);
+  // Merge: cada caja con su device vinculado (si tiene)
+  setCajas(cajasData.map(c => ({ ...c, device: devicesData.find(d => d.cajaId === c.id) ?? null })));
+}
+
+// CRUD callbacks
+async function handleCreate(form: PdvForm) {
+  const caja = await pdvService.createCaja(form);
+  setCajas(prev => [...prev, { ...caja, device: null }]);
+  setSaved(true);
+  setModalOpen(false);
+}
+
+async function handleDelete(caja: CajaRow) {
+  await pdvService.deleteCaja(caja.id);
+  setCajas(prev => prev.filter(c => c.id !== caja.id));
+  setDeleteConfirm(null);
+}
+
+async function handleLinkDevice(cajaId: string, deviceId: string, username: string) {
+  const device = await pdvService.linkDevice({ cajaId, deviceId, deviceUsername: username });
+  setCajas(prev => prev.map(c => c.id === cajaId ? { ...c, device } : c));
+}
+```
+
+**D.2) `PdvTable.tsx`** — grid de PDVs
+
+```tsx
+// Cada fila:
+// ┌──────────────┬─────────────────────┬──────────────────────────┐
+// │ Barra VIP    │ QR: [📋 copiar URL] │ Posnet: PAX_A910__X      │
+// │ BARRA-01     │     [─── Ver QR ──] │ Apodo: Caja 1            │
+// │              │                     │ [✕ desvincular]          │
+// ├──────────────┼─────────────────────┼──────────────────────────┤
+// │ (vacío = no  │ Sin QR              │ Sin Posnet               │
+// │  hay cajas)  │                     │      [+ Vincular]        │
+// └──────────────┴─────────────────────┴──────────────────────────┘
+```
+
+**D.3) `PdvFormModal.tsx`** — side-drawer para crear PDV
+
+```tsx
+// Campos:
+// - Nombre de la barra (texto, ej. "Barra VIP")
+// - Código de barra (pre-llenado con BAR_CODE, readonly)
+//
+// ⚠ Advertencia si el BAR_CODE != "BARRA-01" (única barra soportada):
+//   "Esta funcionalidad solo está disponible para Barra VIP (BARRA-01).
+//    Multi-barra no está implementado todavía."
+//
+// Footer: [Cancelar] [Crear PDV]
+```
+
+**D.4) Botón "+ Nueva barra"** — deshabilitado con advertencia
+
+El botón de crear nueva barra muestra un tooltip/badge indicando que multi-barra no está disponible. Si `BAR_CODE` ya tiene una caja creada, el botón aparece deshabilitado con el texto "Solo Barra VIP disponible". Si no tiene caja (primer uso), el botón está activo y crea la caja para `BARRA-01`.
+
+```tsx
+<button
+  onClick={() => setModalOpen(true)}
+  disabled={cajas.length >= 1}
+  className="..."
+  title={cajas.length >= 1 ? "Solo Barra VIP disponible — multi-barra no implementado" : "Crear PDV para Barra VIP"}
+>
+  <Plus size={14} />
+  {cajas.length >= 1 ? "Solo Barra VIP" : "+ Nueva barra"}
+</button>
+```
+
+**D.5) Integración en `AdminClient.tsx`**
+
+```tsx
+// Import
+import { Store } from "lucide-react";
+import PdvSection from "@/components/settings/PdvSection";
+
+// Sidebar button (en grupo "Configuración", antes de Pagos)
+<button onClick={() => handleTabChange("pdv")} ...>
+  <Store size={13} />
+  <span>PDV</span>
+</button>
+
+// Render
+{activeTab === "pdv" && (
+  <div key="pdv" className="animate-dashboard-in">
+    <PdvSection />
+  </div>
+)}
+```
+
+### E) Servicio frontend
+
+**Archivo**: `apps/web/src/services/pdv.service.ts`
+
+```ts
+import { apiFetch } from "./api-client";
+
+export type CajaRow = {
+  id: string;
+  barId: string;
+  storeId: string;
+  externalPosId: string;
+  posIdMp: string | null;
+  qrImage: string | null;
+  qrTemplate: string | null;
+  sellerUserId: string;
+  createdAt: string;
+  device?: DeviceRow | null;
+};
+
+export type DeviceRow = {
+  id: string;
+  cajaId: string;
+  deviceId: string;
+  deviceUsername: string | null;
+  operatingMode: string | null;
+};
+
+export const pdvService = {
+  listCajas()    { return apiFetch<CajaRow[]>("/api/mercadopago/provisioning/cajas"); },
+  createCaja(b)  { return apiFetch<CajaRow>("/api/mercadopago/provisioning/pos", { method: "POST", body: b }); },
+  deleteCaja(id) { return apiFetch<{ ok: true }>(`/api/mercadopago/provisioning/pos/${id}`, { method: "DELETE" }); },
+  listDevices()  { return apiFetch<DeviceRow[]>("/api/mercadopago/provisioning/devices"); },
+  linkDevice(b)  { return apiFetch<DeviceRow>("/api/mercadopago/provisioning/device", { method: "POST", body: b }); },
+  unlinkDevice(id) { return apiFetch<{ ok: true }>(`/api/mercadopago/provisioning/device/${id}`, { method: "DELETE" }); },
+};
+```
 ## Fase 4 — Cobro con QR Estático (Orders API `type: "qr"`)
 
 ### A) ¿Qué se hace?

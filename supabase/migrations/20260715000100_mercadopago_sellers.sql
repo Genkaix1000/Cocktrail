@@ -5,9 +5,9 @@
 CREATE TABLE IF NOT EXISTS mercadopago_sellers (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       TEXT NOT NULL UNIQUE,                      -- mp_user_id del vendedor (Bosko)
-  access_token  TEXT NOT NULL,                             -- token OAuth activo
-  refresh_token TEXT,                                      -- rotativo, un solo uso
-  expires_at    TIMESTAMPTZ NOT NULL,                      -- fecha de expiración del token
+  access_token  TEXT,                                   -- token OAuth activo (nullable: Cloud es fuente de verdad)
+  refresh_token TEXT,                                   -- rotativo, un solo uso
+  expires_at    TIMESTAMPTZ,                            -- fecha de expiración del token (nullable para stubs locales)
   status        TEXT DEFAULT 'active'
                   CHECK (status IN ('active', 'expired')),
   created_at    TIMESTAMPTZ DEFAULT NOW(),
@@ -18,11 +18,19 @@ CREATE TABLE IF NOT EXISTS mercadopago_sellers (
 ALTER TABLE mercadopago_sellers ENABLE ROW LEVEL SECURITY;
 
 -- Bloquea todo acceso desde el cliente (anon/authenticated).
-CREATE POLICY sellers_service_role_only
-  ON mercadopago_sellers
-  FOR ALL
-  TO authenticated, anon
-  USING (false);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_policies
+    WHERE policyname = 'sellers_service_role_only'
+      AND tablename = 'mercadopago_sellers'
+  ) THEN
+    CREATE POLICY sellers_service_role_only
+      ON mercadopago_sellers
+      FOR ALL
+      TO authenticated, anon
+      USING (false);
+  END IF;
+END $$;
 
 -- Least privilege: el backend usa service_role (bypassea RLS por diseño en Supabase).
 GRANT ALL PRIVILEGES ON TABLE mercadopago_sellers TO postgres, service_role;

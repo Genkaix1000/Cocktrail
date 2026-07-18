@@ -50,12 +50,31 @@ const SELECT_COLS =
   "id, bar_id, store_id, external_pos_id, pos_id_mp, qr_image, qr_template, seller_user_id, created_at";
 
 export interface MercadoPagoCajasRepository {
+  findById(id: string): Promise<Caja | null>;
   findByBarId(barId: string): Promise<Caja | null>;
   findBySellerUserId(sellerUserId: string): Promise<Caja[]>;
+  listAll(): Promise<Caja[]>;
   create(caja: NewCaja): Promise<Caja>;
+  update(id: string, patch: Partial<Pick<Caja, "qrImage" | "qrTemplate" | "posIdMp">>): Promise<Caja>;
+  deleteById(id: string): Promise<void>;
 }
 
 export class SupabaseMercadoPagoCajasRepository implements MercadoPagoCajasRepository {
+  async findById(id: string): Promise<Caja | null> {
+    const { data, error } = await supabase
+      .from("mercadopago_cajas")
+      .select(SELECT_COLS)
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[SupabaseMercadoPagoCajasRepository] Error finding caja by id:", error);
+      throw error;
+    }
+
+    return data ? mapCajaRow(data as CajaRow) : null;
+  }
+
   async findByBarId(barId: string): Promise<Caja | null> {
     const { data, error } = await supabase
       .from("mercadopago_cajas")
@@ -85,6 +104,20 @@ export class SupabaseMercadoPagoCajasRepository implements MercadoPagoCajasRepos
     return (data ?? []).map((row) => mapCajaRow(row as CajaRow));
   }
 
+  async listAll(): Promise<Caja[]> {
+    const { data, error } = await supabase
+      .from("mercadopago_cajas")
+      .select(SELECT_COLS)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("[SupabaseMercadoPagoCajasRepository] Error listing cajas:", error);
+      throw error;
+    }
+
+    return (data ?? []).map((row) => mapCajaRow(row as CajaRow));
+  }
+
   async create(caja: NewCaja): Promise<Caja> {
     const { data, error } = await supabase
       .from("mercadopago_cajas")
@@ -102,6 +135,36 @@ export class SupabaseMercadoPagoCajasRepository implements MercadoPagoCajasRepos
 
     if (error) {
       console.error("[SupabaseMercadoPagoCajasRepository] Error creating caja:", error);
+      throw error;
+    }
+
+    return mapCajaRow(data as CajaRow);
+  }
+
+  async deleteById(id: string): Promise<void> {
+    const { error } = await supabase.from("mercadopago_cajas").delete().eq("id", id);
+
+    if (error) {
+      console.error("[SupabaseMercadoPagoCajasRepository] Error deleting caja:", error);
+      throw error;
+    }
+  }
+
+  async update(id: string, patch: Partial<Pick<Caja, "qrImage" | "qrTemplate" | "posIdMp">>): Promise<Caja> {
+    const payload: Record<string, unknown> = {};
+    if (patch.qrImage !== undefined) payload.qr_image = patch.qrImage;
+    if (patch.qrTemplate !== undefined) payload.qr_template = patch.qrTemplate;
+    if (patch.posIdMp !== undefined) payload.pos_id_mp = patch.posIdMp;
+
+    const { data, error } = await supabase
+      .from("mercadopago_cajas")
+      .update(payload)
+      .eq("id", id)
+      .select(SELECT_COLS)
+      .single();
+
+    if (error) {
+      console.error("[SupabaseMercadoPagoCajasRepository] Error updating caja:", error);
       throw error;
     }
 

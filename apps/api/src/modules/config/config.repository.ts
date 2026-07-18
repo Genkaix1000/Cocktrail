@@ -54,7 +54,7 @@ const DEFAULT_CONFIG: AppConfig = {
   mercadoPago: {
     publicKey: "",
     accessToken: "",
-    sandbox: true,
+    sandbox: false,
   },
   clubId: "cocktrail_club_01",
   clubName: "Bosko Club",
@@ -152,9 +152,12 @@ export class SupabaseConfigRepository implements ConfigRepository {
     if (partial.logoUrl !== undefined) updates.logo_url = partial.logoUrl || null;
     if (partial.customTheme !== undefined) updates.custom_theme = partial.customTheme;
     if (partial.mercadoPago !== undefined) {
+      const mp = partial.mercadoPago;
       updates.mercado_pago = {
         ...current.mercadoPago,
-        ...partial.mercadoPago,
+        ...(mp.publicKey !== undefined ? { publicKey: mp.publicKey } : {}),
+        ...(mp.accessToken !== undefined ? { accessToken: mp.accessToken } : {}),
+        ...(mp.sandbox !== undefined ? { sandbox: mp.sandbox } : {}),
       };
     }
     if (partial.clubId !== undefined) updates.club_id = partial.clubId;

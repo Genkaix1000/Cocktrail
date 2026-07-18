@@ -25,9 +25,9 @@ export type ConfigUpdate = {
   logoUrl?: string;
   customTheme?: CustomTheme | null;
   mercadoPago?: {
-    publicKey: string;
-    accessToken: string;
-    sandbox: boolean;
+    publicKey?: string;
+    accessToken?: string;
+    sandbox?: boolean;
   };
   clubId?: string;
   clubName?: string;

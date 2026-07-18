@@ -11,8 +11,8 @@
 |------------|---------------------|
 | `Store` / Sucursal | El local físico ("Bosko Bar"). Se crea 1 por comercio. |
 | `POS` / Caja | Un punto de venta dentro del local. Se crea 1 por barra. |
-| `external_id` (store) | ID que Cocktrail asigna a la sucursal (ej. `"COCKTRAIL-SUC-001"`) |
-| `external_id` (pos) | ID que Cocktrail asigna a la caja (ej. `"COCKTRAIL-BAR-01"`) |
+| `external_id` (store) | ID que Cocktrail asigna a la sucursal (ej. `"COCKTRAILSUC001"`) — **solo alfanumérico** |
+| `external_id` (pos) | ID que Cocktrail asigna a la caja (ej. `"COCKTRAILBAR01"`) — **solo alfanumérico** (MP rechaza guiones) |
 | `store_id` | ID numérico que **MP asigna** a la sucursal — se obtiene del response y se guarda en DB |
 
 ---
@@ -28,15 +28,15 @@
 ```json
 {
   "name": "Bosko Bar",
-  "external_id": "COCKTRAIL-SUC-001",
+  "external_id": "COCKTRAILSUC001",
   "location": {
     "street_number": "739",
     "street_name": "Ramon Castillo",
-    "city_name": "Buenos Aires",
+    "city_name": "Bolívar",
     "state_name": "Buenos Aires",
-    "latitude": -34.603722,
-    "longitude": -58.381592,
-    "reference": "Esquina con Av. Corrientes"
+    "latitude": -36.23,
+    "longitude": -61.11,
+    "reference": "Frente a la rotonda"
   }
 }
 ```
@@ -49,7 +49,7 @@
 {
   "id": 1234567,
   "name": "Bosko Bar",
-  "external_id": "COCKTRAIL-SUC-001",
+  "external_id": "COCKTRAILSUC001",
   "location": { "address_line": "Ramon Castillo 739, Buenos Aires." }
 }
 ```
@@ -78,8 +78,8 @@
   "name": "Barra Principal",
   "fixed_amount": true,
   "store_id": 1234567,
-  "external_store_id": "COCKTRAIL-SUC-001",
-  "external_id": "COCKTRAIL-BAR-01"
+  "external_store_id": "COCKTRAILSUC001",
+  "external_id": "COCKTRAILBAR01"
 }
 ```
 
@@ -90,7 +90,7 @@
 ```json
 {
   "id": 2711382,
-  "external_id": "COCKTRAIL-BAR-01",
+  "external_id": "COCKTRAILBAR01",
   "store_id": 1234567,
   "status": "active",
   "qr": {

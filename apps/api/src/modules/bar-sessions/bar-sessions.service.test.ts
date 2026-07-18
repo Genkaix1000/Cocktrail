@@ -68,9 +68,11 @@ describe("BarSessionsService", () => {
     service = new BarSessionsService(repo, barsRepo, () => NOW);
   });
 
-  it("genera identidades distintas para cada cajero", () => {
-    expect(barSessionUserId("caja", "caja")).toBe("caja:caja");
-    expect(barSessionUserId("marina", "caja")).toBe("caja:marina");
+  it("genera identidades distintas por dispositivo", () => {
+    expect(barSessionUserId("caja", "caja", "dev1")).toBe("caja:caja:dev1");
+    expect(barSessionUserId("marina", "caja", "dev2")).toBe("caja:marina:dev2");
+    // Mismo usuario, distinto dispositivo → IDs distintos
+    expect(barSessionUserId("caja", "caja", "dev1")).not.toBe(barSessionUserId("caja", "caja", "dev2"));
   });
 
   it("lista cajas disponibles, ocupadas y la sesión propia", async () => {

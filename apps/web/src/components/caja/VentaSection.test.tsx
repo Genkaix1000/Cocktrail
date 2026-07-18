@@ -15,6 +15,9 @@ vi.mock("@/services/mercadopago.service", () => ({
     createPosIntent: vi.fn(),
     getPosIntentStatus: vi.fn(),
     cancelPosIntent: vi.fn(),
+    createQrOrder: vi.fn(),
+    getQrOrderStatus: vi.fn(),
+    cancelQrOrder: vi.fn(),
   },
 }));
 
@@ -179,7 +182,7 @@ describe("VentaSection", () => {
     expect(screen.getByText(`#${order.displayNumber}`)).toBeInTheDocument();
   });
 
-  it("el selector de método de pago solo muestra Efectivo y Tarjeta (sin Código QR)", async () => {
+  it("el selector de método de pago muestra Efectivo, Tarjeta y Código QR", async () => {
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
@@ -188,7 +191,37 @@ describe("VentaSection", () => {
 
     expect(await screen.findByRole("button", { name: /efectivo/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /tarjeta/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /código qr/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /código qr/i })).toBeInTheDocument();
+  });
+
+  it("inicia un pago QR llamando a createQrOrder", async () => {
+    mockedMercadopagoService.createQrOrder.mockResolvedValue({
+      orderId: "ORD01QR",
+      qrImage: "https://mp.example/qr.png",
+      status: "created",
+      expiresAt: new Date(Date.now() + 900000).toISOString(),
+    });
+    mockedMercadopagoService.getQrOrderStatus.mockResolvedValue({
+      orderIdMp: "ORD01QR",
+      status: "created",
+      paymentId: null,
+      amount: 2500,
+    });
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+
+    const qrButton = await screen.findByRole("button", { name: /código qr/i });
+    await user.click(qrButton);
+
+    await waitFor(() =>
+      expect(mockedMercadopagoService.createQrOrder).toHaveBeenCalledWith(2500, "Fernet con Coca x1"),
+    );
+
+    expect(await screen.findByText(/Esperando pago QR/i)).toBeInTheDocument();
   });
 
   it("inicia un pago con Posnet llamando a createPosIntent", async () => {

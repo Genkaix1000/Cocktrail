@@ -4,8 +4,8 @@ import type { BarSessionsRepository, BarSession } from "./bar-sessions.repositor
 
 export const BAR_SESSION_TTL_MS = 2 * 60 * 1000;
 
-export function barSessionUserId(username: string, role: "caja" | "admin"): string {
-  return `${role}:${username}`;
+export function barSessionUserId(username: string, role: "caja" | "admin", deviceId: string): string {
+  return `${role}:${username}:${deviceId}`;
 }
 
 export type JoinResult = {

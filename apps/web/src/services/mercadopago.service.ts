@@ -2,6 +2,8 @@ import { apiFetch } from "./api-client";
 
 export type MpNormalizedStatus = "OPEN" | "ON_TERMINAL" | "FINISHED" | "CANCELED" | "PENDING";
 
+export type MpQrOrderStatus = "created" | "processed" | "canceled" | "refunded" | "expired";
+
 export type PosnetDeviceStatus = {
   connected: boolean;
   message: string;
@@ -15,6 +17,21 @@ export type MpSellerStatus = {
   email: string | null;
   linkedAt: string | null;
   displayName: string | null;
+};
+
+export type CreateQrOrderResponse = {
+  orderId: string;
+  qrImage: string | null;
+  status: "created";
+  expiresAt: string;
+};
+
+export type QrOrderStatusResponse = {
+  orderIdMp: string;
+  status: MpQrOrderStatus;
+  paymentId: string | null;
+  amount: number;
+  qrImage?: string | null;
 };
 
 export const mercadopagoService = {
@@ -40,6 +57,14 @@ export const mercadopagoService = {
     });
   },
 
+  /** Fase 5 — test $15 contra un Posnet específico. */
+  testDeviceChargeFor(deviceId: string) {
+    return apiFetch<{ reachedDevice: boolean; message: string }>("/api/mercadopago/device/test-charge", {
+      method: "POST",
+      body: { deviceId },
+    });
+  },
+
   createPosIntent(amount: number, description?: string) {
     return apiFetch<{ id: string }>("/api/mercadopago/pos/intent", {
       method: "POST",
@@ -55,5 +80,24 @@ export const mercadopagoService = {
     return apiFetch<{ status: string }>(`/api/mercadopago/pos/intent/${id}`, {
       method: "DELETE",
     });
+  },
+
+  /** Fase 4 — crea order QR estática (carga el QR fijo de la barra con el monto). */
+  createQrOrder(amount: number, description?: string, barId?: string) {
+    return apiFetch<CreateQrOrderResponse>("/api/mercadopago/orders/qr", {
+      method: "POST",
+      body: { amount, description, ...(barId ? { barId } : {}) },
+    });
+  },
+
+  getQrOrderStatus(orderId: string) {
+    return apiFetch<QrOrderStatusResponse>(`/api/mercadopago/orders/${encodeURIComponent(orderId)}/status`);
+  },
+
+  cancelQrOrder(orderId: string) {
+    return apiFetch<{ status: "canceled" }>(
+      `/api/mercadopago/orders/${encodeURIComponent(orderId)}/cancel`,
+      { method: "POST" },
+    );
   },
 };

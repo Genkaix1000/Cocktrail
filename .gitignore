@@ -16,6 +16,7 @@ build/
 
 # tooling local
 .claude/
+.cursor/
 .playwright-mcp/
 tsconfig.tsbuildinfo
 *.log
@@ -41,6 +42,10 @@ coverage/
 # generado por supabase/generate-keys.mjs desde kong.yml.template (ver
 # docs/specs/hardening-kong-demo-keys.md) — el template SÍ se versiona, esto no.
 supabase/docker/kong.yml
+
+# estado local del CLI de Supabase (no versionar)
+supabase/.temp/
+**/.branches/
 
 # agentes local
 .agents/LLM.md

@@ -162,13 +162,24 @@ export class MercadoPagoService {
    * dueña. Si no viene, el resolver cae al fallback global/env (comportamiento legacy).
    */
   async createPaymentIntent(amount: number, description?: string, deviceId?: string): Promise<MpPaymentIntentResponse> {
-    this.assertConfigured();
+    const resolvedDeviceId = deviceId || env.MP_POS_DEVICE_ID;
+    if (!resolvedDeviceId) {
+      throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
+    }
     const token = await this.resolveToken(deviceId);
-    return this.createPaymentIntentWithToken(token, amount, description);
+    return this.createPaymentIntentWithToken(token, amount, description, resolvedDeviceId);
   }
 
-  private async createPaymentIntentWithToken(token: string, amount: number, description?: string): Promise<MpPaymentIntentResponse> {
-    const attempt = () => this.createPaymentIntentAttempt(token, amount, description);
+  private async createPaymentIntentWithToken(
+    token: string,
+    amount: number,
+    description?: string,
+    deviceId: string | undefined = env.MP_POS_DEVICE_ID,
+  ): Promise<MpPaymentIntentResponse> {
+    if (!deviceId) {
+      throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
+    }
+    const attempt = () => this.createPaymentIntentAttempt(token, amount, description, deviceId);
 
     try {
       return await attempt();
@@ -177,28 +188,20 @@ export class MercadoPagoService {
 
       const queuedIntentId = extractQueuedIntentId(err.mpData);
       if (!queuedIntentId) {
-        // No hay forma de recuperar el id de la intención bloqueante: ni el error 2205 lo
-        // trae, ni existe (en la doc pública de la Point Integration API) un endpoint para
-        // "consultar la intención activa de este device" sin conocerlo de antemano (confirmado
-        // contra la doc oficial de Mercado Pago). Se propaga el error tageado como DEVICE_BUSY
-        // para que el frontend pueda reintentar/mostrar un estado claro sin parsear texto.
         throw new MpApiError(err.message, err.mpCode, err.mpData, DEVICE_BUSY_CODE);
       }
 
       try {
-        await this.cancelPaymentIntentWithToken(token, queuedIntentId);
+        await this.cancelPaymentIntentWithToken(token, queuedIntentId, deviceId);
       } catch (cancelErr) {
         console.error(`No se pudo cancelar la intención en cola ${queuedIntentId} antes de reintentar:`, cancelErr);
-        // se prioriza el error original (2205), más claro para la cajera, pero tageado igual
         throw new MpApiError(err.message, err.mpCode, err.mpData, DEVICE_BUSY_CODE);
       }
 
       try {
-        return await attempt(); // reintento único, no hay loop
+        return await attempt();
       } catch (retryErr) {
         if (isQueuedIntentError(retryErr)) {
-          // El auto-cancel+retry no alcanzó (ej. el device volvió a encolar algo entre
-          // medio). Se propaga igual tageado para que el frontend sepa que sigue "busy".
           throw new MpApiError(retryErr.message, retryErr.mpCode, retryErr.mpData, DEVICE_BUSY_CODE);
         }
         throw retryErr;
@@ -206,12 +209,15 @@ export class MercadoPagoService {
     }
   }
 
-  private createPaymentIntentAttempt(token: string, amount: number, description?: string): Promise<MpPaymentIntentResponse> {
-    const deviceId = env.MP_POS_DEVICE_ID;
-
+  private createPaymentIntentAttempt(
+    token: string,
+    amount: number,
+    description: string | undefined,
+    deviceId: string,
+  ): Promise<MpPaymentIntentResponse> {
     return this.pointApiRequest<MpPaymentIntentResponse>(
       token,
-      `/point/integration-api/devices/${deviceId}/payment-intents`,
+      `/point/integration-api/devices/${encodeURIComponent(deviceId)}/payment-intents`,
       {
         method: "POST",
         headers: { "X-Idempotency-Key": randomUUID() },
@@ -268,17 +274,22 @@ export class MercadoPagoService {
   }
 
   async cancelPaymentIntent(paymentIntentId: string, deviceId?: string): Promise<MpPaymentIntentResponse> {
-    this.assertConfigured();
+    const resolvedDeviceId = deviceId || env.MP_POS_DEVICE_ID;
+    if (!resolvedDeviceId) {
+      throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
+    }
     const token = await this.resolveToken(deviceId);
-    return this.cancelPaymentIntentWithToken(token, paymentIntentId);
+    return this.cancelPaymentIntentWithToken(token, paymentIntentId, resolvedDeviceId);
   }
 
-  private cancelPaymentIntentWithToken(token: string, paymentIntentId: string): Promise<MpPaymentIntentResponse> {
-    const deviceId = env.MP_POS_DEVICE_ID;
-
+  private cancelPaymentIntentWithToken(
+    token: string,
+    paymentIntentId: string,
+    deviceId: string,
+  ): Promise<MpPaymentIntentResponse> {
     return this.pointApiRequest<MpPaymentIntentResponse>(
       token,
-      `/point/integration-api/devices/${deviceId}/payment-intents/${paymentIntentId}`,
+      `/point/integration-api/devices/${encodeURIComponent(deviceId)}/payment-intents/${encodeURIComponent(paymentIntentId)}`,
       { method: "DELETE" },
       "Error al cancelar la intención de pago en el Posnet",
     );
@@ -317,9 +328,18 @@ export class MercadoPagoService {
    * la API real) — en ese caso queda a cargo de la cajera cancelarla a mano
    * en el propio dispositivo. Solo se auto-cancela por API si nunca salió
    * de OPEN (no llegó al device), para no dejarla colgada.
+   *
+   * Fase 5: `deviceId` apunta al Posnet bajo test (Card 3). Si no viene,
+   * cae al legacy `MP_POS_DEVICE_ID`.
    */
   async testDeviceReachability(deviceId?: string): Promise<{ reachedDevice: boolean; message: string }> {
-    this.assertConfigured();
+    const resolvedDeviceId = deviceId || env.MP_POS_DEVICE_ID;
+    if (!resolvedDeviceId) {
+      return {
+        reachedDevice: false,
+        message: "Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).",
+      };
+    }
 
     let token: string;
     try {
@@ -330,7 +350,12 @@ export class MercadoPagoService {
 
     let intent: MpPaymentIntentResponse;
     try {
-      intent = await this.createPaymentIntentWithToken(token, 15, "Prueba de conexion Cocktrail");
+      intent = await this.createPaymentIntentWithToken(
+        token,
+        15,
+        "Prueba de conexion Cocktrail",
+        resolvedDeviceId,
+      );
     } catch (err) {
       return { reachedDevice: false, message: err instanceof Error ? err.message : "Error al crear la intención de prueba." };
     }
@@ -356,7 +381,6 @@ export class MercadoPagoService {
     }
 
     if (reachedDevice) {
-      // MP ya no deja cancelar por API una vez que pasó a ON_TERMINAL (error 103).
       return {
         reachedDevice: true,
         message: "El Posnet recibió la prueba correctamente. Cancelá la operación de $15 desde el propio dispositivo (no se puede cancelar por acá). Listo para cobrar.",
@@ -364,7 +388,7 @@ export class MercadoPagoService {
     }
 
     try {
-      await this.cancelPaymentIntentWithToken(token, intentId);
+      await this.cancelPaymentIntentWithToken(token, intentId, resolvedDeviceId);
     } catch (cancelErr) {
       console.error(`No se pudo cancelar la intención de prueba ${intentId}:`, cancelErr);
     }

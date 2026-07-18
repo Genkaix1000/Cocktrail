@@ -67,8 +67,19 @@ services:
       - ./supabase/migrations/20260715000400_oauth_states.sql:/docker-entrypoint-initdb.d/init-scripts/19-oauth_states.sql:Z
       # Fase 1 — columnas extra del flujo OAuth cloud (bars.seller_user_id, sellers nickname/email)
       - ./supabase/migrations/20260715000500_mp_oauth_cloud_columns.sql:/docker-entrypoint-initdb.d/init-scripts/20-mp_oauth_cloud_columns.sql:Z
+      # Fase 4 — mp_orders (QR / Point) + devices.caja_id nullable
+      - ./supabase/migrations/20260717221900_mp_orders.sql:/docker-entrypoint-initdb.d/init-scripts/21-mp_orders.sql:Z
+      - ./supabase/migrations/20260717224503_mp_devices_nullable_caja.sql:/docker-entrypoint-initdb.d/init-scripts/22-mp_devices_nullable_caja.sql:Z
+      # Sellers: nombre en UI + tokens nullable (OAuth pendiente)
+      - ./supabase/migrations/20260718000000_seller_name_columns.sql:/docker-entrypoint-initdb.d/init-scripts/23-seller_name_columns.sql:Z
+      - ./supabase/migrations/20260718010000_sellers_nullable_tokens.sql:/docker-entrypoint-initdb.d/init-scripts/24-sellers_nullable_tokens.sql:Z
+      # Fase 3 — bars.code (BARRA-01 ↔ UUID) + seed Barra VIP
+      - ./supabase/migrations/20260719000000_bars_code.sql:/docker-entrypoint-initdb.d/init-scripts/25-bars_code.sql:Z
+      # Sesiones de caja por barra
+      - ./supabase/migrations/20260720000000_bar_sessions.sql:/docker-entrypoint-initdb.d/init-scripts/26-bar_sessions.sql:Z
+      - ./supabase/migrations/20260720000100_bar_sessions_last_seen.sql:/docker-entrypoint-initdb.d/init-scripts/27-bar_sessions_last_seen.sql:Z
       # pgTAP: solo dev/local, para correr supabase/tests/*.sql
-      - ./supabase/migrations/20260715000600_pgtap_extension.sql:/docker-entrypoint-initdb.d/init-scripts/21-pgtap_extension.sql:Z
+      - ./supabase/migrations/20260715000600_pgtap_extension.sql:/docker-entrypoint-initdb.d/init-scripts/28-pgtap_extension.sql:Z
 
   rest:
     image: postgrest/postgrest:v14.12

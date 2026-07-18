@@ -16,6 +16,10 @@ import { createUsersController } from "./modules/users/users.controller.js";
 import { createConfigController } from "./modules/config/config.controller.js";
 import { createMercadoPagoController } from "./modules/mercadopago/mercadopago.controller.js";
 import { createMercadoPagoOAuthController } from "./modules/mercadopago/mercadopago-oauth.controller.js";
+import { createMercadoPagoProvisioningController } from "./modules/mercadopago/mercadopago-provisioning.controller.js";
+import { createMercadoPagoOrdersController } from "./modules/mercadopago/mercadopago-orders.controller.js";
+import { createMercadoPagoWebhooksController } from "./modules/mercadopago/mercadopago-webhooks.controller.js";
+import { MercadoPagoWebhooksService } from "./modules/mercadopago/mercadopago-webhooks.service.js";
 import { createBarSessionsController } from "./modules/bar-sessions/bar-sessions.controller.js";
 import { createPrinterController } from "./modules/printer/printer.controller.js";
 
@@ -39,6 +43,9 @@ import { SupabaseMercadoPagoCajasRepository } from "./modules/mercadopago/mercad
 import { SupabaseMercadoPagoCajasDevicesRepository } from "./modules/mercadopago/mercadopago-cajas-devices.repository.js";
 import { SupabaseBarsRepository } from "./modules/mercadopago/bars.repository.js";
 import { CredentialsResolverService } from "./modules/mercadopago/credentials-resolver.service.js";
+import { MercadoPagoProvisioningService } from "./modules/mercadopago/mercadopago-provisioning.service.js";
+import { MercadoPagoOrdersService } from "./modules/mercadopago/mercadopago-orders.service.js";
+import { SupabaseMpOrdersRepository } from "./modules/mercadopago/mp-orders.repository.js";
 import {
   BarSessionsService,
   barSessionUserId,
@@ -110,19 +117,35 @@ const mpOAuthService = new MercadoPagoOAuthService(oauthStatesRepo, mpSellersRep
   refreshMarginDays: env.MP_REFRESH_MARGIN_DAYS,
 });
 
-// Fase 2 — resuelve el access_token según contexto (device/barra/seller/env fallback).
-const credentialsResolver = new CredentialsResolverService(
-  mpSellersRepo,
-  mpCajasRepo,
-  mpCajasDevicesRepo,
-  mpOAuthService,
-);
+// Fase 2 — resuelve el access_token del único seller vinculado (single-seller).
+const credentialsResolver = new CredentialsResolverService(mpSellersRepo, mpOAuthService);
 
 const mpService = new MercadoPagoService(credentialsResolver);
 
 // Sesiones de caja por barra
 const barSessionsRepo = new SupabaseBarSessionsRepository();
 const barSessionsService = new BarSessionsService(barSessionsRepo, barsRepo);
+
+// Fase 3 — Store / POS / Point devices.
+const mpProvisioningService = new MercadoPagoProvisioningService(
+  credentialsResolver,
+  mpSellersRepo,
+  barsRepo,
+  mpCajasRepo,
+  mpCajasDevicesRepo,
+);
+
+// Fase 4 — Orders QR estático.
+const mpOrdersRepo = new SupabaseMpOrdersRepository();
+const mpOrdersService = new MercadoPagoOrdersService(
+  credentialsResolver,
+  barsRepo,
+  mpCajasRepo,
+  mpOrdersRepo,
+);
+
+// Fase 6 — Webhooks Orders API (conciliación async).
+const mpWebhooksService = new MercadoPagoWebhooksService(mpOrdersService, emit);
 
 const systemService = new SystemService(eventsRepo, mpService, printerService, supabase, supabaseCloud);
 
@@ -179,7 +202,7 @@ app.use(
   "/api/auth",
   createAuthController(usersRepo, {
     onLogout: async (user) => {
-      await barSessionsService.leave(barSessionUserId(user.username, user.role));
+      await barSessionsService.leave(barSessionUserId(user.username, user.role, "default"));
     },
   }),
 );
@@ -190,6 +213,9 @@ app.use("/api/tickets", createTicketsController(ticketsService));
 app.use("/api/users", createUsersController(usersService));
 app.use("/api/config", createConfigController(configRepo, eventsService));
 app.use("/api/mercadopago", createMercadoPagoOAuthController(mpOAuthService));
+app.use("/api/mercadopago", createMercadoPagoProvisioningController(mpProvisioningService));
+app.use("/api/mercadopago", createMercadoPagoOrdersController(mpOrdersService));
+app.use("/api/mercadopago", createMercadoPagoWebhooksController(mpWebhooksService));
 app.use("/api/mercadopago", createMercadoPagoController(mpService));
 app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));

@@ -34,10 +34,14 @@ export function createMercadoPagoController(service: MercadoPagoService): Router
     }
   });
 
-  // POST /api/mercadopago/device/test-charge - Manda $1 real al Posnet y confirma si lo recibió (se auto-cancela)
+  // POST /api/mercadopago/device/test-charge - Manda $15 real al Posnet y confirma si lo recibió
   router.post("/device/test-charge", authMiddleware, requireRole("admin", "caja"), mpContextMiddleware, async (req, res, next) => {
     try {
-      res.json(await service.testDeviceReachability(req.mpContext?.deviceId));
+      const deviceId =
+        typeof req.body?.deviceId === "string" && req.body.deviceId.trim()
+          ? req.body.deviceId.trim()
+          : req.mpContext?.deviceId;
+      res.json(await service.testDeviceReachability(deviceId));
     } catch (err) {
       next(err);
     }

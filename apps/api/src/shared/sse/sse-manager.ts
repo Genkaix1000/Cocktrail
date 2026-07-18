@@ -29,6 +29,20 @@ export type DomainEvent =
       barId: string;
       ejectedUser: string;
       ejectedBy: string;
+    }
+  | {
+      type: "mp.order.updated";
+      mpOrder: {
+        orderIdMp: string;
+        externalRef: string;
+        status: string;
+        paymentId: string | null;
+        type: "qr" | "point";
+        amount: number;
+        barId: string | null;
+      };
+      action?: string;
+      isPartialRefund?: boolean;
     };
 
 /** Firma inyectable de `emit`, para pasar por constructor en vez de importar el singleton. */

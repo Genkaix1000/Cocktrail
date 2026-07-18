@@ -37,6 +37,9 @@ const EnvSchema = z.object({
   MP_REDIRECT_URI: z.string().url().optional(),
   // Días antes del vencimiento en que se refresca proactivamente el token (1–7, default 5).
   MP_REFRESH_MARGIN_DAYS: z.coerce.number().min(1).max(7).default(5),
+
+  // Webhooks Orders API (Fase 6) — clave secreta del panel de MP.
+  MP_WEBHOOK_SECRET: z.string().optional(),
 });
 
 function loadEnv() {

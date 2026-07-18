@@ -115,9 +115,9 @@ export const UpdateConfigSchema = z.object({
   logoUrl: z.string().max(500).optional(),
   customTheme: z.null().optional(),
   mercadoPago: z.object({
-    publicKey: z.string().max(200).default(""),
-    accessToken: z.string().max(200).default(""),
-    sandbox: z.boolean().default(true),
+    publicKey: z.string().max(200).optional(),
+    accessToken: z.string().max(200).optional(),
+    sandbox: z.boolean().optional(),
   }).optional(),
   clubId: z.string().max(100).optional(),
   clubName: z.string().max(100).optional(),

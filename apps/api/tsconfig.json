@@ -9,10 +9,10 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "declaration": false,
+    "rootDir": "./src",
     "outDir": "./dist",
     "paths": {
-      "@/*": ["./src/*"],
-      "@cocktrail/shared": ["../../packages/shared/src/domain.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts"],

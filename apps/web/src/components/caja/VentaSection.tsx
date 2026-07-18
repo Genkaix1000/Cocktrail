@@ -9,6 +9,7 @@ import {
   X,
   Banknote,
   CreditCard,
+  QrCode,
   ArrowLeft,
   ArrowRight,
   Receipt,
@@ -408,6 +409,8 @@ export default function VentaSection({ drinks, printer }: Props) {
     posnetErrorMessage,
     setPosnetErrorMessage,
     posnetRetryAttempt,
+    qrImage,
+    setQrImage,
     latestOrder,
     saleError,
     displayCashValue,
@@ -419,6 +422,7 @@ export default function VentaSection({ drinks, printer }: Props) {
     startPolling,
     stopPolling,
     startPosnetPayment,
+    startQrPayment,
     stopPosnetRetry,
   } = useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCart });
 
@@ -458,6 +462,7 @@ export default function VentaSection({ drinks, printer }: Props) {
     setPaymentIntentState(null);
     setPosnetErrorMessage(null);
     setCurrentIntentId(null);
+    setQrImage(null);
     stopPolling();
   }
 
@@ -483,16 +488,22 @@ export default function VentaSection({ drinks, printer }: Props) {
     }
 
     const isPosInProgress = paymentMethod === "debito" && posnetStatus !== "idle";
-    if (isPosInProgress) {
-      if (paymentIntentState === "ON_TERMINAL") return; // no se puede salir con el cobro activo en el lector
+    const isQrInProgress = paymentMethod === "qr" && posnetStatus !== "idle";
+    if (isPosInProgress || isQrInProgress) {
+      if (isPosInProgress && paymentIntentState === "ON_TERMINAL") return; // no se puede salir con el cobro activo en el lector
       stopPolling();
       if (currentIntentId) {
-        mercadopagoService.cancelPosIntent(currentIntentId).catch((err) => console.warn("Error canceling intent (handled):", err));
+        if (isQrInProgress) {
+          mercadopagoService.cancelQrOrder(currentIntentId).catch((err) => console.warn("Error canceling QR order (handled):", err));
+        } else {
+          mercadopagoService.cancelPosIntent(currentIntentId).catch((err) => console.warn("Error canceling intent (handled):", err));
+        }
       }
       setPaymentMethod(null);
       setPosnetStatus("idle");
       setPaymentIntentState(null);
       setCurrentIntentId(null);
+      setQrImage(null);
       return;
     }
 
@@ -519,7 +530,11 @@ export default function VentaSection({ drinks, printer }: Props) {
     { isCheckoutOpen, paymentMethod, latestOrder, canConfirmCash, totalItems, highlightedGridIndex: gridHighlightedIndex },
     {
       onOpenCheckout: openCheckout,
-      onSelectMethod: (method) => (method === "efectivo" ? setPaymentMethod("efectivo") : startPosnetPayment(method)),
+      onSelectMethod: (method) => {
+        if (method === "efectivo") setPaymentMethod("efectivo");
+        else if (method === "qr") startQrPayment();
+        else startPosnetPayment(method);
+      },
       onExactAmount: () => handleChangeCash(String(totalPrice)),
       onConfirmCash: confirmOrder,
       onNewSale: newSale,
@@ -785,7 +800,8 @@ export default function VentaSection({ drinks, printer }: Props) {
         <div
           onClick={() => {
             const isPosInProgress = paymentMethod === "debito" && posnetStatus !== "idle";
-            if (isPosInProgress) return;
+            const isQrInProgress = paymentMethod === "qr" && posnetStatus !== "idle";
+            if (isPosInProgress || isQrInProgress) return;
             closeCheckout();
           }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
@@ -852,7 +868,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                   <div>
                     <h2 className="text-xl font-black text-ink-50 mb-1.5">Cobro cancelado</h2>
                     <p className="text-ink-400 text-sm px-4 leading-relaxed">
-                      Se canceló el cobro desde el Posnet.
+                      Se canceló el cobro.
                     </p>
                   </div>
 
@@ -863,6 +879,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                       setPaymentIntentState(null);
                       setPosnetErrorMessage(null);
                       setCurrentIntentId(null);
+                      setQrImage(null);
                     }}
                     className="w-full h-12 bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider cursor-pointer hover:bg-ink-800 flex items-center justify-center gap-2 mt-2"
                   >
@@ -970,13 +987,15 @@ export default function VentaSection({ drinks, printer }: Props) {
                   </div>
                 </div>
               ) : (
-                // Vista de Error Posnet General
+                // Vista de Error Posnet / QR General
                 <div className="flex flex-col items-center justify-center py-8 gap-5 text-center animate-in fade-in zoom-in-95">
                   <div className="w-16 h-16 rounded-full bg-danger-soft border border-danger-line flex items-center justify-center text-danger shrink-0">
                     <X size={32} strokeWidth={3} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-black text-ink-50 mb-1.5">Error en el Posnet</h2>
+                    <h2 className="text-xl font-black text-ink-50 mb-1.5">
+                      {paymentMethod === "qr" ? "Error en el cobro QR" : "Error en el Posnet"}
+                    </h2>
                     <p className="text-ink-400 text-sm px-4 leading-relaxed">
                       {posnetErrorMessage || "Ocurrió un error inesperado al procesar la operación."}
                     </p>
@@ -990,6 +1009,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                       setPaymentIntentState(null);
                       setPosnetErrorMessage(null);
                       setCurrentIntentId(null);
+                      setQrImage(null);
                     }}
                     className="w-full h-12 bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider cursor-pointer hover:bg-ink-800 flex items-center justify-center gap-2 mt-2"
                   >
@@ -1003,8 +1023,8 @@ export default function VentaSection({ drinks, printer }: Props) {
               <>
                 <div className="flex justify-between items-center mb-6 shrink-0">
                   {paymentMethod ? (
-                    // Si es POS en progreso
-                    (paymentMethod === "debito" && posnetStatus !== "idle") ? (
+                    // Si es POS/QR en progreso
+                    ((paymentMethod === "debito" || paymentMethod === "qr") && posnetStatus !== "idle") ? (
                       paymentIntentState === "ON_TERMINAL" ? (
                         // Ocultamos "Atrás" si está ON_TERMINAL
                         <div />
@@ -1013,12 +1033,17 @@ export default function VentaSection({ drinks, printer }: Props) {
                           onClick={async () => {
                             stopPolling();
                             if (currentIntentId) {
-                              mercadopagoService.cancelPosIntent(currentIntentId).catch((err) => console.warn("Error canceling intent (handled):", err));
+                              if (paymentMethod === "qr") {
+                                mercadopagoService.cancelQrOrder(currentIntentId).catch((err) => console.warn("Error canceling QR order (handled):", err));
+                              } else {
+                                mercadopagoService.cancelPosIntent(currentIntentId).catch((err) => console.warn("Error canceling intent (handled):", err));
+                              }
                             }
                             setPaymentMethod(null);
                             setPosnetStatus("idle");
                             setPaymentIntentState(null);
                             setCurrentIntentId(null);
+                            setQrImage(null);
                           }}
                           className="flex items-center gap-2 text-ink-400 hover:text-ink-50 transition-colors cursor-pointer bg-transparent border-none"
                         >
@@ -1027,7 +1052,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                         </button>
                       )
                     ) : (
-                      // Si no es POS (ej: efectivo)
+                      // Si no es POS/QR (ej: efectivo)
                       <button
                         onClick={() => {
                           setPaymentMethod(null);
@@ -1056,8 +1081,13 @@ export default function VentaSection({ drinks, printer }: Props) {
                     <button
                       onClick={async () => {
                         const isPosInProgress = paymentMethod === "debito" && posnetStatus !== "idle";
-                        if (isPosInProgress && currentIntentId) {
-                          mercadopagoService.cancelPosIntent(currentIntentId).catch(e => console.warn(e));
+                        const isQrInProgress = paymentMethod === "qr" && posnetStatus !== "idle";
+                        if ((isPosInProgress || isQrInProgress) && currentIntentId) {
+                          if (isQrInProgress) {
+                            mercadopagoService.cancelQrOrder(currentIntentId).catch((e) => console.warn(e));
+                          } else {
+                            mercadopagoService.cancelPosIntent(currentIntentId).catch((e) => console.warn(e));
+                          }
                         }
                         closeCheckout();
                       }}
@@ -1085,7 +1115,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 w-full mt-2">
+                    <div className="grid grid-cols-3 gap-3 w-full mt-2">
                       <button
                         disabled={submitting}
                         onClick={() => setPaymentMethod("efectivo")}
@@ -1106,6 +1136,17 @@ export default function VentaSection({ drinks, printer }: Props) {
                           <CreditCard size={26} />
                         </div>
                         <span className="font-bold text-sm text-ink-50">Tarjeta</span>
+                      </button>
+
+                      <button
+                        disabled={submitting}
+                        onClick={() => startQrPayment()}
+                        className="h-32 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-accent/10 border border-accent/25 text-accent flex items-center justify-center shrink-0">
+                          <QrCode size={26} />
+                        </div>
+                        <span className="font-bold text-sm text-ink-50">Código QR</span>
                       </button>
                     </div>
                   </div>
@@ -1364,6 +1405,72 @@ export default function VentaSection({ drinks, printer }: Props) {
                               </button>
                             )}
                           </div>
+                        )}
+                      </div>
+                    )}
+
+                    {paymentMethod === "qr" && (
+                      <div className="flex flex-col gap-4">
+                        <div className="py-8 flex flex-col items-center text-center gap-4 bg-ink-950 border border-ink-800 rounded-2xl animate-pulse">
+                          <Loader2 size={48} className="text-accent animate-spin" />
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-sm font-bold text-ink-50">
+                              Esperando pago QR...
+                            </p>
+                            <p className="text-xs text-ink-400 px-8 leading-relaxed">
+                              El cliente debe escanear el QR fijo de la barra con la app de Mercado Pago.
+                            </p>
+                          </div>
+                          {qrImage && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={qrImage}
+                              alt="QR estático de la barra"
+                              className="w-40 h-40 rounded-xl border border-ink-800 bg-white object-contain p-2"
+                            />
+                          )}
+                        </div>
+
+                        {currentIntentId ? (
+                          <button
+                            onClick={async () => {
+                              stopPolling();
+                              try {
+                                await mercadopagoService.cancelQrOrder(currentIntentId);
+                                setPosnetStatus("idle");
+                                setCurrentIntentId(null);
+                                setPaymentMethod(null);
+                                setPaymentIntentState(null);
+                                setPosnetErrorMessage(null);
+                                setQrImage(null);
+                              } catch (err) {
+                                console.warn("Error canceling QR order (handled):", err);
+                                const message = err instanceof Error ? err.message : undefined;
+                                setPosnetStatus("error");
+                                setPosnetErrorMessage(message || "No se pudo cancelar el cobro QR.");
+                                setCurrentIntentId(null);
+                                setPaymentMethod(null);
+                                setPaymentIntentState(null);
+                                setQrImage(null);
+                              }
+                            }}
+                            className="w-full h-12 border border-danger-line hover:bg-danger-soft/20 text-danger rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+                          >
+                            Cancelar cobro QR
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              stopPolling();
+                              setPosnetStatus("idle");
+                              setPaymentMethod(null);
+                              setPaymentIntentState(null);
+                              setQrImage(null);
+                            }}
+                            className="w-full h-12 border border-ink-700 text-ink-300 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+                          >
+                            Volver Atrás
+                          </button>
                         )}
                       </div>
                     )}

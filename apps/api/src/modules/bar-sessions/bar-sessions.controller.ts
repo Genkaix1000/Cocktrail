@@ -10,14 +10,19 @@ import { emit } from "../../shared/sse/sse-manager.js";
 export function createBarSessionsController(service: BarSessionsService): Router {
   const router = Router();
 
-  function currentUserId(session: Session) {
-    return barSessionUserId(session.username, session.role);
+  function currentUserId(session: Session, deviceId?: string) {
+    return barSessionUserId(session.username, session.role, deviceId || "default");
+  }
+
+  // deviceId por body o header
+  function getDeviceId(req: any): string {
+    return req.body?.deviceId || req.headers?.["x-device-id"] || "default";
   }
 
   // GET /api/bar-sessions/options - cajas disponibles y sesión del usuario actual
   router.get("/options", authMiddleware, requireRole("caja", "admin"), async (req, res, next) => {
     try {
-      res.json(await service.listOptions(currentUserId(req.session!)));
+      res.json(await service.listOptions(currentUserId(req.session!, getDeviceId(req))));
     } catch (err) {
       next(err);
     }
@@ -26,7 +31,7 @@ export function createBarSessionsController(service: BarSessionsService): Router
   // POST /api/bar-sessions/join — cajera se conecta a una barra
   router.post("/join", authMiddleware, requireRole("caja", "admin"), async (req, res, next) => {
     try {
-      const { barId } = req.body;
+      const { barId, deviceId } = req.body;
       const session = req.session!;
 
       if (!barId || typeof barId !== "string") {
@@ -36,7 +41,7 @@ export function createBarSessionsController(service: BarSessionsService): Router
 
       const result = await service.join(
         barId,
-        currentUserId(session),
+        currentUserId(session, deviceId),
         session.username,
         session.role,
       );
@@ -59,7 +64,7 @@ export function createBarSessionsController(service: BarSessionsService): Router
   // DELETE /api/bar-sessions/leave — cajera se desconecta
   router.delete("/leave", authMiddleware, requireRole("caja", "admin"), async (req, res, next) => {
     try {
-      await service.leave(currentUserId(req.session!));
+      await service.leave(currentUserId(req.session!, getDeviceId(req)));
       res.json({ ok: true });
     } catch (err) {
       next(err);
@@ -69,7 +74,7 @@ export function createBarSessionsController(service: BarSessionsService): Router
   // POST /api/bar-sessions/heartbeat - mantiene viva la ocupación de la caja
   router.post("/heartbeat", authMiddleware, requireRole("caja", "admin"), async (req, res, next) => {
     try {
-      res.json(await service.heartbeat(currentUserId(req.session!)));
+      res.json(await service.heartbeat(currentUserId(req.session!, getDeviceId(req))));
     } catch (err) {
       next(err);
     }
