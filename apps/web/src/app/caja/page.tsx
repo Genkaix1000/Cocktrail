@@ -1,21 +1,97 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CajaClient from "./CajaClient";
+import CajaSessionOnboarding from "@/components/caja/CajaSessionOnboarding";
 import { drinksService } from "@/services/drinks.service";
 import { authService } from "@/services/auth.service";
+import {
+  barSessionsService,
+  setActiveBarContext,
+  type BarSession,
+  type BarSessionOption,
+  type BarSessionOptions,
+} from "@/services/bar-sessions.service";
+import { ApiError } from "@/services/api-client";
+import { useSSE } from "@/lib/useSSE";
 import type { Drink } from "@cocktrail/shared";
+
+type CurrentUser = {
+  username: string;
+  role: "admin" | "caja";
+};
 
 export default function CajaPage() {
   const router = useRouter();
   const [drinks, setDrinks] = useState<Drink[]>([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [boxes, setBoxes] = useState<BarSessionOption[]>([]);
+  const [activeSession, setActiveSession] = useState<BarSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadedBarId, setLoadedBarId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [joiningBarId, setJoiningBarId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeBarId = activeSession?.barId ?? null;
+  const activeBarIdRef = useRef(activeBarId);
+  const usernameRef = useRef(currentUser?.username ?? null);
+  const loadOptionsRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
 
   useEffect(() => {
-    authService
-      .getMe()
-      .then((user) => {
+    activeBarIdRef.current = activeBarId;
+  }, [activeBarId]);
+
+  useEffect(() => {
+    usernameRef.current = currentUser?.username ?? null;
+  }, [currentUser?.username]);
+
+  const applyOptions = useCallback((options: BarSessionOptions) => {
+    setBoxes(options.boxes);
+    setActiveSession(options.currentSession);
+    setActiveBarContext(options.currentSession?.barId ?? null);
+  }, []);
+
+  const loadOptions = useCallback(async (silent = false) => {
+    if (!silent) setRefreshing(true);
+    try {
+      applyOptions(await barSessionsService.listOptions());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar las cajas.");
+    } finally {
+      if (!silent) setRefreshing(false);
+    }
+  }, [applyOptions]);
+
+  useEffect(() => {
+    loadOptionsRef.current = loadOptions;
+  }, [loadOptions]);
+
+  // useSSE captura handlers en el mount: refs evitan stale-state.
+  useSSE({
+    "bar-session.expired": ({ barId, ejectedUser, ejectedBy }) => {
+      void loadOptionsRef.current(true);
+
+      if (activeBarIdRef.current !== barId) return;
+      if (usernameRef.current && ejectedUser !== usernameRef.current) return;
+
+      setActiveSession(null);
+      setActiveBarContext(null);
+      setLoadedBarId(null);
+      setError(
+        `Tu sesión fue cerrada por ${ejectedBy}. Elegí una caja para continuar.`,
+      );
+    },
+  });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function initialize() {
+      try {
+        const user = await authService.getMe();
         if (!user) {
           router.push("/login");
           return;
@@ -25,27 +101,137 @@ export default function CajaPage() {
           router.push(dest);
           return;
         }
-
-        drinksService
-          .list()
-          .then((data) => {
-            setDrinks(data);
-            setLoading(false);
-          })
-          .catch(() => {
-            router.push("/login");
-          });
-      })
-      .catch(() => {
+        setCurrentUser(user);
+      } catch {
         router.push("/login");
-      });
-  }, [router]);
+        setLoading(false);
+        return;
+      }
 
-  if (loading) {
+      try {
+        const options = await barSessionsService.listOptions(controller.signal);
+        applyOptions(options);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "No se pudieron cargar las cajas.",
+          );
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void initialize();
+    return () => controller.abort();
+  }, [applyOptions, router]);
+
+  useEffect(() => {
+    if (!activeBarId) return;
+    let cancelled = false;
+    drinksService
+      .list()
+      .then((data) => {
+        if (!cancelled) setDrinks(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "No se pudo cargar la carta.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadedBarId(activeBarId);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBarId]);
+
+  useEffect(() => {
+    if (loading || activeBarId) return;
+    const interval = window.setInterval(() => {
+      void loadOptions(true);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [activeBarId, loadOptions, loading]);
+
+  useEffect(() => {
+    if (!activeBarId) return;
+    const heartbeat = async () => {
+      try {
+        const session = await barSessionsService.heartbeat();
+        setActiveSession(session);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          setActiveSession(null);
+          setActiveBarContext(null);
+          setError("La sesión de esta caja terminó. Elegí una caja para continuar.");
+          await loadOptions(true);
+        }
+      }
+    };
+    const interval = window.setInterval(() => {
+      void heartbeat();
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [activeBarId, loadOptions]);
+
+  async function handleJoin(barId: string) {
+    setJoiningBarId(barId);
+    setError(null);
+    try {
+      const { session } = await barSessionsService.join(barId);
+      setActiveSession(session);
+      setActiveBarContext(session.barId);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const data = err.data as { connectedUser?: string };
+        setError(
+          data.connectedUser
+            ? `Esta caja acaba de ser ocupada por ${data.connectedUser}.`
+            : "Esta caja ya está en uso.",
+        );
+        await loadOptions(true);
+      } else {
+        setError(err instanceof Error ? err.message : "No se pudo conectar a la caja.");
+      }
+    } finally {
+      setJoiningBarId(null);
+    }
+  }
+
+  async function handleLogout() {
+    await authService.logout();
+    router.push("/login");
+    router.refresh();
+  }
+
+  if (loading || (activeBarId && loadedBarId !== activeBarId)) {
     return (
-      <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center">
-        <p className="text-ink-400 text-sm animate-pulse">Cargando caja…</p>
+      <main className="min-h-[100dvh] bg-ink-950 text-ink-50 flex items-center justify-center">
+        <p className="text-ink-400 text-sm animate-pulse">
+          {activeSession ? "Conectando caja..." : "Buscando cajas..."}
+        </p>
       </main>
+    );
+  }
+
+  if (!currentUser) return null;
+
+  if (!activeSession) {
+    return (
+      <CajaSessionOnboarding
+        username={currentUser.username}
+        boxes={boxes}
+        joiningBarId={joiningBarId}
+        refreshing={refreshing}
+        error={error}
+        onJoin={(barId) => void handleJoin(barId)}
+        onRefresh={() => void loadOptions()}
+        onLogout={() => void handleLogout()}
+      />
     );
   }
 

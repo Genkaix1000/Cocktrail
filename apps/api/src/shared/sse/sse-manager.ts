@@ -23,6 +23,12 @@ export type DomainEvent =
       textLogoSize?: number;
       clubId?: string;
       clubName?: string;
+    }
+  | {
+      type: "bar-session.expired";
+      barId: string;
+      ejectedUser: string;
+      ejectedBy: string;
     };
 
 /** Firma inyectable de `emit`, para pasar por constructor en vez de importar el singleton. */

@@ -4,8 +4,16 @@ import { buildSessionCookie, buildClearCookie, COOKIE_NAME, verifySession } from
 import { validate, LoginSchema } from "../../shared/middleware/validate.js";
 import { loginLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";
+import type { Role } from "@cocktrail/shared";
 
-export function createAuthController(usersRepo: UsersRepository): Router {
+type AuthControllerOptions = {
+  onLogout?: (user: { username: string; role: Role }) => Promise<void>;
+};
+
+export function createAuthController(
+  usersRepo: UsersRepository,
+  options: AuthControllerOptions = {},
+): Router {
   const router = Router();
 
   // POST /api/auth/login — la protección contra fuerza bruta es loginLimiter
@@ -29,9 +37,23 @@ export function createAuthController(usersRepo: UsersRepository): Router {
   });
 
   // POST /api/auth/logout
-  router.post("/logout", (_req, res) => {
-    res.setHeader("Set-Cookie", buildClearCookie());
-    res.json({ ok: true });
+  router.post("/logout", async (req, res, next) => {
+    try {
+      const session = verifySession(req.cookies?.[COOKIE_NAME]);
+      if (session && options.onLogout) {
+        try {
+          await options.onLogout(session);
+        } catch (error) {
+          // Cerrar la cookie siempre. El TTL de bar_sessions libera cualquier
+          // ocupación que no haya podido borrarse en este intento.
+          console.error("[auth] No se pudo liberar la sesión de caja:", error);
+        }
+      }
+      res.setHeader("Set-Cookie", buildClearCookie());
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
   });
 
   // GET /api/auth/me
@@ -42,7 +64,6 @@ export function createAuthController(usersRepo: UsersRepository): Router {
       res.json(null);
       return;
     }
-
     // Permisos derivados 100% del rol — ya no son editables por usuario
     // (ver docs/ARCHITECTURE.md §8).
     const permissions =

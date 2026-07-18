@@ -16,6 +16,7 @@ import { createUsersController } from "./modules/users/users.controller.js";
 import { createConfigController } from "./modules/config/config.controller.js";
 import { createMercadoPagoController } from "./modules/mercadopago/mercadopago.controller.js";
 import { createMercadoPagoOAuthController } from "./modules/mercadopago/mercadopago-oauth.controller.js";
+import { createBarSessionsController } from "./modules/bar-sessions/bar-sessions.controller.js";
 import { createPrinterController } from "./modules/printer/printer.controller.js";
 
 // Services & Repositories
@@ -36,7 +37,13 @@ import { SupabaseOAuthStatesRepository } from "./modules/mercadopago/oauth-state
 import { SupabaseMercadoPagoSellersRepository } from "./modules/mercadopago/mercadopago-sellers.repository.js";
 import { SupabaseMercadoPagoCajasRepository } from "./modules/mercadopago/mercadopago-cajas.repository.js";
 import { SupabaseMercadoPagoCajasDevicesRepository } from "./modules/mercadopago/mercadopago-cajas-devices.repository.js";
+import { SupabaseBarsRepository } from "./modules/mercadopago/bars.repository.js";
 import { CredentialsResolverService } from "./modules/mercadopago/credentials-resolver.service.js";
+import {
+  BarSessionsService,
+  barSessionUserId,
+} from "./modules/bar-sessions/bar-sessions.service.js";
+import { SupabaseBarSessionsRepository } from "./modules/bar-sessions/bar-sessions.repository.js";
 import { PrinterService } from "./modules/printer/printer.service.js";
 import { emit } from "./shared/sse/sse-manager.js";
 import { SupabaseCloudSyncRepository } from "./modules/sync/cloud-sync.repository.js";
@@ -95,6 +102,7 @@ const oauthStatesRepo = new SupabaseOAuthStatesRepository();
 const mpSellersRepo = new SupabaseMercadoPagoSellersRepository();
 const mpCajasRepo = new SupabaseMercadoPagoCajasRepository();
 const mpCajasDevicesRepo = new SupabaseMercadoPagoCajasDevicesRepository();
+const barsRepo = new SupabaseBarsRepository();
 const mpOAuthService = new MercadoPagoOAuthService(oauthStatesRepo, mpSellersRepo, {
   appId: env.MP_APP_ID,
   clientSecret: env.MP_CLIENT_SECRET,
@@ -111,6 +119,10 @@ const credentialsResolver = new CredentialsResolverService(
 );
 
 const mpService = new MercadoPagoService(credentialsResolver);
+
+// Sesiones de caja por barra
+const barSessionsRepo = new SupabaseBarSessionsRepository();
+const barSessionsService = new BarSessionsService(barSessionsRepo, barsRepo);
 
 const systemService = new SystemService(eventsRepo, mpService, printerService, supabase, supabaseCloud);
 
@@ -146,7 +158,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ["GET", "POST", "PATCH", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Bar-Id", "X-Device-Id"],
 }));
 
 // 3. Limitador de solicitudes general (Rate Limiter)
@@ -163,7 +175,14 @@ app.get("/health", (_req, res) => {
 // Routes
 import { createSystemController } from "./modules/system/system.controller.js";
 
-app.use("/api/auth", createAuthController(usersRepo));
+app.use(
+  "/api/auth",
+  createAuthController(usersRepo, {
+    onLogout: async (user) => {
+      await barSessionsService.leave(barSessionUserId(user.username, user.role));
+    },
+  }),
+);
 app.use("/api/drinks", createDrinksController(drinksService));
 app.use("/api/orders", createOrdersController(ordersService));
 app.use("/api/events", createSSEController());
@@ -172,6 +191,7 @@ app.use("/api/users", createUsersController(usersService));
 app.use("/api/config", createConfigController(configRepo, eventsService));
 app.use("/api/mercadopago", createMercadoPagoOAuthController(mpOAuthService));
 app.use("/api/mercadopago", createMercadoPagoController(mpService));
+app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
 app.use("/api/system", createSystemController(usersRepo, systemService, syncService));
 app.use("/api", createEventsController(eventsService, usersRepo));

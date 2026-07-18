@@ -38,6 +38,24 @@ describe("useSSE", () => {
     expect(onOrderUpdated).not.toHaveBeenCalled();
   });
 
+  it("despacha bar-session.expired con el payload tipado", () => {
+    const onExpired = vi.fn();
+    renderHook(() => useSSE({ "bar-session.expired": onExpired }));
+
+    const es = FakeEventSource.instances.at(-1)!;
+    es.emit("bar-session.expired", {
+      barId: "bar-1",
+      ejectedUser: "caja",
+      ejectedBy: "admin",
+    });
+
+    expect(onExpired).toHaveBeenCalledWith({
+      barId: "bar-1",
+      ejectedUser: "caja",
+      ejectedBy: "admin",
+    });
+  });
+
   it("ignora un frame con JSON malformado sin romper", () => {
     const onOrderCreated = vi.fn();
     renderHook(() => useSSE({ "order.created": onOrderCreated }));

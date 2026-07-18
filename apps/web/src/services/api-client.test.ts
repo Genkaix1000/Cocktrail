@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch } from "./api-client";
+import { ACTIVE_BAR_STORAGE_KEY } from "@/lib/bar-context";
 
 function mockFetchOnce(response: {
   ok: boolean;
@@ -26,6 +27,7 @@ describe("apiFetch", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    localStorage.removeItem(ACTIVE_BAR_STORAGE_KEY);
   });
 
   it("hace GET por defecto, con credentials include y Content-Type json", async () => {
@@ -60,6 +62,23 @@ describe("apiFetch", () => {
         method: "POST",
         body: JSON.stringify({ qty: 2 }),
         headers: { "Content-Type": "application/json", "X-Custom": "1" },
+      }),
+    );
+  });
+
+  it("envía la caja seleccionada como contexto operativo", async () => {
+    localStorage.setItem(ACTIVE_BAR_STORAGE_KEY, "bar-vip");
+    mockFetchOnce({ ok: true, text: JSON.stringify({ ok: true }) });
+
+    await apiFetch("/api/mercadopago/device/status");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/mercadopago/device/status",
+      expect.objectContaining({
+        headers: {
+          "Content-Type": "application/json",
+          "X-Bar-Id": "bar-vip",
+        },
       }),
     );
   });

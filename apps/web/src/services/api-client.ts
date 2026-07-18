@@ -1,4 +1,5 @@
 import { API_URL } from "@/config/env";
+import { ACTIVE_BAR_STORAGE_KEY } from "@/lib/bar-context";
 
 type RequestOptions = {
   method?: string;
@@ -28,11 +29,16 @@ export async function apiFetch<T>(
   opts: RequestOptions = {},
 ): Promise<T> {
   const { method = "GET", body, headers = {}, signal } = opts;
+  const activeBarId =
+    typeof window !== "undefined"
+      ? localStorage.getItem(ACTIVE_BAR_STORAGE_KEY)
+      : null;
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
+      ...(activeBarId ? { "X-Bar-Id": activeBarId } : {}),
       ...headers,
     },
     body: body ? JSON.stringify(body) : undefined,

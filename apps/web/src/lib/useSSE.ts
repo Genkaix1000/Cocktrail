@@ -30,6 +30,11 @@ export type DomainEventHandlers = Partial<{
     clubId?: string;
     clubName?: string;
   }) => void;
+  "bar-session.expired": (data: {
+    barId: string;
+    ejectedUser: string;
+    ejectedBy: string;
+  }) => void;
 }>;
 
 type Options = {

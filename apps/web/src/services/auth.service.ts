@@ -1,5 +1,6 @@
 import { apiFetch } from "./api-client";
 import type { Role } from "@cocktrail/shared";
+import { setActiveBarContext } from "@/lib/bar-context";
 
 type LoginResponse = { username: string; role: Role };
 type MeResponse = {
@@ -21,8 +22,12 @@ export const authService = {
     });
   },
 
-  logout() {
-    return apiFetch<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+  async logout() {
+    try {
+      return await apiFetch<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+    } finally {
+      setActiveBarContext(null);
+    }
   },
 
   getMe() {
