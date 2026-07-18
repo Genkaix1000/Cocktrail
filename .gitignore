@@ -17,6 +17,7 @@ build/
 # tooling local
 .claude/
 .cursor/
+.vscode/
 .playwright-mcp/
 tsconfig.tsbuildinfo
 *.log
@@ -47,7 +48,7 @@ supabase/docker/kong.yml
 supabase/.temp/
 **/.branches/
 
-# agentes local
-.agents/LLM.md
-.agents/commands/
-
+# agentes / skills local (no versionar)
+.agents/
+.agent/
+skills-lock.json
