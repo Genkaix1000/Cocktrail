@@ -442,3 +442,100 @@ El corte 3/4 es el único delicado: el PR 3 arregla idempotencia asumiendo que e
 ### Cabo suelto identificado
 
 Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSection` (`:369-399`, `handleForceLogout`). No son ni Pagos ni PDV: son operación de caja. Al repartir las cards hay que decidir dónde van — componente propio o `SistemaSection` — o como mínimo dejar registrado que la ubicación es de conveniencia. Se resuelve en `/tasks`.
+
+---
+
+## Tareas
+
+> Derivadas del plan técnico. Agrupadas por los 6 PRs del orden de ejecución — cada PR es desplegable y verificable por separado. Tildá `- [x]` a medida que se completan. Los cambios grandes (PR 2, 4, 5) conviene hacerlos en **Plan Mode**.
+>
+> Convención de subagents: 🟦 `supabase-expert` · 🟩 `mercadopago-integrator` · 🟪 `e2e-playwright-tester` · 🟨 `expert-react-frontend-engineer` · sin marca = directo.
+
+### PR 1 — Suite en verde + comentarios que mienten (no toca runtime)
+
+- [ ] 🟨 Arreglar el toggle Sandbox de `PagosSection.tsx:599-612`: convertirlo en un control accesible con nombre ("Sandbox") y `aria-pressed`/`role="switch"`, para que el test `persiste el toggle Sandbox` pase. **No** tocar la lógica de negocio.
+- [ ] Verificar que el test `persiste el toggle Sandbox al cambiarlo` pasa; los otros 6 de `PagosSection.test.tsx` (PDV/Posnet) quedan pendientes hasta PR 6 (se migran allá) — dejarlos explícitamente `skip` con un comentario que apunte a PR 6, para no dejar la suite roja.
+- [ ] Borrar el comentario mentiroso de `credentials-resolver.service.ts:66-67` que afirma un `FOR UPDATE` inexistente. No reemplazar por otra promesa de lock.
+- [ ] `pnpm typecheck` + `pnpm test` en verde.
+
+### PR 2 — Runner de migraciones (schema idéntico, sin cambio observable)
+
+- [ ] Sumar dependencia `pg` + `@types/pg` a `apps/api`.
+- [ ] 🟦 Auditar las 19 migraciones existentes en `supabase/migrations/` y dejarlas todas idempotentes (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`, guardas `DO $$`). Documentar cuáles ya lo eran.
+- [ ] 🟦 Migración nueva `schema_migrations` (version TEXT PK = nombre de archivo, checksum sha256, applied_at, duration_ms, applied_by) con `REVOKE ALL FROM anon, authenticated`.
+- [ ] `apps/api/src/infra/migrations/pg-migrations.repository.ts` — único lugar con `pg`: conexión por `DATABASE_URL` (nueva env, default `postgres://postgres:postgres@127.0.0.1:54322/postgres`), `pg_advisory_lock`, ejecución de cada `.sql` completo en una transacción con su registro, `pg_advisory_unlock`.
+- [ ] `apps/api/src/infra/migrations/migration-runner.ts` — orquestación: lista archivos ordenados, filtra aplicados, aplica pendientes; convención `-- migrate:no-transaction` en 1ª línea para DDL no transaccional. Backfill por re-ejecución (primer arranque aplica todas con `applied_by='baseline'`).
+- [ ] `apps/api/src/infra/migrations/migrations-status.ts` — singleton `{ pending, failed, drift }`.
+- [ ] Integrar en `apps/api/src/server.ts` dentro de `boot()`, después de `ensureDatabaseConnection()` y antes de `pullMasterData`, en `try/catch` que **nunca** re-lanza (fail-open).
+- [ ] Exponer el estado en `GET /api/system/health` (leer el singleton desde `systemService`).
+- [ ] 🟨 Banner rojo persistente en `/admin` cuando `pending`/`failed`/`drift` — la contrapartida no negociable del fail-open.
+- [ ] Quitar las 19 líneas de migraciones de `docker-compose.yml:57-79`; dejar solo `01-roles.sql` y `02-jwt.sql`.
+- [ ] **Verificación**: correr el runner sobre la DB local actual (8 tablas viejas) → aplica las 14 nuevas conservando 29 tragos + 109 noches. Correrlo dos veces seguidas → idéntico, sin fallar. Comparar con una DB creada de cero (mismo schema).
+- [ ] `pnpm typecheck` + tests del runner.
+
+### PR 3 — Integridad del cobro (cierra el bloque A)
+
+- [ ] 🟦 Migración: UNIQUE en `mp_orders` sobre `order_id_mp`, `external_ref`, `idempotency_key` (A3).
+- [ ] 🟦 Migración: `ALTER TABLE mp_orders ADD COLUMN event_id UUID REFERENCES night_events(id)` + índice (prerrequisito del sync — PR 5).
+- [ ] 🟩 `mercadopago-orders.service.ts`: idempotency key **estable** por cobro (no `randomUUID()` por request) → evita doble cobro por doble click.
+- [ ] 🟩 `mercadopago-orders.service.ts`, `-provisioning.service.ts`, `-oauth.service.ts`, `mercadopago.service.ts` (`pointApiRequest`): `AbortSignal.timeout` en toda llamada a MP (A9). Sobre cada HTTP individual, **nunca** sobre el polling del intent.
+- [ ] 🟩 `mercadopago-orders.service.ts:mapMpStatus`: no mapear estados desconocidos a `"created"` — distinguir `failed`/`action_required` de "en curso".
+- [ ] 🟩 `mercadopago-webhooks.service.ts`: reemplazar el `setImmediate` fire-and-forget por un camino que sobreviva un reinicio (deja constancia recuperable); agregar ventana de frescura del `ts` en la validación de firma (anti-replay).
+- [ ] 🟨 `useCheckout.ts`: timeout de cliente honrando el `expiresAt` del backend (A10); si el registro del pedido falla tras confirmar el cobro, dejar constancia recuperable en vez de descartar (A11).
+- [ ] 🟩 Poblar `mp_orders.event_id` al crear la order desde el evento abierto.
+- [ ] 🟪 **Gate**: cobro real con el Posnet físico (test de $15) — debe seguir funcionando (usa el fallback env, sin tocar `credentials-resolver`).
+- [ ] `pnpm typecheck` + tests.
+
+### PR 4 — Inversión del token + modelo single-seller + seguridad
+
+- [ ] 🟦 Migración: `mercadopago_sellers` + `access_token_enc`, `refresh_token_enc`, `key_version SMALLINT`, `cloud_synced_at`. (El `DROP` de las columnas en claro va en una migración **posterior**, ya verificado.)
+- [ ] 🟦 Migración: `mercadopago_seller_handoff` (buzón de traspaso, aplica en Cloud, se versiona igual).
+- [ ] 🟦 Migración: habilitar RLS + revocar `anon` en `bars` (A2).
+- [ ] 🟩 Cifrado app-level (AES-256-GCM, `HKDF-SHA256` con `MP_TOKEN_SECRET ?? AUTH_SECRET`, salt por fila): cifrar/descifrar en `mercadopago-sellers.repository.ts:mapRow` — el tipo `Seller` sigue exponiendo el token en claro hacia adentro. Descifrado **tolerante a token en claro** durante una versión (backfill).
+- [ ] 🟩 `mercadopago-sellers.repository.ts:76,101,116,140`: cambiar `mpDb` → `supabase` (local). Eliminar `mpDb` de `shared/supabase.ts:27` (A1).
+- [ ] 🟩 `credentials-resolver.service.ts:34-36`: envolver el nivel 2 para que un fallo de red **degrade** al nivel 3 (`env.MP_ACCESS_TOKEN`) en vez de propagar (A1b). **No** eliminar el fallback legacy.
+- [ ] 🟩 `mercadopago-oauth.service.ts:129:refreshTokenIfNeeded`: persistir local y devolver de inmediato; marcar `cloud_synced_at IS NULL`. Único escritor → cierra A8 por construcción.
+- [ ] 🟩 Bajada cloud→local del seller: endpoint `POST /api/mercadopago/oauth/pull-seller` (admin), + intento en el boot (`pullMasterData` si no hay seller local) + lazy en `getSellerStatus`.
+- [ ] 🟩 **Modelo single-seller (D9/A17)**: al completar un OAuth nuevo, desactivar/borrar el seller anterior — nunca 2 activos. Corregir `findFirstActive` para que no dependa del orden por fecha.
+- [ ] 🟩 **Desvincular (D9/A18)**: endpoint `DELETE /api/mercadopago/oauth/seller` (admin) que borra el seller en local + Cloud + handoff si quedó.
+- [ ] 🟩 Edge Function `mp-auth-callback/index.ts`: dejar de escribir tokens en `mercadopago_sellers` de Cloud; escribir metadata no secreta + handoff cifrado con `MP_HANDOFF_KEY`.
+- [ ] 🟩 `mercadopago-provisioning.service.ts:293-325`: reemplazar el `supabase.from()` directo por `sellersRepo.upsert()` inyectado (el salto de capa se disuelve con `mpDb` local).
+- [ ] `mp-context.middleware.ts` + backend: validar `X-Bar-Id`/`x-device-id` contra la sesión autenticada (A12) — el header deja de ser autoritativo.
+- [ ] Revisar si el `SameSite=Lax` de `session.ts:59,64` sigue siendo necesario ahora que el callback aterriza en la Edge Function; si no, volver a `Strict`.
+- [ ] 🟨 UI: botón "Desvincular" en la tarjeta de OAuth de `PagosSection.tsx`.
+- [ ] Envs nuevas en `.env.example`: `MP_TOKEN_SECRET`, `MP_TOKEN_SECRET_PREVIOUS` (opcional), `MP_HANDOFF_KEY` (secret de la Edge Function), `DATABASE_URL`, `API_PROXY_TARGET`.
+- [ ] 🟪 **Gate crítico**: cobro real con el Posnet físico **con la red a Supabase Cloud cortada a mano** — debe cobrar igual (prueba de que D1 funciona). Verificar además los 3 modos: seller vinculado sin Cloud, sin seller con solo `MP_ACCESS_TOKEN`, Cloud apagado.
+- [ ] `pnpm typecheck` + tests.
+
+### PR 5 — Conciliación / sync (aditivo)
+
+- [ ] 🟦 `cloud-sync.repository.ts`: métodos `pushSellerMetadata()`, `pushMpCajas()`, `pushMpDevices()`, `pushMpOrders()`, `pullSellerHandoff()`.
+- [ ] 🟩 Enganchar el push de `mp_orders` (por `event_id`), cajas y devices al cierre de noche (`events.service` → sync en background), junto con orders/tickets.
+- [ ] 🟩 Push diferido del seller (outbox por `cloud_synced_at IS NULL`) en el tick de sync.
+- [ ] 🟩 `restoreFromCloud()`: incluir config MP (cajas, devices, cobros). Tokens **excluidos** explícitamente (D3) — documentar que hay que re-vincular tras un restore.
+- [ ] 🟪 **Verificación**: cerrar una noche con cobros MP → aparecen en Cloud. Restore → cajas/devices/cobros vuelven.
+- [ ] `pnpm typecheck` + tests.
+
+### PR 6 — Sesiones de caja + cableado de PDVs + docs
+
+- [ ] 🟦 Migración: cambio de la clave de identidad de `bar_sessions` (D6) — desplegar fuera de turno (invalida sesiones vivas).
+- [ ] `bar-sessions.service.ts:7-9`: la identidad deja de incluir `deviceId`; deriva de la sesión autenticada (A5/A7).
+- [ ] `app.ts:205`: sacar la construcción de identidad de la capa de composición (mover a `BarSessionsService`); el logout libera la caja de verdad.
+- [ ] 🟨 `apps/web/src/services/bar-sessions.service.ts:37-45`: eliminar el UUID por pestaña.
+- [ ] 🟨 Cablear `PdvSection` como **tab propio** en `AdminClient.tsx` (no embebido — evita doble `<h1>`). Migrar las Cards 2 (PDV/QR) y 3 (Posnets) de `PagosSection` a `PdvSection`; borrar la tarjeta "Sucursal" duplicada de `PdvSection.tsx:224-252`. Decidir dónde va el bloque de sesiones de barra (`PagosSection.tsx:369-399`) — no es Pagos ni PDV.
+- [ ] 🟨 Renombrar `PdvFormModal.tsx` → `PdvFormPanel.tsx`; accesibilidad de panel lateral (labels asociadas, `Escape` cierra, foco inicial y retorno, **sin** focus trap).
+- [ ] 🟨 `PagosSection.tsx`: arreglar `handleTestCharge` (pasar el `deviceId`, `:182`), renderizar `testResult` (`:57,:183`), y el `catch {}` que traga fallos de carga (`:107`).
+- [ ] 🟨 Migrar los 6 tests de PDV/Posnet de `PagosSection.test.tsx` a `PdvSection.test.tsx` (des-skipear los de PR 1). Sumar tests de `PdvSection`/`PdvTable`/`PdvFormPanel` (hoy sin ninguno).
+- [ ] **Docs**: actualizar `docs/ARCHITECTURE.md` (modelo de datos MP, flujo OAuth con Edge Function, resolución de credenciales local-first, sesiones de caja, runner de migraciones — corregir §2 sobre internet y §9/§217 sobre init-scripts).
+- [ ] **Docs**: actualizar `docs/ROADMAP.md` (cerrar/reformular R14 y R15; sumar R17 —validación con zod en controllers nuevos— y lo que no se resuelva acá).
+- [ ] **Docs**: `CLAUDE.md` — módulos nuevos (bar-sessions, infra/migrations) y convenciones. Documentar el supuesto "único proceso Node" del que depende el cierre de A8.
+- [ ] **Docs**: cerrar la Fase 1 de MP en `docs/fases-mp/INDEX.md` (E2E cloud validado esta sesión). Considerar renombrar las fases MP para no colisionar con las del roadmap ("Fase 6" ambigua).
+- [ ] 🟪 Verificación E2E completa de los 4 flujos + SSE.
+- [ ] `pnpm typecheck` + `pnpm test` en verde en todo el repo.
+
+### Cierre
+
+- [ ] Migración posterior: `DROP COLUMN access_token, refresh_token` de `mercadopago_sellers` (una vez verificado el cifrado en producción — no en el mismo deploy que las mueve).
+- [ ] Actualizar el estado de la spec a `implementada` y registrar en `ROADMAP.md`.
+
+> **Recordatorio**: PR 2, 4 y 5 son grandes — usar **Plan Mode**. Los gates 🟪 de PR 3 y PR 4 (cobro con Posnet físico real) son **bloqueantes**: no cerrar el PR sin pasarlos, y el de PR 4 con la red a Cloud cortada.
