@@ -596,9 +596,11 @@ export default function PagosSection() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-ink-500 font-medium uppercase tracking-wider">Sandbox</span>
+            <span id="sandbox-toggle-label" className="text-[11px] text-ink-500 font-medium uppercase tracking-wider">Sandbox</span>
             <button
               type="button"
+              aria-labelledby="sandbox-toggle-label"
+              aria-pressed={sandbox}
               onClick={async () => {
                 const next = !sandbox;
                 setSandbox(next);

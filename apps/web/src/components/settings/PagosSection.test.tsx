@@ -112,17 +112,21 @@ describe("PagosSection", () => {
     expect(screen.getByText("bosko@example.com")).toBeInTheDocument();
   });
 
-  it("muestra la sección Puntos de Venta", async () => {
+  // ── SKIP DELIBERADO (PR 1 de docs/specs/remediacion-integracion-mp.md) ──
+  // Estos 6 tests prueban la UI de PDVs/Posnets que D5 migra de PagosSection
+  // a PdvSection. NO se arreglan acá: se MIGRAN a PdvSection.test.tsx en el
+  // PR 6 (cableado de PdvSection), donde se des-skipean contra la UI real.
+  it.skip("muestra la sección Puntos de Venta", async () => { // → PR 6
     render(<PagosSection />);
     expect(await screen.findByRole("heading", { name: "Puntos de Venta" })).toBeInTheDocument();
   });
 
-  it("muestra el botón Crear Barra VIP cuando no hay PDVs", async () => {
+  it.skip("muestra el botón Crear Barra VIP cuando no hay PDVs", async () => { // → PR 6
     render(<PagosSection />);
     expect(await screen.findByRole("button", { name: /Crear Barra VIP/i })).toBeInTheDocument();
   });
 
-  it("crea el PDV al clickear Crear Barra VIP", async () => {
+  it.skip("crea el PDV al clickear Crear Barra VIP", async () => { // → PR 6
     const user = userEvent.setup();
     mockedMpService.getSellerStatus.mockResolvedValue({
       linked: true,
@@ -157,7 +161,7 @@ describe("PagosSection", () => {
     expect(await screen.findByText("Barra VIP")).toBeInTheDocument();
   });
 
-  it("muestra Barra VIP cuando hay un PDV provisionado", async () => {
+  it.skip("muestra Barra VIP cuando hay un PDV provisionado", async () => { // → PR 6
     mockedPdvService.listCajas.mockResolvedValue([
       {
         id: "caja-1",
@@ -177,7 +181,7 @@ describe("PagosSection", () => {
     expect(await screen.findByText("Barra VIP")).toBeInTheDocument();
   });
 
-  it("muestra la sección Posnets con formulario de alta (sin 'Próximamente')", async () => {
+  it.skip("muestra la sección Posnets con formulario de alta (sin 'Próximamente')", async () => { // → PR 6
     render(<PagosSection />);
     expect(await screen.findByRole("heading", { name: "Posnets" })).toBeInTheDocument();
     expect(screen.queryByText("Próximamente")).not.toBeInTheDocument();
@@ -185,7 +189,7 @@ describe("PagosSection", () => {
     expect(screen.getByRole("button", { name: /Agregar/i })).toBeInTheDocument();
   });
 
-  it("registra un Posnet al clickear Agregar", async () => {
+  it.skip("registra un Posnet al clickear Agregar", async () => { // → PR 6
     const user = userEvent.setup();
     mockedPdvService.registerDevice.mockResolvedValue({
       id: "dev-1",

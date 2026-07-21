@@ -62,9 +62,8 @@ export class CredentialsResolverService {
       );
     }
 
-    // Refrescar si está por vencer (Fase 1 — C.3).
-    // ⚠ Concurrencia: el refresh_token es de un solo uso. refreshTokenIfNeeded
-    // usa FOR UPDATE en transacción para serializar refreshes concurrentes.
+    // Refrescar si está por vencer (Fase 1 — C.3). La semántica de
+    // concurrencia del refresh está documentada en refreshTokenIfNeeded.
     return this.oauthService.refreshTokenIfNeeded(seller);
   }
 }
