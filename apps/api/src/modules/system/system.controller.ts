@@ -26,6 +26,13 @@ export function createSystemController(
     }
   });
 
+  // GET /api/system/health — staff. Liviano (singleton en memoria, sin I/O) y
+  // SIN systemStatusLimiter: lo pollea el banner de migraciones de /admin.
+  // No confundir con el GET /health público de app.ts (liveness sin auth).
+  router.get("/health", authMiddleware, requireRole("admin", "caja"), (_req, res) => {
+    res.json(systemService.getHealth());
+  });
+
   // GET /api/system/status — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
   router.get("/status", authMiddleware, requireRole("admin", "caja"), systemStatusLimiter, async (_req, res, next) => {
     try {

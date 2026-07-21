@@ -9,11 +9,31 @@ export type RestoreResult = {
   auditLogs: SyncTableResult;
 };
 
+// Espejo de MigrationsStatus / SystemHealth del backend (apps/api/src/infra/migrations).
+export type MigrationsStatus = {
+  state: "unknown" | "running" | "ok" | "degraded";
+  lastRunAt: string | null;
+  appliedNow: string[];
+  pending: string[];
+  failed: { version: string; error: string } | null;
+  drift: { version: string; expected: string; actual: string }[];
+};
+
+export type SystemHealth = {
+  status: "ok" | "degraded";
+  migrations: MigrationsStatus;
+  serverStartedAt: number;
+};
+
 export const systemService = {
   restore(password: string) {
     return apiFetch<RestoreResult>("/api/system/restore", {
       method: "POST",
       body: { password },
     });
+  },
+
+  getHealth() {
+    return apiFetch<SystemHealth>("/api/system/health");
   },
 };

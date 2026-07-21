@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SystemService } from "./system.service.js";
 import { env } from "../../config/env.js";
+import {
+  resetMigrationsStatusForTests,
+  setMigrationsStatus,
+} from "../../infra/migrations/migrations-status.js";
 import type { EventsRepository } from "../events/events.repository.js";
 import type { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
 import type { PrinterService } from "../printer/printer.service.js";
@@ -159,5 +163,67 @@ describe("SystemService.getStatus", () => {
     const status = await service.getStatus();
 
     expect(status.printer).toEqual({ connected: false, configured: true, message: "Impresora no encontrada o sin permisos" });
+  });
+});
+
+describe("SystemService.getHealth", () => {
+  beforeEach(() => {
+    resetMigrationsStatusForTests();
+  });
+
+  afterEach(() => {
+    resetMigrationsStatusForTests();
+  });
+
+  function makeService() {
+    return new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), null);
+  }
+
+  it("status ok cuando las migraciones están limpias", () => {
+    setMigrationsStatus({
+      state: "ok",
+      lastRunAt: "2026-07-21T00:00:00.000Z",
+      appliedNow: ["20260101000000_a.sql"],
+      pending: [],
+      failed: null,
+      drift: [],
+    });
+
+    const health = makeService().getHealth();
+
+    expect(health.status).toBe("ok");
+    expect(health.migrations.appliedNow).toEqual(["20260101000000_a.sql"]);
+    expect(typeof health.serverStartedAt).toBe("number");
+  });
+
+  it("status degraded cuando una migración falló", () => {
+    setMigrationsStatus({
+      state: "degraded",
+      lastRunAt: "2026-07-21T00:00:00.000Z",
+      appliedNow: [],
+      pending: ["20260102000000_b.sql"],
+      failed: { version: "20260101000000_a.sql", error: "syntax error" },
+      drift: [],
+    });
+
+    const health = makeService().getHealth();
+
+    expect(health.status).toBe("degraded");
+    expect(health.migrations.failed?.version).toBe("20260101000000_a.sql");
+  });
+
+  it("getStatus también expone las migraciones (mismo singleton)", async () => {
+    setMigrationsStatus({
+      state: "ok",
+      lastRunAt: "2026-07-21T00:00:00.000Z",
+      appliedNow: [],
+      pending: [],
+      failed: null,
+      drift: [],
+    });
+
+    const status = await makeService().getStatus();
+
+    expect(status.migrations.state).toBe("ok");
   });
 });

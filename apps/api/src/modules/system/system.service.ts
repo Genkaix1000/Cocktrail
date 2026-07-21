@@ -4,8 +4,19 @@ import type { EventsRepository } from "../events/events.repository.js";
 import type { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
 import type { PrinterService } from "../printer/printer.service.js";
 import { env } from "../../config/env.js";
+import {
+  getMigrationsStatus,
+  isDegraded,
+  type MigrationsStatus,
+} from "../../infra/migrations/migrations-status.js";
 
 const serverStartedAt = Date.now();
+
+export type SystemHealth = {
+  status: "ok" | "degraded";
+  migrations: MigrationsStatus;
+  serverStartedAt: number;
+};
 
 export type SystemStatus = {
   internet: { connected: boolean };
@@ -23,6 +34,7 @@ export type SystemStatus = {
   sync: { synced: boolean; pendingEvents: number };
   eventDetails: { id: string; status: string; orderCounter: number } | null;
   serverStartedAt: number;
+  migrations: MigrationsStatus;
 };
 
 /**
@@ -38,6 +50,21 @@ export class SystemService {
     private localDb: SupabaseClient,
     private cloudDb: SupabaseClient | null,
   ) {}
+
+  /**
+   * Liviano (lee un singleton en memoria, sin I/O) — a diferencia de
+   * getStatus(), que hace fetchs con timeout y está rate-limiteado. Lo
+   * pollea el banner de migraciones de /admin. El singleton se lee directo
+   * (sin DI): lo escribe solo el runner del boot y es el diseño del estado.
+   */
+  getHealth(): SystemHealth {
+    const migrations = getMigrationsStatus();
+    return {
+      status: isDegraded(migrations) ? "degraded" : "ok",
+      migrations,
+      serverStartedAt,
+    };
+  }
 
   async checkInternet(): Promise<boolean> {
     try {
@@ -148,6 +175,7 @@ export class SystemService {
       sync: { synced, pendingEvents },
       eventDetails,
       serverStartedAt,
+      migrations: getMigrationsStatus(),
     };
   }
 

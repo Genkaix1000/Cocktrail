@@ -35,6 +35,7 @@ import UsuariosSection from "@/components/settings/UsuariosSection";
 import SistemaSection from "@/components/settings/SistemaSection";
 
 import DashboardSection from "@/components/admin/DashboardSection";
+import { MigrationsBanner } from "@/components/admin/MigrationsBanner";
 import HistorialSection from "@/components/admin/HistorialSection";
 import LogsSection from "@/components/admin/LogsSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
@@ -614,6 +615,7 @@ export default function AdminClient({
             <OSHeadbar activeScreen="Administración" />
           </div>
         </header>
+        <MigrationsBanner />
         {/* Dynamic Section Contents */}
         <div className="flex-1 overflow-y-auto p-5 md:p-6 bg-ink-950 min-h-0">
           {activeTab === "monitoreo" && (

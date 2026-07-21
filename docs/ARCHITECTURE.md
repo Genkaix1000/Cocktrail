@@ -207,15 +207,47 @@ El `docker-compose.yml` levanta un **stack Supabase local mínimo** (3 servicios
 
 | Servicio | Imagen | Rol |
 |---|---|---|
-| `db` | `supabase/postgres:17.6.1.136` | Postgres con los roles Supabase (`anon`, `authenticated`, `service_role`, `authenticator`). Aplica `supabase/migrations/*.sql` en el primer boot. |
+| `db` | `supabase/postgres:17.6.1.136` | Postgres con los roles Supabase (`anon`, `authenticated`, `service_role`, `authenticator`). Los init-scripts solo dejan roles y JWT; **el schema lo aplica el runner del backend** (ver abajo). |
 | `rest` | `postgrest/postgrest:v14.12` | PostgREST: traduce HTTP REST → SQL. |
 | `kong` | `kong/kong:3.9.1` | Gateway en host `:54321`: enruta `/rest/v1/*` → PostgREST y valida la `apikey`. |
 
 - **Opcionales** (`--profile debug`): `meta` + `studio` (UI web en `:54323`) para inspeccionar la base.
 - **Excluidos a propósito** (el backend no los usa): auth/gotrue, realtime, storage, functions, analytics, vector, pooler.
 - **Llaves**: por default, JWT secret demo de Supabase + `anon`/`service_role` firmadas con él (`docker-compose.yml` trae los valores demo embebidos, corre sin `.env`; `supabase/generate-keys.mjs --demo` los regenera si hace falta, vía `postinstall`). `supabase/docker/kong.yml` **no se versiona ni se edita a mano** — se genera desde `supabase/docker/kong.yml.template` (Kong DB-less no interpola env vars en `key-auth`). Para un deployment que pueda salir de la LAN, `node supabase/generate-keys.mjs` genera credenciales propias — la `service_role` resultante va en `apps/api/.env` como `SUPABASE_SERVICE_ROLE_KEY`. Ver `docs/DEPLOY.md` § 7 y `docs/specs/hardening-kong-demo-keys.md`.
-- **Init ordenado** (string-sort): `01-roles` → `02-jwt` → `10..13-migraciones`. **Cada migración nueva se agrega como `14-…`, `15-…` en el compose.**
 - **R1 resuelto** (2026-06-30): antes esto era Postgres pelado sin REST; verificado end-to-end con curl (las 8 tablas responden con la `service_role`, 401 sin apikey).
+
+### Runner de migraciones (2026-07-21 — spec `remediacion-integracion-mp`, PR 2)
+
+Los init-scripts de Docker corren **únicamente con el volumen vacío** — sobre una base ya
+desplegada Postgres los saltea en silencio, así que dejaron de ser el mecanismo de migración
+(antes actualizar una instalación existente era imposible sin borrar el volumen). Ahora:
+
+- **El backend aplica las migraciones en el boot** (`apps/api/src/infra/migrations/`), después
+  de verificar la conexión y antes de que nada lea el schema. También a mano:
+  `pnpm --filter cocktrail-api db:migrate` (útil para operar la mini-PC sin rebootear).
+- **Conexión directa a Postgres** por `DATABASE_URL` (default
+  `postgres://postgres:postgres@127.0.0.1:54322/postgres`). `pg-migrations.repository.ts` es
+  **el único archivo del repo que usa el driver `pg`** — todo lo demás sigue en PostgREST, que
+  no puede ejecutar DDL. Habla el protocolo de Postgres (no Docker ni REST), así que sobrevive
+  al Postgres embebido de la Fase 6.
+- **Tracking en `schema_migrations`** (version = nombre de archivo como identidad, checksum
+  sha256 informativo, `applied_by`: `baseline`|`runner`), con `REVOKE` a `anon`/`authenticated`.
+  Bootstrap idempotente en código (no es una migración más). Advisory lock contra corridas
+  concurrentes. Cada `.sql` corre en su propia transacción que incluye su registro.
+- **Backfill por re-ejecución**: con la tabla vacía (instalación creada por init-scripts, o de
+  cero) se aplican TODAS como `baseline` — por eso **toda migración debe ser idempotente**
+  (`IF NOT EXISTS`, guardas `DO $$`, seeds con `WHERE NOT EXISTS`). Es un **invariante duro**:
+  la directiva `-- migrate:no-transaction` (1ª línea, para DDL no transaccional) registra fuera
+  de la transacción y un crash entre SQL y registro re-ejecuta el archivo en el próximo boot.
+- **Fail-open**: si una migración falla, el backend arranca igual con el schema anterior (una
+  caja en pleno turno no se apaga por una migración). La contrapartida no negociable: estado
+  degradado en `GET /api/system/health` (liviano, staff, sin rate-limit — a diferencia de
+  `/api/system/status` que es caro y limitado a 10 req/min) y **banner rojo persistente** en
+  `/admin` (`MigrationsBanner.tsx`, polling 60s).
+- **Drift**: si un archivo ya aplicado cambia, se flaggea (warning + banner) pero no se
+  re-ejecuta ni bloquea. Remediación manual: verificar el cambio y actualizar el checksum.
+- `supabase/migrations/schema.sql` (dump cumulativo viejo) queda **excluido** del runner por
+  no matchear el patrón `<timestamp14>_*.sql`.
 
 ---
 

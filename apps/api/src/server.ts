@@ -1,8 +1,12 @@
 import { env } from "./config/env.js";
 import { app, eventsService, syncService } from "./app.js";
 import { supabase } from "./shared/supabase.js";
+import { runMigrations } from "./infra/migrations/migration-runner.js";
+import { PgMigrationsRepository } from "./infra/migrations/pg-migrations.repository.js";
 import { exec } from "node:child_process";
 import { networkInterfaces } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** IP LAN real de esta máquina (no "localhost") — la necesita cualquier dispositivo
  * de la red (tablet de caja/barra) para llegar al backend, a diferencia de localhost
@@ -93,12 +97,30 @@ async function boot() {
   // 2. Perform self-healing local DB connection check and initialization
   let dbInitialized = false;
 
-  async function initializeDatabase() {
-    console.log("[boot] Checking local database connection...");
-    await ensureDatabaseConnection();
-    console.log("[boot] Local database connection verified.");
+  // Fail-open: una migración fallida NO impide arrancar (la base queda como
+  // estaba — cada migración es una transacción atómica). La contrapartida es
+  // el estado degradado visible en /api/system/health y el banner de /admin.
+  async function runMigrationsFailOpen() {
+    try {
+      const migrationsDir = join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../../supabase/migrations",
+      );
+      await runMigrations({
+        repo: new PgMigrationsRepository(env.DATABASE_URL),
+        migrationsDir,
+      });
+    } catch (err: any) {
+      // runMigrations no lanza; esto es un cinturón extra.
+      console.error("[boot] Migrations runner failed unexpectedly:", err?.message || err);
+    }
+  }
 
-    // Initialize events service (queries local database)
+  // Pasos comunes al camino feliz y al retry-loop: el runner corre después de
+  // verificar conexión y ANTES de que nada lea el schema.
+  async function initializeDatabaseCore() {
+    await runMigrationsFailOpen();
+
     await eventsService.initialize();
     console.log("[boot] EventsService initialized");
 
@@ -106,35 +128,33 @@ async function boot() {
     console.log("[boot] Ensuring local master data is seeded...");
     await syncService.ensureLocalMasterDataSeeded();
     console.log("[boot] Local master data check completed.");
-    
+
     dbInitialized = true;
+  }
+
+  async function initializeDatabase() {
+    console.log("[boot] Checking local database connection...");
+    await ensureDatabaseConnection();
+    console.log("[boot] Local database connection verified.");
+    await initializeDatabaseCore();
   }
 
   initializeDatabase().catch(async (err: any) => {
     console.error("❌ Failed to initialize local database on boot:", err.message || err);
     console.log("[boot] Database initialization failed. Starting background auto-healing retry loop...");
-    
+
     while (!dbInitialized) {
       try {
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        
+
         // Quick connection check
         const { error } = await supabase.from("night_events").select("id").limit(1);
         if (error && (error.message.includes("fetch failed") || error.message.includes("ECONNREFUSED"))) {
           throw new Error(error.message);
         }
-        
+
         console.log("[boot] [Retry] Local database connection established!");
-        
-        // Re-run initialization steps
-        await eventsService.initialize();
-        console.log("[boot] [Retry] EventsService initialized");
-
-        console.log("[boot] [Retry] Ensuring local master data is seeded...");
-        await syncService.ensureLocalMasterDataSeeded();
-        console.log("[boot] [Retry] Local master data check completed.");
-
-        dbInitialized = true;
+        await initializeDatabaseCore();
         console.log("[boot] [Retry] Database initialization fully completed successfully!");
       } catch (retryErr: any) {
         // Silently retry to avoid log spam in terminal

@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "db:reset": "tsx src/scripts/reset-data.ts",
+    "db:migrate": "tsx src/scripts/migrate.ts",
     "verify-sync": "tsx src/scripts/verify-sync.ts",
     "typecheck": "tsc --noEmit",
     "test": "pnpm test:unit && pnpm test:integration",
@@ -24,6 +25,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
+    "pg": "^8.22.0",
     "zod": "^3.25.20"
   },
   "devDependencies": {
@@ -31,6 +33,7 @@
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.9",
     "supertest": "^7.2.2",

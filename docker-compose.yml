@@ -46,40 +46,14 @@ services:
       - ${POSTGRES_EXTERNAL_PORT:-54322}:5432
     volumes:
       - cocktrail_db_data:/var/lib/postgresql/data
-      # Orden de init = orden alfabético del nombre dentro de init-scripts/.
-      # OJO: es string-sort, así que zero-padeamos ("10-" < "20-").
+      # Los init-scripts solo dejan roles y JWT (corren ÚNICAMENTE en el primer
+      # arranque con volumen vacío). Las migraciones de supabase/migrations/ las
+      # aplica el backend en el boot — runner en apps/api/src/infra/migrations/
+      # (también a mano: `pnpm --filter cocktrail-api db:migrate`).
       #   01-roles -> setea el password de `authenticator` (los roles ya existen)
       #   02-jwt   -> expone el jwt secret como GUC
-      #   10..13   -> migraciones del proyecto, en orden, DESPUÉS de los roles
-      # NUEVA MIGRACIÓN: agregá acá una línea `14-...`, `15-...`, etc.
       - ./supabase/docker/roles.sql:/docker-entrypoint-initdb.d/init-scripts/01-roles.sql:Z
       - ./supabase/docker/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/02-jwt.sql:Z
-      - ./supabase/migrations/20240101000000_schema.sql:/docker-entrypoint-initdb.d/init-scripts/10-schema.sql:Z
-      - ./supabase/migrations/20240102000000_edge_sync.sql:/docker-entrypoint-initdb.d/init-scripts/11-edge_sync.sql:Z
-      - ./supabase/migrations/20260626175947_add_closed_by.sql:/docker-entrypoint-initdb.d/init-scripts/12-add_closed_by.sql:Z
-      - ./supabase/migrations/20260629201500_create_audit_logs.sql:/docker-entrypoint-initdb.d/init-scripts/13-create_audit_logs.sql:Z
-      - ./supabase/migrations/20260701000000_add_keyword.sql:/docker-entrypoint-initdb.d/init-scripts/14-add_keyword.sql:Z
-      # Fase 0 — Integración MP (docs/plans/plan-implementacion-mp.md). Orden = deps de FK.
-      - ./supabase/migrations/20260715000000_bars.sql:/docker-entrypoint-initdb.d/init-scripts/15-bars.sql:Z
-      - ./supabase/migrations/20260715000100_mercadopago_sellers.sql:/docker-entrypoint-initdb.d/init-scripts/16-mercadopago_sellers.sql:Z
-      - ./supabase/migrations/20260715000200_mercadopago_cajas.sql:/docker-entrypoint-initdb.d/init-scripts/17-mercadopago_cajas.sql:Z
-      - ./supabase/migrations/20260715000300_mercadopago_cajas_devices.sql:/docker-entrypoint-initdb.d/init-scripts/18-mercadopago_cajas_devices.sql:Z
-      - ./supabase/migrations/20260715000400_oauth_states.sql:/docker-entrypoint-initdb.d/init-scripts/19-oauth_states.sql:Z
-      # Fase 1 — columnas extra del flujo OAuth cloud (bars.seller_user_id, sellers nickname/email)
-      - ./supabase/migrations/20260715000500_mp_oauth_cloud_columns.sql:/docker-entrypoint-initdb.d/init-scripts/20-mp_oauth_cloud_columns.sql:Z
-      # Fase 4 — mp_orders (QR / Point) + devices.caja_id nullable
-      - ./supabase/migrations/20260717221900_mp_orders.sql:/docker-entrypoint-initdb.d/init-scripts/21-mp_orders.sql:Z
-      - ./supabase/migrations/20260717224503_mp_devices_nullable_caja.sql:/docker-entrypoint-initdb.d/init-scripts/22-mp_devices_nullable_caja.sql:Z
-      # Sellers: nombre en UI + tokens nullable (OAuth pendiente)
-      - ./supabase/migrations/20260718000000_seller_name_columns.sql:/docker-entrypoint-initdb.d/init-scripts/23-seller_name_columns.sql:Z
-      - ./supabase/migrations/20260718010000_sellers_nullable_tokens.sql:/docker-entrypoint-initdb.d/init-scripts/24-sellers_nullable_tokens.sql:Z
-      # Fase 3 — bars.code (BARRA-01 ↔ UUID) + seed Barra VIP
-      - ./supabase/migrations/20260719000000_bars_code.sql:/docker-entrypoint-initdb.d/init-scripts/25-bars_code.sql:Z
-      # Sesiones de caja por barra
-      - ./supabase/migrations/20260720000000_bar_sessions.sql:/docker-entrypoint-initdb.d/init-scripts/26-bar_sessions.sql:Z
-      - ./supabase/migrations/20260720000100_bar_sessions_last_seen.sql:/docker-entrypoint-initdb.d/init-scripts/27-bar_sessions_last_seen.sql:Z
-      # pgTAP: solo dev/local, para correr supabase/tests/*.sql
-      - ./supabase/migrations/20260715000600_pgtap_extension.sql:/docker-entrypoint-initdb.d/init-scripts/28-pgtap_extension.sql:Z
 
   rest:
     image: postgrest/postgrest:v14.12

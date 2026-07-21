@@ -26,6 +26,14 @@ const EnvSchema = z.object({
   SUPABASE_CLOUD_URL: z.string().url().optional(),
   SUPABASE_CLOUD_SERVICE_ROLE_KEY: z.string().optional(),
 
+  // Postgres directo — SOLO lo usa el runner de migraciones (infra/migrations).
+  // Default = compose local: puerto host 54322, password "postgres"
+  // (docker-compose.yml:38-46). Vale también para `supabase start` (CLI).
+  DATABASE_URL: z
+    .string()
+    .url()
+    .default("postgres://postgres:postgres@127.0.0.1:54322/postgres"),
+
   // Mercado Pago — Posnet/Point legacy (single-seller, sandbox)
   MP_ACCESS_TOKEN: z.string().optional(),
   MP_POS_DEVICE_ID: z.string().optional(),
