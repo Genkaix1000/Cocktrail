@@ -453,25 +453,26 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 
 ### PR 1 — Suite en verde + comentarios que mienten (no toca runtime)
 
-- [ ] 🟨 Arreglar el toggle Sandbox de `PagosSection.tsx:599-612`: convertirlo en un control accesible con nombre ("Sandbox") y `aria-pressed`/`role="switch"`, para que el test `persiste el toggle Sandbox` pase. **No** tocar la lógica de negocio.
-- [ ] Verificar que el test `persiste el toggle Sandbox al cambiarlo` pasa; los otros 6 de `PagosSection.test.tsx` (PDV/Posnet) quedan pendientes hasta PR 6 (se migran allá) — dejarlos explícitamente `skip` con un comentario que apunte a PR 6, para no dejar la suite roja.
-- [ ] Borrar el comentario mentiroso de `credentials-resolver.service.ts:66-67` que afirma un `FOR UPDATE` inexistente. No reemplazar por otra promesa de lock.
-- [ ] `pnpm typecheck` + `pnpm test` en verde.
+- [x] 🟨 Arreglar el toggle Sandbox de `PagosSection.tsx:599-612`: convertirlo en un control accesible con nombre ("Sandbox") y `aria-pressed`/`role="switch"`, para que el test `persiste el toggle Sandbox` pase. **No** tocar la lógica de negocio.
+- [x] Verificar que el test `persiste el toggle Sandbox al cambiarlo` pasa; los otros 6 de `PagosSection.test.tsx` (PDV/Posnet) quedan pendientes hasta PR 6 (se migran allá) — dejarlos explícitamente `skip` con un comentario que apunte a PR 6, para no dejar la suite roja.
+- [x] Borrar el comentario mentiroso de `credentials-resolver.service.ts:66-67` que afirma un `FOR UPDATE` inexistente. No reemplazar por otra promesa de lock.
+- [x] `pnpm typecheck` + `pnpm test` en verde.
 
 ### PR 2 — Runner de migraciones (schema idéntico, sin cambio observable)
 
-- [ ] Sumar dependencia `pg` + `@types/pg` a `apps/api`.
-- [ ] 🟦 Auditar las 19 migraciones existentes en `supabase/migrations/` y dejarlas todas idempotentes (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`, guardas `DO $$`). Documentar cuáles ya lo eran.
-- [ ] 🟦 Migración nueva `schema_migrations` (version TEXT PK = nombre de archivo, checksum sha256, applied_at, duration_ms, applied_by) con `REVOKE ALL FROM anon, authenticated`.
-- [ ] `apps/api/src/infra/migrations/pg-migrations.repository.ts` — único lugar con `pg`: conexión por `DATABASE_URL` (nueva env, default `postgres://postgres:postgres@127.0.0.1:54322/postgres`), `pg_advisory_lock`, ejecución de cada `.sql` completo en una transacción con su registro, `pg_advisory_unlock`.
-- [ ] `apps/api/src/infra/migrations/migration-runner.ts` — orquestación: lista archivos ordenados, filtra aplicados, aplica pendientes; convención `-- migrate:no-transaction` en 1ª línea para DDL no transaccional. Backfill por re-ejecución (primer arranque aplica todas con `applied_by='baseline'`).
-- [ ] `apps/api/src/infra/migrations/migrations-status.ts` — singleton `{ pending, failed, drift }`.
-- [ ] Integrar en `apps/api/src/server.ts` dentro de `boot()`, después de `ensureDatabaseConnection()` y antes de `pullMasterData`, en `try/catch` que **nunca** re-lanza (fail-open).
-- [ ] Exponer el estado en `GET /api/system/health` (leer el singleton desde `systemService`).
-- [ ] 🟨 Banner rojo persistente en `/admin` cuando `pending`/`failed`/`drift` — la contrapartida no negociable del fail-open.
-- [ ] Quitar las 19 líneas de migraciones de `docker-compose.yml:57-79`; dejar solo `01-roles.sql` y `02-jwt.sql`.
-- [ ] **Verificación**: correr el runner sobre la DB local actual (8 tablas viejas) → aplica las 14 nuevas conservando 29 tragos + 109 noches. Correrlo dos veces seguidas → idéntico, sin fallar. Comparar con una DB creada de cero (mismo schema).
-- [ ] `pnpm typecheck` + tests del runner.
+- [x] Sumar dependencia `pg` + `@types/pg` a `apps/api`.
+- [x] 🟦 Auditar las 19 migraciones existentes en `supabase/migrations/` y dejarlas todas idempotentes (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`, guardas `DO $$`). Documentar cuáles ya lo eran.
+- [x] 🟦 Migración nueva `schema_migrations` (version TEXT PK = nombre de archivo, checksum sha256, applied_at, duration_ms, applied_by) con `REVOKE ALL FROM anon, authenticated`.
+  > Implementado como **bootstrap idempotente en código** (constante en `pg-migrations.repository.ts`), no como `.sql`: una migración que se registra a sí misma es circular. El REVOKE se re-asegura al final de cada corrida porque las migraciones legacy hacen `GRANT ALL ON ALL TABLES` a `anon` (deuda anotada).
+- [x] `apps/api/src/infra/migrations/pg-migrations.repository.ts` — único lugar con `pg`: conexión por `DATABASE_URL` (nueva env, default `postgres://postgres:postgres@127.0.0.1:54322/postgres`), `pg_advisory_lock`, ejecución de cada `.sql` completo en una transacción con su registro, `pg_advisory_unlock`.
+- [x] `apps/api/src/infra/migrations/migration-runner.ts` — orquestación: lista archivos ordenados, filtra aplicados, aplica pendientes; convención `-- migrate:no-transaction` en 1ª línea para DDL no transaccional. Backfill por re-ejecución (primer arranque aplica todas con `applied_by='baseline'`).
+- [x] `apps/api/src/infra/migrations/migrations-status.ts` — singleton `{ pending, failed, drift }`.
+- [x] Integrar en `apps/api/src/server.ts` dentro de `boot()`, después de `ensureDatabaseConnection()` y antes de `pullMasterData`, en `try/catch` que **nunca** re-lanza (fail-open).
+- [x] Exponer el estado en `GET /api/system/health` (leer el singleton desde `systemService`).
+- [x] 🟨 Banner rojo persistente en `/admin` cuando `pending`/`failed`/`drift` — la contrapartida no negociable del fail-open.
+- [x] Quitar las 19 líneas de migraciones de `docker-compose.yml:57-79`; dejar solo `01-roles.sql` y `02-jwt.sql`.
+- [x] **Verificación**: correr el runner sobre la DB local actual (8 tablas viejas) → aplica las 14 nuevas conservando 29 tragos + 109 noches. Correrlo dos veces seguidas → idéntico, sin fallar. Comparar con una DB creada de cero (mismo schema).
+- [x] `pnpm typecheck` + tests del runner.
 
 ### PR 3 — Integridad del cobro (cierra el bloque A)
 
