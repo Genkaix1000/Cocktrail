@@ -13,7 +13,7 @@
 | 1 — Suite en verde + comentarios falsos | ✅ `ba7c113` |
 | 2 — Runner de migraciones | ✅ `2745f7c` |
 | 3 — Integridad del cobro (bloque A) | ✅ `e3f1a29` — **gate físico pasado el 2026-07-22** (cobro real aprobado con el Posnet en PDV, ticket impreso) |
-| 4 — Inversión del token + single-seller + seguridad | ← **siguiente** |
+| 4 — Inversión del token + single-seller + seguridad | 🟡 **código implementado y deployado** (`db1e31d`, 2026-07-22: backend + Edge Function + UI + 3 migraciones; EF deployada y `MP_HANDOFF_KEY` seteado vía CLI). Pendiente operativo: `pr4-cloud.sql` en el dashboard (purga — punto de no retorno), re-vincular por OAuth, y el gate físico con Cloud cortado |
 | 5 — Sync / conciliación | pendiente |
 | 6 — Sesiones de caja + PDVs + docs | pendiente |
 

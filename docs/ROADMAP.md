@@ -38,7 +38,7 @@ sigue: el **PR 4** de la remediación MP.
 | # | Qué | Por qué va en ese lugar | Estado |
 |---|---|---|---|
 | 1 | **Cobro verificado** (`specs/mercadopago/cobro-verificado.md`) | Era el único que perdía plata **en cada uso**. | ✅ **`done` (2026-07-22)** — implementado, sync a Cloud verificado y **gate físico pasado** (rechazos reales sin ticket ni pedido; cobro aprobado ligado a su pago) |
-| 2 | **PR 4** de la remediación MP | Cimiento: hoy hay **dos sellers activos** y el sistema elige el correcto por casualidad (R21). Construir la gestión de Posnets encima de eso es edificar sobre algo que se mueve. Además es el que habilita migrar a la cuenta del boliche. | ⏳ **← SIGUIENTE** |
+| 2 | **PR 4** de la remediación MP (código ✅ `db1e31d`; faltan los pasos operativos + gate) | Cimiento: hoy hay **dos sellers activos** y el sistema elige el correcto por casualidad (R21). Construir la gestión de Posnets encima de eso es edificar sobre algo que se mueve. Además es el que habilita migrar a la cuenta del boliche. | ⏳ **← SIGUIENTE** |
 | 3 | **Gestión de Posnets** (`specs/mercadopago/gestion-posnets.md`) **+ PR 6** | Son la misma pantalla: el PR 6 cablea la UI de PDVs y la spec le da la funcionalidad que hoy no existe. Separarlas es tocar los mismos archivos dos veces. | spec `draft` |
 | 4 | **PR 5** — conciliación / sync | Se beneficia del #1: el intent del Posnet ahora **sí** se persiste en `mp_orders` (R19 resuelto), así que la conciliación tiene datos reales sobre los que trabajar. | pendiente |
 | 5 | **Fase 6** — empaquetado | Nada de lo anterior es opcional para poder entregar el producto. | pendiente |
