@@ -7,7 +7,43 @@
 > [`docs/specs/`](./specs/README.md), organizada por fase (`01-tickets-impresora/`,
 > `02-auditoria-api/`, …). Los planes técnicos correspondientes viven en `docs/plans/` con
 > las mismas subcarpetas. Cada sección de abajo linkea su carpeta y sus documentos.
-> Última actualización: 2026-07-21.
+> Última actualización: 2026-07-22.
+
+---
+
+## 🧭 Dónde estamos y qué sigue *(2026-07-22)*
+
+**En una línea**: el cobro con Posnet físico ya funciona de punta a punta, pero el sistema
+**registra como venta un pago que Mercado Pago rechazó**. Eso se arregla primero; todo lo demás
+espera.
+
+### Lo que se cerró el 2026-07-22
+
+- **Titularidad del Posnet destrabada** — dejó de depender de un tercero. El lector
+  `PAX_A910__SMARTPOS1493600985` pasó a la cuenta propia, quedó colgado de la caja "Barra VIP"
+  (`COCKTRAILBAR01`) y **en modo PDV**. Ver "Remediación de la integración Mercado Pago".
+- **Gate físico del PR 3 pasado** — cobro real con el Posnet, aprobado, con ticket impreso.
+- **El cobro por QR quedó verificado a nivel código**: funciona por *polling* contra MP y **no**
+  depende del webhook (que hoy está caído por `MP_WEBHOOK_SECRET` vacía, R26). Falta probarlo con
+  plata real, aprobada y rechazada.
+- **Bug crítico encontrado y reproducido con evidencia cruda** — ver la sección "Cobro verificado".
+
+### Orden de trabajo acordado
+
+| # | Qué | Por qué va en ese lugar | Estado |
+|---|---|---|---|
+| 1 | **Cobro verificado** (`specs/mercadopago/cobro-verificado.md`) | Es el único que pierde plata **en cada uso**. Lo demás son riesgos; esto es daño presente. | spec `draft`, evidencia empírica capturada — **listo para `/plan`** |
+| 2 | **PR 4** de la remediación MP | Cimiento: hoy hay **dos sellers activos** y el sistema elige el correcto por casualidad (R21). Construir la gestión de Posnets encima de eso es edificar sobre algo que se mueve. Además es el que habilita migrar a la cuenta del boliche. | pendiente |
+| 3 | **Gestión de Posnets** (`specs/mercadopago/gestion-posnets.md`) **+ PR 6** | Son la misma pantalla: el PR 6 cablea la UI de PDVs y la spec le da la funcionalidad que hoy no existe. Separarlas es tocar los mismos archivos dos veces. | spec `draft` |
+| 4 | **PR 5** — conciliación / sync | Se beneficia del #1: hoy el Posnet **no deja fila en `mp_orders`** (R19), y el #1 obliga a persistir el intent. Hacerlo antes sería conciliar sobre datos que no existen. | pendiente |
+| 5 | **Fase 6** — empaquetado | Nada de lo anterior es opcional para poder entregar el producto. | pendiente |
+
+### Decisiones pendientes del dueño del proyecto
+
+- ¿El **chequeo de salud** de la vinculación MP debe **bloquear** el cobro o solo advertir?
+  (criterio G de `gestion-posnets.md`)
+- ¿Un mismo Posnet puede **rotar entre dos barras** en noches distintas? Hoy el modelo dice que no
+  — hay que confirmar que no existe el caso de un local con un solo aparato que lo mueve.
 
 ---
 
@@ -206,7 +242,62 @@ La deuda estructural de Fase 2 vive con su fase:
 
 ---
 
-## Remediación de la integración Mercado Pago 🔧 *(en progreso, 2026-07-21)*
+## Cobro verificado — el sistema registra ventas NO cobradas 🚨 *(bloqueante, 2026-07-22)*
+
+> 🔴 **Tiene prioridad sobre el PR 4 de la remediación.** Un sistema que registra ventas no cobradas
+> no se puede poner en un boliche. Todo lo demás espera.
+
+**Qué pasó** (reproducido en vivo el 2026-07-22): se cobró con el Posnet físico usando una **tarjeta
+sin fondos**. Mercado Pago rechazó el pago (`cc_rejected_insufficient_amount`) y **Cocktrail imprimió
+el ticket y registró la venta como concretada**. El boliche entregó producto sin cobrar y la caja no
+cuadra.
+
+**Causa raíz**: el campo `state` del payment intent describe el **ciclo de vida del intent**, no el
+resultado del pago. `FINISHED` significa "el intent terminó" y convive con `payment.status:
+"rejected"`. El backend devuelve ese estado crudo (`mercadopago.service.ts:286`) sin consultar nunca
+el pago real, y el frontend concreta la venta con esa sola palabra (`useCheckout.ts:298`). La función
+correcta —`mapPaymentStatusToNormalized`— **ya existe** (`mercadopago.service.ts:30-34`); solo se
+invoca dentro del `if (rawStatus === "CONFIRMATION_REQUIRED")`.
+
+**El bug nació en la doc**: `docs/mp/api-point-devices.md:93` dice `FINISHED → FINISHED → Concretar
+pedido ✅`, y `cobro-posnet-mercadopago.md:90-92` lo repite como criterio de aceptación cumplido.
+Mientras eso siga escrito, cualquiera lo reintroduce con la doc de su lado.
+
+**Lo que dejó a la vista**: el intent del Posnet no se persiste en ningún lado · `Order` no tiene
+ningún campo de pago (`domain.ts:38-56`) · el ticket se imprime según `isStaffOrder`
+(`orders.service.ts:83`), no según el cobro · el monto aprobado nunca se compara contra el carrito ·
+la constancia de "venta cobrada sin registrar" se escribe **antes** de registrar · el polling del
+Posnet no tiene deadline · un rechazo por fondos se muestra como *"la cancelaron a propósito"*.
+
+**Los webhooks no salvaban nada**: `MP_WEBHOOK_SECRET` vacía → 401 (R26) · se descarta todo lo que no
+sea `type === "order"` y el topic de Point es `payment_intent` · `reconcileFromMp` solo toca
+`mp_orders` y nada revierte una `Order`. La verificación tiene que ser **sincrónica**.
+
+**Alcance**: Posnet 🔴 roto y confirmado empíricamente · QR 🟡 **sin verificar** (mismo patrón de
+razonamiento en `useCheckout.ts:367`; probablemente se salva porque la Orders API tiene `failed` como
+estado propio, pero hay que probarlo).
+
+- [ ] El backend consulta el pago real ante **cualquier** estado terminal con `payment.id` — con
+  tarjeta sin fondos el endpoint debe devolver `CANCELED`, nunca `FINISHED`.
+- [ ] `FINISHED` sin `payment.id` es **indeterminado**, no cobrado: reintento acotado y, si no se
+  resuelve, estado explícito de "no confirmado" que pide verificación humana. **Ante la duda, NO
+  cobrado.**
+- [ ] Se verifica que el monto aprobado coincida con el total del carrito (Posnet **y** QR).
+- [ ] La cajera lee el motivo real del rechazo, para poder pedir otro medio de pago.
+- [ ] `POST /api/orders` con método no-efectivo **exige prueba de pago y la valida server-side**
+  (implica persistir el intent de Point y agregar la referencia de pago a `Order`).
+- [ ] La impresión del ticket cuelga del cobro verificado, no de `isStaffOrder`.
+- [ ] El polling del Posnet tiene deadline, como el del QR.
+- [ ] Se corrigen las dos afirmaciones falsas de la doc (`docs/mp/api-point-devices.md:93` y
+  `cobro-posnet-mercadopago.md:90-92`).
+
+📁 Spec: [`specs/mercadopago/cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md)
+(`draft`). Riesgo asociado: **R27**. Plan y tareas pendientes — se escriben después de responder las
+preguntas abiertas contra la API real de MP.
+
+---
+
+## Remediación de la integración Mercado Pago 🔧 *(en progreso, 2026-07-22)*
 
 **Origen**: el 2026-07-17 entró a `develop` la integración completa de MP (OAuth, provisioning, QR,
 webhooks) + sesiones de caja, **sin revisión**. Una auditoría en profundidad encontró **12 defectos
@@ -228,10 +319,15 @@ Log de deuda encontrada durante la implementación:
 |---|---|---|
 | 1 | Suite de tests en verde + comentarios falsos | ✅ `ba7c113` |
 | 2 | **Runner de migraciones** — antes no existía forma de actualizar el schema de una base ya desplegada sin borrarla (bloqueante de producción, independiente de MP) | ✅ `2745f7c` |
-| 3 | Integridad del cobro: idempotencia real, timeouts, webhooks durables, constancia de ventas cobradas sin registrar | ✅ `e3f1a29` — **falta el gate**: cobro real con Posnet físico (bloqueado, ver abajo) |
+| 3 | Integridad del cobro: idempotencia real, timeouts, webhooks durables, constancia de ventas cobradas sin registrar | ✅ `e3f1a29` — **falta el gate**: cobro real con Posnet físico. **Ya no está bloqueado por un tercero** (destrabado el 2026-07-22): falta pasar el lector a modo PDV, asignarle store/POS, apuntar `MP_POS_DEVICE_ID` al lector correcto y correr el test de $15 |
 | 4 | **Invertir la dirección del token**: cobrar deja de depender de Supabase Cloud (D1). Cifrado de tokens, modelo single-seller (vincular reemplaza + Desvincular), validación server-side de barra/dispositivo | ⏳ **← SIGUIENTE** |
 | 5 | Conciliación: los cobros MP suben a la nube al cerrar la noche | ⏳ pendiente |
 | 6 | Sesiones de caja (que hoy se auto-bloquean) + cableado del CRUD de PDVs + docs | ⏳ pendiente |
+
+> 🚨 **Reprioritizado el 2026-07-22: antes del PR 4 va "Cobro verificado"** (sección de arriba,
+> R27). El PR 4 evita que la plata vaya a la cuenta equivocada; el bug de cobro verificado hace que
+> **la plata no entre en ninguna cuenta y el sistema diga que sí**. Es más grave y más barato de
+> arreglar. Lo de abajo queda vigente, pero inmediatamente después.
 
 > 🎯 **Próxima sesión (definido el 2026-07-21): arrancar por el PR 4.** Es el que cierra la fuga
 > más peligrosa que dejó a la vista el episodio del Posnet: **hoy hay dos sellers activos y el
@@ -241,91 +337,131 @@ Log de deuda encontrada durante la implementación:
 > para migrar a la cuenta del dueño cuando toque.
 >
 > Antes de codear: **re-verificar los supuestos del PR 4 contra el estado real** — la sección se
-> escribió antes de los hallazgos del 21-07 y al menos uno ya cayó (los cobros salen por el nivel 2
-> OAuth, no por el fallback env como asumía el plan). Hay una pasada de auditoría de la spec en
-> curso con ese objetivo.
+> escribió antes de los hallazgos del 21-07 y ya cayeron dos: (1) los cobros salen por el nivel 2
+> OAuth, no por el fallback env como asumía el plan; y (2) **el fallback al nivel 3 no salva el cobro
+> por Posnet** salvo que el `MP_ACCESS_TOKEN` sea de la misma *aplicación* de MP que el lector
+> (R24, verificado el 22-07). La tarea correspondiente ya está reformulada en la spec.
 >
-> En paralelo (no bloquea el PR 4): pedirle al otro desarrollador que **dé de baja el lector de su
-> cuenta** para poder correr los gates físicos de PR 3 y PR 4.
+> El bloqueo de titularidad del lector que frenaba los gates físicos de PR 3 y PR 4 **se resolvió el
+> 2026-07-22** — ver el bloque de abajo.
 
-> 🟡 **Bloqueo actual (2026-07-21) — titularidad del Posnet, NO es la cuenta del dueño.** El gate del
-> PR 3 (cobro real de $15) está frenado por una causa mundana: **el Posnet nuevo ya estaba registrado
-> en la cuenta de Mercado Pago del otro desarrollador** (Matías Asin, `ASMA4106894` /
-> `logzone@outlook.com`), probablemente de cuando desarrolló la integración. **No hace falta esperar
-> a la cuenta del dueño del boliche para destrabarlo.**
+> ✅ **Bloqueo de titularidad del Posnet — RESUELTO el 2026-07-22.**
 >
-> Diagnóstico verificado por API y en el panel de MP:
+> **Qué pasaba** (2026-07-21): el gate del PR 3 (cobro real de $15) estaba frenado por una causa
+> mundana — **el Posnet nuevo ya estaba registrado en la cuenta de Mercado Pago del otro
+> desarrollador** (Matías Asin, `ASMA4106894` / `logzone@outlook.com`, user `225043369`),
+> probablemente de cuando desarrolló la integración. El panel del lector mostraba `log****@outlook.com`
+> en el campo **"Cuenta"**; **cerrar sesión no liberaba la titularidad** (el lector figuraba "Sin
+> sesión activa" y seguía en esa cuenta), y reconfigurarlo con otra cuenta devolvía *"Tu cuenta no
+> tiene permiso para iniciar sesión"*. Entrando como **colaborador** sí se configuraba, pero entonces
+> **los cobros entraban a la cuenta del colaborado** — comprobado con un cobro de prueba de $15.
 >
-> - En el panel del lector, el campo **"Cuenta"** muestra `log****@outlook.com` → la **titularidad**
->   es de esa cuenta, y está asignado a su caja "Local - QR #1".
-> - **Cerrar sesión no libera la titularidad**: el lector aparece "Sin sesión activa" y aun así sigue
->   figurando en esa cuenta. Por eso, al reconfigurarlo con otra cuenta, MP responde *"Tu cuenta no
->   tiene permiso para iniciar sesión — Podés ingresar usando una cuenta vinculada a este
->   establecimiento"*.
-> - Como Manuel es **colaborador** de esa cuenta (con su mismo email), el lector sí se configura
->   desde ese contexto — pero entonces **los cobros entran a la cuenta del colaborado**. Comprobado:
->   un cobro de prueba de $15 quedó registrado en las ventas de esa cuenta.
-> - Estado al momento: los **dos** lectores (`…1494025317` y `…1493600985`) están en esa cuenta, en
->   modo **STANDALONE**; la cuenta de prueba de Manuel quedó con **cero** lectores.
+> **Cómo se destrabó** (2026-07-22): desde la app de MP, operando como colaborador dentro de la cuenta
+> de Matías, se usó la opción **"Eliminar el lector de mi cuenta"** sobre
+> `PAX_A910__SMARTPOS1493600985`. Resultado verificado por API (`GET /point/integration-api/devices`):
 >
-> **Salida**: que el otro desarrollador **dé de baja el lector de su cuenta** (o el trámite de cambio
-> de titularidad de MP). Liberado el aparato, se reclama desde el menú del equipo con la cuenta que
-> corresponda y se cierra el gate.
+> - Cuenta de Matías (`225043369`): pasó de `total: 2` a `total: 1`. Le queda solo
+>   `PAX_A910__SMARTPOS1494025317` (store `83923406`, POS `134012614`, sigue `STANDALONE`).
+> - Cuenta de Manuel (`1517393956`): pasó de `total: 0` a `total: 1` — apareció
+>   `PAX_A910__SMARTPOS1493600985` con `pos_id: 0`, `store_id: ""` y `operating_mode: STANDALONE`.
+>
+> O sea: **"Eliminar el lector de mi cuenta" desde un contexto de colaborador transfiere el lector a
+> la cuenta personal del colaborador**, no lo deja huérfano. Y **no** lo pone en modo PDV: eso es un
+> paso aparte (ver R25 y la feature de Posnets).
+>
+> **Qué falta para cerrar el gate** (ya no depende de un tercero): pasar `…1493600985` a modo **PDV**,
+> asignarle store/POS, apuntar `MP_POS_DEVICE_ID` al lector correcto —hoy vale
+> `PAX_A910__SMARTPOS1494025317`, el que quedó en la cuenta de Matías— y correr el test de $15.
 >
 > **Reglas que deja este episodio** (aplican también a la puesta en producción):
 > 1. El **lector y el seller vinculado a Cocktrail tienen que ser de la misma cuenta de MP**.
 > 2. La **titularidad manda sobre el login**: entrar como colaborador con tu email no cambia a qué
 >    cuenta entra la plata.
 > 3. El lector debe estar en **modo PDV**, no STANDALONE, para recibir cobros de un sistema externo.
+> 4. **OAuth da permiso sobre una cuenta, no posesión del hardware.** Mercado Pago no expone ningún
+>    endpoint para reclamar ni transferir un lector entre cuentas — eso se hace sí o sí desde la app
+>    de MP o desde el aparato. Por eso vincular por OAuth **nunca "trae" el Posnet**. Ahora bien, una
+>    vez que el lector ya está en la cuenta, el token OAuth sí puede listarlo, pasarlo a PDV, crear
+>    store/POS y obtener el QR estático. Conclusión práctica: el flujo ideal ("el dueño vincula su
+>    cuenta en `/admin` y configura su Posnet desde ahí") **es alcanzable con un único paso manual
+>    irreductible**: que el dueño reclame el lector en su cuenta desde la app de MP.
 
 ---
 
 ## Feature — Gestión de Posnets desde la app 📟 *(nueva, va ANTES de la Fase 6)*
 
-**Por qué existe esta entrada**: se descubrió el 2026-07-21, al intentar usar un Posnet nuevo, que
-**la pantalla de Posnets del admin es decorativa a los fines de cobrar**. El cobro resuelve el
-dispositivo desde la variable de entorno `MP_POS_DEVICE_ID` (`mercadopago.service.ts:178`); dar de
-alta o vincular un Posnet desde `/admin` **solo escribe en una tabla que ningún camino de cobro
-lee**. Consecuencia concreta y verificada: **cambiar de Posnet físico obliga a editar un `.env` y
+**Qué pasa**: se descubrió el 2026-07-21, al intentar usar un Posnet nuevo, que **la pantalla de
+Posnets del admin es decorativa a los fines de cobrar**. **Demostrado empíricamente el 2026-07-22**:
+se hizo un cobro real con el Posnet físico que funcionó perfectamente mientras `/admin → Pagos`
+mostraba **"0 Posnets"**, **"No hay Posnets registrados"** y **"Sin Posnet vinculado"**.
+
+**Causa**: el cobro resuelve el dispositivo desde la variable de entorno `MP_POS_DEVICE_ID`
+(`mercadopago.service.ts:178`); dar de alta o vincular un Posnet desde `/admin` **solo escribe en
+`mercadopago_cajas_devices`, tabla que ningún camino de cobro lee** (verificado: está vacía mientras
+el cobro funciona). Consecuencia concreta: **cambiar de Posnet físico obliga a editar un `.env` y
 reiniciar el backend** — imposible para el dueño del boliche.
 
-La spec de remediación contempló los *síntomas* (que el botón de prueba apunta al device equivocado,
-que el CRUD de PDVs está sin cablear, que `x-device-id` no se valida) pero **no la causa**: no existe
-el camino "device vinculado en la base → el cobro va a ese device".
+**Restricción irreductible**: **OAuth da permiso sobre una cuenta, no posesión del hardware.** MP no
+expone API para reclamar ni transferir un lector entre cuentas. Pero una vez que el lector está en la
+cuenta, el token OAuth alcanza para listarlo, pasarlo a PDV, crear sucursal/caja y sacar el QR — o
+sea que el flujo objetivo tiene **un único paso manual**: que el dueño reclame el lector desde la app
+de MP. Todo lo demás va en `/admin`.
 
-**Modelo objetivo** (decidido el 2026-07-21):
+**Modelo objetivo** (decidido el 2026-07-21): la **caja es la unidad estable** (su `external_pos_id`
+y su **QR estático no cambian nunca**, el QR está atado al punto de venta en MP, no al hardware); el
+**Posnet es hardware reemplazable** colgado de una caja (un device pertenece a una sola caja para
+siempre, pero una caja sí puede cambiar de device — el viejo queda histórico, no se borra, y el QR ni
+se entera); pueden convivir varios Posnets dados de alta, **uno solo activo por caja**.
 
-- **La caja (PDV) es la unidad estable.** Su `external_pos_id` y su **QR son estáticos y no cambian
-  nunca** — el QR vive en `mercadopago_cajas.qr_image`, atado al punto de venta en MP, **no al
-  hardware**. Esto es lo que ancla la auditoría y lo que el cliente escanea.
-- **El Posnet es hardware reemplazable colgado de una caja.** Un dispositivo se vincula a **una sola
-  caja y no se mueve entre cajas** (preserva la trazabilidad de los cobros históricos), pero **una
-  caja sí puede cambiar de dispositivo**: si el aparato se rompe o lo reemplazan, se vincula el nuevo
-  a la misma caja, el anterior queda desvinculado e histórico (no se borra) y **el QR ni se entera**.
-- Pueden convivir **varios Posnets dados de alta** (p.ej. uno de backup), pero **uno solo activo por
-  caja**. El cobro resuelve el dispositivo desde la caja; `MP_POS_DEVICE_ID` queda como fallback.
+- [ ] El cobro resuelve el `deviceId` desde el Posnet vinculado a la caja; `MP_POS_DEVICE_ID` queda
+  degradado a **último recurso** y su uso es visible, no silencioso.
+- [ ] Listar los Posnets de la cuenta desde la app, poner un lector en **modo PDV** desde la app, y
+  que `operating_mode` refleje el valor **real** de MP (R25).
+- [ ] Vincular / cambiar / desvincular un Posnet desde `/admin`, sin tocar el QR estático.
+- [ ] **Panel de salud de la vinculación** (R23): seller único y activo · lector en la misma cuenta ·
+  lector en PDV · caja provisionada en la cuenta activa. Más el chequeo de **misma aplicación** para
+  el token de la env (R24).
+- [ ] Sin prefijo de modelo hardcodeado, nombre de sucursal real (hoy es el literal `"Bosko"`), y
+  "Test $15" contra el Posnet de la fila con su resultado visible.
 
-- [ ] El cobro (`createPaymentIntent`) resuelve el `deviceId` desde el Posnet vinculado a la caja,
-  con la env como fallback. Hoy la env es la única fuente.
-- [ ] Vincular / cambiar / desvincular un Posnet desde `/admin`, con el invariante "un device pertenece
-  a una caja para siempre" y "una caja tiene a lo sumo un device activo".
-- [ ] **Listar los Posnets de la cuenta de MP** (`GET /point/integration-api/devices`): hoy la app
-  consulta ese endpoint dos veces pero siempre filtra por un ID conocido y descarta el resto, así que
-  **no hay forma de descubrir el ID de un aparato nuevo desde la app** — hay que sacarlo del equipo o
-  del panel de MP. Un endpoint que exponga la lista resolvería el alta a ciegas.
-- [ ] Quitar el prefijo hardcodeado `PAX_A910__SMARTPOS` del formulario de alta (`PagosSection.tsx:151`):
-  hoy solo se puede registrar ese modelo.
-- [ ] El botón "Test $15" debe disparar al Posnet de la fila, no siempre al de la env (ya estaba como
-  criterio G de la remediación, PR 6).
+📁 **Spec**: [`specs/mercadopago/gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md)
+(`draft`, 2026-07-22) — **fuente de verdad de esta feature**. Riesgos asociados: **R23**, **R24**,
+**R25** (y detecta R21/R22). Plan y tareas pendientes.
 
-📁 Docs: sin spec propia todavía — el contexto está en
-[`specs/mercadopago/`](./specs/mercadopago/) (PR 6 de
-[`remediacion-integracion-mp.md`](./specs/mercadopago/remediacion-integracion-mp.md)).
-
-> **Relación con la remediación**: el PR 6 de la spec de MP cablea la pantalla de PDVs; esta feature
-> le da la funcionalidad que hoy no existe. Conviene hacerlas juntas o esta inmediatamente después.
+> **Relación con la remediación**: el PR 6 de
+> [`remediacion-integracion-mp.md`](./specs/mercadopago/remediacion-integracion-mp.md) cablea la
+> pantalla de PDVs; esta feature le da la funcionalidad que hoy no existe. Conviene hacerlas juntas o
+> esta inmediatamente después. Con
+> [`cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md) no se pisan, pero ambas tocan
+> `mercadopago.service.ts` — coordinar si se hacen en paralelo.
 > **Va antes de la Fase 6** porque entregar un producto empaquetado donde cambiar un Posnet exige
 > editar un archivo de configuración por SSH no es entregable.
+
+### Procedimiento — migrar el Posnet a la cuenta del boliche *(acordado el 2026-07-22)*
+
+Las pruebas se hacen con la cuenta de Manuel (`1517393956`). Cuando llegue el momento de producción,
+el procedimiento es:
+
+1. Sacar el lector de la cuenta de Manuel con la misma opción **"Eliminar el lector de mi cuenta"**.
+2. **El dueño lo reclama desde SU cuenta** en la app de MP (paso manual irreductible — MP no expone
+   API para transferir hardware, ver regla 4 del episodio de titularidad).
+3. El dueño **vincula su cuenta por OAuth** en `/admin`.
+4. Se **desvinculan los sellers viejos** (el botón "Desvincular" del PR 4).
+5. Se **re-provisiona local/caja**, y **el QR estático CAMBIA**: si ya se imprimió, hay que
+   reimprimirlo. Esto es exactamente R22.
+
+> ⚠️ **Supuesto pendiente de verificar antes de la puesta en producción**: si un OAuth iniciado por un
+> **colaborador** genera token de la cuenta del colaborador o de la del negocio. Hay que probarlo — de
+> eso depende que el paso 3 haga lo que se espera.
+
+> 🧹 **Datos del boliche real provisionados en la cuenta equivocada** (verificado el 2026-07-22): el
+> store **"Bosko"** (`84800158`, `external_id=BOSKO`, Av. Corrientes 1000, La Plata, creado el
+> 2026-07-15) está en la cuenta de **Matías** (`225043369`), no en la de Manuel (ahí da 404).
+> "Bosko/Bósko" es el nombre del boliche real al que va a ir la plata en producción — o sea que hay
+> datos del boliche real provisionados en la cuenta del otro desarrollador. Además, la pantalla del
+> propio aparato mostraba un negocio "Bósko" y un nombre **"Mole"** que **no existe** como store ni
+> como POS en ninguna de las dos cuentas conocidas — queda sin explicación y anotado como tal, no se
+> adivina de dónde sale.
 
 ---
 
@@ -438,7 +574,9 @@ Solo quedan acá los riesgos **abiertos**. Los resueltos (R1-R7, R9, R10, R12, R
 esta tabla — el detalle de cada resolución está en la spec correspondiente o en el historial de
 git.
 
-> Los riesgos R17-R21 salieron de la auditoría y de la implementación de la remediación MP. El
+> Los riesgos R17-R26 salieron de la auditoría, de la implementación de la remediación MP y de la
+> verificación contra la API real de Mercado Pago (21 y 22-07). **R27 salió de un cobro real fallido
+> el 22-07 y es el único bloqueante duro de producción hoy.** El
 > inventario **completo** de deuda encontrada (con file:line y contexto) vive en
 > [`docs/plans/mercadopago/deuda-remediacion-mp.md`](./plans/mercadopago/deuda-remediacion-mp.md); acá suben solo los que
 > tienen impacto transversal o de seguridad.
@@ -453,9 +591,13 @@ git.
 | R18 | **Las 8 tablas legacy son escribibles por el rol anónimo**: `20240101000000_schema.sql:69` y `20240102000000_edge_sync.sql:47` hacen `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role`. Las tablas nuevas de MP sí revocan `anon` una por una; las viejas (`night_events`, `orders`, `tickets`, `drinks`, `users`, `app_config`, `audit_logs`, `cash_sales`) no. | **Seguridad**: cualquiera con la `anon key` pública y acceso a la LAN puede escribir/borrar pedidos, tickets y usuarios vía PostgREST. Hoy acotado a la red local del boliche; sería crítico si el stack se expusiera. | Abierto — el criterio E de la remediación solo cubrió las tablas nuevas. Descubierto el 2026-07-21 al implementar el runner de migraciones. |
 | R19 | **No existe ligadura entre `mp_orders` y los pedidos de dominio (`orders`)**, y los cobros con **Posnet no dejan fila en `mp_orders`** (solo los de QR). | La conciliación "cobro cobrado sin pedido registrado" es manual, y el push a la nube del PR 5 solo va a ver los cobros por QR — el débito con Posnet, que es el medio real de uso hoy, queda afuera del criterio C. | Abierto — candidato a resolverse junto con el PR 5 de la remediación. |
 | R20 | El reintento de una "venta cobrada sin registrar" (constancia del PR 3) puede **crear un pedido duplicado**: `POST /api/orders` no tiene idempotencia propia, así que si el registro llegó al servidor pero se perdió la respuesta, el reintento inserta un segundo pedido. | La cajera podría generar dos pedidos para un solo cobro al usar el botón "Reintentar". Preferible a perder la venta (el trade-off se tomó a conciencia), pero hay que cerrarlo. | Abierto — la solución es llevar la misma semilla de idempotencia a `orders`. |
-| R21 | **Hoy hay dos sellers de Mercado Pago activos** en Cloud (la cuenta de prueba de Manuel y la del otro desarrollador). `findFirstActive()` toma el **más viejo**, y da la casualidad de que el más viejo es el correcto. | Si se vincula otra cuenta, el sistema puede **cobrar con la cuenta equivocada en silencio** — la plata iría a otro. Verificado en vivo el 2026-07-21. | Abierto — lo cierra el PR 4 de la remediación (D9: vincular reemplaza + botón Desvincular). |
-| R22 | **Cambiar de cuenta de Mercado Pago deja huérfanas las cajas ya provisionadas.** `mercadopago_cajas` estampa `seller_user_id` y su `store_id`/`pos_id_mp` viven **dentro de la cuenta de ese seller**, pero no existe ninguna lógica de re-provisión ni de limpieza cuando se vincula otra cuenta (verificado: nadie llama a `cajasRepo.deleteById` por cambio de seller). | Al migrar a la cuenta del dueño, la caja y **el QR estático quedan apuntando a un punto de venta de la cuenta vieja**. Hay que re-provisionar a mano, y **el QR cambia** — si ya se imprimió, hay que reimprimirlo. | Abierto — resolver junto con el PR 4 (que es el que cambia la cuenta) o con la feature de gestión de Posnets. |
-| R23 | **El sistema no detecta ni avisa cuando la vinculación de MP quedó incoherente**: seller de una cuenta y lector de otra, lector en modo STANDALONE en vez de PDV, o caja provisionada en una cuenta que ya no es la activa. El cobro simplemente falla con un error de MP. | Diagnosticar el problema del 2026-07-21 llevó horas de consultas manuales a la API. En producción, un sábado a la noche, eso es la caja parada sin saber por qué. | Abierto — un chequeo de "salud de la vinculación MP" en `/admin` (seller único activo · lector en la misma cuenta · lector en PDV · caja provisionada en la cuenta activa) lo haría evidente de un vistazo. |
+| R21 | **Hoy hay dos sellers de Mercado Pago activos** en Cloud (la cuenta de prueba de Manuel y la del otro desarrollador). `findFirstActive()` toma el **más viejo**, y da la casualidad de que el más viejo es el correcto. | Si se vincula otra cuenta, el sistema puede **cobrar con la cuenta equivocada en silencio** — la plata iría a otro. Verificado en vivo el 2026-07-21. **Actualización 2026-07-22**: tras la transferencia del lector, el seller que gana por `created_at ASC` (Manuel, `1517393956`) **casualmente sí es el dueño del lector** — o sea que la coincidencia se sostiene, pero **sigue siendo por casualidad**, no por diseño. | Abierto — lo cierra el PR 4 de la remediación (D9: vincular reemplaza + botón Desvincular). |
+| R22 | **Cambiar de cuenta de Mercado Pago deja huérfanas las cajas ya provisionadas.** `mercadopago_cajas` estampa `seller_user_id` y su `store_id`/`pos_id_mp` viven **dentro de la cuenta de ese seller**, pero no existe ninguna lógica de re-provisión ni de limpieza cuando se vincula otra cuenta (verificado: nadie llama a `cajasRepo.deleteById` por cambio de seller). | Al migrar a la cuenta del dueño, la caja y **el QR estático quedan apuntando a un punto de venta de la cuenta vieja**. Hay que re-provisionar a mano, y **el QR cambia** — si ya se imprimió, hay que reimprimirlo. | **Ya se materializó** (verificado el 2026-07-22, no es hipotético): existe un POS "Barra VIP" con `external_id=COCKTRAILBAR01` **en las dos cuentas a la vez** (Manuel `135641665` y Matías `135485560`), más un tercero con `external_id=BARRAVIP` (POS `135344264`) dentro del store "Bosko" de Matías. El provisioning de Cocktrail corrió contra cuentas distintas en momentos distintos y nadie limpió nada. Resolver junto con el PR 4 (que es el que cambia la cuenta); la **detección** de cajas huérfanas y el **aviso previo de que el QR cambia** son de [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque H). El procedimiento de migración está más arriba, en la sección de gestión de Posnets. |
+| R23 | **El sistema no detecta ni avisa cuando la vinculación de MP quedó incoherente**: seller de una cuenta y lector de otra, lector en modo STANDALONE en vez de PDV, o caja provisionada en una cuenta que ya no es la activa. El cobro simplemente falla con un error de MP. | Diagnosticar el problema del 2026-07-21 llevó horas de consultas manuales a la API. En producción, un sábado a la noche, eso es la caja parada sin saber por qué. | Abierto — lo cierra la spec [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque G): un panel de "salud de la vinculación MP" en `/admin` con los 4 chequeos (seller único activo · lector en la misma cuenta · lector en PDV · caja provisionada en la cuenta activa) lo hace evidente de un vistazo. |
+| R24 | **La visibilidad de los devices Point es por APLICACIÓN de Mercado Pago, no solo por cuenta.** Verificado el 2026-07-22 contra la API real: con el `MP_ACCESS_TOKEN` de `apps/api/.env` —que pertenece a la aplicación `4126722482739227` pero a la **misma cuenta** `1517393956`— `GET /point/integration-api/devices` devuelve `total: 0`. Solo el token OAuth de la aplicación `MP_APP_ID=2990738606457276` ve el lector. | **Rompe el diseño del fallback local-first.** El nivel 3 del `credentials-resolver.service.ts` (`env.MP_ACCESS_TOKEN`), que el PR 4 planeaba conservar como red de seguridad, **no puede cobrar con Posnet** salvo que ese token sea de la **misma aplicación** bajo la que está registrado el device. La tarea del PR 4 "degradar al nivel 3 ante un fallo de red (A1b)" no salva el cobro por Posnet tal como estaba escrita. | Abierto — la tarea ya se reformuló en la spec de remediación (PR 4, que define la estrategia de fallback). La **detección y el aviso** ("el token de la env es de la misma app que el lector") son de [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque G). |
+| R25 | **`mercadopago_cajas_devices.operating_mode` miente**: tiene `DEFAULT 'PDV'`, **ningún CHECK**, y **nadie lo sincroniza contra Mercado Pago**. Verificado el 2026-07-22: la tabla local afirma "PDV" mientras el aparato real está en `STANDALONE`. | Un admin mira la pantalla de Posnets, ve "PDV" y cree que el lector está operativo; el cobro falla igual. Es exactamente la clase de dato falso que hace que diagnosticar un problema de cobro lleve horas (ver R23). | Abierto — lo cierra la spec [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque C): sincronizar el modo real contra MP + poder setearlo por `PATCH .../devices/{id}` desde la app. |
+| R26 | **`MP_WEBHOOK_SECRET` está vacía** en `apps/api/.env`, así que `POST /api/mercadopago/webhooks` responde **401 fail-closed** (el fail-closed es correcto y deliberado; lo que falta es el secreto). Verificado el 2026-07-22. | Todo el trabajo de **webhooks durables del PR 3 está inerte en este entorno**. No bloquea el cobro por Posnet (que resuelve por polling del payment intent) pero sí el flujo de **QR**, que depende de la notificación de MP. | Abierto — cargar el secreto en el `.env` del entorno de pruebas y volver a verificar el camino de QR antes de darlo por validado. |
+| R27 | 🚨 **El sistema registra como venta concretada un pago que Mercado Pago rechazó.** Reproducido en vivo el 2026-07-22 con una tarjeta sin fondos: MP devolvió `rejected` / `cc_rejected_insufficient_amount` y Cocktrail **imprimió el ticket y creó el pedido**. Causa: el `state` del payment intent describe el **ciclo de vida del intent**, no el resultado del pago — `FINISHED` convive con un pago rechazado. El backend devuelve ese estado crudo (`mercadopago.service.ts:286`) sin consultar nunca el pago real, y el frontend concreta la venta con esa única condición (`useCheckout.ts:298`). La normalización correcta ya existe (`mercadopago.service.ts:30-34`) pero solo se invoca dentro del `if (rawStatus === "CONFIRMATION_REQUIRED")`. Agravantes: el intent del Posnet no se persiste, `Order` no tiene ningún campo de pago (`domain.ts:38-56`), el ticket se imprime según `isStaffOrder` (`orders.service.ts:83`) y el monto aprobado nunca se compara contra el carrito. Los webhooks no lo corrigen (R26 + filtro `type === "order"` + `reconcileFromMp` solo toca `mp_orders`). **El bug nació en la doc**: `docs/mp/api-point-devices.md:93` y `cobro-posnet-mercadopago.md:90-92` lo canonizan como correcto. | **Pérdida de plata directa e invisible**: el boliche entrega producto sin cobrar y la caja no cuadra, sin que nadie se entere hasta el cierre — si se entera. Aplica a **cualquier** rechazo (fondos, límite, tarjeta vencida o robada), no a un caso raro. **Posnet: roto y confirmado empíricamente. QR: sin verificar** (mismo patrón en `useCheckout.ts:367`). | **Abierto — BLOQUEANTE para producción, con prioridad sobre el PR 4 de la remediación.** Spec `draft`: [`specs/mercadopago/cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md). |
 | R16 | Los tests de integración (`apps/api/tests/integration/`) pegan contra el MISMO Supabase local que usa el dev server — no hay una DB de test aislada. `cleanNightEvents()`/`cleanOrders`/etc. en `db-helpers.ts` borran/crean sin acotar a un rango/prefijo de test, a diferencia de `cleanDrinks()`/`cleanUsers()` (ya arregladas con `TEST_DRINK_ID_FLOOR`/`TEST_USERNAME_PREFIX`). | Corriendo la suite de integración repetidas veces en una sesión de desarrollo larga, se acumulan decenas de `night_events`/`orders`/`tickets` de test reales en la base compartida. No hay riesgo de perder catálogo/usuarios reales (ya protegidos), pero sí de ensuciar el Historial de Noches con datos falsos si no se corre `cleanup-empty-nights.ts` después. | Abierto — aplicar el mismo patrón de rango/prefijo de test a `night_events`/`orders`/`tickets`, o directamente provisionar una segunda instancia local de Supabase dedicada a tests. |
 
 ---

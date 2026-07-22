@@ -1,26 +1,29 @@
 # Remediación de la integración Mercado Pago + bar-sessions
 
-**Estado**: `en ejecución` — PR 1-3 implementados (ba7c113, 2745f7c, e3f1a29), PR 4-6 pendientes. Ver "Estado actual" abajo. Decisiones cerradas el 2026-07-20; plan técnico escrito; enriquecida con hallazgos de verificación en vivo (A1b, A17, A18) y bugs de infraestructura ya corregidos.
+**Estado**: `in-progress` — PR 1-3 implementados (ba7c113, 2745f7c, e3f1a29), PR 4-6 pendientes. Ver "Estado actual (2026-07-22)" abajo. Decisiones cerradas el 2026-07-20; plan técnico escrito; enriquecida con hallazgos de verificación en vivo (A1b, A17, A18), con la verificación contra la API real de MP del 2026-07-22 (titularidad del lector destrabada + R24, visibilidad de devices por aplicación) y bugs de infraestructura ya corregidos.
 **Fecha**: 2026-07-20
 **Origen**: auditoría del merge `e95404a..8b559b2` (5 commits de Genkaix1000, 2026-07-17, +13.934/−4.066 en 162 archivos)
 
 ---
 
-## Estado actual (2026-07-21)
+## Estado actual (2026-07-22)
 
 | PR | Estado |
 |---|---|
 | 1 — Suite en verde + comentarios falsos | ✅ `ba7c113` |
 | 2 — Runner de migraciones | ✅ `2745f7c` |
-| 3 — Integridad del cobro (bloque A) | ✅ `e3f1a29` — gate físico pendiente (ver abajo) |
+| 3 — Integridad del cobro (bloque A) | ✅ `e3f1a29` — gate físico pendiente, **ya no bloqueado** (ver abajo) |
 | 4 — Inversión del token + single-seller + seguridad | ← **siguiente** |
 | 5 — Sync / conciliación | pendiente |
 | 6 — Sesiones de caja + PDVs + docs | pendiente |
 
 - **Criterios cumplidos**: A1-A5 y el bloque F completo. A6 (refresh concurrente) se cierra por construcción en el PR 4 con D1.
 - **Entorno**: hay **dos sellers activos en Cloud** — la cuenta de prueba de Manuel (`1517393956`, que gana por el `order asc` de A17) y la del otro desarrollador (`225043369`). **La cuenta del dueño del boliche nunca se vinculó.** Los cobros salen por el **nivel 2 del resolver (seller OAuth)**, no por el fallback env.
-- **Gate físico bloqueado**: los 2 lectores Point están registrados en la cuenta del otro desarrollador y en modo STANDALONE — la titularidad no se libera con cerrar sesión, así que el test de $15 queda diferido hasta que él los dé de baja.
-- **Punteros**: riesgos R17-R23 en `docs/ROADMAP.md`; deuda diferida en `docs/plans/mercadopago/deuda-remediacion-mp.md`.
+- **✅ Titularidad del lector — DESTRABADA el 2026-07-22.** Desde la app de MP, operando como colaborador dentro de la cuenta de Matías (`225043369`), se usó **"Eliminar el lector de mi cuenta"** sobre `PAX_A910__SMARTPOS1493600985`. Verificado por API (`GET /point/integration-api/devices`): la cuenta de Matías pasó de `total: 2` a `total: 1` (le queda `PAX_A910__SMARTPOS1494025317`, store `83923406`, POS `134012614`, `STANDALONE`) y la de Manuel (`1517393956`) pasó de `total: 0` a `total: 1`, con `PAX_A910__SMARTPOS1493600985`, `pos_id: 0`, `store_id: ""`, `operating_mode: STANDALONE`. Es decir: **esa opción, desde un contexto de colaborador, transfiere el lector a la cuenta personal del colaborador** — no lo deja huérfano, y **no** lo pone en PDV (eso es un paso aparte). El gate del PR 3 **ya no depende de un tercero**.
+- **⚠️ `MP_POS_DEVICE_ID` apunta al lector equivocado**: vale `PAX_A910__SMARTPOS1494025317`, que es el que **quedó en la cuenta de Matías**. El lector que ahora es de Manuel es `…1493600985`. Hay que corregir la env (o resolver el device desde la caja, ver la feature de gestión de Posnets en el roadmap) antes de correr el gate.
+- **🔴 Hallazgo nuevo y crítico — la visibilidad de los devices Point es por APLICACIÓN de MP, no solo por cuenta.** Con el `MP_ACCESS_TOKEN` de `apps/api/.env` —que pertenece a la aplicación `4126722482739227` pero a la **misma cuenta** `1517393956`— el listado de devices devuelve `total: 0`. Solo el token OAuth de la aplicación `MP_APP_ID=2990738606457276` ve el lector. **Impacto directo sobre el PR 4**: el nivel 3 del resolver (`env.MP_ACCESS_TOKEN`) **no puede cobrar con Posnet** salvo que el token sea de la misma aplicación bajo la que está registrado el device — ver la tarea corregida en el PR 4 y R24 en el roadmap.
+- **Entorno, otros dos puntos verificados el 2026-07-22**: (a) `MP_WEBHOOK_SECRET` está **vacía**, así que `POST /api/mercadopago/webhooks` responde 401 fail-closed y **todo el trabajo de webhooks durables del PR 3 está inerte acá** — no bloquea el Posnet (polling del payment intent) pero sí el flujo de QR (R26). (b) El stack Docker estaba apagado: los contenedores `cocktrail-db`/`cocktrail-rest`/`cocktrail-kong` no existían (había un `cocktrail-postgres-local` viejo, *Exited* hace 3 semanas); el volumen `cocktrail_cocktrail_db_data` sí existe y la data está intacta. Además **`apps/api/.env` no define `DATABASE_URL`** —la API habla por PostgREST en `:54321`— que es justo la variable que usa el runner de migraciones del PR 2: hay que verificar que el runner tenga cómo conectarse antes de asumir que las migraciones corren en este entorno.
+- **Punteros**: riesgos R17-R26 en `docs/ROADMAP.md`; deuda diferida en `docs/plans/mercadopago/deuda-remediacion-mp.md`.
 
 ---
 
@@ -98,6 +101,14 @@ Se decide explícitamente **remediar, no revertir**: el trabajo es valioso y rev
 - [ ] **Dado** que Supabase Cloud está caído pero Mercado Pago está disponible, **cuando** se intenta cobrar, **entonces** el cobro se concreta.
 - [ ] La única parte del flujo que requiere Supabase Cloud es la **vinculación inicial por OAuth** (setup de una vez). Cobrar no lo requiere nunca — ver D1.
 - [ ] **Dado** un token de acceso vencido y dos cobros simultáneos, **cuando** ambos disparan la renovación, **entonces** existe un único componente capaz de renovarlo, de modo que la carrera no puede ocurrir por construcción — ver D1.
+- [ ] **Dado** que el sistema cae al fallback por env (`MP_ACCESS_TOKEN`), **cuando** el cobro es con **Posnet**, **entonces** ese token pertenece a la **misma aplicación de Mercado Pago** bajo la que está registrado el lector — y si no, el sistema lo detecta y lo avisa **antes** del cobro, en vez de fallar recién en la caja. *(Nuevo el 2026-07-22: la visibilidad de los devices Point es por aplicación, no solo por cuenta — R24.)*
+
+> ⚠️ **Corrección de alcance del bloque B (2026-07-22).** Hasta esta fecha, "el cobro degrada al
+> fallback local y sigue funcionando" se daba por equivalente a "cobrar sin Cloud". **No lo es para el
+> Posnet**: el fallback solo sirve si `MP_ACCESS_TOKEN` es de la misma aplicación de MP que el device.
+> Con el token actual del `.env` (app `4126722482739227`) el listado de devices da `total: 0`, o sea
+> que degradar al nivel 3 hoy **no salva el cobro por Posnet**. Los criterios de arriba se leen con
+> ese requisito adosado.
 
 ### C. Conciliación
 
@@ -292,6 +303,28 @@ Se levantó el entorno y se ejercitó la vinculación de punta a punta en un nav
 - **A17 reproducido.** Había 2 sellers activos en Cloud: la cuenta del otro desarrollador (del 07-17) + la cuenta de prueba de Manuel (`GARCIAMANUEL…`, user `1517393956`) vinculada el 20-07 — **la cuenta del dueño del boliche nunca se vinculó todavía**. La UI mostraba la vieja por el `order asc`. Se intentó resolver borrando la fila vieja a mano (DELETE contra la REST API de Cloud) — exactamente el "desvincular" que A18 dice que falta en la app — pero el borrado no fue definitivo: al 2026-07-21 vuelven a estar las dos filas activas (ver "Estado actual").
 - **Setup de OAuth documentado** en `docs/fases-mp/setup-oauth.md` (nuevo): las 3 env del backend, los 4 secrets de la Edge Function, el registro del redirect URI y PKCE en el panel de MP.
 
+### Notas de método para verificar contra la API de Mercado Pago (2026-07-22)
+
+Salieron de la verificación de titularidad del lector. **Están acá para que el próximo que verifique
+no saque conclusiones falsas** — dos de estos endpoints devuelven errores que parecen evidencia y no
+lo son.
+
+- **La visibilidad de los devices Point es por APLICACIÓN, no solo por cuenta.** Dos tokens de la
+  misma cuenta pero de aplicaciones distintas ven listados distintos: el `MP_ACCESS_TOKEN` del `.env`
+  (app `4126722482739227`) devuelve `total: 0` y el token OAuth de `MP_APP_ID=2990738606457276`
+  devuelve el lector. Antes de concluir "el device no está en esta cuenta", verificar **con qué
+  aplicación** se está consultando.
+- **`GET /users/{uid}/stores/{id}` devuelve HTTP 405 — no existe.** El detalle de un store sale por
+  `GET /stores/{id}`.
+- **`GET /point/integration-api/devices/{id}` devuelve HTTP 404
+  `{"error":"111","message":"Action not supported"}` para TODOS los ids y con TODOS los tokens**,
+  incluso para devices que sí figuran en el listado. Es una **limitación del endpoint**, no evidencia
+  de que el device no exista ni de que no sea tuyo.
+- **El único dato confiable de titularidad es el listado `GET /point/integration-api/devices`.**
+- **Poner un lector en PDV**: `PATCH https://api.mercadopago.com/point/integration-api/devices/{id}`
+  con `{"operating_mode":"PDV"}`. Hoy la app no tiene forma de hacerlo (ver la feature de gestión de
+  Posnets en el roadmap), así que va a mano.
+
 ### Bugs de infraestructura encontrados y corregidos en esta sesión
 
 No estaban en la auditoría original (aparecieron al levantar el entorno). **Ya corregidos y commiteados** (`next.config.ts` en `d3fd06f`):
@@ -420,18 +453,36 @@ Por eso: **el fallback a `MP_ACCESS_TOKEN` no se elimina en esta ronda.** El PR 
 
 **Corolario del hallazgo A1b — el PR 4 tiene un trabajo extra que no estaba previsto**: no alcanza con leer el token de local. Hay que **hacer que el fallback sea alcanzable**, envolviendo el nivel 2 para que un fallo de red degrade al nivel 3 en vez de propagar la excepción. Hoy esa red de seguridad está desconectada.
 
+> **Actualización 2026-07-22 — la red de seguridad no es tan red como se creía (R24).** La visibilidad
+> de los devices Point es **por aplicación de Mercado Pago**, no solo por cuenta: verificado que con el
+> `MP_ACCESS_TOKEN` del `.env` (app `4126722482739227`, misma cuenta `1517393956`) el listado de
+> devices devuelve `total: 0`, y solo el token OAuth de `MP_APP_ID=2990738606457276` ve el lector. O
+> sea: **degradar al nivel 3 no salva el cobro por Posnet** salvo que el token de la env sea de la
+> misma aplicación que el device. Hacer el fallback alcanzable sigue valiendo la pena (evita que una
+> excepción de red mate el cobro, y sirve para el flujo de QR), pero **con el requisito de
+> misma-aplicación documentado y, ojalá, verificado por la app**.
+
 **Gate obligatorio**: cobro real con el Posnet físico (el test de $15) al cerrar el PR 3 y al cerrar el PR 4 — este último **con la red hacia Supabase Cloud cortada a mano**, que es la única prueba de que D1 realmente funciona.
 
-> **Actualización 2026-07-21 — el gate del PR 3 quedó pendiente por un bloqueo de titularidad del
-> Posnet, no por el código** — ver el bloque "Estado actual" al inicio; detalle completo en
-> `ROADMAP.md` → "Remediación de la integración Mercado Pago". **No bloquea la implementación del
-> PR 4**, solo su validación en vivo.
+> **Actualización 2026-07-22 — el bloqueo de titularidad del Posnet SE RESOLVIÓ.** El lector
+> `PAX_A910__SMARTPOS1493600985` ya está en la cuenta de Manuel (`1517393956`); ver el bloque "Estado
+> actual" al inicio y el detalle en `ROADMAP.md` → "Remediación de la integración Mercado Pago". El
+> gate del PR 3 **ya no depende de un tercero**: falta pasar el lector a modo **PDV**, asignarle
+> store/POS y apuntar `MP_POS_DEVICE_ID` al device correcto (hoy apunta a `…1494025317`, el que quedó
+> en la cuenta de Matías).
 >
 > Lo que este episodio deja como aprendizaje para la puesta en producción — el lector, el seller
-> vinculado y la caja provisionada tienen que ser **de la misma cuenta de MP**; la titularidad manda
-> sobre el login (entrar como colaborador no cambia a qué cuenta entra la plata); y el lector debe
-> estar en modo **PDV**, no STANDALONE. Los riesgos derivados quedaron como R22 (cajas huérfanas al
-> cambiar de cuenta) y R23 (el sistema no detecta la vinculación incoherente) en el roadmap.
+> vinculado y la caja provisionada tienen que ser **de la misma cuenta de MP** (y ahora también: el
+> token de la env, de la misma **aplicación**); la titularidad manda sobre el login (entrar como
+> colaborador no cambia a qué cuenta entra la plata); el lector debe estar en modo **PDV**, no
+> STANDALONE; y **OAuth da permiso sobre una cuenta, no posesión del hardware** — MP no expone ningún
+> endpoint para reclamar ni transferir un lector, así que vincular por OAuth nunca "trae" el Posnet.
+> Una vez que el lector ya está en la cuenta, sí: el token OAuth lo lista, lo pasa a PDV, crea
+> store/POS y saca el QR estático. El flujo ideal ("el dueño configura su Posnet desde `/admin`") es
+> alcanzable **con un único paso manual irreductible**. Los riesgos derivados quedaron como R22 (cajas
+> huérfanas al cambiar de cuenta, ya materializado), R23 (el sistema no detecta la vinculación
+> incoherente), R24 (visibilidad por aplicación), R25 (`operating_mode` local que miente) y R26
+> (`MP_WEBHOOK_SECRET` vacía) en el roadmap.
 
 **Alto — el cifrado puede dejar al boliche sin cobrar.** Un backfill fallido devuelve basura. Mitigación: el descifrado tolera token en claro durante al menos una versión, y el drop de las columnas viejas se difiere a una migración posterior.
 
@@ -516,7 +567,7 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 - [x] 🟩 `mercadopago-webhooks.service.ts`: reemplazar el `setImmediate` fire-and-forget por un camino que sobreviva un reinicio (deja constancia recuperable); agregar ventana de frescura del `ts` en la validación de firma (anti-replay).
 - [x] 🟨 `useCheckout.ts`: timeout de cliente honrando el `expiresAt` del backend (A10); si el registro del pedido falla tras confirmar el cobro, dejar constancia recuperable en vez de descartar (A11).
 - [x] 🟩 Poblar `mp_orders.event_id` al crear la order desde el evento abierto.
-- [ ] 🟪 **Gate**: cobro real con el Posnet físico (test de $15) — debe seguir funcionando (sale por el seller OAuth — nivel 2 del resolver, que no se toca; bloqueado por la titularidad del lector, ver Estado actual).
+- [ ] 🟪 **Gate**: cobro real con el Posnet físico (test de $15) — debe seguir funcionando (sale por el seller OAuth, nivel 2 del resolver, que no se toca). **Ya no bloqueado por la titularidad** (destrabada el 2026-07-22). Pasos previos pendientes: (1) pasar `PAX_A910__SMARTPOS1493600985` a modo **PDV** con `PATCH /point/integration-api/devices/{id}` `{"operating_mode":"PDV"}` —hoy hay que hacerlo a mano, la app no tiene forma—, (2) asignarle store/POS, (3) corregir `MP_POS_DEVICE_ID` (apunta al lector de la otra cuenta).
 - [x] `pnpm typecheck` + tests.
 
 ### PR 4 — Inversión del token + modelo single-seller + seguridad
@@ -526,7 +577,15 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 - [ ] 🟦 Migración: habilitar RLS + revocar `anon` en `bars` (A2).
 - [ ] 🟩 Cifrado app-level (AES-256-GCM, `HKDF-SHA256` con `MP_TOKEN_SECRET ?? AUTH_SECRET`, salt por fila): cifrar/descifrar en `mercadopago-sellers.repository.ts:mapRow` — el tipo `Seller` sigue exponiendo el token en claro hacia adentro. Descifrado **tolerante a token en claro** durante una versión (backfill).
 - [ ] 🟩 `mercadopago-sellers.repository.ts:76,101,116,140`: cambiar `mpDb` → `supabase` (local). Eliminar `mpDb` de `shared/supabase.ts:27` (A1).
-- [ ] 🟩 `credentials-resolver.service.ts:34-36`: envolver el nivel 2 para que un fallo de red **degrade** al nivel 3 (`env.MP_ACCESS_TOKEN`) en vez de propagar (A1b). **No** eliminar el fallback legacy.
+- [ ] 🟩 `credentials-resolver.service.ts:34-36`: envolver el nivel 2 para que un fallo de red **degrade** al nivel 3 (`env.MP_ACCESS_TOKEN`) en vez de propagar (A1b). **No** eliminar el fallback legacy. **Requisito adosado (R24, 2026-07-22)**: el `MP_ACCESS_TOKEN` de la env tiene que ser de la **misma aplicación de MP** bajo la que está registrado el lector, o el nivel 3 no ve el device y **no cobra igual**. Documentarlo en `.env.example` y validarlo/avisarlo desde la app (chequeo de salud de la vinculación, R23) — no alcanza con que el token sea de la misma cuenta.
+  > **Por qué cambió esta tarea**: la formulación original ("degradar al nivel 3 en vez de propagar")
+  > asumía que el nivel 3 era una red de seguridad equivalente. El 2026-07-22 se verificó contra la
+  > API real que **la visibilidad de los devices Point es por aplicación, no solo por cuenta**: con el
+  > token de la env (app `4126722482739227`, misma cuenta `1517393956`) el listado de devices devuelve
+  > `total: 0`, mientras que el token OAuth de `MP_APP_ID=2990738606457276` sí ve el lector. La tarea
+  > **no se elimina** —degradar en vez de propagar sigue siendo correcto y sigue sirviendo para el
+  > flujo de QR y para no romper el cobro con una excepción— pero **deja de poder venderse como
+  > garantía de "el Posnet cobra igual"** sin el requisito de misma-aplicación.
 - [ ] 🟩 `mercadopago-oauth.service.ts:129:refreshTokenIfNeeded`: persistir local y devolver de inmediato; marcar `cloud_synced_at IS NULL`. Único escritor → cierra A8 por construcción.
 - [ ] 🟩 Bajada cloud→local del seller: endpoint `POST /api/mercadopago/oauth/pull-seller` (admin), + intento en el boot (`pullMasterData` si no hay seller local) + lazy en `getSellerStatus`.
 - [ ] 🟩 **Modelo single-seller (D9/A17)**: al completar un OAuth nuevo, desactivar/borrar el seller anterior — nunca 2 activos. Corregir `findFirstActive` para que no dependa del orden por fecha.
@@ -540,7 +599,7 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 - [ ] 🟩 **Saneamiento inicial de sellers**: antes/al desplegar, desvincular las DOS filas activas preexistentes en Cloud (cuenta de prueba de Manuel `1517393956` + la del otro desarrollador `225043369` — ninguna es la del dueño). El botón Desvincular de A18 es la herramienta; sin esto, "vincular reemplaza" solo protege vinculaciones futuras.
 - [ ] 🟩 **Cajas huérfanas al cambiar de cuenta (R22)**: Desvincular debe avisar (o limpiar) las cajas provisionadas del seller saliente — su store/pos/QR viven en la cuenta vieja y el QR CAMBIA al re-provisionar. Mínimo: aviso en la UI + doc del procedimiento de re-provisión.
 - [ ] 🟩 **Purga de tokens en claro en Cloud**: las filas actuales de `mercadopago_sellers` en Cloud ya contienen access/refresh tokens en claro; el diseño post-PR 4 dice que en Cloud no debe quedar token legible. Purgarlos al migrar al handoff (no alcanza el DROP local diferido).
-- [ ] 🟪 **Gate crítico**: cobro real con el Posnet físico **con la red a Supabase Cloud cortada a mano** — debe cobrar igual (prueba de que D1 funciona). Verificar además los 3 modos: seller vinculado sin Cloud, sin seller con solo `MP_ACCESS_TOKEN`, Cloud apagado. *(Implementación NO bloqueada; la validación en vivo queda diferida hasta destrabar la titularidad del lector — ver Estado actual.)*
+- [ ] 🟪 **Gate crítico**: cobro real con el Posnet físico **con la red a Supabase Cloud cortada a mano** — debe cobrar igual (prueba de que D1 funciona). Verificar además los 3 modos: seller vinculado sin Cloud, sin seller con solo `MP_ACCESS_TOKEN`, Cloud apagado. *(La titularidad del lector se destrabó el 2026-07-22 — ver Estado actual.)* **Ojo con el modo "solo `MP_ACCESS_TOKEN`" (R24)**: con el token actual de la env ese modo **no puede cobrar con Posnet**, porque es de otra aplicación de MP y no ve el device. Para que el gate sea concluyente hay que usar un `MP_ACCESS_TOKEN` de la **misma aplicación** que el lector, o dejar registrado explícitamente que ese modo queda fuera del gate y por qué.
 - [ ] `pnpm typecheck` + tests.
 
 > ⚠️ Las referencias de línea de este bloque (y las del plan técnico para estos archivos) son anteriores al PR 3 — `mercadopago-oauth.service.ts` y `mercadopago-provisioning.service.ts` fueron modificados; re-verificar offsets antes de usarlas como guía.
@@ -589,3 +648,8 @@ Correcciones que se integraron directamente al texto (la versión corregida es l
 - 2026-07-20 — D3/cifrado: la formulación original ("clave derivada del `AUTH_SECRET`") se descartó por acoplar la rotación de la cookie con poder cobrar y por no resolver la Edge Function; el diseño vigente (buzón de traspaso + `MP_TOKEN_SECRET`) pasó al cuerpo de D3.
 - 2026-07-20 — Backfill/`bars_code.sql`: la spec afirmaba que `20260719000000_bars_code.sql` no era idempotente; sí lo es (seed con `WHERE NOT EXISTS`), lo que habilitó el backfill por re-ejecución.
 - 2026-07-21 — A17/verificación en vivo: la cuenta vinculada el 20-07 no era "la del dueño real" sino la cuenta de prueba de Manuel (`1517393956`); la cuenta del dueño del boliche nunca se vinculó, y el borrado manual de la fila vieja no fue definitivo.
+- 2026-07-22 — **PR 4 / fallback al nivel 3**: la tarea decía, sin matices, "envolver el nivel 2 para que un fallo de red **degrade** al nivel 3 (`env.MP_ACCESS_TOKEN`) en vez de propagar (A1b)", y el bloque de Riesgos vendía ese fallback como red de seguridad equivalente para el Posnet. Se corrigió porque se verificó contra la API real que **la visibilidad de los devices Point es por aplicación de MP, no solo por cuenta**: el token de la env (app `4126722482739227`, misma cuenta `1517393956`) devuelve `total: 0` en `GET /point/integration-api/devices`, mientras que el de `MP_APP_ID=2990738606457276` sí ve el lector. La tarea **no se borró** —degradar en vez de propagar sigue siendo correcto— pero ahora lleva adosado el requisito de **misma aplicación** y la aclaración de que sin eso **no salva el cobro por Posnet** (R24).
+- 2026-07-22 — **Estado actual / gate físico**: decía "Gate físico bloqueado: los 2 lectores Point están registrados en la cuenta del otro desarrollador… hasta que él los dé de baja". **Ya no es cierto**: el 22-07, operando como colaborador en la cuenta de Matías (`225043369`), la opción "Eliminar el lector de mi cuenta" **transfirió** `PAX_A910__SMARTPOS1493600985` a la cuenta personal de Manuel (`1517393956`) — verificado por API con el `total` del listado de devices pasando de 2→1 y de 0→1 respectivamente. El gate ya no depende de un tercero; lo que falta es pasar el lector a PDV, asignarle store/POS y corregir `MP_POS_DEVICE_ID`.
+- 2026-07-22 — **`MP_POS_DEVICE_ID`**: la spec no registraba a qué lector apuntaba. Apunta a `PAX_A910__SMARTPOS1494025317`, que es el que **quedó en la cuenta de Matías**, no el que ahora es de Manuel (`…1493600985`). Cualquier gate corrido sin corregir esa env estaría probando contra el aparato equivocado.
+- 2026-07-22 — **Bloque B (local-first)**: los criterios daban por equivalente "degrada al fallback local" y "cobra sin Cloud". Se agregó un criterio explícito de misma-aplicación para el `MP_ACCESS_TOKEN` y una nota de alcance, por el mismo motivo que la corrección del PR 4.
+- 2026-07-22 — **Modelo mental de OAuth vs. posesión del hardware**: la spec dejaba implícito que vincular por OAuth alcanzaba para operar el Posnet. Se explicitó que **OAuth da permiso sobre una cuenta, no posesión del hardware**: MP no expone ningún endpoint para reclamar ni transferir un lector entre cuentas, así que el flujo "el dueño configura su Posnet desde `/admin`" tiene **un paso manual irreductible** (reclamar el lector desde la app de MP). Una vez reclamado, el token OAuth sí puede listarlo, pasarlo a PDV, crear store/POS y sacar el QR estático.

@@ -1,7 +1,24 @@
 # Cobro con Posnet Mercado Pago — cierre y endurecimiento
 
-**Estado**: done
+**Estado**: done — con **dos afirmaciones superadas**, ver el aviso de abajo
 **Fecha**: 2026-07-12
+
+---
+
+> ⚠️ **Aviso de vigencia (agregado el 2026-07-22). No apliques dos cosas de esta spec:**
+>
+> 1. **"Sacar la opción Código QR"** (alcance y plan técnico) **ya no corresponde.** Era correcto en
+>    su momento: ese botón vivía dentro de la pantalla de Posnet y prometía mostrar un QR en la
+>    pantalla del aparato, algo que la Point Integration API no puede hacer (riesgo R14). Pero el
+>    merge de la integración de MP del 2026-07-17 construyó un camino de QR **distinto y real** —
+>    Orders API contra el QR estático impreso de la caja — y ese botón volvió a `/caja`
+>    (`VentaSection.tsx:1252` → `startQrPayment()`). **Funciona.** Sacarlo hoy rompería un cobro
+>    que anda. Verificado el 2026-07-22.
+> 2. **`FINISHED` = concretar el pedido** (criterios de aceptación) **es falso y causó un bug real**:
+>    en la Point Integration API `state` describe el ciclo de vida del intent, no el resultado del
+>    pago, así que un `FINISHED` puede convivir con un pago rechazado. El 2026-07-22 se reprodujo
+>    en vivo: tarjeta sin fondos → ticket impreso y venta registrada. Lo corrige
+>    [`cobro-verificado.md`](./cobro-verificado.md).
 
 ---
 
