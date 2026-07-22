@@ -2,7 +2,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { NewOrderInput, Order, OrderStatus, NightEvent } from "@cocktrail/shared";
 import type { OrdersRepository } from "./orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
-import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
+import type { VerifyPaymentFn, PaymentVerdict } from "./payment-verification.port.js";
+import { BadRequest, Conflict, NotFound, UnprocessableEntity } from "../../shared/errors/http-errors.js";
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
 
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -17,20 +18,38 @@ function shortToken(): string {
 
 export type CreateOrderResult = Order & { printed: boolean };
 
+export type OrdersServiceDeps = {
+  ordersRepo: OrdersRepository;
+  drinksRepo: DrinksRepository;
+  getActiveEvent: () => Promise<NightEvent | null>;
+  incrementOrderCounter: (eventId: string) => Promise<number>;
+  emit: EmitFn;
+  generateTicketCodeString?: (orderId: string) => string;
+  saveTicket?: (orderId: string, code: string) => Promise<void>;
+  printTicket?: (order: Order, nightEvent: NightEvent) => Promise<void>;
+  /** Puerto de verificación de pago — el adaptador (MP) lo cablea app.ts. */
+  verifyPayment?: VerifyPaymentFn;
+  /**
+   * Guarda del runner fail-open: si las migraciones del cobro no aplicaron,
+   * la venta no-efectivo se bloquea con un mensaje claro en vez de romper el
+   * INSERT con un error incomprensible.
+   */
+  isPaymentSchemaReady?: () => boolean;
+};
+
 export class OrdersService {
-  constructor(
-    private ordersRepo: OrdersRepository,
-    private drinksRepo: DrinksRepository,
-    private getActiveEvent: () => Promise<NightEvent | null>,
-    private incrementOrderCounter: (eventId: string) => Promise<number>,
-    private emit: EmitFn,
-    private generateTicketCodeString?: (orderId: string) => string,
-    private saveTicket?: (orderId: string, code: string) => Promise<void>,
-    private printTicket?: (order: Order, nightEvent: NightEvent) => Promise<void>,
-  ) {}
+  constructor(private deps: OrdersServiceDeps) {}
 
   async createOrder(input: NewOrderInput, createdBy?: string): Promise<CreateOrderResult> {
-    const event = await this.getActiveEvent();
+    const { ordersRepo, drinksRepo, verifyPayment } = this.deps;
+
+    // Replay (R20): mismo intento lógico → misma Order, sin doble registro.
+    if (input.idempotencyKey) {
+      const previous = await ordersRepo.findByIdempotencyKey(input.idempotencyKey);
+      if (previous) return { ...previous, printed: false };
+    }
+
+    const event = await this.deps.getActiveEvent();
     if (!event || event.status !== "activo") {
       throw new Conflict("Todavía no se abrió la noche. Pedile al admin que la abra desde /admin para poder cobrar.");
     }
@@ -40,7 +59,7 @@ export class OrdersService {
 
     const items = [];
     for (const it of input.items) {
-      const drink = await this.drinksRepo.findById(it.drinkId);
+      const drink = await drinksRepo.findById(it.drinkId);
       if (!drink) throw new NotFound(`Drink ${it.drinkId} no existe.`);
       if (!drink.available) throw new Conflict(`${drink.name} no está disponible.`);
       if (it.qty <= 0) throw new BadRequest("Cantidad inválida.");
@@ -54,7 +73,53 @@ export class OrdersService {
     }
 
     const total = items.reduce((sum, it) => sum + it.subtotal, 0);
-    const displayNumber = await this.incrementOrderCounter(event.id);
+
+    // La exigencia de prueba de pago cuelga del ORIGEN (createdBy sale de la
+    // cookie, no del body) y del método — /carta ("Cliente") sigue igual.
+    const esVentaDeCaja = Boolean(createdBy && createdBy !== "Cliente");
+    const schemaReady = this.deps.isPaymentSchemaReady ? this.deps.isPaymentSchemaReady() : true;
+
+    let verdict: PaymentVerdict = { result: "no_aplica" };
+    if (esVentaDeCaja) {
+      if (input.paymentMethod !== "efectivo") {
+        if (!schemaReady) {
+          throw new Conflict(
+            "El cobro con QR/Posnet está bloqueado: faltan aplicar migraciones de base (ver banner de /admin). El efectivo sigue funcionando.",
+            "PAYMENT_SCHEMA_NOT_READY",
+          );
+        }
+        if (!input.payment) {
+          throw new UnprocessableEntity(
+            "Falta la prueba de pago: una venta de caja con QR/Posnet solo se registra con el cobro confirmado (campo `payment`).",
+            "PAYMENT_PROOF_REQUIRED",
+          );
+        }
+        if (!verifyPayment) {
+          throw new Conflict("La verificación de pagos no está configurada en el servidor.");
+        }
+      }
+      if (verifyPayment) {
+        const proofInput = input.payment
+          ? { proof: input.payment, expectedAmount: total, method: input.paymentMethod }
+          : { expectedAmount: total, method: input.paymentMethod };
+        verdict = await verifyPayment(proofInput);
+      }
+      if (verdict.result === "rechazado") {
+        // Sin Order, sin ticket, sin order.created (criterio D).
+        throw new Conflict(
+          `Cobro rechazado: ${verdict.reason}${verdict.detail ? ` (${verdict.detail})` : ""}. No se registró la venta.`,
+          "PAYMENT_REJECTED",
+        );
+      }
+      if (verdict.result === "indeterminado") {
+        throw new Conflict(
+          `No se pudo confirmar el cobro: ${verdict.reason} La venta NO se registró — verificá el cobro y reintentá desde la constancia.`,
+          "PAYMENT_UNVERIFIED",
+        );
+      }
+    }
+
+    const displayNumber = await this.deps.incrementOrderCounter(event.id);
 
     const order: Order = {
       id: randomUUID(),
@@ -67,29 +132,57 @@ export class OrdersService {
       createdAt: Date.now(),
       createdBy: createdBy || "Cliente",
     };
+    if (input.idempotencyKey) order.idempotencyKey = input.idempotencyKey;
+    if (verdict.result === "confirmado") {
+      order.paymentStatus = "cobrado";
+      order.paymentRef = verdict.providerPaymentId;
+      order.paymentRecordId = verdict.proofRecordId;
+    } else if (esVentaDeCaja && input.paymentMethod === "efectivo" && schemaReady) {
+      // El escape del efectivo es irreductible: nadie verifica billetes server-side.
+      order.paymentStatus = "cobrado";
+    }
+    // /carta ("Cliente"): sin paymentStatus → la DB aplica el default 'desconocido'.
 
-    if (this.generateTicketCodeString) {
-      order.ticketCode = this.generateTicketCodeString(order.id);
+    if (this.deps.generateTicketCodeString) {
+      order.ticketCode = this.deps.generateTicketCodeString(order.id);
     }
 
-    await this.ordersRepo.create(order, event.id);
+    try {
+      await ordersRepo.create(order, event.id);
+    } catch (err) {
+      // Carrera de replays (23505 en los UNIQUE parciales). PostgREST no expone
+      // error.constraint, así que se distingue por cuál lookup encuentra al ganador.
+      if ((err as { code?: string })?.code === "23505") {
+        if (input.idempotencyKey) {
+          const winner = await ordersRepo.findByIdempotencyKey(input.idempotencyKey);
+          if (winner) return { ...winner, printed: false };
+        }
+        if (verdict.result === "confirmado") {
+          // Cobro ya usado por otra venta: devolver esa Order, nunca duplicar.
+          const winner = await ordersRepo.findByMpOrderId(verdict.proofRecordId);
+          if (winner) return { ...winner, printed: false };
+        }
+      }
+      throw err;
+    }
 
-    if (this.saveTicket && order.ticketCode) {
-      await this.saveTicket(order.id, order.ticketCode);
+    if (this.deps.saveTicket && order.ticketCode) {
+      await this.deps.saveTicket(order.id, order.ticketCode);
     }
 
     let printed = false;
-    const isStaffOrder = Boolean(createdBy && createdBy !== "Cliente");
-    if (this.printTicket && isStaffOrder) {
+    // La impresión cuelga del veredicto (no_aplica = efectivo; confirmado = MP
+    // verificado) — a esta altura los otros veredictos ya abortaron.
+    if (this.deps.printTicket && esVentaDeCaja && (verdict.result === "no_aplica" || verdict.result === "confirmado")) {
       try {
-        await this.printTicket(order, event);
+        await this.deps.printTicket(order, event);
         printed = true;
       } catch {
         printed = false; // red de seguridad extra; printTicket ya no debería nunca tirar
       }
     }
 
-    this.emit({ type: "order.created", order });
+    this.deps.emit({ type: "order.created", order });
     return { ...order, printed };
   }
 
@@ -99,7 +192,7 @@ export class OrdersService {
     operator?: string,
     deliveryMeta?: { deliveredByBar?: string; redeemMethod?: "scan" | "manual" },
   ): Promise<Order> {
-    const order = await this.ordersRepo.findById(id);
+    const order = await this.deps.ordersRepo.findById(id);
     if (!order) throw new NotFound(`Order ${id} no existe.`);
 
     const allowed = STATUS_TRANSITIONS[order.status];
@@ -130,14 +223,14 @@ export class OrdersService {
     // (ej. canje + cancelación del mismo pedido casi al mismo tiempo) — si otra request ya
     // cambió el status entre el findById de arriba y este UPDATE, la condición no matchea y
     // undefined nos avisa que perdimos la carrera, en vez de pisar el resultado del ganador.
-    const updated = await this.ordersRepo.updateStatus(id, status, timestamps, order.status);
+    const updated = await this.deps.ordersRepo.updateStatus(id, status, timestamps, order.status);
     if (!updated) {
-      const current = await this.ordersRepo.findById(id);
+      const current = await this.deps.ordersRepo.findById(id);
       throw new Conflict(
         `Transición inválida: ${current?.status ?? "desconocido"} → ${status} (el pedido cambió de estado durante la operación).`,
       );
     }
-    this.emit({ type: "order.updated", order: updated });
+    this.deps.emit({ type: "order.updated", order: updated });
     return updated;
   }
 
@@ -153,7 +246,7 @@ export class OrdersService {
     operator: string,
     meta?: { deliveredByBar?: string; redeemMethod?: "scan" | "manual" },
   ): Promise<Order> {
-    const order = await this.ordersRepo.findById(orderId);
+    const order = await this.deps.ordersRepo.findById(orderId);
     if (!order) throw new NotFound(`Order ${orderId} no existe.`);
     if (order.status !== "pendiente") {
       throw new Conflict(`El pedido está en un estado (${order.status}) que no se puede entregar.`);
@@ -162,31 +255,31 @@ export class OrdersService {
   }
 
   async getActiveOrders(): Promise<Order[]> {
-    const event = await this.getActiveEvent();
+    const event = await this.deps.getActiveEvent();
     if (!event) return [];
-    return this.ordersRepo.findActive(event.id);
+    return this.deps.ordersRepo.findActive(event.id);
   }
 
   async listOrders(): Promise<Order[]> {
-    const event = await this.getActiveEvent();
+    const event = await this.deps.getActiveEvent();
     if (!event) return [];
-    return this.ordersRepo.listForEvent(event.id);
+    return this.deps.ordersRepo.listForEvent(event.id);
   }
 
   async getOrdersLog(all: boolean = false): Promise<Order[]> {
     if (all) {
-      return this.ordersRepo.listAll();
+      return this.deps.ordersRepo.listAll();
     }
-    const event = await this.getActiveEvent();
+    const event = await this.deps.getActiveEvent();
     if (!event) return [];
-    return this.ordersRepo.listForEvent(event.id);
+    return this.deps.ordersRepo.listForEvent(event.id);
   }
 
   async getOrder(id: string): Promise<Order | undefined> {
-    return this.ordersRepo.findById(id);
+    return this.deps.ordersRepo.findById(id);
   }
 
   async getOrderByToken(token: string): Promise<Order | undefined> {
-    return this.ordersRepo.findByToken(token);
+    return this.deps.ordersRepo.findByToken(token);
   }
 }

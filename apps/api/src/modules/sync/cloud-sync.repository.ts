@@ -133,6 +133,12 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
       delivered_by: o.deliveredBy || null,
       delivered_by_bar: o.deliveredByBar || null,
       redeem_method: o.redeemMethod || null,
+      // Columnas de cobro-verificado. En Cloud van SIN FK (archivo histórico);
+      // requieren el DDL del paso 7.1 aplicado allá o el push entero falla.
+      mp_order_id: o.paymentRecordId || null,
+      mp_payment_id: o.paymentRef || null,
+      idempotency_key: o.idempotencyKey || null,
+      payment_status: o.paymentStatus || "desconocido",
     }));
     const { error } = await supabaseCloud.from("orders").upsert(rows);
     if (error) throw error;

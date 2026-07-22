@@ -60,6 +60,15 @@ function makeMpOrder(overrides: Partial<MpOrder> = {}): MpOrder {
     eventId: "event-1",
     qrData: "https://mp.example/qr.png",
     expiresAt: "2026-07-17T00:15:00Z",
+    deviceId: null,
+    attemptId: null,
+    rawState: null,
+    paymentStatus: null,
+    paymentStatusDetail: null,
+    paidAmount: null,
+    verifiedAt: null,
+    verificationError: null,
+    cartItems: null,
     createdAt: "2026-07-17T00:00:00Z",
     updatedAt: "2026-07-17T00:00:00Z",
     ...overrides,
@@ -135,6 +144,7 @@ describe("MercadoPagoOrdersService", () => {
       findByPaymentId: vi.fn(),
       findByExternalRef: vi.fn(),
       findByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      findByAttemptId: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockImplementation(async (orderIdMp, patch) =>
         makeMpOrder({ orderIdMp, ...patch }),
       ),
@@ -343,22 +353,67 @@ describe("MercadoPagoOrdersService", () => {
       expect(fetch).not.toHaveBeenCalled();
     });
 
-    it("consulta MP y actualiza status + payment_id (reference_id)", async () => {
-      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder());
+    it("al concretar verifica el monto y persiste paid_amount + payment_id (reference_id)", async () => {
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder({ amount: 1500 }));
       mockFetchOk({
         id: "ORD01ABC",
         status: "processed",
         transactions: {
-          payments: [{ id: "PAY01TXN", reference_id: "99887766", status: "processed" }],
+          payments: [{ id: "PAY01TXN", reference_id: "99887766", status: "processed", amount: "1500.00" }],
         },
       });
 
       const result = await service.getOrderStatus("ORD01ABC");
-      expect(mpOrdersRepo.update).toHaveBeenCalledWith("ORD01ABC", {
-        status: "processed",
-        paymentId: "99887766",
-      });
+      expect(mpOrdersRepo.update).toHaveBeenCalledWith(
+        "ORD01ABC",
+        expect.objectContaining({
+          status: "processed",
+          paymentId: "99887766",
+          paidAmount: 1500,
+          verifiedAt: expect.any(String),
+          verificationError: null,
+        }),
+      );
       expect(result.status).toBe("processed");
+    });
+
+    it("processed sin monto/payment_id verificable queda unknown, nunca concretado (criterio B)", async () => {
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder({ amount: 1500 }));
+      mockFetchOk({
+        id: "ORD01ABC",
+        status: "processed",
+        transactions: { payments: [{ id: "PAY01TXN", status: "processed" }] },
+      });
+
+      await service.getOrderStatus("ORD01ABC");
+      expect(mpOrdersRepo.update).toHaveBeenCalledWith(
+        "ORD01ABC",
+        expect.objectContaining({
+          status: "unknown",
+          verificationError: expect.stringContaining("sin payment_id/monto"),
+        }),
+      );
+    });
+
+    it("processed con monto distinto al solicitado queda unknown con el detalle", async () => {
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder({ amount: 1500 }));
+      mockFetchOk({
+        id: "ORD01ABC",
+        status: "processed",
+        transactions: {
+          payments: [{ id: "PAY01TXN", reference_id: "99887766", amount: "900.00" }],
+        },
+      });
+
+      await service.getOrderStatus("ORD01ABC");
+      expect(mpOrdersRepo.update).toHaveBeenCalledWith(
+        "ORD01ABC",
+        expect.objectContaining({
+          status: "unknown",
+          paidAmount: 900,
+          verificationError: expect.stringContaining("distinto del solicitado"),
+        }),
+      );
     });
 
     it("404 si la order no existe localmente", async () => {
@@ -401,14 +456,14 @@ describe("MercadoPagoOrdersService", () => {
 
   describe("reconcileFromMp", () => {
     it("consulta MP y actualiza mp_orders (webhook / conciliación)", async () => {
-      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder());
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder({ amount: 1500 }));
       mockFetchOk({
         id: "ORD01ABC",
         status: "processed",
         type: "qr",
         status_detail: "accredited",
         transactions: {
-          payments: [{ id: "PAY01TXN", reference_id: "99887766" }],
+          payments: [{ id: "PAY01TXN", reference_id: "99887766", amount: "1500.00" }],
         },
       });
 
@@ -418,10 +473,14 @@ describe("MercadoPagoOrdersService", () => {
         statusDetail: "accredited",
         mpOrder: expect.objectContaining({ status: "processed" }),
       });
-      expect(mpOrdersRepo.update).toHaveBeenCalledWith("ORD01ABC", {
-        status: "processed",
-        paymentId: "99887766",
-      });
+      expect(mpOrdersRepo.update).toHaveBeenCalledWith(
+        "ORD01ABC",
+        expect.objectContaining({
+          status: "processed",
+          paymentId: "99887766",
+          paidAmount: 1500,
+        }),
+      );
     });
 
     it("devuelve null si la order no existe localmente", async () => {

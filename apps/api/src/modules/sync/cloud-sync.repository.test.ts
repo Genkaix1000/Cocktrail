@@ -14,6 +14,8 @@ function makeQueryBuilder(result: QueryResult) {
 
 const localResults = new Map<string, QueryResult>();
 const cloudResults = new Map<string, QueryResult>();
+/** Último builder creado por tabla en cloud, para inspeccionar qué se upserteó. */
+const cloudBuilders = new Map<string, any>();
 let cloudConfigured = true;
 
 vi.mock("../../shared/supabase.js", () => ({
@@ -22,7 +24,13 @@ vi.mock("../../shared/supabase.js", () => ({
   },
   get supabaseCloud() {
     if (!cloudConfigured) return null;
-    return { from: (table: string) => makeQueryBuilder(cloudResults.get(table) ?? { data: [], error: null }) };
+    return {
+      from: (table: string) => {
+        const builder = makeQueryBuilder(cloudResults.get(table) ?? { data: [], error: null });
+        cloudBuilders.set(table, builder);
+        return builder;
+      },
+    };
   },
 }));
 
@@ -31,7 +39,68 @@ const { SupabaseCloudSyncRepository } = await import("./cloud-sync.repository.js
 beforeEach(() => {
   localResults.clear();
   cloudResults.clear();
+  cloudBuilders.clear();
   cloudConfigured = true;
+});
+
+describe("SupabaseCloudSyncRepository.pushOrders", () => {
+  it("mapea las 4 columnas de cobro-verificado (mp_order_id, mp_payment_id, idempotency_key, payment_status)", async () => {
+    cloudResults.set("orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    await repo.pushOrders("event-1", [
+      {
+        id: "o1",
+        token: "tok",
+        displayNumber: 1,
+        items: [],
+        total: 1500,
+        paymentMethod: "debito",
+        status: "pendiente",
+        createdAt: Date.now(),
+        paymentStatus: "cobrado",
+        paymentRef: "pay-99",
+        paymentRecordId: "mp-row-uuid",
+        idempotencyKey: "attempt-1111-2222",
+      } as any,
+    ]);
+
+    const upserted = cloudBuilders.get("orders").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({
+      id: "o1",
+      mp_order_id: "mp-row-uuid",
+      mp_payment_id: "pay-99",
+      idempotency_key: "attempt-1111-2222",
+      payment_status: "cobrado",
+    });
+  });
+
+  it("filas pre-migración sin datos de cobro suben con payment_status='desconocido' y nulls", async () => {
+    cloudResults.set("orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    await repo.pushOrders("event-1", [
+      {
+        id: "o-legacy",
+        token: "tok",
+        displayNumber: 2,
+        items: [],
+        total: 1000,
+        paymentMethod: "efectivo",
+        status: "entregado",
+        createdAt: Date.now(),
+      } as any,
+    ]);
+
+    const upserted = cloudBuilders.get("orders").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({
+      id: "o-legacy",
+      mp_order_id: null,
+      mp_payment_id: null,
+      idempotency_key: null,
+      payment_status: "desconocido",
+    });
+  });
 });
 
 describe("SupabaseCloudSyncRepository.pullDrinks", () => {

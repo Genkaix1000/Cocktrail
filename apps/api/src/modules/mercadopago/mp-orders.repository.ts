@@ -8,8 +8,11 @@ export type MpOrderStatus =
   | "expired"
   | "failed"
   | "action_required"
-  | "unknown";
+  | "unknown"
+  | "rejected";
 export type MpOrderType = "qr" | "point";
+
+export type MpCartItem = { drinkId: number; qty: number };
 
 export type MpOrder = {
   id: string;
@@ -18,6 +21,7 @@ export type MpOrder = {
   idempotencyKey: string;
   paymentTransactionId: string | null;
   paymentId: string | null;
+  /** ⚠ En PESOS (la conversión a centavos vive solo en el borde de la Point API). */
   amount: number;
   status: MpOrderStatus;
   type: MpOrderType;
@@ -26,6 +30,16 @@ export type MpOrder = {
   eventId: string | null;
   qrData: string | null;
   expiresAt: string | null;
+  deviceId: string | null;
+  attemptId: string | null;
+  rawState: string | null;
+  paymentStatus: string | null;
+  paymentStatusDetail: string | null;
+  /** ⚠ En PESOS. */
+  paidAmount: number | null;
+  verifiedAt: string | null;
+  verificationError: string | null;
+  cartItems: MpCartItem[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -44,12 +58,26 @@ export type NewMpOrder = {
   eventId?: string | null;
   qrData?: string | null;
   expiresAt?: string | null;
+  deviceId?: string | null;
+  attemptId?: string | null;
+  rawState?: string | null;
+  paymentStatus?: string | null;
+  paymentStatusDetail?: string | null;
+  paidAmount?: number | null;
+  verifiedAt?: string | null;
+  cartItems?: MpCartItem[] | null;
 };
 
 export type MpOrderUpdate = {
   status?: MpOrderStatus;
   paymentId?: string | null;
   paymentTransactionId?: string | null;
+  rawState?: string | null;
+  paymentStatus?: string | null;
+  paymentStatusDetail?: string | null;
+  paidAmount?: number | null;
+  verifiedAt?: string | null;
+  verificationError?: string | null;
 };
 
 type MpOrderRow = {
@@ -67,6 +95,15 @@ type MpOrderRow = {
   event_id: string | null;
   qr_data: string | null;
   expires_at: string | null;
+  device_id: string | null;
+  attempt_id: string | null;
+  raw_state: string | null;
+  payment_status: string | null;
+  payment_status_detail: string | null;
+  paid_amount: number | string | null;
+  verified_at: string | null;
+  verification_error: string | null;
+  cart_items: MpCartItem[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -87,13 +124,22 @@ export function mapMpOrderRow(row: MpOrderRow): MpOrder {
     eventId: row.event_id,
     qrData: row.qr_data,
     expiresAt: row.expires_at,
+    deviceId: row.device_id,
+    attemptId: row.attempt_id,
+    rawState: row.raw_state,
+    paymentStatus: row.payment_status,
+    paymentStatusDetail: row.payment_status_detail,
+    paidAmount: row.paid_amount == null ? null : Number(row.paid_amount),
+    verifiedAt: row.verified_at,
+    verificationError: row.verification_error,
+    cartItems: row.cart_items,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 const SELECT_COLS =
-  "id, order_id_mp, external_ref, idempotency_key, payment_transaction_id, payment_id, amount, status, type, bar_id, caja_id, event_id, qr_data, expires_at, created_at, updated_at";
+  "id, order_id_mp, external_ref, idempotency_key, payment_transaction_id, payment_id, amount, status, type, bar_id, caja_id, event_id, qr_data, expires_at, device_id, attempt_id, raw_state, payment_status, payment_status_detail, paid_amount, verified_at, verification_error, cart_items, created_at, updated_at";
 
 export interface MpOrdersRepository {
   create(order: NewMpOrder): Promise<MpOrder>;
@@ -101,6 +147,8 @@ export interface MpOrdersRepository {
   findByPaymentId(paymentId: string): Promise<MpOrder | null>;
   findByExternalRef(externalRef: string): Promise<MpOrder | null>;
   findByIdempotencyKey(idempotencyKey: string): Promise<MpOrder | null>;
+  /** Puede haber varios intents por attempt (retry 2205) — devuelve el más nuevo. */
+  findByAttemptId(attemptId: string): Promise<MpOrder | null>;
   update(orderIdMp: string, patch: MpOrderUpdate): Promise<MpOrder>;
   updateStatus(orderIdMp: string, status: MpOrderStatus): Promise<MpOrder>;
 }
@@ -123,6 +171,14 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
         event_id: order.eventId ?? null,
         qr_data: order.qrData ?? null,
         expires_at: order.expiresAt ?? null,
+        device_id: order.deviceId ?? null,
+        attempt_id: order.attemptId ?? null,
+        raw_state: order.rawState ?? null,
+        payment_status: order.paymentStatus ?? null,
+        payment_status_detail: order.paymentStatusDetail ?? null,
+        paid_amount: order.paidAmount ?? null,
+        verified_at: order.verifiedAt ?? null,
+        cart_items: order.cartItems ?? null,
       })
       .select(SELECT_COLS)
       .single();
@@ -195,6 +251,23 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
     return data ? mapMpOrderRow(data as MpOrderRow) : null;
   }
 
+  async findByAttemptId(attemptId: string): Promise<MpOrder | null> {
+    const { data, error } = await supabase
+      .from("mp_orders")
+      .select(SELECT_COLS)
+      .eq("attempt_id", attemptId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[SupabaseMpOrdersRepository] Error finding by attempt_id:", error);
+      throw error;
+    }
+
+    return data ? mapMpOrderRow(data as MpOrderRow) : null;
+  }
+
   async update(orderIdMp: string, patch: MpOrderUpdate): Promise<MpOrder> {
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.status !== undefined) payload.status = patch.status;
@@ -202,6 +275,12 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
     if (patch.paymentTransactionId !== undefined) {
       payload.payment_transaction_id = patch.paymentTransactionId;
     }
+    if (patch.rawState !== undefined) payload.raw_state = patch.rawState;
+    if (patch.paymentStatus !== undefined) payload.payment_status = patch.paymentStatus;
+    if (patch.paymentStatusDetail !== undefined) payload.payment_status_detail = patch.paymentStatusDetail;
+    if (patch.paidAmount !== undefined) payload.paid_amount = patch.paidAmount;
+    if (patch.verifiedAt !== undefined) payload.verified_at = patch.verifiedAt;
+    if (patch.verificationError !== undefined) payload.verification_error = patch.verificationError;
 
     const { data, error } = await supabase
       .from("mp_orders")

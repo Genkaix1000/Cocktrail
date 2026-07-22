@@ -35,6 +35,19 @@ export type OrderStatus =
 
 export type PaymentMethod = "efectivo" | "qr" | "debito";
 
+/**
+ * Estado de cobro de la venta. "desconocido" es solo para filas pre-migración
+ * y pedidos de /carta; "pendiente_de_cobro" queda reservado para la Fase 7.
+ */
+export type PaymentStatus = "cobrado" | "pendiente_de_cobro" | "desconocido";
+
+/** Prueba de pago que la caja presenta al registrar una venta no-efectivo. */
+export type PaymentProofInput = {
+  provider: "mercadopago";
+  kind: "point_intent" | "qr_order";
+  id: string;
+};
+
 export type Order = {
   id: string;
   token: string;
@@ -53,6 +66,13 @@ export type Order = {
   deliveredBy?: string;
   deliveredByBar?: string;
   redeemMethod?: "scan" | "manual";
+  paymentStatus?: PaymentStatus;
+  /** Id del pago en el proveedor (ej. payment_id de MP) — lo que se busca en su panel. */
+  paymentRef?: string;
+  /** Id interno de la fila de cobro ligada (orders.mp_order_id). */
+  paymentRecordId?: string;
+  /** Key de replay del registro (orders.idempotency_key). */
+  idempotencyKey?: string;
 };
 
 export type EventStatus = "activo" | "cerrado";
@@ -95,4 +115,8 @@ export type EventSummary = NightEvent & {
 export type NewOrderInput = {
   items: { drinkId: number; qty: number }[];
   paymentMethod: PaymentMethod;
+  /** Obligatoria para ventas de caja no-efectivo (el server la verifica). */
+  payment?: PaymentProofInput;
+  /** Replay: mismo key → misma Order, sin doble registro. */
+  idempotencyKey?: string;
 };

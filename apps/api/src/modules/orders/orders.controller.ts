@@ -32,12 +32,12 @@ export function createOrdersController(
   // POST /api/orders — crear pedido (público)
   router.post("/", orderLimiter, validate(CreateOrderSchema), async (req, res, next) => {
     try {
-      const { items, paymentMethod } = req.body;
+      const { items, paymentMethod, payment, idempotencyKey } = req.body;
       const sessionCookie = req.cookies?.[COOKIE_NAME];
       const session = verifySession(sessionCookie);
       const createdBy = session ? session.username : "Cliente";
 
-      const order = await service.createOrder({ items, paymentMethod }, createdBy);
+      const order = await service.createOrder({ items, paymentMethod, payment, idempotencyKey }, createdBy);
       await auditLogsService.log(
         "order.created",
         `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,

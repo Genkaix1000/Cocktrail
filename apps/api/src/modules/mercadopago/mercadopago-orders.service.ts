@@ -245,16 +245,57 @@ export class MercadoPagoOrdersService {
       "Error al consultar la order en Mercado Pago",
     );
 
+    return this.mpOrdersRepo.update(order.orderIdMp, this.buildStatusPatch(order, mpOrder));
+  }
+
+  /**
+   * Criterio B en el camino QR: al CONCRETAR (processed) se verifica el monto
+   * aprobado contra lo pedido y se persisten paid_amount/status_detail. Va acá
+   * (al momento de concretar) y no en cada poll: el short-circuit de filas ya
+   * finales en getOrderStatus nunca re-ejecuta esta verificación.
+   */
+  private buildStatusPatch(order: MpOrder, mpOrder: MpOrderResponse) {
     const newStatus = this.mapMpStatus(mpOrder.status);
     // El payment_id real llega en reference_id al consultar; no pisar con el id de transacción.
     const payment = mpOrder.transactions?.payments?.[0];
     const paymentId =
       payment?.reference_id != null ? String(payment.reference_id) : null;
 
-    return this.mpOrdersRepo.update(order.orderIdMp, {
-      status: newStatus,
-      ...(paymentId ? { paymentId } : {}),
-    });
+    if (newStatus !== "processed") {
+      return {
+        status: newStatus,
+        ...(paymentId ? { paymentId } : {}),
+        ...(payment?.status_detail ? { paymentStatusDetail: payment.status_detail } : {}),
+      };
+    }
+
+    // payments[0].amount viene en PESOS como string ("101.00").
+    const paidAmount = payment?.amount != null ? Number(payment.amount) : NaN;
+    if (!paymentId || !Number.isFinite(paidAmount)) {
+      return {
+        status: "unknown" as const,
+        verificationError: "MP reportó processed sin payment_id/monto verificable.",
+        ...(payment?.status_detail ? { paymentStatusDetail: payment.status_detail } : {}),
+      };
+    }
+    if (paidAmount !== Number(order.amount)) {
+      return {
+        status: "unknown" as const,
+        paymentId,
+        paidAmount,
+        verificationError: `Monto aprobado ($${paidAmount}) distinto del solicitado ($${order.amount}).`,
+        ...(payment?.status_detail ? { paymentStatusDetail: payment.status_detail } : {}),
+      };
+    }
+    return {
+      status: "processed" as const,
+      paymentId,
+      paidAmount,
+      verifiedAt: new Date().toISOString(),
+      verificationError: null,
+      ...(payment?.status_detail ? { paymentStatusDetail: payment.status_detail } : {}),
+      ...(payment?.status ? { paymentStatus: payment.status } : {}),
+    };
   }
 
   /**
@@ -277,16 +318,11 @@ export class MercadoPagoOrdersService {
       "Error al consultar la order en Mercado Pago",
     );
 
-    const newStatus = this.mapMpStatus(mpOrder.status);
+    // Misma verificación de monto que getOrderStatus: el webhook también es
+    // un camino de concretar y el CHECK de DB exige paid_amount en processed.
+    const updated = await this.mpOrdersRepo.update(order.orderIdMp, this.buildStatusPatch(order, mpOrder));
+
     const payment = mpOrder.transactions?.payments?.[0];
-    const paymentId =
-      payment?.reference_id != null ? String(payment.reference_id) : null;
-
-    const updated = await this.mpOrdersRepo.update(order.orderIdMp, {
-      status: newStatus,
-      ...(paymentId ? { paymentId } : {}),
-    });
-
     return {
       mpOrder: updated,
       mpType: mpOrder.type,

@@ -3,7 +3,12 @@ import { act, renderHook } from "@testing-library/react";
 
 import { useCheckout } from "./useCheckout";
 import { listPendingSales } from "@/lib/pendingSales";
-import { mercadopagoService, type MpQrOrderStatus } from "@/services/mercadopago.service";
+import { ApiError } from "@/services/api-client";
+import {
+  mercadopagoService,
+  type MpQrOrderStatus,
+  type PosIntentVerdict,
+} from "@/services/mercadopago.service";
 import { ordersService } from "@/services/orders.service";
 import type { Drink, Order } from "@cocktrail/shared";
 
@@ -11,6 +16,7 @@ vi.mock("@/services/mercadopago.service", () => ({
   mercadopagoService: {
     createPosIntent: vi.fn(),
     getPosIntentStatus: vi.fn(),
+    resolvePosIntent: vi.fn(),
     cancelPosIntent: vi.fn(),
     createQrOrder: vi.fn(),
     getQrOrderStatus: vi.fn(),
@@ -87,6 +93,22 @@ function makeQrStatus(status: MpQrOrderStatus) {
   return { orderIdMp: "ORD01QR", status, paymentId: null, amount: 2500, expiresAt: null };
 }
 
+/** Response del create Posnet con el deadline server-side a futuro (10 min, como el backend). */
+function makePosCreated(overrides: Partial<{ id: string; expiresAt: string }> = {}) {
+  return {
+    id: "intent-1",
+    expiresAt: new Date(Date.now() + 600_000).toISOString(),
+    ...overrides,
+  };
+}
+
+function makePosVerdict(
+  status: PosIntentVerdict["status"],
+  extra: Partial<PosIntentVerdict> = {},
+): PosIntentVerdict {
+  return { status, ...extra };
+}
+
 describe("useCheckout — cobro Posnet", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -99,9 +121,9 @@ describe("useCheckout — cobro Posnet", () => {
     vi.useRealTimers();
   });
 
-  it("FINISHED crea el pedido y vuelve a idle", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "FINISHED" });
+  it("FINISHED crea el pedido con la prueba de pago + idempotencyKey y vuelve a idle", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("FINISHED"));
     mockedOrdersService.create.mockResolvedValue(makeOrder());
 
     const { result } = setupHook();
@@ -110,21 +132,33 @@ describe("useCheckout — cobro Posnet", () => {
       await result.current.startPosnetPayment("debito");
     });
 
+    // El intent se crea con el attemptId (semilla) y los items del carrito
+    // (respaldo server-side de la venta).
+    expect(mockedMercadopagoService.createPosIntent).toHaveBeenCalledWith(
+      2500,
+      "Fernet con Coca x1",
+      { attemptId: expect.any(String), items: [{ drinkId: 1, qty: 1 }] },
+    );
+    const attemptId = mockedMercadopagoService.createPosIntent.mock.calls[0][2]?.attemptId;
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
 
+    // El registro presenta la prueba de pago y reusa el attemptId como key de replay.
     expect(mockedOrdersService.create).toHaveBeenCalledWith({
       items: [{ drinkId: 1, qty: 1 }],
       paymentMethod: "debito",
+      payment: { provider: "mercadopago", kind: "point_intent", id: "intent-1" },
+      idempotencyKey: attemptId,
     });
     expect(result.current.posnetStatus).toBe("idle");
     expect(result.current.latestOrder).not.toBeNull();
   });
 
-  it("CANCELED marca error y no crea el pedido", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "CANCELED" });
+  it("CANCELED sigue siendo cancelación deliberada (sentinel), no un rechazo", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("CANCELED"));
 
     const { result } = setupHook();
 
@@ -141,11 +175,108 @@ describe("useCheckout — cobro Posnet", () => {
     expect(mockedOrdersService.create).not.toHaveBeenCalled();
   });
 
-  it.each(["OPEN", "ON_TERMINAL", "PENDING"] as const)(
-    "status %s sigue esperando, sin crear el pedido ni marcar error",
-    async (status) => {
-      mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-      mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status });
+  it("REJECTED por fondos insuficientes corta el polling y muestra el motivo real", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(
+      makePosVerdict("REJECTED", { statusDetail: "cc_rejected_insufficient_amount", rawState: "FINISHED" }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toBe(
+      "Tarjeta rechazada: fondos insuficientes — pedile al cliente otro medio de pago",
+    );
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+
+    // Polling detenido: no vuelve a consultar.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(mockedMercadopagoService.getPosIntentStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("REJECTED con un detail no mapeado muestra el rechazo genérico con el detalle", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(
+      makePosVerdict("REJECTED", { statusDetail: "cc_rejected_bad_filled_security_code" }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(result.current.posnetErrorMessage).toBe(
+      "Tarjeta rechazada (cc_rejected_bad_filled_security_code). Pedile al cliente otro medio de pago.",
+    );
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+  });
+
+  it("EXPIRED corta el polling con el sentinel de expiración, sin crear el pedido", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("EXPIRED"));
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toBe("intent_expired");
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(mockedMercadopagoService.getPosIntentStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("UNKNOWN NO es terminal ni cobrado: sigue consultando y lo muestra como advertencia", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("UNKNOWN"));
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+
+    expect(mockedMercadopagoService.getPosIntentStatus).toHaveBeenCalledTimes(2);
+    expect(result.current.posnetStatus).not.toBe("error");
+    expect(result.current.paymentIntentState).toBe("UNKNOWN");
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["OPEN", "OPEN"],
+    ["ON_TERMINAL", "ON_TERMINAL"],
+    [undefined, "PENDING"],
+  ] as const)(
+    "PENDING con rawState %s sigue esperando y expone %s como estado visible",
+    async (rawState, visible) => {
+      mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+      mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(
+        makePosVerdict("PENDING", rawState ? { rawState } : {}),
+      );
 
       const { result } = setupHook();
 
@@ -159,11 +290,69 @@ describe("useCheckout — cobro Posnet", () => {
 
       expect(mockedOrdersService.create).not.toHaveBeenCalled();
       expect(result.current.posnetStatus).not.toBe("error");
+      expect(result.current.paymentIntentState).toBe(visible);
     },
   );
 
+  it("criterio F: pasado el expiresAt del create corta el polling localmente", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(
+      makePosCreated({ expiresAt: new Date(Date.now() + 1000).toISOString() }),
+    );
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(
+      makePosVerdict("PENDING", { rawState: "OPEN" }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+
+    // Ticks a 3s y 6s: todavía dentro de expiresAt (1s) + gracia (5s) → consulta.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(mockedMercadopagoService.getPosIntentStatus).toHaveBeenCalledTimes(2);
+
+    // Tick a 9s: vencido → corta ANTES de consultar de nuevo.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(mockedMercadopagoService.cancelPosIntent).toHaveBeenCalledWith("intent-1");
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toBe("intent_expired");
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+
+    // Polling detenido: no vuelve a consultar.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(mockedMercadopagoService.getPosIntentStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("si el deadline local corta tras un UNKNOWN, el mensaje es 'no confirmado' (D1), no expiración", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(
+      makePosCreated({ expiresAt: new Date(Date.now() + 1000).toISOString() }),
+    );
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("UNKNOWN"));
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toContain("panel de Mercado Pago");
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+  });
+
   it("un error de red al consultar el estado marca posnetStatus en error", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
     mockedMercadopagoService.getPosIntentStatus.mockRejectedValue(new Error("network down"));
 
     const { result } = setupHook();
@@ -181,8 +370,8 @@ describe("useCheckout — cobro Posnet", () => {
   });
 
   it("desmontar el componente con un intent activo lo cancela en el device", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("PENDING", { rawState: "OPEN" }));
     mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "CANCELED" });
 
     const { result, unmount } = setupHook();
@@ -207,8 +396,8 @@ describe("useCheckout — cobro Posnet", () => {
   });
 
   it("desmontar después de un cobro FINISHED no cancela (el intent ya está cerrado)", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "FINISHED" });
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("FINISHED"));
     mockedOrdersService.create.mockResolvedValue(makeOrder());
 
     const { result, unmount } = setupHook();
@@ -228,8 +417,8 @@ describe("useCheckout — cobro Posnet", () => {
   });
 
   it("handleOpenCheckout cancela un intent activo abandonado antes de resetear el estado", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("PENDING", { rawState: "OPEN" }));
     mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "CANCELED" });
 
     const { result } = setupHook();
@@ -248,8 +437,8 @@ describe("useCheckout — cobro Posnet", () => {
   });
 
   it("A11: si el registro falla tras FINISHED, la constancia queda y el mensaje es el específico", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "FINISHED" });
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("FINISHED"));
     mockedOrdersService.create.mockRejectedValue(new Error("ECONNREFUSED"));
 
     const { result, unmount } = setupHook();
@@ -269,15 +458,78 @@ describe("useCheckout — cobro Posnet", () => {
     expect(result.current.pendingSales[0]).toMatchObject({
       paymentMethod: "debito",
       mpRef: "intent-1",
+      mpKind: "point_intent",
+      idempotencyKey: expect.any(String),
       amount: 2500,
       attempts: 1,
       lastError: "ECONNREFUSED",
     });
+    expect(result.current.pendingSales[0].blocked).toBeUndefined();
     expect(listPendingSales()).toHaveLength(1);
 
     // El cobro ya está hecho: desmontar no debe cancelarlo en el device.
     unmount();
     expect(mockedMercadopagoService.cancelPosIntent).not.toHaveBeenCalled();
+  });
+
+  it("409 PAYMENT_REJECTED al registrar NO reintenta: marca la constancia y muestra el motivo", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("FINISHED"));
+    const serverMsg = "Cobro rechazado: el pago fue rechazado por MP (cc_rejected_insufficient_amount). No se registró la venta.";
+    mockedOrdersService.create.mockRejectedValue(
+      new ApiError(409, serverMsg, { error: serverMsg, code: "PAYMENT_REJECTED" }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    // El mensaje es el motivo del server, nunca el genérico de "quedó guardada para reintentar".
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toBe(serverMsg);
+    expect(result.current.pendingSales).toHaveLength(1);
+    expect(result.current.pendingSales[0].blocked).toEqual({
+      code: "PAYMENT_REJECTED",
+      reason: serverMsg,
+    });
+
+    // La constancia bloqueada no se reintenta: retryPendingSale es un no-op.
+    mockedOrdersService.create.mockClear();
+    let retried: boolean | undefined;
+    await act(async () => {
+      retried = await result.current.retryPendingSale(result.current.pendingSales[0].id);
+    });
+    expect(retried).toBe(false);
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+  });
+
+  it("409 PAYMENT_UNVERIFIED al registrar también bloquea la constancia (D1)", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("FINISHED"));
+    const serverMsg = "No se pudo confirmar el cobro: MP no respondió. La venta NO se registró — verificá el cobro y reintentá desde la constancia.";
+    mockedOrdersService.create.mockRejectedValue(
+      new ApiError(409, serverMsg, { error: serverMsg, code: "PAYMENT_UNVERIFIED" }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(result.current.posnetErrorMessage).toBe(serverMsg);
+    expect(result.current.pendingSales[0].blocked).toEqual({
+      code: "PAYMENT_UNVERIFIED",
+      reason: serverMsg,
+    });
   });
 });
 
@@ -307,13 +559,17 @@ describe("useCheckout — cobro QR (integridad)", () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
 
+    // El registro presenta la prueba de pago y reusa la semilla del intento como key.
+    const [, , createOpts] = mockedMercadopagoService.createQrOrder.mock.calls[0];
     expect(mockedOrdersService.create).toHaveBeenCalledWith({
       items: [{ drinkId: 1, qty: 1 }],
       paymentMethod: "qr",
+      payment: { provider: "mercadopago", kind: "qr_order", id: "ORD01QR" },
+      idempotencyKey: createOpts?.idempotencyKey,
     });
     expect(result.current.posnetStatus).toBe("idle");
     expect(result.current.latestOrder).not.toBeNull();
-    // La constancia write-ahead se escribió y se removió al registrar OK.
+    // La constancia se escribió tras el cobro confirmado y se removió al registrar OK.
     expect(result.current.pendingSales).toEqual([]);
     expect(listPendingSales()).toEqual([]);
   });
@@ -340,6 +596,7 @@ describe("useCheckout — cobro QR (integridad)", () => {
     expect(result.current.pendingSales[0]).toMatchObject({
       paymentMethod: "qr",
       mpRef: "ORD01QR",
+      mpKind: "qr_order",
       amount: 2500,
       attempts: 1,
       lastError: "network down",

@@ -47,6 +47,9 @@ export function createMercadoPagoOrdersController(service: MercadoPagoOrdersServ
   // GET /api/mercadopago/orders/:orderId/status — polling con consulta a MP
   router.get("/orders/:orderId/status", ...cajaOrAdmin, async (req, res, next) => {
     try {
+      // Criterio I: sin no-store, el ETag por defecto de Express deja al
+      // navegador cachear el estado del cobro (304) en pleno polling.
+      res.set("Cache-Control", "no-store");
       const orderId = req.params.orderId as string;
       const barId = typeof req.query.barId === "string" ? req.query.barId : undefined;
       res.json(await service.getOrderStatus(orderId, barId));

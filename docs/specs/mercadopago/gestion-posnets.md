@@ -134,11 +134,15 @@ Nueve, cada uno con su criterio de aceptación más abajo.
    activo**, que el lector esté **en la misma cuenta que el seller**, que esté **en PDV**, y que la
    caja esté **provisionada en la cuenta activa**. Hoy el cobro simplemente falla con un error de MP
    y hay que salir a investigar a mano.
-9. **La visibilidad de devices es por APLICACIÓN de MP, no solo por cuenta** (R24). Verificado: con
-   el `MP_ACCESS_TOKEN` del `.env` —aplicación `4126722482739227`, **misma cuenta** `1517393956`—
-   `GET /point/integration-api/devices` devuelve `total: 0`; solo el token OAuth de
-   `MP_APP_ID=2990738606457276` ve el lector. **Condiciona el diseño del fallback** y queda escrito
-   como restricción, no como detalle.
+9. **Nadie sabe si el fallback por `MP_ACCESS_TOKEN` sirve, hasta que falla un cobro** (R24). El
+   22-07 ese token devolvió `total: 0` en `GET /point/integration-api/devices` y se concluyó que
+   *"la visibilidad de devices es por aplicación de MP"*; **más tarde el mismo día quedó refutado** —
+   con el mismo token el listado devuelve el lector, una vez que el lector pasó a `PDV` con store y
+   POS (lo que cambió fue el estado del device, no el token; ver R24 en el roadmap y el changelog de
+   la spec de remediación). Lo que queda en pie es el problema real: la utilidad del fallback
+   depende de que sea de la **misma cuenta** que el lector y de que efectivamente lo vea, y **el
+   sistema no lo observa**. Se **detecta y avisa** acá; la estrategia (preflight F1) es del PR 4 de
+   la remediación.
 
 **Para quién**: el dueño (no puede cambiar un Posnet sin un técnico, y no tiene forma de saber por
 qué no cobra), la cajera (la caja queda parada sin diagnóstico), y quien mantenga el código (una
@@ -292,10 +296,11 @@ En términos de comportamiento observable:
      `external_id` en dos cuentas a la vez — R22).
 - [ ] **Dado** un chequeo en rojo, **cuando** el admin lo mira, **entonces** el mensaje dice **qué
   hacer**, no solo qué está mal.
-- [ ] **Dado** que se usa el fallback `MP_ACCESS_TOKEN`, **cuando** se evalúa la salud, **entonces**
-  el sistema verifica que ese token pertenezca a la **misma aplicación de Mercado Pago** bajo la que
-  está registrado el lector, y **avisa antes del cobro** si no lo es (R24) — porque un token de la
-  misma cuenta pero de otra aplicación **ve `total: 0` devices y no puede cobrar con Posnet**.
+- [ ] **Dado** que existe el fallback `MP_ACCESS_TOKEN`, **cuando** se evalúa la salud, **entonces**
+  el panel muestra si ese token es de la **misma cuenta** de Mercado Pago que el lector y si
+  **efectivamente ve** el lector configurado (y en qué `operating_mode`), o bien que no se pudo
+  determinar — y **avisa antes del cobro**, no durante (R24). El cálculo lo hace el preflight del PR
+  4 de la remediación (estrategia F1); acá es una fila más del panel.
 - [ ] **Dado** el diagnóstico completo, **cuando** se lo compara con el episodio del 21-07,
   **entonces** ese problema (lector de otra cuenta + STANDALONE) habría sido evidente **sin una sola
   consulta manual a la API**. Es el criterio de éxito real de este bloque.
@@ -323,8 +328,9 @@ El procedimiento acordado está en `docs/ROADMAP.md` → "Feature — Gestión d
   R23, R24 y R25 referencian esta spec como el lugar donde se resuelven.
 - [ ] `docs/ARCHITECTURE.md` describe la resolución del dispositivo desde la caja y el rol degradado
   de `MP_POS_DEVICE_ID`.
-- [ ] `.env.example` documenta que `MP_POS_DEVICE_ID` es un **último recurso** y que, para el
-  Posnet, el token de la env debe ser de la **misma aplicación** que el lector (R24).
+- [ ] `.env.example` documenta que `MP_POS_DEVICE_ID` es un **último recurso** y que
+  `MP_ACCESS_TOKEN` es un **fallback de emergencia** que, para servir con Posnet, tiene que ser de la
+  **misma cuenta** que el lector y verlo en el listado de devices (R24).
 
 ---
 
@@ -452,8 +458,9 @@ Ninguna bloquea escribir el plan técnico, pero todas hay que responderlas antes
   toca ese archivo**; el orden natural es `cobro-verificado` primero (es bloqueante para producción)
   y esta después o encima.
 - **Riesgos del roadmap**: **R23** (sin chequeo de salud) y **R25** (`operating_mode` miente) se
-  cierran acá. **R24** (visibilidad por aplicación) se **detecta y avisa** acá; la estrategia de
-  fallback definitiva es del PR 4. **R22** (cajas huérfanas al cambiar de cuenta) se cubre desde el
+  cierran acá. **R24** (el fallback por env puede no ver el lector — la formulación "visibilidad por
+  aplicación" quedó refutada el 22-07) se **detecta y avisa** acá; la estrategia de fallback
+  definitiva es la **F1** del PR 4. **R22** (cajas huérfanas al cambiar de cuenta) se cubre desde el
   lado del procedimiento (bloque H); la limpieza al desvincular es del PR 4. **R21** (dos sellers
   activos) se **detecta** acá, se resuelve en el PR 4.
 - **Fase 6 (empaquetado)** — esta feature va **antes**: ver D6.

@@ -1,6 +1,37 @@
 import { apiFetch } from "./api-client";
 
-export type MpNormalizedStatus = "OPEN" | "ON_TERMINAL" | "FINISHED" | "CANCELED" | "PENDING";
+/**
+ * Veredicto verificado del cobro con Posnet (GET /pos/intent/:id). Ya no es el
+ * `state` crudo del intent: FINISHED significa "pago approved verificado con
+ * monto correcto" contra /v1/payments. REJECTED ≠ CANCELED a propósito.
+ */
+export type PosIntentVerdictStatus =
+  | "PENDING"
+  | "FINISHED"
+  | "REJECTED"
+  | "CANCELED"
+  | "EXPIRED"
+  | "UNKNOWN";
+
+export type PosIntentVerdict = {
+  status: PosIntentVerdictStatus;
+  /** Estado crudo del intent en MP (OPEN/ON_TERMINAL/…) — solo para mensajes de progreso. */
+  rawState?: string;
+  reason?: string;
+  /** Motivo de MP en un rechazo (ej. cc_rejected_insufficient_amount). */
+  statusDetail?: string;
+  paymentId?: string;
+  expiresAt?: string;
+};
+
+export type CreatePosIntentResponse = {
+  id: string;
+  /** Deadline server-side del cobro — el hook lo usa para el corte local del polling. */
+  expiresAt: string;
+  idempotencyKeyUsed?: string;
+  externalReferenceUsed?: string;
+  deviceIdUsed?: string;
+};
 
 export type MpQrOrderStatus =
   | "created"
@@ -77,15 +108,40 @@ export const mercadopagoService = {
     });
   },
 
-  createPosIntent(amount: number, description?: string) {
-    return apiFetch<{ id: string }>("/api/mercadopago/pos/intent", {
+  /**
+   * `attemptId`: semilla estable por intento de cobro (misma semántica que la
+   * idempotencyKey del QR). `items`: el carrito viaja al backend, que lo
+   * persiste como respaldo server-side de la venta (sobrevive al cierre de la
+   * pestaña).
+   */
+  createPosIntent(
+    amount: number,
+    description?: string,
+    opts?: { attemptId?: string; items?: { drinkId: number; qty: number }[] },
+  ) {
+    return apiFetch<CreatePosIntentResponse>("/api/mercadopago/pos/intent", {
       method: "POST",
-      body: { amount, description },
+      body: {
+        amount,
+        description,
+        ...(opts?.attemptId ? { attemptId: opts.attemptId } : {}),
+        ...(opts?.items ? { items: opts.items } : {}),
+      },
     });
   },
 
   getPosIntentStatus(id: string) {
-    return apiFetch<{ status: MpNormalizedStatus; amount?: number }>(`/api/mercadopago/pos/intent/${id}`);
+    return apiFetch<PosIntentVerdict>(`/api/mercadopago/pos/intent/${id}`);
+  },
+
+  /**
+   * Re-consulta MP y devuelve el veredicto actualizado, incluso si el intent
+   * quedó EXPIRED — recupera un cobro desde otro dispositivo/pestaña (D6).
+   */
+  resolvePosIntent(id: string) {
+    return apiFetch<PosIntentVerdict>(`/api/mercadopago/pos/intent/${encodeURIComponent(id)}/resolve`, {
+      method: "POST",
+    });
   },
 
   cancelPosIntent(id: string) {

@@ -604,8 +604,19 @@ export default function VentaSection({ drinks, printer }: Props) {
                   <span className="text-[10px] font-black uppercase tracking-wider text-ink-300 px-1.5 py-0.5 bg-ink-850 border border-ink-800 rounded">
                     {sale.paymentMethod === "qr" ? "QR" : "Débito"}
                   </span>
-                  {sale.lastError && (
-                    <span className="text-danger/80 text-[10px]">Último error: {sale.lastError}</span>
+                  {sale.blocked ? (
+                    // El server dio un veredicto terminal sobre el registro:
+                    // rechazo o cobro sin verificar. Reintentar no aplica.
+                    <span className="text-danger text-[10px] font-bold">
+                      {sale.blocked.code === "PAYMENT_REJECTED"
+                        ? "El cobro fue rechazado por Mercado Pago — no es una venta por registrar."
+                        : "El cobro no se pudo verificar — revisá el panel de Mercado Pago antes de descartar."}{" "}
+                      {sale.blocked.reason}
+                    </span>
+                  ) : (
+                    sale.lastError && (
+                      <span className="text-danger/80 text-[10px]">Último error: {sale.lastError}</span>
+                    )
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -632,14 +643,18 @@ export default function VentaSection({ drinks, printer }: Props) {
                     </>
                   ) : (
                     <>
-                      <button
-                        onClick={() => handleRetryPendingSale(sale.id)}
-                        disabled={retryingSaleId !== null}
-                        className="ct-checkout-btn h-8 px-4 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {retryingSaleId === sale.id && <Loader2 size={12} className="animate-spin" />}
-                        {retryingSaleId === sale.id ? "Reintentando…" : "Reintentar"}
-                      </button>
+                      {/* Reintentar solo aplica a fallos de red/registro — nunca
+                          a un rechazo o cobro sin verificar (blocked). */}
+                      {!sale.blocked && (
+                        <button
+                          onClick={() => handleRetryPendingSale(sale.id)}
+                          disabled={retryingSaleId !== null}
+                          className="ct-checkout-btn h-8 px-4 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {retryingSaleId === sale.id && <Loader2 size={12} className="animate-spin" />}
+                          {retryingSaleId === sale.id ? "Reintentando…" : "Reintentar"}
+                        </button>
+                      )}
                       <button
                         onClick={() => setConfirmingDiscardId(sale.id)}
                         disabled={retryingSaleId !== null}
@@ -994,6 +1009,44 @@ export default function VentaSection({ drinks, printer }: Props) {
                     <ArrowLeft size={14} />
                     Volver Atrás
                   </button>
+                </div>
+              ) : posnetErrorMessage === "intent_expired" ? (
+                // El cobro venció sin confirmarse (deadline del server o corte
+                // local): distinto de un rechazo y de una cancelación — se
+                // puede reintentar si el cliente sigue ahí.
+                <div className="flex flex-col items-center justify-center py-8 gap-5 text-center animate-in fade-in zoom-in-95">
+                  <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-500 shrink-0">
+                    <CreditCard size={30} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-ink-50 mb-1.5">El cobro expiró</h2>
+                    <p className="text-ink-400 text-sm px-4 leading-relaxed">
+                      El cobro expiró sin confirmarse. Si el cliente no llegó a pagar, reintentá;
+                      si pagó, verificá en el panel de Mercado Pago antes de volver a cobrar.
+                    </p>
+                  </div>
+
+                  <div className="w-full flex flex-col gap-2.5 mt-2 shrink-0">
+                    <button
+                      onClick={() => startPosnetPayment("debito")}
+                      className="ct-checkout-btn w-full h-12 font-black rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      Reintentar cobro
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPosnetStatus("idle");
+                        setPaymentMethod(null);
+                        setPaymentIntentState(null);
+                        setPosnetErrorMessage(null);
+                        setCurrentIntentId(null);
+                      }}
+                      className="w-full h-12 bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider cursor-pointer hover:bg-ink-800 flex items-center justify-center gap-2"
+                    >
+                      <ArrowLeft size={14} />
+                      Volver Atrás
+                    </button>
+                  </div>
                 </div>
               ) : posnetErrorMessage === "busy_device" ? (
                 <div className="flex flex-col items-center justify-center py-6 gap-4 text-center animate-in fade-in zoom-in-95">
@@ -1358,10 +1411,22 @@ export default function VentaSection({ drinks, printer }: Props) {
                             {paymentIntentState === "ON_TERMINAL" ? (
                               <>
                                 <p className="text-sm font-bold text-amber-500">
-                                  Cobro activo en el Posnet
+                                  El cliente está pagando…
                                 </p>
                                 <p className="text-xs text-ink-400 px-8 leading-relaxed">
-                                  El cobro está en pantalla. Hacé que el cliente acerque la tarjeta.
+                                  El cobro está en pantalla del Posnet. Esperá a que el cliente acerque la tarjeta.
+                                </p>
+                              </>
+                            ) : paymentIntentState === "UNKNOWN" ? (
+                              // El backend no pudo confirmar el resultado todavía:
+                              // advertencia, nunca "cobrado" — sigue consultando
+                              // acotado por el deadline.
+                              <>
+                                <p className="text-sm font-bold text-amber-500">
+                                  No pudimos confirmar el cobro — verificando…
+                                </p>
+                                <p className="text-xs text-ink-400 px-8 leading-relaxed">
+                                  Seguimos consultando a Mercado Pago. No entregues el producto ni vuelvas a cobrar hasta que se confirme.
                                 </p>
                               </>
                             ) : (
@@ -1473,6 +1538,8 @@ export default function VentaSection({ drinks, printer }: Props) {
                                   stopPolling();
                                   try {
                                     await mercadopagoService.cancelPosIntent(currentIntentId);
+                                    // Cancelación deliberada: el próximo cobro es un intento nuevo.
+                                    resetPaymentAttempt();
                                     setPosnetStatus("idle");
                                     setCurrentIntentId(null);
                                     setPaymentMethod(null);

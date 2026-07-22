@@ -80,6 +80,45 @@ export async function createTestAdmin(opts?: {
   return { id: data.id, username, password, role };
 }
 
+/**
+ * Solo borra filas de cobro de test (external_ref con prefijo `TEST-`) — nunca
+ * cobros reales. Llamarlo DESPUÉS de borrar las orders que las referencian
+ * (orders.mp_order_id es FK ON DELETE NO ACTION; cleanNightEvents cascadea orders).
+ */
+export async function cleanTestMpOrders(): Promise<void> {
+  const { error } = await supabase.from("mp_orders").delete().like("external_ref", "TEST-%");
+  if (error) throw error;
+}
+
+/** Crea una fila de cobro de test en mp_orders (type point por default). */
+export async function createTestMpOrder(overrides?: {
+  status?: string;
+  amount?: number;
+  paidAmount?: number;
+  paymentId?: string;
+}): Promise<{ id: string; orderIdMp: string }> {
+  const suffix = randomUUID();
+  const status = overrides?.status ?? "created";
+  const { data, error } = await supabase
+    .from("mp_orders")
+    .insert({
+      order_id_mp: `TEST-INTENT-${suffix}`,
+      external_ref: `TEST-${suffix}`,
+      idempotency_key: `TEST-KEY-${suffix}`,
+      amount: overrides?.amount ?? 1500,
+      status,
+      type: "point",
+      device_id: "TEST-DEVICE",
+      // El CHECK exige paid_amount + payment_id cuando status='processed'.
+      paid_amount: overrides?.paidAmount ?? (status === "processed" ? (overrides?.amount ?? 1500) : null),
+      payment_id: overrides?.paymentId ?? (status === "processed" ? `TEST-PAY-${suffix}` : null),
+    })
+    .select("id, order_id_mp")
+    .single();
+  if (error) throw error;
+  return { id: data.id, orderIdMp: data.order_id_mp };
+}
+
 /** Firma una cookie de sesión válida sin pasar por /api/auth/login. */
 export function signTestSession(username: string, role: Role): string {
   const { value } = signSession(username, role);

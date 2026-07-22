@@ -41,16 +41,28 @@ describe("MercadoPagoService", () => {
   });
 
   describe("createPaymentIntent", () => {
-    it("crea la intencion de pago y devuelve el body de MP", async () => {
+    it("crea la intencion de pago y devuelve el body de MP + metadata de lo enviado", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
 
       const result = await service.createPaymentIntent(1000);
 
-      expect(result).toEqual({ id: "intent-1", status: "OPEN" });
+      expect(result).toMatchObject({ id: "intent-1", status: "OPEN", deviceIdUsed: "device-1" });
+      expect(result.idempotencyKeyUsed).toBeTruthy();
+      expect(result.externalReferenceUsed).toMatch(/^cocktrail-/);
       expect(fetch).toHaveBeenCalledWith(
         "https://api.mercadopago.com/point/integration-api/devices/device-1/payment-intents",
         expect.objectContaining({ method: "POST" }),
       );
+    });
+
+    it("manda el monto en CENTAVOS a la Point API (la conversion vive solo en este borde)", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+
+      await service.createPaymentIntent(1500.5);
+
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse((call[1] as RequestInit).body as string);
+      expect(body.amount).toBe(150050);
     });
 
     it("lanza Conflict con el mensaje de MP cuando la respuesta no es ok", async () => {
@@ -83,21 +95,21 @@ describe("MercadoPagoService", () => {
       expect(headers.Authorization).toBe("Bearer AT-device-9");
     });
 
-    it("manda un external_reference unico (basado en timestamp) en additional_info", async () => {
+    it("manda un external_reference unico (timestamp + sufijo random) en additional_info", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
 
       await service.createPaymentIntent(1000);
 
       const call = vi.mocked(fetch).mock.calls[0];
       const body = JSON.parse((call[1] as RequestInit).body as string);
-      expect(body.additional_info.external_reference).toMatch(/^cocktrail-\d+$/);
+      expect(body.additional_info.external_reference).toMatch(/^cocktrail-\d+-[0-9a-f]{8}$/);
     });
 
-    it("dos llamadas seguidas generan external_reference distintos", async () => {
+    it("dos llamadas en el MISMO milisegundo generan external_reference distintos (UNIQUE en mp_orders)", async () => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
       mockFetchOnce({ ok: true, body: { id: "intent-2", status: "OPEN" } });
 
-      const dateNowSpy = vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValueOnce(2000);
+      const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(1000);
       await service.createPaymentIntent(1000);
       await service.createPaymentIntent(1000);
       dateNowSpy.mockRestore();
@@ -116,7 +128,7 @@ describe("MercadoPagoService", () => {
 
       const call = vi.mocked(fetch).mock.calls[0];
       const body = JSON.parse((call[1] as RequestInit).body as string);
-      expect(body.additional_info.external_reference).toMatch(/^cocktrail-\d+-2x-Fernet-con-Coca-1x-Gin-Tonic$/);
+      expect(body.additional_info.external_reference).toMatch(/^cocktrail-\d+-[0-9a-f]{8}-2x-Fernet-con-Coca-1x-Gin-Tonic$/);
       expect(body.additional_info.external_reference.length).toBeLessThanOrEqual(64);
     });
 
@@ -130,6 +142,35 @@ describe("MercadoPagoService", () => {
       expect(headers["X-Idempotency-Key"]).toBeTruthy();
     });
 
+    it("usa la idempotencyKey provista y la devuelve en idempotencyKeyUsed", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+
+      const result = await service.createPaymentIntent(1000, undefined, undefined, "key-provista-123");
+
+      const call = vi.mocked(fetch).mock.calls[0];
+      const headers = (call[1] as RequestInit).headers as Record<string, string>;
+      expect(headers["X-Idempotency-Key"]).toBe("key-provista-123");
+      expect(result.idempotencyKeyUsed).toBe("key-provista-123");
+    });
+
+    it("el reintento post-2205 usa una idempotency key NUEVA (es un intent nuevo)", async () => {
+      mockFetchOnce({
+        ok: false,
+        status: 409,
+        body: { message: "Device has a queued payment intent", error: "2205", payment_intent_id: "intent-vieja" },
+      });
+      mockFetchOnce({ ok: true, body: { status: "CANCELED" } }); // cancel
+      mockFetchOnce({ ok: true, body: { id: "intent-nueva", status: "OPEN" } }); // retry
+
+      const result = await service.createPaymentIntent(1000, undefined, undefined, "key-original-123");
+
+      const firstHeaders = (vi.mocked(fetch).mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+      const retryHeaders = (vi.mocked(fetch).mock.calls[2][1] as RequestInit).headers as Record<string, string>;
+      expect(firstHeaders["X-Idempotency-Key"]).toBe("key-original-123");
+      expect(retryHeaders["X-Idempotency-Key"]).not.toBe("key-original-123");
+      expect(result.idempotencyKeyUsed).toBe(retryHeaders["X-Idempotency-Key"]);
+    });
+
     it("ante un 2205 con el id de la intencion en cola, la cancela y reintenta una vez", async () => {
       mockFetchOnce({
         ok: false,
@@ -141,7 +182,7 @@ describe("MercadoPagoService", () => {
 
       const result = await service.createPaymentIntent(1000);
 
-      expect(result).toEqual({ id: "intent-nueva", status: "OPEN" });
+      expect(result).toMatchObject({ id: "intent-nueva", status: "OPEN" });
       expect(fetch).toHaveBeenCalledTimes(3);
       expect(fetch).toHaveBeenNthCalledWith(
         2,
@@ -337,12 +378,33 @@ describe("MercadoPagoService", () => {
   });
 
   describe("getPaymentIntentStatus", () => {
-    it.each(["OPEN", "ON_TERMINAL", "FINISHED", "CANCELED"])("pasa el status %s tal cual", async (rawStatus) => {
+    it.each(["OPEN", "ON_TERMINAL", "FINISHED", "CANCELED"])("sin payment.id pasa el status %s tal cual", async (rawStatus) => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", status: rawStatus } });
 
       const result = await service.getPaymentIntentStatus("intent-1");
 
       expect(result.status).toBe(rawStatus);
+    });
+
+    it("FINISHED con payment.id dispara un segundo fetch y decide con el pago real (R27)", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", state: "FINISHED", payment: { id: "payment-1" } } });
+      mockFetchOnce({ ok: true, body: { id: "payment-1", status: "rejected", status_detail: "cc_rejected_insufficient_amount" } });
+
+      const result = await service.getPaymentIntentStatus("intent-1");
+
+      // Tarjeta sin fondos con state FINISHED: NUNCA puede volver como FINISHED.
+      expect(result.status).toBe("CANCELED");
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("FINISHED con pago approved sigue siendo FINISHED (camino feliz, 2 fetches)", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", state: "FINISHED", payment: { id: "payment-1" } } });
+      mockFetchOnce({ ok: true, body: { id: "payment-1", status: "approved" } });
+
+      const result = await service.getPaymentIntentStatus("intent-1");
+
+      expect(result.status).toBe("FINISHED");
+      expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it("resuelve CONFIRMATION_REQUIRED con pago approved como FINISHED, sin intervencion manual", async () => {
@@ -379,6 +441,51 @@ describe("MercadoPagoService", () => {
       await expect(service.getPaymentIntentStatus("intent-1")).rejects.toMatchObject({
         message: expect.stringContaining("Error al consultar estado del Posnet en Mercado Pago"),
       });
+    });
+  });
+
+  describe("resolveIntentOutcome", () => {
+    it("sin payment.id devuelve solo rawState + external_reference (1 fetch)", async () => {
+      mockFetchOnce({
+        ok: true,
+        body: { id: "intent-1", state: "ON_TERMINAL", additional_info: { external_reference: "cocktrail-1-abc" } },
+      });
+
+      const outcome = await service.resolveIntentOutcome("intent-1");
+
+      expect(outcome).toEqual({ rawState: "ON_TERMINAL", externalReference: "cocktrail-1-abc" });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("con payment.id consulta /v1/payments y devuelve el DTO completo (montos en pesos)", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", state: "FINISHED", payment: { id: "payment-1" } } });
+      mockFetchOnce({
+        ok: true,
+        body: { id: "payment-1", status: "approved", status_detail: "accredited", transaction_amount: 101 },
+      });
+
+      const outcome = await service.resolveIntentOutcome("intent-1");
+
+      expect(outcome).toMatchObject({
+        rawState: "FINISHED",
+        paymentId: "payment-1",
+        paymentStatus: "approved",
+        statusDetail: "accredited",
+        transactionAmount: 101,
+      });
+    });
+
+    it("pago rechazado: devuelve el status crudo con el detail, sin normalizar", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", state: "FINISHED", payment: { id: "payment-1" } } });
+      mockFetchOnce({
+        ok: true,
+        body: { id: "payment-1", status: "rejected", status_detail: "cc_rejected_insufficient_amount" },
+      });
+
+      const outcome = await service.resolveIntentOutcome("intent-1");
+
+      expect(outcome.paymentStatus).toBe("rejected");
+      expect(outcome.statusDetail).toBe("cc_rejected_insufficient_amount");
     });
   });
 });

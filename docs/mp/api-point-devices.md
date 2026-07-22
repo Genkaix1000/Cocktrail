@@ -86,17 +86,29 @@ Response:
 
 ### Estados posibles y qué hacer en cada uno
 
-| Estado crudo MP | Estado normalizado (Cocktrail) | Acción |
-|----------------|-------------------------------|--------|
-| `OPEN` | `OPEN` | Seguir polling |
-| `ON_TERMINAL` | `ON_TERMINAL` | Seguir polling (el cliente está pagando) |
-| `FINISHED` | `FINISHED` | Concretar pedido ✅ |
-| `CANCELED` | `CANCELED` | Volver al selector de método ❌ |
-| `CONFIRMATION_REQUIRED` | `FINISHED` o `CANCELED` o `PENDING` | **Ver sección abajo** ⚠️ |
+> ⚠️ **CORRECCIÓN (2026-07-22, R27)**: una versión anterior de esta tabla decía `FINISHED →
+> Concretar pedido ✅`. **Es falso y causó un bug real de plata**: en la Point Integration API,
+> `state` describe el **ciclo de vida del intent**, no el resultado del pago. Un intent puede
+> terminar `FINISHED` con el pago **rechazado** (`payment.status: "rejected"`,
+> `status_detail: "cc_rejected_insufficient_amount"`) — reproducido en vivo con una tarjeta sin
+> fondos: MP rechazó y Cocktrail imprimió el ticket igual. La regla correcta es: **si el intent
+> trae `payment.id` (aparece recién en los estados terminales), consultar `GET
+> /v1/payments/{id}` y decidir con `payment.status` — sea cual sea el `state`.** Ante la duda,
+> NO cobrado. Ver `docs/specs/mercadopago/cobro-verificado.md`.
+
+| Estado crudo MP | Qué significa | Acción |
+|----------------|---------------|--------|
+| `OPEN` | Intent creado, el device aún no lo tomó | Seguir polling |
+| `ON_TERMINAL` | El cliente está pagando (sin `payment` todavía) | Seguir polling |
+| `FINISHED` | **El intent terminó — NO implica que se cobró** | Resolver `payment.id` contra `/v1/payments` y decidir por `payment.status` |
+| `CANCELED` | Cancelado desde el device / por API | Si trae `payment.id`, resolver igual (distingue rechazo de cancelación); si no, abortar |
+| `CONFIRMATION_REQUIRED` | MP no pudo confirmar desde el device | Resolver `payment.id` (ver abajo) |
+| *(cualquier otro)* | Estado no contemplado | **Nunca** concretar: tratar como indeterminado y registrar el valor crudo |
 
 #### Manejo de `CONFIRMATION_REQUIRED`
 
-MP no pudo confirmar si el cobro se realizó. El response incluye `payment.id`.
+MP no pudo confirmar si el cobro se realizó. El response incluye `payment.id`. (Desde el 2026-07-22
+esta resolución se aplica a **todo** estado que traiga `payment.id`, no solo a este.)
 
 1. Llamar `GET /v1/payments/{payment.id}` (ver [`api-payments.md`](./api-payments.md))
 2. Mapear según el `status` del pago:

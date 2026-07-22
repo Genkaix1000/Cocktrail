@@ -113,7 +113,7 @@ Planes: [`plans/features/`](../plans/features/) —
 | [`integracion-mp.md`](./mercadopago/integracion-mp.md) | referencia activa | Arquitectura de alto nivel: OAuth, Store, POS, QR y Point en Cocktrail |
 | [`cobro-posnet-mercadopago.md`](./mercadopago/cobro-posnet-mercadopago.md) | `done` | Cierre y endurecimiento del cobro con el Posnet físico (Point Integration API) |
 | [`remediacion-integracion-mp.md`](./mercadopago/remediacion-integracion-mp.md) | `in-progress` | Los 12 defectos altos de la integración que entró sin revisión — 6 PRs de remediación (1-3 hechos, 4-6 pendientes) |
-| [`cobro-verificado.md`](./mercadopago/cobro-verificado.md) | `draft` | 🚨 Bloqueante — el sistema registra como venta un pago que MP **rechazó**; la venta se concreta si y solo si MP confirmó el cobro (R27) |
+| [`cobro-verificado.md`](./mercadopago/cobro-verificado.md) | `in-progress` | 🚨 Bloqueante — el sistema registra como venta un pago que MP **rechazó**; la venta se concreta si y solo si MP confirmó el cobro (R27) |
 | [`gestion-posnets.md`](./mercadopago/gestion-posnets.md) | `draft` | La pantalla de Posnets es decorativa: el cobro sale por `MP_POS_DEVICE_ID` y no por la caja. Alta/PDV/salud del Posnet desde `/admin` (R23/R24/R25) |
 
 Planes: [`plans/mercadopago/`](../plans/mercadopago/) —

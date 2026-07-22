@@ -39,6 +39,19 @@ export const CreateOrderSchema = z.object({
   paymentMethod: z.enum(["efectivo", "qr", "debito"], {
     errorMap: () => ({ message: "Método de pago inválido" }),
   }),
+  // Ojo: validate() reemplaza req.body por result.data — si un campo no está
+  // declarado acá, el service nunca lo ve.
+  payment: z
+    .object({
+      provider: z.literal("mercadopago"),
+      kind: z.enum(["point_intent", "qr_order"]),
+      id: z.string().min(1, "id de cobro requerido").max(100, "id de cobro demasiado largo").trim(),
+    })
+    .optional(),
+  idempotencyKey: z
+    .string()
+    .regex(/^[A-Za-z0-9-]{16,64}$/, "idempotencyKey inválida: alfanumérica (con guiones) de 16 a 64 caracteres")
+    .optional(),
 });
 
 // 4. Esquema para cambiar tema de la noche

@@ -32,6 +32,12 @@ export function createPrinterController(
       const order = await ordersRepo.findById(req.params.orderId as string);
       if (!order) throw new NotFound("Pedido no encontrado.");
 
+      // Criterio D sin puerta de atrás: un ticket sin cobrar no se reimprime.
+      // Las filas legacy ('desconocido') siguen reimprimibles a propósito.
+      if (order.paymentStatus === "pendiente_de_cobro") {
+        throw new Conflict("Este pedido todavía no está cobrado — no se puede reimprimir el ticket.");
+      }
+
       const event = await eventsService.getCurrentEvent();
       if (!event) throw new Conflict("No hay noche activa para reimprimir.");
 

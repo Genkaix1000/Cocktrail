@@ -30,6 +30,14 @@ export class NotFound extends Error {
   }
 }
 
+/** 422 — la request está bien formada pero le falta algo que el negocio exige (ej. prueba de pago). */
+export class UnprocessableEntity extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+    this.name = "UnprocessableEntity";
+  }
+}
+
 /** 409 — el estado del recurso no permite la operación. */
 export class Conflict extends Error {
   /**

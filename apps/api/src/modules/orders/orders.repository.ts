@@ -7,6 +7,10 @@ export interface OrdersRepository {
   create(order: Order, eventId: string): Promise<Order>;
   findById(id: string): Promise<Order | undefined>;
   findByToken(token: string): Promise<Order | undefined>;
+  /** Replay (R20): busca la venta ya registrada con esa key. */
+  findByIdempotencyKey(idempotencyKey: string): Promise<Order | undefined>;
+  /** Cobro ya usado: busca la venta ligada a esa fila de cobro (orders.mp_order_id). */
+  findByMpOrderId(mpOrderId: string): Promise<Order | undefined>;
   findActive(eventId: string): Promise<Order[]>;
   listForEvent(eventId: string): Promise<Order[]>;
   listAll(): Promise<Order[]>;
@@ -52,6 +56,10 @@ type OrderRow = {
   delivered_by: string | null;
   delivered_by_bar: string | null;
   redeem_method: "scan" | "manual" | null;
+  payment_status: Order["paymentStatus"] | null;
+  mp_payment_id: string | null;
+  mp_order_id: string | null;
+  idempotency_key: string | null;
 };
 
 function mapRowToOrder(row: OrderRow): Order {
@@ -73,6 +81,10 @@ function mapRowToOrder(row: OrderRow): Order {
     deliveredBy: row.delivered_by || undefined,
     deliveredByBar: row.delivered_by_bar || undefined,
     redeemMethod: row.redeem_method || undefined,
+    paymentStatus: row.payment_status || undefined,
+    paymentRef: row.mp_payment_id || undefined,
+    paymentRecordId: row.mp_order_id || undefined,
+    idempotencyKey: row.idempotency_key || undefined,
   };
 }
 
@@ -92,6 +104,13 @@ export class SupabaseOrdersRepository implements OrdersRepository {
         created_at: new Date(order.createdAt).toISOString(),
         ticket_code: order.ticketCode || null,
         created_by: order.createdBy || null,
+        // Las columnas de cobro solo se mandan si están seteadas: así el INSERT
+        // de efectivo/carta sigue funcionando aunque M2 no haya aplicado todavía
+        // (el runner es fail-open) y el default 'desconocido' lo pone la DB.
+        ...(order.paymentStatus !== undefined ? { payment_status: order.paymentStatus } : {}),
+        ...(order.paymentRef !== undefined ? { mp_payment_id: order.paymentRef } : {}),
+        ...(order.paymentRecordId !== undefined ? { mp_order_id: order.paymentRecordId } : {}),
+        ...(order.idempotencyKey !== undefined ? { idempotency_key: order.idempotencyKey } : {}),
       })
       .select()
       .single();
@@ -128,6 +147,36 @@ export class SupabaseOrdersRepository implements OrdersRepository {
 
     if (error) {
       console.error("[SupabaseOrdersRepository] Error finding order by token:", error);
+      throw error;
+    }
+
+    return data ? mapRowToOrder(data) : undefined;
+  }
+
+  async findByIdempotencyKey(idempotencyKey: string): Promise<Order | undefined> {
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[SupabaseOrdersRepository] Error finding order by idempotency_key:", error);
+      throw error;
+    }
+
+    return data ? mapRowToOrder(data) : undefined;
+  }
+
+  async findByMpOrderId(mpOrderId: string): Promise<Order | undefined> {
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("mp_order_id", mpOrderId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[SupabaseOrdersRepository] Error finding order by mp_order_id:", error);
       throw error;
     }
 

@@ -45,7 +45,10 @@ import { SupabaseBarsRepository } from "./modules/mercadopago/bars.repository.js
 import { CredentialsResolverService } from "./modules/mercadopago/credentials-resolver.service.js";
 import { MercadoPagoProvisioningService } from "./modules/mercadopago/mercadopago-provisioning.service.js";
 import { MercadoPagoOrdersService } from "./modules/mercadopago/mercadopago-orders.service.js";
+import { PointPaymentsService } from "./modules/mercadopago/point-payments.service.js";
+import { createMercadoPagoPaymentAdapter } from "./modules/mercadopago/mercadopago-payment-adapter.js";
 import { SupabaseMpOrdersRepository } from "./modules/mercadopago/mp-orders.repository.js";
+import { getMigrationsStatus } from "./infra/migrations/migrations-status.js";
 import { SupabaseMpWebhookEventsRepository } from "./modules/mercadopago/mp-webhook-events.repository.js";
 import {
   BarSessionsService,
@@ -80,31 +83,6 @@ const syncService = new SyncService(usersRepo, drinksRepo, ordersRepo, ticketsRe
 const eventsService = new EventsService(eventsRepo, ordersRepo, drinksRepo, emit, syncService, configRepo);
 
 const printerService = new PrinterService();
-
-const ordersService = new OrdersService(
-  ordersRepo,
-  drinksRepo,
-  async () => eventsService.getCurrentEvent(),
-  async () => eventsService.incrementOrderCounter(),
-  emit,
-  (orderId: string): string => ticketsService.generateCodeString(orderId),
-  async (orderId: string, code: string): Promise<void> => ticketsService.saveTicketForOrder(orderId, code),
-  async (order, nightEvent): Promise<void> => {
-    // printerService.printTicket ya atrapa toda excepción interna y devuelve
-    // { success, message } en vez de tirar — si success es false, hay que propagar
-    // el fallo (throw) para que OrdersService.createOrder marque printed=false.
-    const result = await printerService.printTicket(order, nightEvent);
-    if (!result.success) {
-      throw new Error(result.message);
-    }
-  },
-);
-
-const ticketsService = new TicketsService(
-  ticketsRepo,
-  ordersService,
-  env.AUTH_SECRET,
-);
 
 const oauthStatesRepo = new SupabaseOAuthStatesRepository();
 const mpSellersRepo = new SupabaseMercadoPagoSellersRepository();
@@ -145,6 +123,59 @@ const mpOrdersService = new MercadoPagoOrdersService(
   mpCajasRepo,
   mpOrdersRepo,
   async () => eventsService.getCurrentEvent(),
+);
+
+// cobro-verificado (R27) — política del cobro con Posnet: crea+persiste el
+// intent y resuelve el veredicto contra el pago real.
+const pointPaymentsService = new PointPaymentsService(
+  mpService,
+  mpOrdersRepo,
+  async () => eventsService.getCurrentEvent(),
+  emit,
+);
+
+// Adaptador del puerto de verificación de pago declarado en modules/orders —
+// modules/orders NUNCA importa modules/mercadopago; los une este archivo.
+const verifyPayment = createMercadoPagoPaymentAdapter({
+  mpOrdersRepo,
+  pointPayments: pointPaymentsService,
+  qrOrders: mpOrdersService,
+});
+
+// Guarda del runner fail-open: si M1/M2 (esquema del cobro) no aplicaron, la
+// venta no-efectivo se bloquea con mensaje claro en vez de romper el INSERT.
+const COBRO_MIGRATIONS = ["20260722000000_mp_orders_point.sql", "20260722000100_orders_cobro.sql"];
+const isPaymentSchemaReady = (): boolean => {
+  const st = getMigrationsStatus();
+  const notApplied = [...st.pending, ...(st.failed ? [st.failed.version] : [])];
+  return !notApplied.some((version) => COBRO_MIGRATIONS.includes(version));
+};
+
+const ordersService = new OrdersService({
+  ordersRepo,
+  drinksRepo,
+  getActiveEvent: async () => eventsService.getCurrentEvent(),
+  incrementOrderCounter: async () => eventsService.incrementOrderCounter(),
+  emit,
+  generateTicketCodeString: (orderId: string): string => ticketsService.generateCodeString(orderId),
+  saveTicket: async (orderId: string, code: string): Promise<void> => ticketsService.saveTicketForOrder(orderId, code),
+  printTicket: async (order, nightEvent): Promise<void> => {
+    // printerService.printTicket ya atrapa toda excepción interna y devuelve
+    // { success, message } en vez de tirar — si success es false, hay que propagar
+    // el fallo (throw) para que OrdersService.createOrder marque printed=false.
+    const result = await printerService.printTicket(order, nightEvent);
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+  },
+  verifyPayment,
+  isPaymentSchemaReady,
+});
+
+const ticketsService = new TicketsService(
+  ticketsRepo,
+  ordersService,
+  env.AUTH_SECRET,
 );
 
 // Fase 6 — Webhooks Orders API (durables: se persisten antes del 200 y se
@@ -225,7 +256,7 @@ app.use("/api/mercadopago", createMercadoPagoOAuthController(mpOAuthService));
 app.use("/api/mercadopago", createMercadoPagoProvisioningController(mpProvisioningService));
 app.use("/api/mercadopago", createMercadoPagoOrdersController(mpOrdersService));
 app.use("/api/mercadopago", createMercadoPagoWebhooksController(mpWebhooksService));
-app.use("/api/mercadopago", createMercadoPagoController(mpService));
+app.use("/api/mercadopago", createMercadoPagoController(mpService, pointPaymentsService));
 app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
 app.use("/api/system", createSystemController(usersRepo, systemService, syncService));

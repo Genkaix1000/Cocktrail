@@ -1,7 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { app } from "../../src/app.js";
-import { cleanNightEvents, cleanDrinks, cleanAuditLogs, signTestSession, createTestDrink } from "../setup/db-helpers.js";
+import { supabase } from "../../src/shared/supabase.js";
+import {
+  cleanNightEvents,
+  cleanDrinks,
+  cleanAuditLogs,
+  cleanTestMpOrders,
+  createTestMpOrder,
+  signTestSession,
+  createTestDrink,
+} from "../setup/db-helpers.js";
 
 // Ver nota en tickets.integration.test.ts: EventsService cachea la noche activa en
 // memoria, así que se abre una única vez vía la API real para todo este archivo.
@@ -15,12 +25,18 @@ async function createOrder(body: unknown, cookie?: string) {
 
 describe("orders (integración)", () => {
   beforeAll(async () => {
+    // Si quedó una noche activa de una corrida anterior (o real — riesgo ya
+    // documentado en db-helpers.ts), el open devolvería 409.
+    await cleanNightEvents();
     const res = await request(app).post("/api/events/open").set("Cookie", adminCookie).send({ keyword: "test-keyword" });
     expect(res.status).toBe(201);
   });
 
   afterAll(async () => {
+    // Orden importa: las orders (borradas en cascada con la noche) referencian
+    // mp_orders con FK NO ACTION.
     await cleanNightEvents();
+    await cleanTestMpOrders();
   });
 
   afterEach(async () => {
@@ -54,6 +70,121 @@ describe("orders (integración)", () => {
       const res = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo" }, cajaCookie);
       expect(res.status).toBe(201);
       expect(res.body.createdBy).toBe("cajera-test");
+    });
+  });
+
+  describe("invariantes de cobro en DB (M1/M2) y replay", () => {
+    async function activeEventId(): Promise<string> {
+      const { data, error } = await supabase
+        .from("night_events")
+        .select("id")
+        .eq("status", "activo")
+        .single();
+      if (error) throw error;
+      return data.id;
+    }
+
+    function baseOrderRow(eventId: string) {
+      return {
+        id: randomUUID(),
+        event_id: eventId,
+        token: randomUUID().slice(0, 8),
+        display_number: 9000 + Math.floor(Math.random() * 999),
+        items: [],
+        total: 1500,
+        status: "pendiente",
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    it("el CHECK invariante rechaza una venta 'cobrado' no-efectivo sin mp_order_id", async () => {
+      const eventId = await activeEventId();
+      const { error } = await supabase.from("orders").insert({
+        ...baseOrderRow(eventId),
+        payment_method: "debito",
+        payment_status: "cobrado",
+        mp_order_id: null,
+      });
+      expect(error).toBeTruthy();
+      // 23514 = check_violation (orders_cobrado_requires_mp_order)
+      expect(error!.code).toBe("23514");
+    });
+
+    it("el CHECK permite 'cobrado' en efectivo sin mp_order_id (escape irreductible)", async () => {
+      const eventId = await activeEventId();
+      const { error } = await supabase.from("orders").insert({
+        ...baseOrderRow(eventId),
+        payment_method: "efectivo",
+        payment_status: "cobrado",
+      });
+      expect(error).toBeNull();
+    });
+
+    it("uq_orders_mp_order_id: dos ventas no pueden ligarse al mismo cobro (23505)", async () => {
+      const eventId = await activeEventId();
+      const mp = await createTestMpOrder({ status: "processed", amount: 1500 });
+
+      const first = await supabase.from("orders").insert({
+        ...baseOrderRow(eventId),
+        payment_method: "debito",
+        payment_status: "cobrado",
+        mp_order_id: mp.id,
+      });
+      expect(first.error).toBeNull();
+
+      const second = await supabase.from("orders").insert({
+        ...baseOrderRow(eventId),
+        payment_method: "debito",
+        payment_status: "cobrado",
+        mp_order_id: mp.id,
+      });
+      expect(second.error).toBeTruthy();
+      expect(second.error!.code).toBe("23505");
+    });
+
+    it("replay por idempotency_key vía API: dos POST iguales devuelven la MISMA Order (201)", async () => {
+      const drink = await createTestDrink();
+      const cookie = signTestSession("cajera-test", "caja");
+      const idempotencyKey = randomUUID();
+      const body = { items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo", idempotencyKey };
+
+      const first = await createOrder(body, cookie);
+      expect(first.status).toBe(201);
+
+      const second = await createOrder(body, cookie);
+      expect(second.status).toBe(201);
+      expect(second.body.id).toBe(first.body.id);
+
+      const { data } = await supabase.from("orders").select("id").eq("idempotency_key", idempotencyKey);
+      expect(data).toHaveLength(1);
+    });
+
+    it("uq_orders_idempotency_key también aguanta a nivel DB (23505)", async () => {
+      const eventId = await activeEventId();
+      const idempotencyKey = `TEST-KEY-${randomUUID()}`;
+
+      const first = await supabase.from("orders").insert({
+        ...baseOrderRow(eventId),
+        payment_method: "efectivo",
+        idempotency_key: idempotencyKey,
+      });
+      expect(first.error).toBeNull();
+
+      const second = await supabase.from("orders").insert({
+        ...baseOrderRow(eventId),
+        payment_method: "efectivo",
+        idempotency_key: idempotencyKey,
+      });
+      expect(second.error).toBeTruthy();
+      expect(second.error!.code).toBe("23505");
+    });
+
+    it("staff + débito sin prueba de pago → 422 con code PAYMENT_PROOF_REQUIRED", async () => {
+      const drink = await createTestDrink();
+      const cookie = signTestSession("cajera-test", "caja");
+      const res = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "debito" }, cookie);
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe("PAYMENT_PROOF_REQUIRED");
     });
   });
 

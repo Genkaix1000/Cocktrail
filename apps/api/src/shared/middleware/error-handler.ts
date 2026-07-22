@@ -5,6 +5,7 @@ import {
   Conflict,
   Unauthorized,
   Forbidden,
+  UnprocessableEntity,
 } from "../errors/http-errors.js";
 
 /**
@@ -31,6 +32,10 @@ export function errorHandler(
   }
   if (err instanceof NotFound) {
     res.status(404).json({ error: err.message });
+    return;
+  }
+  if (err instanceof UnprocessableEntity) {
+    res.status(422).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     return;
   }
   if (err instanceof Conflict) {

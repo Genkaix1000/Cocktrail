@@ -13,17 +13,46 @@ type MpDevice = {
   operating_mode?: string;
 };
 
-type MpPaymentIntentResponse = {
+export type MpPaymentIntentResponse = {
   id?: string;
   state?: string;
   status?: string;
   payment?: { id: string };
+  additional_info?: { external_reference?: string; [key: string]: unknown };
   [key: string]: unknown;
 };
 
 type MpPayment = {
   id: string;
   status: string;
+  status_detail?: string;
+  /** ⚠ En PESOS: la Payments API (/v1/payments) NO usa centavos como la Point API. */
+  transaction_amount?: number;
+};
+
+/**
+ * Metadata de la creación del intent que el caller necesita persistir
+ * (PointPaymentsService): qué key/external_ref/device se mandaron DE VERDAD
+ * (el reintento post-2205 regenera key y external_ref).
+ */
+export type CreatedIntentMeta = {
+  idempotencyKeyUsed: string;
+  externalReferenceUsed: string;
+  deviceIdUsed: string;
+};
+
+/**
+ * Resultado crudo de consultar un intent + (si existe) su pago real.
+ * El gateway INFORMA, no decide: el veredicto lo arma PointPaymentsService.
+ */
+export type IntentOutcome = {
+  rawState: string | null;
+  externalReference?: string;
+  paymentId?: string;
+  paymentStatus?: string;
+  statusDetail?: string;
+  /** ⚠ En PESOS (viene de /v1/payments, no de la Point API). */
+  transactionAmount?: number;
 };
 
 /** Mapea el estado real de un pago de MP al status normalizado que expone el service. */
@@ -67,7 +96,9 @@ function isQueuedIntentError(err: unknown): err is MpApiError {
  * external_reference a 64 caracteres y solo letras/números/guiones.
  */
 function buildExternalReference(description?: string): string {
-  const base = `cocktrail-${Date.now()}`;
+  // El sufijo random evita la colisión de dos cobros en el mismo milisegundo
+  // (external_ref tiene UNIQUE en mp_orders → sin esto, 500 en plena caja).
+  const base = `cocktrail-${Date.now()}-${randomUUID().slice(0, 8)}`;
   if (!description) return base;
 
   const sanitized = description
@@ -174,13 +205,18 @@ export class MercadoPagoService {
    * `deviceId` (opcional) viene de `req.mpContext` para resolver la cuenta MP
    * dueña. Si no viene, el resolver cae al fallback global/env (comportamiento legacy).
    */
-  async createPaymentIntent(amount: number, description?: string, deviceId?: string): Promise<MpPaymentIntentResponse> {
+  async createPaymentIntent(
+    amount: number,
+    description?: string,
+    deviceId?: string,
+    idempotencyKey?: string,
+  ): Promise<MpPaymentIntentResponse & CreatedIntentMeta> {
     const resolvedDeviceId = deviceId || env.MP_POS_DEVICE_ID;
     if (!resolvedDeviceId) {
       throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
     }
     const token = await this.resolveToken(deviceId);
-    return this.createPaymentIntentWithToken(token, amount, description, resolvedDeviceId);
+    return this.createPaymentIntentWithToken(token, amount, description, resolvedDeviceId, idempotencyKey);
   }
 
   private async createPaymentIntentWithToken(
@@ -188,14 +224,17 @@ export class MercadoPagoService {
     amount: number,
     description?: string,
     deviceId: string | undefined = env.MP_POS_DEVICE_ID,
-  ): Promise<MpPaymentIntentResponse> {
+    idempotencyKey?: string,
+  ): Promise<MpPaymentIntentResponse & CreatedIntentMeta> {
     if (!deviceId) {
       throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
     }
-    const attempt = () => this.createPaymentIntentAttempt(token, amount, description, deviceId);
+    // El reintento post-2205 crea un intent NUEVO (el viejo se canceló), así que
+    // usa una key nueva — reusar la del intento fallido haría que MP dedupe.
+    const attempt = (key: string) => this.createPaymentIntentAttempt(token, amount, description, deviceId, key);
 
     try {
-      return await attempt();
+      return await attempt(idempotencyKey ?? randomUUID());
     } catch (err) {
       if (!isQueuedIntentError(err)) throw err;
 
@@ -212,7 +251,7 @@ export class MercadoPagoService {
       }
 
       try {
-        return await attempt();
+        return await attempt(randomUUID());
       } catch (retryErr) {
         if (isQueuedIntentError(retryErr)) {
           throw new MpApiError(retryErr.message, retryErr.mpCode, retryErr.mpData, DEVICE_BUSY_CODE);
@@ -222,27 +261,34 @@ export class MercadoPagoService {
     }
   }
 
-  private createPaymentIntentAttempt(
+  private async createPaymentIntentAttempt(
     token: string,
     amount: number,
     description: string | undefined,
     deviceId: string,
-  ): Promise<MpPaymentIntentResponse> {
-    return this.pointApiRequest<MpPaymentIntentResponse>(
+    idempotencyKey: string,
+  ): Promise<MpPaymentIntentResponse & CreatedIntentMeta> {
+    const externalReference = buildExternalReference(description);
+    const data = await this.pointApiRequest<MpPaymentIntentResponse>(
       token,
       `/point/integration-api/devices/${encodeURIComponent(deviceId)}/payment-intents`,
       {
         method: "POST",
-        headers: { "X-Idempotency-Key": randomUUID() },
+        headers: { "X-Idempotency-Key": idempotencyKey },
         body: JSON.stringify({
+          // ⚠ ÚNICO punto de conversión pesos → centavos: la Point API cobra en
+          // centavos, pero mp_orders.amount y paid_amount se guardan en PESOS.
+          // Si esto se duplica en otro lado, la verificación de montos rechaza
+          // todos los cobros buenos.
           amount: Math.round(amount * 100),
           additional_info: {
-            external_reference: buildExternalReference(description),
+            external_reference: externalReference,
           },
         }),
       },
       "Error al crear la intención de pago en el Posnet",
     );
+    return { ...data, idempotencyKeyUsed: idempotencyKey, externalReferenceUsed: externalReference, deviceIdUsed: deviceId };
   }
 
   async getPayment(paymentId: string, deviceId?: string): Promise<MpPayment> {
@@ -276,14 +322,47 @@ export class MercadoPagoService {
 
     const rawStatus = data.state || data.status;
 
-    // Estado final: MP no puede confirmar el resultado desde el device. Se resuelve solo
-    // consultando el pago real (payment.id) en vez de pedirle a la cajera que mire la pantalla.
-    if (rawStatus === "CONFIRMATION_REQUIRED" && data.payment?.id) {
+    // Regla central de cobro-verificado: si el intent trae payment.id, el estado
+    // lo decide el PAGO real (/v1/payments), sea cual sea el state del intent.
+    // Un state "FINISHED" con pago rejected es un rechazo, no un cobro (R27).
+    if (data.payment?.id) {
       const payment = await this.getPaymentWithToken(token, data.payment.id);
       return { ...data, status: mapPaymentStatusToNormalized(payment.status) };
     }
 
     return { ...data, status: (rawStatus as MpNormalizedStatus) ?? "PENDING" };
+  }
+
+  /**
+   * Consulta un intent y, si ya tiene pago asociado, el pago real. Devuelve un
+   * DTO crudo — sin normalizar ni decidir: el veredicto es de PointPaymentsService.
+   */
+  async resolveIntentOutcome(paymentIntentId: string, deviceId?: string): Promise<IntentOutcome> {
+    this.assertConfigured(false);
+    const token = await this.resolveToken(deviceId);
+
+    const data = await this.pointApiRequest<MpPaymentIntentResponse>(
+      token,
+      `/point/integration-api/payment-intents/${paymentIntentId}`,
+      { method: "GET" },
+      "Error al consultar estado del Posnet en Mercado Pago",
+    );
+
+    const outcome: IntentOutcome = {
+      rawState: data.state || data.status || null,
+    };
+    if (typeof data.additional_info?.external_reference === "string") {
+      outcome.externalReference = data.additional_info.external_reference;
+    }
+
+    if (!data.payment?.id) return outcome;
+
+    const payment = await this.getPaymentWithToken(token, data.payment.id);
+    outcome.paymentId = payment.id;
+    outcome.paymentStatus = payment.status;
+    if (payment.status_detail !== undefined) outcome.statusDetail = payment.status_detail;
+    if (payment.transaction_amount !== undefined) outcome.transactionAmount = payment.transaction_amount;
+    return outcome;
   }
 
   async cancelPaymentIntent(paymentIntentId: string, deviceId?: string): Promise<MpPaymentIntentResponse> {

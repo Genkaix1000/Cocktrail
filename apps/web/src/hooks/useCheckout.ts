@@ -5,12 +5,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addPendingSale,
   listPendingSales,
+  pendingSaleProofKind,
   removePendingSale,
   updatePendingSale,
   type PendingSale,
 } from "@/lib/pendingSales";
 import { ApiError } from "@/services/api-client";
-import { mercadopagoService, type MpQrOrderStatus } from "@/services/mercadopago.service";
+import {
+  mercadopagoService,
+  type MpQrOrderStatus,
+  type PosIntentVerdict,
+} from "@/services/mercadopago.service";
 import { ordersService } from "@/services/orders.service";
 import type { Drink, Order, PaymentMethod } from "@cocktrail/shared";
 
@@ -21,14 +26,41 @@ type CartEntry = { drink: Drink; qty: number };
 const MAX_POSNET_BUSY_RETRIES = 2;
 const posnetBusyRetryDelayMs = (attempt: number) => attempt * 2000;
 
-/** Gracia sobre el expiresAt del QR antes de cortar el polling: absorbe drift
- * chico de reloj entre la mini-PC y el backend sin dejar el polling infinito. */
-const QR_EXPIRY_GRACE_MS = 5000;
+/** Gracia sobre el expiresAt (QR y Posnet) antes de cortar el polling: absorbe
+ * drift chico de reloj entre la mini-PC y el backend sin dejar el polling
+ * infinito. Defensa en profundidad: la autoridad del deadline es el server. */
+const EXPIRY_GRACE_MS = 5000;
 
 /** El cobro en MP salió bien pero `POST /api/orders` falló: mensaje específico
  * (nunca el genérico de polling) — la constancia queda en localStorage. */
 const REGISTRO_FALLIDO_MSG =
   "El cobro se realizó correctamente pero no se pudo registrar la venta. Quedó guardada para reintentar — no volvés a cobrar.";
+
+/** El backend no pudo confirmar el cobro contra MP: nunca se trata como cobrado (D1). */
+const COBRO_NO_CONFIRMADO_MSG =
+  "No se pudo confirmar el cobro — verificá en el panel de Mercado Pago antes de reintentar. No entregues el producto hasta confirmarlo.";
+
+/** Motivos de rechazo de MP (statusDetail) con mensaje accionable para la cajera. */
+const POSNET_RECHAZO_POR_DETALLE: Record<string, string> = {
+  cc_rejected_insufficient_amount:
+    "Tarjeta rechazada: fondos insuficientes — pedile al cliente otro medio de pago",
+};
+
+function posnetRechazoMessage(statusDetail?: string): string {
+  if (statusDetail && POSNET_RECHAZO_POR_DETALLE[statusDetail]) {
+    return POSNET_RECHAZO_POR_DETALLE[statusDetail];
+  }
+  return statusDetail
+    ? `Tarjeta rechazada (${statusDetail}). Pedile al cliente otro medio de pago.`
+    : "Tarjeta rechazada. Pedile al cliente otro medio de pago.";
+}
+
+/** Código machine-readable del error del backend (`{ error, code }`). */
+function apiErrorCode(err: unknown): string | undefined {
+  return err instanceof ApiError && err.data && typeof err.data === "object"
+    ? (err.data as { code?: string }).code
+    : undefined;
+}
 
 /** Métodos que se cobran vía Posnet. Hoy solo "debito" — el Posnet físico no puede
  * diferenciar un cobro con QR del resto (ver docs/specs/mercadopago/cobro-posnet-mercadopago.md). */
@@ -80,12 +112,14 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   // cancelarlo si se cierra/reabre el modal o se desmonta el componente a mitad de camino.
   const posnetRetryCountRef = useRef(0);
   const posnetRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Semilla de idempotencia del intento de cobro QR: una por intento, se REUSA
-  // en doble click/reintento (el backend devuelve la misma order) y se resetea
-  // al confirmar/cancelar manual/expirar/fallar terminal.
+  // Semilla de idempotencia del intento de cobro (QR y Posnet): una por
+  // intento, se REUSA en doble click/reintento (el backend devuelve la misma
+  // order; en Posnet además es la idempotencyKey del registro de la venta) y
+  // se resetea al confirmar/cancelar manual/expirar/fallar terminal.
   const paymentAttemptIdRef = useRef<string | null>(null);
-  // expiresAt (epoch ms) de la order QR activa, del response del create (A10).
-  const qrExpiresAtRef = useRef<number | null>(null);
+  // expiresAt (epoch ms) del cobro activo (order QR o intent Posnet), del
+  // response del create — corta el polling localmente (A10 / criterio F).
+  const paymentExpiresAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     intentIdRef.current = currentIntentId;
@@ -99,7 +133,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
 
   const resetPaymentAttempt = useCallback(() => {
     paymentAttemptIdRef.current = null;
-    qrExpiresAtRef.current = null;
+    paymentExpiresAtRef.current = null;
   }, []);
 
   // Best-effort: cancela en el device / MP cualquier intención/order que haya
@@ -110,7 +144,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     // Abandonar el cobro invalida el intento en curso: la próxima venta arranca
     // con semilla nueva (reusar la de una order cancelada devolvería esa order).
     paymentAttemptIdRef.current = null;
-    qrExpiresAtRef.current = null;
+    paymentExpiresAtRef.current = null;
     if (!id) return;
     intentIdRef.current = null;
     activePaymentKindRef.current = null;
@@ -198,11 +232,14 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   }, [cart, canConfirmCash, clearCart, paymentMethod, submitting, totalItems]);
 
   const buildPendingSale = useCallback(
-    (method: "qr" | "debito", mpRef: string): PendingSale => ({
+    (method: "qr" | "debito", mpRef: string, idempotencyKey?: string): PendingSale => ({
       id: crypto.randomUUID(),
       createdAt: Date.now(),
       paymentMethod: method,
       mpRef,
+      // La prueba de pago que exige POST /api/orders (criterio C).
+      mpKind: method === "qr" ? "qr_order" : "point_intent",
+      ...(idempotencyKey ? { idempotencyKey } : {}),
       amount: totalPrice,
       items: Object.entries(cart).map(([idStr, qty]) => ({ drinkId: Number(idStr), qty })),
       attempts: 0,
@@ -211,10 +248,11 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
   );
 
   /**
-   * A11 — registra la venta de un cobro YA hecho en MP. Vive FUERA del
-   * try del polling: si `ordersService.create` falla acá el error es "cobrado
-   * pero sin registrar" (la constancia queda en localStorage), nunca el
-   * genérico de "no se pudo consultar el estado".
+   * A11 — registra la venta de un cobro YA verificado en MP, presentando la
+   * prueba de pago que el server valida (criterio C). Vive FUERA del try del
+   * polling: si `ordersService.create` falla acá el error es "cobrado pero sin
+   * registrar" (la constancia queda en localStorage), nunca el genérico de
+   * "no se pudo consultar el estado".
    */
   const registerPaidOrder = useCallback(
     async (entry: PendingSale, opts?: { fromRetry?: boolean }): Promise<boolean> => {
@@ -222,6 +260,8 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         const order = await ordersService.create({
           items: entry.items,
           paymentMethod: entry.paymentMethod,
+          payment: { provider: "mercadopago", kind: pendingSaleProofKind(entry), id: entry.mpRef },
+          ...(entry.idempotencyKey ? { idempotencyKey: entry.idempotencyKey } : {}),
         });
         removePendingSale(entry.id);
         setPendingSales(listPendingSales());
@@ -236,9 +276,30 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         return true;
       } catch (err) {
         console.error("Cobro OK pero falló el registro de la venta:", err);
+        const message = err instanceof Error ? err.message : "Error desconocido";
+        const code = apiErrorCode(err);
+        if (code === "PAYMENT_REJECTED" || code === "PAYMENT_UNVERIFIED") {
+          // Veredicto terminal del server: un cobro rechazado/no verificado NO
+          // es una venta por registrar. Reintentar no sirve — la constancia
+          // queda marcada con el motivo (el "Reintentar" del banner es solo
+          // para fallos de red/registro).
+          updatePendingSale(entry.id, {
+            attempts: entry.attempts + 1,
+            lastError: message,
+            blocked: { code, reason: message },
+          });
+          setPendingSales(listPendingSales());
+          if (!opts?.fromRetry) {
+            setPosnetStatus("error");
+            setPaymentIntentState(null);
+            setQrImage(null);
+            setPosnetErrorMessage(message);
+          }
+          return false;
+        }
         updatePendingSale(entry.id, {
           attempts: entry.attempts + 1,
-          lastError: err instanceof Error ? err.message : "Error desconocido",
+          lastError: message,
         });
         setPendingSales(listPendingSales());
         if (!opts?.fromRetry) {
@@ -261,6 +322,9 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         setPendingSales(listPendingSales());
         return Promise.resolve(false);
       }
+      // Un 409 terminal del server (rechazo / no verificado) no se reintenta:
+      // el banner solo ofrece descartar tras verificar a mano.
+      if (entry.blocked) return Promise.resolve(false);
       return registerPaidOrder(entry, { fromRetry: true });
     },
     [registerPaidOrder],
@@ -276,11 +340,33 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     stopPolling();
     activePaymentKindRef.current = "posnet";
 
+    // Último veredicto visto: si el corte local por deadline llega después de
+    // un UNKNOWN, el mensaje es "no confirmado" (D1), no el de expiración.
+    let lastStatus: PosIntentVerdict["status"] | null = null;
+
     pollingRef.current = setInterval(async () => {
-      let currentState: string;
+      // Criterio F — deadline local (defensa en profundidad; la autoridad es el
+      // expiresAt del server): cortar ANTES de pegarle al backend, mismo patrón
+      // que el QR. Sin esto, un backend inalcanzable dejaría la caja colgada.
+      const expiresAt = paymentExpiresAtRef.current;
+      if (expiresAt !== null && Date.now() > expiresAt + EXPIRY_GRACE_MS) {
+        stopPolling();
+        resetPaymentAttempt();
+        setCurrentIntentId(null);
+        intentIdRef.current = null;
+        activePaymentKindRef.current = null;
+        // Best-effort: si quedó en cola en el device, liberarlo (MP rechaza el
+        // cancel de un intent ya terminal, y eso está bien).
+        Promise.resolve(mercadopagoService.cancelPosIntent(intentId)).catch(() => {});
+        setPosnetStatus("error");
+        setPaymentIntentState(null);
+        setPosnetErrorMessage(lastStatus === "UNKNOWN" ? COBRO_NO_CONFIRMADO_MSG : "intent_expired");
+        return;
+      }
+
+      let verdict: PosIntentVerdict;
       try {
-        const st = await mercadopagoService.getPosIntentStatus(intentId);
-        currentState = st.status;
+        verdict = await mercadopagoService.getPosIntentStatus(intentId);
       } catch (err) {
         console.error("Error polling MP status:", err);
         stopPolling();
@@ -291,24 +377,43 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         setPosnetErrorMessage("Error al consultar el estado del cobro. Verificá la conexión.");
         return;
       }
-      if (currentState) {
-        setPaymentIntentState(currentState);
-      }
+      lastStatus = verdict.status;
+      // Mientras el veredicto es PENDING, el detalle visible es el rawState del
+      // intent (OPEN/ON_TERMINAL/…) — la UI lo usa para el texto de progreso y
+      // para bloquear la salida con el cobro activo en el lector.
+      setPaymentIntentState(
+        verdict.status === "PENDING" ? (verdict.rawState ?? "PENDING") : verdict.status,
+      );
 
-      if (currentState === "FINISHED") {
-        // El cobro ya está hecho: soltar toda referencia al intent ANTES de
-        // registrar la venta, para que un unmount/cancel no cancele en MP un
-        // cobro concretado.
+      if (verdict.status === "FINISHED") {
+        // Cobro verificado por el server (pago approved + monto correcto):
+        // soltar toda referencia al intent ANTES de registrar la venta, para
+        // que un unmount/cancel no cancele en MP un cobro concretado.
         stopPolling();
         setCurrentIntentId(null);
         intentIdRef.current = null;
         activePaymentKindRef.current = null;
-        const entry = buildPendingSale(method, intentId);
+        const attemptKey = paymentAttemptIdRef.current ?? undefined;
+        resetPaymentAttempt();
+        // Orden cobro → constancia → registro (D6): la constancia nace recién
+        // con el veredicto confirmado y es espejo de lo persistido en el server.
+        const entry = buildPendingSale(method, intentId, attemptKey);
         addPendingSale(entry);
         setPendingSales(listPendingSales());
         await registerPaidOrder(entry);
-      } else if (currentState === "CANCELED") {
+      } else if (verdict.status === "REJECTED") {
+        // Criterio E: rechazo ≠ cancelación. El motivo real (statusDetail) le
+        // dice a la cajera que pida otro medio de pago.
         stopPolling();
+        resetPaymentAttempt();
+        setPosnetStatus("error");
+        setCurrentIntentId(null);
+        activePaymentKindRef.current = null;
+        setPaymentIntentState(null);
+        setPosnetErrorMessage(posnetRechazoMessage(verdict.statusDetail));
+      } else if (verdict.status === "CANCELED") {
+        stopPolling();
+        resetPaymentAttempt();
         setPosnetStatus("error");
         setCurrentIntentId(null);
         activePaymentKindRef.current = null;
@@ -317,9 +422,22 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         // cajera o el cliente cancelaron a propósito desde el dispositivo — no es una
         // falla del sistema, así que la UI lo muestra distinto de un error genérico.
         setPosnetErrorMessage("cancelled_by_device");
+      } else if (verdict.status === "EXPIRED") {
+        // El server venció el intent sin confirmación (autoridad del deadline).
+        stopPolling();
+        resetPaymentAttempt();
+        setPosnetStatus("error");
+        setCurrentIntentId(null);
+        activePaymentKindRef.current = null;
+        setPaymentIntentState(null);
+        setPosnetErrorMessage("intent_expired");
       }
+      // PENDING sigue esperando. UNKNOWN también sigue (el server re-consulta
+      // MP en cada poll y puede resolverlo), acotado por el deadline local: la
+      // UI lo muestra como advertencia vía paymentIntentState === "UNKNOWN",
+      // NUNCA como cobrado (D1).
     }, 3000);
-  }, [buildPendingSale, registerPaidOrder, stopPolling]);
+  }, [buildPendingSale, registerPaidOrder, resetPaymentAttempt, stopPolling]);
 
   const startQrPolling = useCallback((orderId: string) => {
     stopPolling();
@@ -328,8 +446,8 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     pollingRef.current = setInterval(async () => {
       // A10 — el QR venció (con gracia): cortar ANTES de pegarle al backend.
       // Sin esto, un status raro ("unknown") dejaría el polling girando infinito.
-      const expiresAt = qrExpiresAtRef.current;
-      if (expiresAt !== null && Date.now() > expiresAt + QR_EXPIRY_GRACE_MS) {
+      const expiresAt = paymentExpiresAtRef.current;
+      if (expiresAt !== null && Date.now() > expiresAt + EXPIRY_GRACE_MS) {
         stopPolling();
         resetPaymentAttempt();
         setCurrentIntentId(null);
@@ -368,11 +486,12 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         // Cobro concretado: soltar toda referencia a la order ANTES de registrar
         // la venta, para que un unmount/cancel no cancele en MP un cobro hecho.
         stopPolling();
+        const attemptKey = paymentAttemptIdRef.current ?? undefined;
         resetPaymentAttempt();
         setCurrentIntentId(null);
         intentIdRef.current = null;
         activePaymentKindRef.current = null;
-        const entry = buildPendingSale("qr", orderId);
+        const entry = buildPendingSale("qr", orderId, attemptKey);
         addPendingSale(entry);
         setPendingSales(listPendingSales());
         await registerPaidOrder(entry);
@@ -406,6 +525,13 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
       posnetRetryCountRef.current = 0;
       setPosnetRetryAttempt(0);
     }
+    // Semilla del intento de cobro: se REUSA en el auto-retry del 2205 (mismo
+    // intento lógico) y es la idempotencyKey con la que después se registra la
+    // venta. Nace una nueva recién después de un reset (terminal/cancel).
+    if (!paymentAttemptIdRef.current) {
+      paymentAttemptIdRef.current = crypto.randomUUID();
+    }
+    const attemptId = paymentAttemptIdRef.current;
     isSubmittingRef.current = true;
     setSubmitting(true);
     setPaymentMethod(method);
@@ -415,8 +541,17 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
     setQrImage(null);
     try {
       const drinksText = cartEntries.map((e) => `${e.drink.name} x${e.qty}`).join(", ");
-      const intent = await mercadopagoService.createPosIntent(totalPrice, drinksText || "Cobro Cocktrail");
+      // Los items viajan al backend, que los persiste junto al intent como
+      // respaldo server-side de la venta (sobrevive al cierre de la pestaña).
+      const items = cartEntries.map((e) => ({ drinkId: e.drink.id, qty: e.qty }));
+      const intent = await mercadopagoService.createPosIntent(
+        totalPrice,
+        drinksText || "Cobro Cocktrail",
+        { attemptId, items },
+      );
       setCurrentIntentId(intent.id);
+      const expiresAtMs = Date.parse(intent.expiresAt);
+      paymentExpiresAtRef.current = Number.isNaN(expiresAtMs) ? null : expiresAtMs;
       setPaymentIntentState("OPEN");
       posnetRetryCountRef.current = 0;
       setPosnetRetryAttempt(0);
@@ -500,7 +635,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
       setCurrentIntentId(created.orderId);
       setQrImage(created.qrImage);
       const expiresAtMs = Date.parse(created.expiresAt);
-      qrExpiresAtRef.current = Number.isNaN(expiresAtMs) ? null : expiresAtMs;
+      paymentExpiresAtRef.current = Number.isNaN(expiresAtMs) ? null : expiresAtMs;
       setPaymentIntentState("created");
       startQrPolling(created.orderId);
     } catch (err) {

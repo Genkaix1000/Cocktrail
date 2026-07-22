@@ -36,7 +36,7 @@ describe("mercadopagoService", () => {
   });
 
   it("createPosIntent hace POST a /api/mercadopago/pos/intent con amount/description", async () => {
-    mockedApiFetch.mockResolvedValueOnce({ id: "intent-1" });
+    mockedApiFetch.mockResolvedValueOnce({ id: "intent-1", expiresAt: "2026-07-22T03:00:00.000Z" });
 
     const result = await mercadopagoService.createPosIntent(5000, "2 Fernet");
 
@@ -44,15 +44,45 @@ describe("mercadopagoService", () => {
       method: "POST",
       body: { amount: 5000, description: "2 Fernet" },
     });
-    expect(result).toEqual({ id: "intent-1" });
+    expect(result).toEqual({ id: "intent-1", expiresAt: "2026-07-22T03:00:00.000Z" });
+  });
+
+  it("createPosIntent manda attemptId + items en el body cuando se le pasan", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ id: "intent-1", expiresAt: "2026-07-22T03:00:00.000Z" });
+
+    await mercadopagoService.createPosIntent(5000, "2 Fernet", {
+      attemptId: "attempt-1234567890abcdef",
+      items: [{ drinkId: 1, qty: 2 }],
+    });
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/pos/intent", {
+      method: "POST",
+      body: {
+        amount: 5000,
+        description: "2 Fernet",
+        attemptId: "attempt-1234567890abcdef",
+        items: [{ drinkId: 1, qty: 2 }],
+      },
+    });
   });
 
   it("getPosIntentStatus hace GET a /api/mercadopago/pos/intent/:id", async () => {
-    mockedApiFetch.mockResolvedValueOnce({ status: "ON_TERMINAL" });
+    mockedApiFetch.mockResolvedValueOnce({ status: "PENDING", rawState: "ON_TERMINAL" });
 
     await mercadopagoService.getPosIntentStatus("intent-1");
 
     expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/pos/intent/intent-1");
+  });
+
+  it("resolvePosIntent hace POST a /api/mercadopago/pos/intent/:id/resolve", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ status: "FINISHED", paymentId: "170034593080" });
+
+    const result = await mercadopagoService.resolvePosIntent("intent-1");
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/pos/intent/intent-1/resolve", {
+      method: "POST",
+    });
+    expect(result).toEqual({ status: "FINISHED", paymentId: "170034593080" });
   });
 
   it("createQrOrder manda la idempotencyKey en el body cuando se le pasa", async () => {

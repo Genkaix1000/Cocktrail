@@ -14,6 +14,7 @@ vi.mock("@/services/mercadopago.service", () => ({
   mercadopagoService: {
     createPosIntent: vi.fn(),
     getPosIntentStatus: vi.fn(),
+    resolvePosIntent: vi.fn(),
     cancelPosIntent: vi.fn(),
     createQrOrder: vi.fn(),
     getQrOrderStatus: vi.fn(),
@@ -58,6 +59,15 @@ function makeOrder(overrides: Partial<Order> = {}): Order & { printed: boolean }
     createdAt: Date.now(),
     createdBy: "cajera1",
     printed: true,
+    ...overrides,
+  };
+}
+
+/** Response del create Posnet con el deadline server-side a futuro (10 min, como el backend). */
+function makePosCreated(overrides: Partial<{ id: string; expiresAt: string }> = {}) {
+  return {
+    id: "intent-1",
+    expiresAt: new Date(Date.now() + 600_000).toISOString(),
     ...overrides,
   };
 }
@@ -248,9 +258,9 @@ describe("VentaSection", () => {
     expect(await screen.findByText(/Esperando pago QR/i)).toBeInTheDocument();
   });
 
-  it("inicia un pago con Posnet llamando a createPosIntent", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
+  it("inicia un pago con Posnet mandando attemptId + items del carrito", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "PENDING", rawState: "OPEN" });
 
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
     const user = await addFirstDrinkToCart();
@@ -262,11 +272,74 @@ describe("VentaSection", () => {
     await user.click(tarjetaButton);
 
     await waitFor(() =>
-      expect(mockedMercadopagoService.createPosIntent).toHaveBeenCalledWith(2500, "Fernet con Coca x1"),
+      expect(mockedMercadopagoService.createPosIntent).toHaveBeenCalledWith(
+        2500,
+        "Fernet con Coca x1",
+        { attemptId: expect.any(String), items: [{ drinkId: 1, qty: 1 }] },
+      ),
     );
 
     expect(await screen.findByText(/Esperando pago con Tarjeta/i)).toBeInTheDocument();
   });
+
+  it("un rechazo por fondos insuficientes muestra el motivo real (nunca 'cancelado')", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({
+      status: "REJECTED",
+      statusDetail: "cc_rejected_insufficient_amount",
+      rawState: "FINISHED",
+    });
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+    await user.click(await screen.findByRole("button", { name: /tarjeta/i }));
+
+    // El polling corre cada 3s con timers reales.
+    expect(
+      await screen.findByText(
+        /Tarjeta rechazada: fondos insuficientes — pedile al cliente otro medio de pago/i,
+        {},
+        { timeout: 6000 },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Cobro cancelado")).not.toBeInTheDocument();
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+  }, 10000);
+
+  it("un cobro CANCELED sigue mostrándose como cancelación deliberada", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "CANCELED" });
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+    await user.click(await screen.findByRole("button", { name: /tarjeta/i }));
+
+    expect(await screen.findByText("Cobro cancelado", {}, { timeout: 6000 })).toBeInTheDocument();
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+  }, 10000);
+
+  it("un cobro EXPIRED muestra la vista de expiración con opción de reintentar", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "EXPIRED" });
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+    await user.click(await screen.findByRole("button", { name: /tarjeta/i }));
+
+    expect(await screen.findByText("El cobro expiró", {}, { timeout: 6000 })).toBeInTheDocument();
+    expect(screen.getByText(/expiró sin confirmarse/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reintentar cobro/i })).toBeInTheDocument();
+    expect(mockedOrdersService.create).not.toHaveBeenCalled();
+  }, 10000);
 
   it("Escape sin método elegido cierra el checkout por completo", async () => {
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
@@ -297,8 +370,8 @@ describe("VentaSection", () => {
   });
 
   it("Escape con un cobro Posnet en curso cancela la intención y vuelve a elegir método", async () => {
-    mockedMercadopagoService.createPosIntent.mockResolvedValue({ id: "intent-1" });
-    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "OPEN" });
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "PENDING", rawState: "OPEN" });
     mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "canceled" });
 
     render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
@@ -342,14 +415,58 @@ describe("VentaSection", () => {
     const banner = await screen.findByRole("alert");
     await user.click(within(banner).getByRole("button", { name: /reintentar/i }));
 
+    // La constancia vieja no tiene mpKind: el kind de la prueba se infiere del
+    // paymentMethod (retrocompatibilidad) y viaja igual al registro.
     await waitFor(() =>
       expect(mockedOrdersService.create).toHaveBeenCalledWith({
         items: [{ drinkId: 1, qty: 1 }],
         paymentMethod: "qr",
+        payment: { provider: "mercadopago", kind: "qr_order", id: "ORD01QR" },
       }),
     );
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     expect(JSON.parse(localStorage.getItem("cocktrail:pendingSales")!)).toEqual([]);
+  });
+
+  it("una constancia bloqueada por rechazo no ofrece Reintentar, solo Descartar con el motivo", async () => {
+    seedPendingSale({
+      paymentMethod: "debito",
+      mpRef: "intent-1",
+      mpKind: "point_intent",
+      blocked: {
+        code: "PAYMENT_REJECTED",
+        reason: "Cobro rechazado: el pago fue rechazado por MP. No se registró la venta.",
+      },
+    });
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+
+    const banner = await screen.findByRole("alert");
+    expect(within(banner).queryByRole("button", { name: /reintentar/i })).not.toBeInTheDocument();
+    expect(
+      within(banner).getByText(/El cobro fue rechazado por Mercado Pago — no es una venta por registrar/),
+    ).toBeInTheDocument();
+    expect(within(banner).getByRole("button", { name: /^descartar$/i })).toBeInTheDocument();
+  });
+
+  it("una constancia bloqueada por cobro sin verificar pide revisar el panel de MP", async () => {
+    seedPendingSale({
+      paymentMethod: "debito",
+      mpRef: "intent-1",
+      mpKind: "point_intent",
+      blocked: {
+        code: "PAYMENT_UNVERIFIED",
+        reason: "No se pudo confirmar el cobro.",
+      },
+    });
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+
+    const banner = await screen.findByRole("alert");
+    expect(within(banner).queryByRole("button", { name: /reintentar/i })).not.toBeInTheDocument();
+    expect(
+      within(banner).getByText(/El cobro no se pudo verificar — revisá el panel de Mercado Pago/),
+    ).toBeInTheDocument();
   });
 
   it("si el reintento vuelve a fallar, el banner queda", async () => {

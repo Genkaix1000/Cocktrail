@@ -1,7 +1,8 @@
 # Cobro verificado — el sistema registra ventas que Mercado Pago rechazó
 
-**Estado**: `draft` — **evidencia empírica capturada** (2026-07-22 18:31); la pregunta abierta sobre
-`payment.id` quedó **resuelta**.
+**Estado**: `in-progress` — plan técnico aprobado y en implementación (2026-07-22); evidencia
+empírica capturada (18:31) y la pregunta abierta sobre `payment.id` **resuelta**. Gate físico
+(tarjeta sin fondos + camino feliz de $15 contra el Posnet real) pendiente para pasar a `done`.
 **Fecha**: 2026-07-22 (última actualización: 2026-07-22, tras la reproducción controlada)
 **Origen**: reproducción en vivo del 2026-07-22 — se cobró con el Posnet físico usando una tarjeta
 sin fondos, Mercado Pago rechazó el pago, y **Cocktrail imprimió el ticket y registró la venta como
@@ -304,6 +305,17 @@ En términos de comportamiento observable:
   PR 5.
 - **Reembolsos / devoluciones** (Fase 7 de MP) — si una venta se registró mal, esta spec define el
   procedimiento manual de corrección, no un flujo automático de devolución.
+- **El agujero de `computeTotals` y el flujo de `/carta`.** `computeTotals`
+  (`apps/api/src/shared/utils/totals.ts:32-40`) suma por `paymentMethod` **sin mirar ningún estado
+  de cobro**, así que un pedido creado desde `/carta` —donde `paymentMethod` significa *cómo el
+  cliente piensa pagar*, no *cómo se cobró*— infla los totales de la noche sin ningún cobro
+  asociado. Es un defecto real y de la misma familia que R27, pero **hoy no causa daño**: `/carta`,
+  el ticket virtual y `/barra` están fuera de validación hasta la Fase 7 (ver `docs/ROADMAP.md`) y
+  nadie crea pedidos por ahí. Se resuelve cuando se rediseñe el flujo digital del cliente, no acá:
+  la prioridad de esta spec es que el cobro de caja funcione. Queda anotado como **R28**, diferido a
+  la Fase 7. Consecuencia de diseño: la exigencia de prueba de pago del criterio C cuelga del
+  **origen** de la request (venta de caja, con sesión de staff) y no de `paymentMethod` — así
+  `/carta` sigue funcionando sin que haya que tocarlo.
 
 ---
 
@@ -609,15 +621,498 @@ Referencias verificadas sobre el código el 2026-07-22.
 
 ## Plan técnico
 
-> Pendiente — se escribe con `/plan cobro-verificado`.
->
-> **Ya no lo bloquea la pregunta del `payment.id`**: quedó resuelta empíricamente el 2026-07-22 (ver
-> "Preguntas respondidas") y con ella la forma de la solución. La **única** pregunta que le sigue
-> abierta al plan es la **lista completa de valores de `state` de la Point Integration API**
-> (pregunta abierta 1), necesaria para saber qué estados son terminales.
+> Escrito el 2026-07-22 tras consultar a `architect-reviewer` (boundaries, secuenciación, impacto
+> sobre el contrato de `POST /api/orders`) y `supabase-expert` (modelo de datos, migraciones,
+> sync). Los dos, por separado, encontraron el mismo problema con el criterio C — está tratado abajo
+> en "Corrección del criterio C". Donde los dos coincidieron, el plan afirma; donde algo quedó sin
+> comprobar contra el entorno real, está listado al final en "Lo que quedó sin verificar".
+
+### Enfoque
+
+El bug es de **autoridad**, no de mapeo: hoy el navegador decide si se cobró y el backend obedece.
+El arreglo mueve esa decisión al servidor y la apoya en un dato persistido, en **tres piezas
+separadas** que no hay que colapsar en una:
+
+1. **`MercadoPagoService` sigue siendo un gateway HTTP crudo.** Se le saca la resolución del pago de
+   adentro del `if (rawStatus === "CONFIRMATION_REQUIRED")` (`mercadopago.service.ts:281`) y se la
+   convierte en una operación propia —`resolveIntentOutcome(intentId, deviceId)`— que devuelve un
+   **DTO rico y crudo** (`rawState`, `paymentId?`, `paymentStatus?`, `statusDetail?`,
+   `transactionAmount?`, `externalReference?`), **no** un status ya normalizado. El gateway informa;
+   no decide.
+2. **`PointPaymentsService` (nuevo, dentro del módulo `mercadopago`) es el dueño de la política.**
+   Crea y **persiste** el intent, consulta el estado, resuelve el veredicto, compara montos, aplica
+   el deadline, persiste el resultado y marca el intent como consumido. El precedente exacto a
+   copiar ya está en el repo: `MercadoPagoOrdersService` es literalmente esto para el camino de QR
+   (gateway propio + `MpOrdersRepository` + `getActiveEvent` inyectado, `app.ts:139-148`).
+3. **`OrdersService` recibe la verificación por un puerto declarado en su propio módulo.** El
+   dominio no importa nada de `mercadopago`; recibe una función.
+
+**La regla que reemplaza al `if`** — y es el corazón del arreglo — no es *"resolvé el pago si el
+estado es terminal"* sino:
+
+> **Si el intent trae `payment.id`, se consulta el pago y se decide con eso, sea cual sea el
+> `state`.**
+
+Esto importa más allá de la elegancia: el punto 7 del anexo de evidencia muestra que `ON_TERMINAL`
+llega **sin** campo `payment`, o sea que `payment.id` aparece recién cuando el intent termina. El
+propio dato hace de discriminante. **Consecuencia directa: la pregunta abierta 1 (lista completa de
+valores de `state`) deja de bloquear el plan** — el `state` sale del camino de decisión y queda solo
+como dato registrado (`raw_state`) y como insumo de los mensajes de la UI.
+
+**El veredicto tiene tres valores, nunca un booleano**: `confirmado` / `rechazado` / `indeterminado`
+(más `no_aplica` para efectivo). Es el mismo patrón que el repo ya adoptó con `RestoreResult`
+(`{ok, failed, error?}`) después del incidente de `drinks` (`ARCHITECTURE.md` §6). Un booleano
+obliga a inventar un default, y por D1 el default no puede ser "cobrado".
+
+**Decisión fuerte que simplifica todo lo demás: un cobro no confirmado NO crea una `Order`.** Vive
+en `mp_orders`. Meter órdenes "no confirmadas" en `orders` obligaría a tocar `computeTotals`,
+`findActive`, el KDS de `/barra`, la máquina de estados de `Order` y el sync — cinco superficies
+nuevas de bug. Con esta decisión, **el criterio D se cumple por construcción**: si no hay `Order`,
+no hay ticket ni `order.created`.
+
+**`POST /api/orders` no llama a Mercado Pago.** Lee `mp_orders` local. El veredicto se resuelve en el
+polling —que ya habla con MP— y se **persiste** ahí. Tres consecuencias que valen la pena: el
+registro no le suma latencia ni un modo de fallo nuevo al camino crítico; **el reintento desde la
+constancia funciona aunque MP esté caído**, que es exactamente el escenario que la constancia
+cubre; y el estado "no confirmado" queda persistido y sobrevive a un F5. El único hueco es que el
+proceso muera entre el veredicto y el UPDATE: se mitiga permitiendo que `POST /api/orders`, **solo**
+cuando la fila está ausente o indeterminada, haga una re-consulta viva a MP — y si esa consulta
+falla, por D1 el resultado es "no confirmado", nunca "cobrado".
+
+**Corrección del criterio C — el criterio, tomado literal, rompe `/carta`.**
+
+`POST /api/orders` es **público** (`orders.controller.ts:32`, sin `authMiddleware`) y sirve dos casos
+semánticamente distintos con el mismo campo:
+
+| Origen | Qué significa `paymentMethod` |
+|---|---|
+| `/caja` | Cómo **se cobró** una venta que ya ocurrió. |
+| `/carta` (`apps/web/src/app/carta/page.tsx:48,215`, default `"qr"`) | Cómo el cliente **piensa** pagar en la barra. El cobro todavía no pasó. |
+
+Exigir prueba de pago para todo `paymentMethod !== "efectivo"` deja `/carta` sin funcionar.
+
+**Decisión de alcance**: la exigencia de prueba de pago cuelga del **origen de la request** (venta de
+caja = request con sesión de staff) **y** de `paymentMethod !== "efectivo"`, **no** de
+`paymentMethod` solo. El discriminante server-side ya existe y no es forjable: `createdBy` sale de la
+cookie (`orders.controller.ts:36-38`), no del body. Con eso, **`/carta` sigue funcionando
+exactamente como hoy y no se toca una línea suya**.
+
+**Este plan cubre únicamente la venta de caja.** Durante el análisis apareció un agujero preexistente
+de la misma familia —`computeTotals` (`shared/utils/totals.ts:32-40`) suma por `paymentMethod` sin
+mirar ningún estado de cobro, así que un pedido de `/carta` infla los totales de la noche sin que
+haya entrado un peso—, pero **queda explícitamente fuera de alcance** y **no se modifica
+`computeTotals`**: `/carta` está fuera de validación hasta la Fase 7 (ver `docs/ROADMAP.md`), nadie
+crea pedidos por ahí, y el flujo digital del cliente se rediseña completo en esa fase. Anotado como
+**R28**, diferido a la Fase 7. La prioridad de esta spec es que el cobro de caja funcione.
+
+**Flujo completo resultante:**
+
+```
+orders.controller
+  → OrdersService.createOrder            (recomputa el total desde drinksRepo — orders.service.ts:41-56;
+                                          eso ya existe y es media defensa contra carrito manipulado)
+  → verifyPayment({ proof, expectedAmount, method })     [PUERTO, declarado en modules/orders]
+  → adaptador (modules/mercadopago)
+  → PointPaymentsService  →  MpOrdersRepository + MercadoPagoService
+```
+
+### Archivos / módulos afectados
+
+**Puerto de verificación (nuevo, en `orders` — la dependencia apunta hacia el dominio):**
+
+- `apps/api/src/modules/orders/payment-verification.port.ts` (nuevo):
+
+```ts
+export type PaymentProof = { provider: "mercadopago"; kind: "point_intent" | "qr_order"; id: string };
+export type PaymentVerdict =
+  | { result: "no_aplica" }
+  | { result: "confirmado"; providerPaymentId: string; amount: number }
+  | { result: "rechazado"; reason: string; detail?: string }
+  | { result: "indeterminado"; reason: string };
+export type VerifyPaymentFn = (input: {
+  proof: PaymentProof; expectedAmount: number; method: PaymentMethod;
+}) => Promise<PaymentVerdict>;
+```
+
+- **Tipo función, no interfaz**, por consistencia con los vecinos: `OrdersService` ya recibe así
+  `getActiveEvent`, `incrementOrderCounter`, `saveTicket` y `printTicket`
+  (`orders.service.ts:21-29`, cableados en `app.ts:84-101`). **`modules/orders/*` nunca importa nada
+  de `modules/mercadopago/*`**; los une `app.ts`.
+- **Deuda a pagar en el mismo PR**: el constructor de `OrdersService` ya tiene **8 parámetros
+  posicionales**; sumar el noveno es el momento de pasarlo a un objeto `deps`.
+
+**Módulo `mercadopago`:**
+
+- `mercadopago.service.ts:281-287` — se saca la resolución del pago del `if` y se expone
+  `resolveIntentOutcome()`. `getPaymentIntentStatus` pasa a apoyarse en ella.
+- `mercadopago.service.ts:24-27` — el tipo `MpPayment` (hoy `{id, status}`) suma **`status_detail`**
+  (necesario para el criterio E) y **`transaction_amount`** (criterio B).
+- `mercadopago.service.ts:69-80` — `buildExternalReference` usa `Date.now()` + descripción y
+  `external_ref` tiene UNIQUE: **dos cobros del mismo trago en el mismo milisegundo colisionan** y
+  tiran 500 en plena caja. Se le suma `randomUUID()` a la semilla.
+- `mercadopago.service.ts:236` — el `X-Idempotency-Key` del Point se genera por request y se tira;
+  pasa a persistirse (`idempotency_key` es NOT NULL + UNIQUE en `mp_orders`).
+- `point-payments.service.ts` (nuevo) — la política: crear+persistir intent, resolver veredicto,
+  comparar montos, deadline, consumir. **No se extiende `MercadoPagoService`**: ya tiene 462 líneas y
+  tres responsabilidades, atarlo a un repositorio rompe el patrón del módulo y haría que
+  `SystemService` (`app.ts:159`) arrastre el repo transitivamente.
+- `mercadopago-point-adapter.ts` (nuevo) — implementa `VerifyPaymentFn` sobre `PointPaymentsService`.
+- `mercadopago.controller.ts:51-58` — `Cache-Control: no-store` **por ruta** (criterio I) + endpoint
+  nuevo `POST /api/mercadopago/pos/intent/:id/resolve`.
+- `mp-orders.repository.ts` — columnas nuevas, UPDATE condicional para consumir el intent.
+
+**Módulo `orders`:**
+
+- `orders.service.ts:20-29` — constructor a objeto `deps` + `verifyPayment`.
+- `orders.service.ts:80-90` — la impresión deja de colgar de `isStaffOrder` y pasa a colgar de
+  `esVentaDeCaja && (verdict === "no_aplica" || verdict === "confirmado")`. **El efectivo pasa por
+  el mismo camino** devolviendo `no_aplica` sin llamar a MP: un solo flujo, cero riesgo de regresión.
+- `orders.controller.ts:32-49` — el body suma `payment?: { provider, kind, id }`.
+- `printer.controller.ts:30-42` — `POST /api/printer/reprint/:orderId` hoy reimprime **cualquier**
+  orden sin mirar nada. Es la puerta de atrás del criterio D y hay que cerrarla.
+- `shared/middleware/validate.ts:29-42` — `CreateOrderSchema` pasa a `superRefine` (o discriminated
+  union). Ojo: `validate()` hace `req.body = result.data`, así que el schema **también filtra** —
+  si el campo no está declarado, no llega al service.
+
+**Explícitamente NO se tocan**: `shared/utils/totals.ts` ni nada de `apps/web/src/app/carta/`. Ver
+"Decisión de alcance" arriba y R28.
+
+**Frontend:**
+
+- `useCheckout.ts:279-321` — deadline del polling del Posnet, orden **cobro → constancia → registro**
+  (D6), y el `paymentAttemptId` que ya existe (`useCheckout.ts:482-485`) pasa a viajar al Posnet
+  (hoy solo lo usa el QR).
+- `useCheckout.ts` (branch `CANCELED`) — el sentinel `"cancelled_by_device"` deja de tapar los
+  rechazos: rechazo y cancelación quedan distinguibles (criterio E).
+- `lib/pendingSales.ts` — la constancia de `localStorage` deja de ser el mecanismo primario y pasa a
+  ser espejo de lo que ya está persistido en el servidor.
+
+**Documentación (D7, entra en el mismo entregable):**
+
+- `docs/mp/api-point-devices.md:93` y `docs/specs/mercadopago/cobro-posnet-mercadopago.md:90-92`.
+- `docs/ROADMAP.md` — R27 y su estado.
+
+### Cambios de datos
+
+**Se reusa `mp_orders`. No se crea una tabla nueva.** El argumento decisivo es la ligadura desde
+`orders`: con dos tablas de cobro haría falta una referencia polimórfica sin FK, o dos FK nullables
+mutuamente excluyentes — las dos peores opciones. Además, `type TEXT -- 'qr' | 'point'` existe en la
+tabla desde `20260717221900_mp_orders.sql:18`: el modelo estaba **inconcluso**, no era ajeno. Los
+tres UNIQUE del PR 3 mapean 1:1 al Posnet (`order_id_mp` ← id del intent, `external_ref` ←
+`additional_info.external_reference`, `payment_id` ← `payment.id`), queda **un solo camino de
+reconciliación** y **un solo push** en el PR 5.
+
+**M1 — `20260722000000_mp_orders_point.sql`**
+
+Columnas nuevas: `device_id TEXT`, `attempt_id TEXT`, `raw_state TEXT`, `payment_status TEXT`,
+`payment_status_detail TEXT`, `paid_amount NUMERIC(12,2)`, `verified_at TIMESTAMPTZ`,
+`verification_error TEXT`.
+
+- `payment_status_detail` **cierra el criterio E**: hoy ese dato no se guarda en ningún lado, y sin
+  él no hay forma de distinguir "fondos insuficientes" de "cancelado a propósito".
+- `raw_state` cierra el último bullet del criterio A: hoy `(rawStatus as MpNormalizedStatus) ??
+  "PENDING"` (`mercadopago.service.ts:287`) **castea a ciegas y tira el valor original**.
+- `paid_amount` es el insumo del criterio B.
+
+Nullables **con CHECK por discriminante**, no nullables sueltos:
+
+- `mp_orders_type_check` — hoy `type` es TEXT libre **en una tabla de plata**.
+- `mp_orders_point_requires_device`.
+- `mp_orders_processed_requires_paid_amount`:
+  `status <> 'processed' OR (paid_amount IS NOT NULL AND payment_id IS NOT NULL)` — que es
+  exactamente el estado que produjo el incidente del 22-07.
+
+Se suma **`'rejected'`** al CHECK de `status` (`20260721000200_mp_orders_status_y_replay.sql:9-13`):
+hoy no distingue rechazo de cancelación, que es justo la distinción que la cajera necesita.
+`'unknown'` ya existe desde el PR 3 y sirve como el "cobro no confirmado" de D1.
+
+Índice sobre `attempt_id` (**no único**, ver abajo) + `GRANT`/`REVOKE` en la misma línea que el resto
+de la tabla.
+
+**⚠️ Unidades — riesgo alto y silencioso.** Point manda y devuelve **centavos** (`amount: 10100` en
+el anexo, `mercadopago.service.ts:239` hace `Math.round(amount * 100)`); `/v1/payments` devuelve
+**pesos** (`transaction_amount: 101`); `mp_orders.amount` hoy guarda **pesos**. Se guardan **pesos en
+ambas columnas** y se convierte en el borde de MP. Si se mezclan, el criterio B compara `101` contra
+`10100` y **rechaza todos los cobros buenos**.
+
+**M2 — `20260722000100_orders_cobro.sql`**
+
+- `orders.mp_order_id UUID NULL REFERENCES mp_orders(id)`, con UNIQUE parcial. El orden de creación
+  juega a favor: **el cobro nace primero**, así que la fila referenciada ya existe cuando se inserta
+  la venta. Al revés harían falta dos escrituras no atómicas. `ON DELETE NO ACTION`: borrar un cobro
+  que respalda una venta **debe fallar** — `CASCADE` borraría la venta y `SET NULL` rompería la
+  auditoría en silencio.
+- `orders.payment_status` con CHECK `('cobrado','pendiente_de_cobro','desconocido')`. Los tres
+  valores quedan en el esquema, pero **en este alcance la app escribe únicamente `'cobrado'`**:
+  `pendiente_de_cobro` queda **reservado para la Fase 7** (es el estado que va a necesitar `/carta`
+  cuando se rediseñe el flujo digital) y `desconocido` es **solo** para las filas pre-migración —no
+  hay forma de saber retroactivamente cuáles se cobraron—. Que el esquema esté listo no obliga a
+  usar el camino ahora; el default para las filas de `/carta` sigue siendo el de hoy.
+- **La invariante como constraint, no como código.** Esto es lo que hace el bug irrepetible:
+
+```sql
+CHECK (payment_status <> 'cobrado' OR payment_method = 'efectivo' OR mp_order_id IS NOT NULL)
+```
+
+  Una venta cobrada no-efectivo sin cobro ligado queda **imposible de insertar**. El escape del
+  efectivo es irreductible: nadie puede verificar server-side que entraron billetes.
+- `orders.mp_payment_id TEXT` — **denormalización deliberada**, redundante con el join. Se justifica
+  por dos motivos: (1) es el string que el dueño pega en el buscador del panel de MP sin trabajo de
+  detective (criterio C, último bullet), y (2) sobrevive a un restore parcial (`safePull` no hace
+  rollback). Es inmutable una vez aprobado, así que no hay riesgo de drift. Queda documentado como
+  tal para que nadie lo "limpie" después.
+- **Idempotencia (R20) — dos índices parciales, dos agujeros distintos**:
+  `uq_orders_idempotency_key` cubre "reintento del mismo intento lógico" **incluido el efectivo**
+  (que no tiene fila en `mp_orders`), y `uq_orders_mp_order_id` cubre "key nueva, mismo cobro real".
+  Los dos `WHERE ... IS NOT NULL`.
+
+**Semántica del handler**: SELECT por `idempotency_key` → si existe, devolver **ese pedido con 201 y
+el mismo body** (replay, nunca 409); si salta `23505` por carrera, releer y devolver el ganador —el
+patrón que `mercadopago-orders.service.ts:190-197` ya usa—; distinguir qué índice se violó por
+`error.constraint`, **no por el mensaje**.
+
+**Anti-forgery / anti-replay del intent**:
+
+- **El cliente manda el `intentId`, NUNCA el `paymentId`.** Un `paymentId` es forjable (cualquier
+  pago aprobado de la cuenta validaría N ventas), es redundante (el `payment.id` ya viaja adentro del
+  intent) y repite el mismo error de diseño que confiar en `state === "FINISHED"`.
+- Se busca la fila en `mp_orders` por `order_id_mp` + `type='point'`; si no existe → 400/409 **sin
+  llamar a MP**.
+- Consumir el intent es un **UPDATE condicional**
+  (`WHERE order_id_mp = $2 AND order_id IS NULL`), mismo patrón que `orders.repository.updateStatus`
+  con `expectedStatus` (`orders.repository.ts:13-31`).
+- **Bonus**: si el intent ya está consumido, se devuelve **la `Order` existente con 200**, no 409.
+  El registro se vuelve idempotente por intent y eso **mata R20** por otra vía.
+
+**Tres comparaciones de monto** (criterio B), y cualquier desajuste ⇒ `indeterminado`, nunca
+`confirmado`: `expectedAmount` recomputado por `OrdersService` desde `drinksRepo`, `mp_orders.amount`
+(lo que se le pidió al Posnet) y `payment.transaction_amount` (lo que MP aprobó).
+
+**`mp_orders.cart_items JSONB`** — se guardan los items del carrito al crear el intent. Hoy el
+carrito vive **solo** en `localStorage` (`lib/pendingSales.ts`), así que si la cajera cierra la
+pestaña la venta se pierde aunque el cobro haya entrado. Con esto, "no perder la venta" pasa a ser
+garantía del servidor y se puede resolver desde cualquier dispositivo (`POST
+/api/mercadopago/pos/intent/:id/resolve`). **Trade-off consciente**: mete datos de dominio en una
+tabla del módulo de pagos. Queda anotado como deuda, no como accidente.
+
+**M3 — `20260722000200_revoke_anon_legacy.sql` (R18)** — va aparte a propósito: tiene un radio de
+impacto distinto al de las otras tres. Mecánica exacta: el `GRANT ALL ON ALL TABLES TO anon` de
+`20240101000000_schema.sql:69` es un **snapshot**, no un `ALTER DEFAULT PRIVILEGES`, así que no
+alcanza tablas futuras; pero en una corrida **baseline** (`applied.length === 0`) se re-ejecutan
+todas las migraciones en orden y esa línea re-abre lo que exista en ese momento. Un REVOKE con
+timestamp `20260722…` **gana siempre** en los dos caminos, por orden lexicográfico. Verificado que
+**nadie usa la anon key**: `apps/web/src` no tiene una sola referencia a `SUPABASE_*` y los tres
+clientes de `shared/supabase.ts` usan `SERVICE_ROLE_KEY`. `ENABLE RLS` sin policies = deny-all salvo
+`BYPASSRLS`, que `service_role` tiene.
+
+**M4 — `20260722000300_repair_checksum_drift.sql`** — opcional pero recomendada. Los tres diffs de
+checksum detectados son **exclusivamente comentarios**, producto del rename `docs/specs/…` →
+`docs/specs/mercadopago/…` del commit `92ab34c`. **Cero DDL.** No condicionan el deploy
+(`detectDrift` no aborta), **pero** `isDegraded` devuelve `true` mientras haya drift: el sistema
+queda permanentemente degradado y **se pierde la señal** justo en el deploy que arregla un bug de
+plata, donde no se va a poder distinguir "aplicó bien" de "algo falló". Se resuelve con un `UPDATE
+schema_migrations SET checksum = …`. **Regla que hay que dejar escrita**: prohibido tocar migraciones
+ya aplicadas, aunque sea un comentario — este drift lo causó un `sed` de rutas de docs. Un hook o un
+test que compare disco contra `schema_migrations` lo evita mejor que la buena voluntad.
+
+Ninguna de las cuatro necesita `-- migrate:no-transaction`: ese directivo es solo para `CREATE INDEX
+CONCURRENTLY`, `ALTER TYPE ADD VALUE`, `VACUUM` y `CREATE DATABASE`, y además el runner corre en el
+boot, antes de servir tráfico.
+
+**Sync (PR 5) — orden obligatorio por las FK**: `night_events` → **`mp_orders`** → `orders` →
+`tickets`. Hoy `pushEventData` (`sync.service.ts:149-186`) va `night_event → orders → tickets`: hay
+que **insertar `pushMpOrders(eventId)` entre el 2 y el 3**. `cloud-sync.repository.ts` necesita
+`pushMpOrders()` y sumar las cuatro columnas nuevas al map de `pushOrders()`. En `restoreFromCloud`
+(`:255-258`), `pullMpOrders()` va entre `night_events` y `orders` o el upsert revienta con `23503`.
+En Cloud la columna va **sin FK**: es archivo histórico y la FK solo agregaría modos de fallo.
+
+**No sube al cloud**: los tokens (D3 de la remediación), `mp_webhook_events` (local-only por su
+propia migración — guarda payloads con datos del pagador) y cualquier `raw_payment JSONB` si se
+agregara. **No se agrega `raw_payment`**: los payloads de `/v1/payments` traen nombre, mail y últimos
+4 dígitos del pagador, y alguien lo va a meter en `pushMpOrders()` sin pensarlo.
+
+### Real-time
+
+**No se inventa ningún evento SSE nuevo.** `mp.order.updated` ya existe con `type: "qr" | "point"`
+(`shared/sse/sse-manager.ts:31-44`) y cubre exactamente lo que haría falta emitir.
+
+Dos advertencias que hay que tener escritas:
+
+- **Hoy nadie lo consume.** Emitirlo sin cablear un listener no cambia nada observable — es
+  preparación, no funcionalidad.
+- **Ninguna decisión de negocio puede depender del SSE.** Es un stream global, sin garantía de
+  entrega y con filtrado del lado del cliente (`ARCHITECTURE.md` §7). Es la misma lección que dejaron
+  los webhooks: red de seguridad, nunca mecanismo primario.
+
+El cambio real en `order.created` es negativo: **deja de emitirse** cuando el cobro no está
+confirmado (criterio D), porque directamente no hay `Order`.
+
+### Auth / permisos
+
+Sin roles nuevos y sin cambios en `UserPermissions`. Cuatro ajustes:
+
+- **`POST /api/orders` sigue siendo público.** Lo que cambia es que la exigencia de prueba de pago
+  cuelga del **origen**, no del método: se aplica cuando hay sesión de staff (venta de caja) **y**
+  `paymentMethod !== "efectivo"`. El discriminante ya es server-side y no es forjable — `createdBy`
+  sale de la cookie (`orders.controller.ts:36-38`), nunca del body.
+- **`POST /api/mercadopago/pos/intent/:id/resolve`** (nuevo) — `authMiddleware` +
+  `requireRole("admin", "caja")` + `mpContextMiddleware`, igual que sus vecinos del controller. Es lo
+  que permite recuperar un cobro desde otro dispositivo si la pestaña se cerró.
+- **`POST /api/printer/reprint/:orderId`** (`printer.controller.ts:30-42`) pasa a exigir que la orden
+  esté en `payment_status = 'cobrado'`. Si no, el criterio D tiene una puerta de atrás abierta.
+- **`Cache-Control: no-store` por ruta** en `mercadopago.controller.ts:51-58` (criterio I).
+  Explícitamente **no** se usa `app.set("etag", false)` global: apagar el ETag de toda la app para
+  arreglar un endpoint es un cambio de radio desproporcionado.
+
+A nivel base, M3 cierra los privilegios heredados de `anon` (R18); las columnas nuevas de M1/M2 caen
+bajo los `GRANT`/`REVOKE` que sus tablas ya tienen.
+
+### Riesgos
+
+**Alto — el runner de migraciones es fail-open y acá eso se vuelve peligroso.** Si M1/M2 fallan, el
+backend arranca igual (política deliberada del PR 2), pero entonces el INSERT con las columnas nuevas
+rompe **cada venta**. Fail-open a nivel migración + fail-closed a nivel operación es lo peor de los
+dos mundos. **Mitigación elegida**: leer `apps/api/src/infra/migrations/migrations-status.ts` y, si
+las migraciones nuevas no aplicaron, **bloquear el cobro no-efectivo con un mensaje explícito**
+—coherente con D1— reusando el banner que el PR 2 ya dejó puesto.
+
+**Alto — el esquema de Cloud no está versionado en el repo y ya divergió.** Los comentarios de
+`pullNightEvents` (`sync.service.ts:157-167`) documentan que Cloud tiene `totals` y **no** tiene
+`status` ni `keyword`. Si no se crean en Cloud `mp_orders` y las cuatro columnas nuevas de `orders`,
+**`pushOrders` falla entera y con ella el cierre de noche**. Es lo único de esta propuesta que puede
+romper algo que **hoy funciona**: hay que verificar contra la instancia real antes de mergear.
+
+**Alto — la mezcla de unidades.** Ya está arriba, pero se repite acá porque el modo de fallo es el
+peor posible: si `paid_amount` se guarda en centavos, el criterio B rechaza **todos** los cobros
+legítimos y la caja deja de funcionar por completo.
+
+**Medio — `testDeviceReachability` ensucia `mp_orders`.** La prueba de Posnet
+(`mercadopago.service.ts:348-410`) usa el mismo polling (`:386`). Si se persiste el intent sin más,
+**cada test de $15 deja un cobro fantasma** en la tabla de plata. El intent de prueba tiene que
+quedar **explícitamente excluido de la persistencia**.
+
+**Medio — colisión de `external_ref`.** `buildExternalReference` (`:69-80`) usa `Date.now()` +
+descripción, y la columna tiene UNIQUE desde el PR 3: dos cobros del mismo trago en el mismo
+milisegundo tiran 500 en plena caja. Se arregla con `randomUUID()` en la semilla.
+
+**Medio — no atar `mp_orders.idempotency_key` al `paymentAttemptId` del cliente.**
+`createPaymentIntentWithToken` (`:196-222`) **crea un segundo intent** cuando auto-recupera del error
+2205 ("queued intent"): dos intents para un solo intento lógico. Con la key atada al attempt, el
+segundo INSERT violaría el UNIQUE global y **rompería una recuperación que hoy funciona**. Por eso
+`attempt_id` va como columna aparte, **no única**, indexada.
+
+**Medio — `bar_id` / `caja_id` pueden quedar NULL en el camino Posnet** (`allowGlobalFallback: true`,
+`mercadopago.service.ts:133`). No hay que hacerlas obligatorias en M1.
+
+**Medio — `MercadoPagoOrdersService.getOrderStatus` (`:232-234`) hace short-circuit** si el status ya
+es final. Si la verificación de monto del criterio B se agrega ahí, **las filas ya finales no la
+ejecutan** nunca.
+
+**Medio — el agujero de `/carta` queda abierto a propósito (R28).** `computeTotals` sigue sumando
+por `paymentMethod` sin mirar estado de cobro, así que un pedido de `/carta` seguiría inflando los
+totales de la noche sin cobro asociado. Hoy no causa daño —`/carta` está fuera de validación hasta
+la Fase 7 y nadie crea pedidos por ahí— y cerrarlo ahora ampliaría el alcance de una spec que es
+bloqueante para producción. **Es una deuda con dueño y fecha**, no un descuido: se resuelve al
+rediseñar el flujo digital del cliente. La contrapartida es que hay que acordarse de que existe si
+alguien habilita `/carta` antes de la Fase 7.
+
+**Tests que van a caer** (verificado sobre el repo, no inferido): todo el `describe` de
+`getPaymentIntentStatus` en `mercadopago.service.test.ts:339-385` (ahora un `FINISHED` dispara un
+segundo fetch), `:348` y `:386-390` si se mueve `mapPaymentStatusToNormalized`; los tres tests de
+impresión de `orders.service.test.ts:111-146`; **todos** los `new OrdersService(...)` si se pasa a
+objeto `deps`; `useCheckout.test.ts`; y probablemente `VentaSection.test.tsx`.
+
+**Deuda asumida conscientemente**: `cart_items` mete datos de dominio en una tabla del módulo de
+pagos, y `orders.mp_payment_id` es una denormalización. Las dos están justificadas arriba; las dos
+tienen que quedar anotadas para que el próximo que las vea no las "arregle".
+
+### Alternativas consideradas
+
+- **Webhooks como mecanismo primario** — descartado, y el argumento es **estructural y permanente**:
+  el sistema es local-first y corre detrás del NAT del boliche. Un webhook de MP **no puede llegar a
+  esa máquina**. No es que esté mal configurado (R26): es incompatible con el deploy objetivo. Sirve
+  como red de seguridad el día que exista un aterrizaje público, nunca como el camino que decide si
+  se cobró.
+- **`OrdersService` importando `MercadoPagoService` directo** — descartado: rompe el boundary entre
+  módulos y, con el checkout online de la Fase 2, obliga a un `switch (provider)` **adentro del
+  dominio**.
+- **Un `CheckoutService` orquestador por arriba** — descartado: deja `POST /api/orders` abierto sin
+  prueba de pago. La garantía sería del router, no una invariante del dominio, y basta con que
+  alguien llame al endpoint por otro camino para perderla.
+- **Que el cliente mande el `paymentId`** — descartado: es forjable. Un pago aprobado cualquiera de
+  la cuenta validaría N ventas distintas.
+- **Modelar el cobro pendiente como un `status` más de `Order`** — descartado: contamina cinco
+  superficies (`computeTotals`, `findActive`, el KDS de barra, la máquina de estados, el sync).
+- **Tabla `pos_payment_intents` propia** — descartado: duplica medio esquema de `mp_orders` y fuerza
+  dos caminos de conciliación y dos pushes distintos.
+- **Extender `MercadoPagoService` con el repositorio** — descartado: 462 líneas y tres
+  responsabilidades ya son demasiadas, y `SystemService` (`app.ts:159`) terminaría arrastrando el
+  repo transitivamente.
+- **Que el backend pollee y avise por SSE, sacando al browser del loop** — **arquitectónicamente
+  mejor** y encaja con local-first, pero exige estado en memoria, timers y recuperación tras un
+  reinicio del proceso. Queda anotado como **evolución natural** una vez que el intent esté
+  persistido, que es justamente lo que este plan habilita.
+- **Colapsar rechazo de tarjeta con cancelación deliberada** (que sería más simple) — descartado: el
+  criterio E lo prohíbe explícitamente, y es el defecto 7 del inventario.
+- **`app.set("etag", false)` global** para el criterio I — descartado por radio de impacto: se
+  resuelve con una línea por ruta.
+
+### Orden de ejecución
+
+Cada paso deja el sistema consistente y es verificable solo.
+
+| # | Contenido | Por qué corta ahí |
+|---|---|---|
+| **1** | M1 + persistir el intent del Posnet **sin cambiar ninguna lógica de decisión** | Aislado y reversible: el comportamiento observable no cambia. Cierra el lado Posnet de R19 y **desbloquea todo lo demás**. |
+| **2** | `resolveIntentOutcome` + `PointPaymentsService`: veredicto de 3 valores, comparación de montos, deadline server-side | **Acá muere el bug** (criterios A, B, F). Todavía no cambia quién tiene la autoridad. |
+| **3** | M2 + el puerto + `OrdersService` exigiendo prueba + impresión colgando del veredicto + `reprint` | **Acá muere el agujero de autoridad** (criterios C, D). Es el paso que más superficie toca. |
+| **4** | Frontend: deadline, mensajes que distinguen rechazo de cancelación, orden **cobro → constancia → registro** | Criterios E, F y D6. Depende de que el backend ya devuelva el veredicto rico. |
+| **5** | `Cache-Control: no-store` (criterio I) | Una línea. **Se puede adelantar** a cualquier punto: no depende de nada. |
+| **6** | Documentación: `docs/mp/api-point-devices.md:93`, `cobro-posnet-mercadopago.md:90-92`, R27 en el roadmap | Criterio H / D7. Va en el mismo entregable, no después. |
+
+M3 (R18) y M4 (checksum drift) son independientes del orden y pueden entrar con el paso 1.
+
+**Gate obligatorio antes de dar esto por cerrado**: reproducir el incidente del 22-07 con la misma
+tarjeta sin fondos contra el Posnet físico y verificar que **no** sale ticket, **no** se crea
+`Order` y la cajera lee el motivo real. Y el camino feliz de $15, para confirmar que no hubo
+regresión.
+
+### Lo que quedó sin verificar
+
+Tres cosas que este plan **asume** y hay que comprobar contra el entorno real antes de implementar —
+justamente porque este bug nació de asumir cosas sobre una API sin verificarlas:
+
+1. **El esquema de `orders` en Supabase Cloud y si `mp_orders` existe allá.** Es el único riesgo que
+   puede romper algo que hoy funciona (el cierre de noche). Se verifica contra la instancia real.
+2. **Si hay filas `type='point'` en `mp_orders` en algún entorno.** El anexo dice **0 filas** en
+   local, pero si en otro entorno hay alguna, los CHECK de M1 (`point_requires_device`) van a fallar
+   al aplicarse.
+3. **La lista completa de valores de `state` de la Point Integration API** (pregunta abierta 1).
+   **Ya no bloquea el plan** —el discriminante pasó a ser la presencia de `payment.id`— pero sigue
+   importando para redactar los mensajes de la UI y para saber qué guardar en `raw_state`.
 
 ---
 
 ## Tareas
 
-> Pendiente — `/tasks cobro-verificado`.
+> Implementadas directamente desde el plan técnico el 2026-07-22 (no se corrió `/tasks` por
+> separado: el plan de implementación aprobado en Plan Mode hizo de checklist). Registro:
+
+- [x] M1-M4 (`supabase/migrations/20260722000000..000300`): columnas point + CHECKs en `mp_orders`,
+  ligadura + invariante en `orders`, REVOKE anon legacy (R18), reparación del checksum drift.
+  Aplicadas dos veces contra la base local — idempotentes, runner en `ok`, drift 0.
+- [x] `resolveIntentOutcome` en el gateway + `PointPaymentsService` (veredicto, montos en pesos,
+  deadline server-side, persistencia) + exclusión de los intents de prueba.
+- [x] Puerto `payment-verification.port.ts` en `orders` + adaptador en `mercadopago` +
+  `OrdersService` con `deps` y prueba de pago obligatoria para venta de caja no-efectivo
+  (422/409) + replay idempotente + impresión colgando del veredicto + guarda de `reprint`.
+- [x] Frontend: veredicto en el polling, mensajes distinguibles (rechazo/cancelación/expirado/
+  desconocido), deadline local, proof + `idempotencyKey` en el registro, constancias `blocked`
+  ante 409 terminal.
+- [x] `Cache-Control: no-store` en los endpoints de estado.
+- [x] Docs corregidas (`api-point-devices.md`, roadmap) y sync: `pushOrders` sube las 4 columnas
+  nuevas; DDL aplicado en Cloud (sin FK) y **cierre de noche verificado de punta a punta** —
+  `sync_status: synced` y la fila en Cloud con `payment_status: 'cobrado'`.
+- [x] Tests: 602 unit api + 96 integración + 388 web + typecheck, todo en verde.
+- [ ] **Gate físico** (bloquea el pase a `done`): tarjeta sin fondos → rechazo visible, sin ticket,
+  sin pedido; camino feliz de $15 → ticket OK.
