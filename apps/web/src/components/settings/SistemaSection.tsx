@@ -34,7 +34,7 @@ function TableResultRow({ label, result }: { label: string; result: SyncTableRes
  * Sección "Sistema" de Configuración en /admin — restore de emergencia desde Supabase
  * Cloud (noches/pedidos/tickets/auditoría). Motivado por un incidente real: la
  * carta local se vació en silencio por un bug de sync, sin ninguna forma de
- * recuperarla desde /admin. Ver docs/specs/restaurar-backup-desde-cloud.md.
+ * recuperarla desde /admin. Ver docs/specs/deuda-pre-fase-6/restaurar-backup-desde-cloud.md.
  */
 export default function SistemaSection() {
   const [modalOpen, setModalOpen] = useState(false);

@@ -302,7 +302,7 @@ Frontend puro — no hay migraciones, backend, tipos compartidos ni eventos SSE 
 
 ### 6. Cierre
 
-- [x] Marcar el estado de la spec como `done` en el header de `docs/specs/pulir-ui-caja.md`.
+- [x] Marcar el estado de la spec como `done` en el header de `docs/specs/05-ui-caja/pulir-ui-caja.md`.
 - [x] Actualizar `docs/ROADMAP.md`: tildar los ítems correspondientes de la Fase 5.
 - [x] Commits por bloque lógico (deuda de latencia / buscador / hook de atajos / cableado final /
   cierre), sin atribución AI, siguiendo la convención del repo.

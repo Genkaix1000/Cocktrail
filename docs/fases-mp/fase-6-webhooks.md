@@ -8,7 +8,7 @@ Exponer un endpoint público `POST /api/mercadopago/webhooks` que reciba notific
 
 ### B) ¿Por qué?
 
-Es el Paso 4 del spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Conciliación". Sin webhooks, la única forma de saber si un QR se pagó es haciendo polling desde el frontend — frágil (el cajero cierra la pantalla, se pierde la conexión). Con webhooks, MP notifica al backend y el pedido se concreta aunque el frontend ya no esté escuchando. La validación contra la API de MP antes de impactar es obligatoria: nunca se debe confiar ciegamente en el body del webhook. La validación HMAC del `x-signature` evita que cualquiera inyecte notificaciones falsas.
+Es el Paso 4 del spec [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Conciliación". Sin webhooks, la única forma de saber si un QR se pagó es haciendo polling desde el frontend — frágil (el cajero cierra la pantalla, se pierde la conexión). Con webhooks, MP notifica al backend y el pedido se concreta aunque el frontend ya no esté escuchando. La validación contra la API de MP antes de impactar es obligatoria: nunca se debe confiar ciegamente en el body del webhook. La validación HMAC del `x-signature` evita que cualquiera inyecte notificaciones falsas.
 
 ### C) Configuración en el panel de MP (admin, una sola vez)
 

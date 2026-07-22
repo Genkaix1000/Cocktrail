@@ -3,7 +3,10 @@
 > Estado y plan de trabajo. La arquitectura vigente está en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 > Convención: `[x]` hecho · `[~]` parcial/a verificar · `[ ]` pendiente.
 > Las fases/features cerradas sin nada pendiente se resumen en 1-3 líneas acá — el detalle
-> completo (qué se hizo, por qué, cómo se verificó) queda en su spec bajo `docs/specs/`.
+> completo (qué se hizo, por qué, cómo se verificó) queda en su spec bajo
+> [`docs/specs/`](./specs/README.md), organizada por fase (`01-tickets-impresora/`,
+> `02-auditoria-api/`, …). Los planes técnicos correspondientes viven en `docs/plans/` con
+> las mismas subcarpetas. Cada sección de abajo linkea su carpeta y sus documentos.
 > Última actualización: 2026-07-21.
 
 ---
@@ -43,7 +46,10 @@ punta el 2026-07-10 (efectivo) y el 2026-07-13 (Posnet físico).
 
 Impresora térmica NICTOM IT06 (POS58, ESC/POS directo, sin CUPS) integrada a `/caja`: ticket
 automático en cada venta de staff, manejo de error sin frenar la venta, botón de test. De paso,
-"Abrir Noche" pasó a manual con palabra clave obligatoria. Detalle: `docs/specs/impresora-termica.md`.
+"Abrir Noche" pasó a manual con palabra clave obligatoria.
+
+📁 Docs: [`specs/01-tickets-impresora/`](./specs/01-tickets-impresora/) —
+[`impresora-termica.md`](./specs/01-tickets-impresora/impresora-termica.md).
 
 - [ ] Corte automático de papel — fuera de alcance (comandera sin cuchilla, se corta a mano).
 
@@ -54,8 +60,11 @@ automático en cada venta de staff, manejo de error sin frenar la venta, botón 
 `apps/api` con tests reales (Vitest+Supertest, 9 módulos, unitarios+integración), 2 hallazgos de
 seguridad corregidos (`/api/system/*` sin auth, credencial `cajavip` hardcodeada), `OrderStatus`
 colapsado a 3 valores, y deuda estructural resuelta (`emit` inyectado, `auth.service.ts`
-partido, `SyncService`/`system.controller.ts` desacoplados). Detalle: `docs/specs/auditoria-api.md`,
-`docs/specs/deuda-estructural-fase2.md`.
+partido, `SyncService`/`system.controller.ts` desacoplados).
+
+📁 Docs: [`specs/02-auditoria-api/`](./specs/02-auditoria-api/) —
+[`auditoria-api.md`](./specs/02-auditoria-api/auditoria-api.md),
+[`deuda-estructural-fase2.md`](./specs/02-auditoria-api/deuda-estructural-fase2.md).
 
 - [ ] Fuera de alcance de esta fase (sin tests/auditoría todavía): módulos `printer`, `cash-sales`
   (eliminado después, ver Deuda pre-Fase 6), `audit-logs`, `sse`.
@@ -65,8 +74,11 @@ partido, `SyncService`/`system.controller.ts` desacoplados). Detalle: `docs/spec
 ## Fase 3 — Auditoría Web 🎨 *(completa)*
 
 Los 3 god-components (`AdminClient` 3418→724, `CajaClient` 2182→447, `BarraClient` 1517→863
-líneas) modularizados en hooks + subcomponentes con tests de caracterización. Detalle:
-`docs/specs/auditoria-web.md`. Hallazgos documentados al cierre — todos resueltos en 3B/3C.
+líneas) modularizados en hooks + subcomponentes con tests de caracterización. Hallazgos
+documentados al cierre — todos resueltos en 3B/3C.
+
+📁 Docs: [`specs/03-auditoria-web/`](./specs/03-auditoria-web/) —
+[`auditoria-web.md`](./specs/03-auditoria-web/auditoria-web.md).
 
 ---
 
@@ -74,8 +86,11 @@ líneas) modularizados en hooks + subcomponentes con tests de caracterización. 
 
 22 componentes sueltos auditados (109 tests nuevos), bug real corregido (`CloseNightModal` con
 timers sin cancelar podía disparar el cierre real sobre un componente desmontado), y los 5
-hallazgos de la Fase 3 resueltos. Detalle: `docs/specs/auditoria-web-componentes.md`. Hallazgos
-documentados al cierre — todos resueltos en 3C o en features posteriores.
+hallazgos de la Fase 3 resueltos. Hallazgos documentados al cierre — todos resueltos en 3C o en
+features posteriores.
+
+📁 Docs: [`specs/03-auditoria-web/`](./specs/03-auditoria-web/) —
+[`auditoria-web-componentes.md`](./specs/03-auditoria-web/auditoria-web-componentes.md).
 
 ---
 
@@ -83,8 +98,11 @@ documentados al cierre — todos resueltos en 3C o en features posteriores.
 
 Servicios de `apps/web/src/services/*.ts` auditados (46 tests), `Toast` compartido, modales
 migrados a montaje condicional, god-components de settings partidos, y `CashSaleModal` (feature
-muerta, nunca conectada desde el primer commit) eliminada. Detalle:
-`docs/specs/fase-3c-deuda-web-componentes.md`.
+muerta, nunca conectada desde el primer commit) eliminada.
+
+📁 Docs: [`specs/03-auditoria-web/`](./specs/03-auditoria-web/) —
+[`fase-3c-deuda-web-componentes.md`](./specs/03-auditoria-web/fase-3c-deuda-web-componentes.md),
+plan: [`plans/03-auditoria-web/2026-07-05-fase-3c-design.md`](./plans/03-auditoria-web/2026-07-05-fase-3c-design.md).
 
 ---
 
@@ -92,7 +110,9 @@ muerta, nunca conectada desde el primer commit) eliminada. Detalle:
 
 `useEventState` (hook compartido Admin+Caja) reemplaza la duplicación byte-a-byte de reconexión
 SSE y `refetch()` entre ambos shells, con 4 hallazgos reales corregidos durante la implementación.
-Detalle: `docs/specs/usesse-centralizado.md`.
+
+📁 Docs: [`specs/features/usesse-centralizado.md`](./specs/features/usesse-centralizado.md),
+plan: [`plans/features/2026-07-05-usesse-centralizado-design.md`](./plans/features/2026-07-05-usesse-centralizado-design.md).
 
 ---
 
@@ -100,15 +120,18 @@ Detalle: `docs/specs/usesse-centralizado.md`.
 
 Dashboard + Estadísticas fusionados en una sola vista (3 `MetricCard`, Ventas por Hora, Top
 Productos, Donut de pagos, Hora Pico, Comparativa), `Ticket Promedio` eliminado de todos lados,
-código/tabs muertos sacados. Detalle: `docs/specs/simplificar-dashboard-admin.md`.
+código/tabs muertos sacados.
+
+📁 Docs: [`specs/features/simplificar-dashboard-admin.md`](./specs/features/simplificar-dashboard-admin.md).
 
 ---
 
 ## Feature — Simplificar Historial de Noches 📉 *(completa)*
 
 De 8 tarjetas + 2 widgets a 3 `MetricCard` + Trago Estrella + un único selector de detalle/
-comparación (reemplaza Comparador + tabla paginada + popup). Detalle:
-`docs/specs/simplificar-historial-noches.md`.
+comparación (reemplaza Comparador + tabla paginada + popup).
+
+📁 Docs: [`specs/features/simplificar-historial-noches.md`](./specs/features/simplificar-historial-noches.md).
 
 ---
 
@@ -117,15 +140,20 @@ comparación (reemplaza Comparador + tabla paginada + popup). Detalle:
 Sin noche abierta, el Dashboard muestra los datos reales de la última noche cerrada (sin
 "-100%" engañoso); la torta de canales ya no pinta colores con total $0; el detalle de una noche
 en Historial suma Tickets Emitidos/Top Trago/Duración y no repite el bloque de sesiones cuando
-hubo una sola. Detalle: `docs/specs/dashboard-sin-noche-abierta.md`.
+hubo una sola.
+
+📁 Docs: [`specs/features/dashboard-sin-noche-abierta.md`](./specs/features/dashboard-sin-noche-abierta.md),
+plan: [`plans/features/2026-07-14-dashboard-sin-noche-abierta-design.md`](./plans/features/2026-07-14-dashboard-sin-noche-abierta-design.md).
 
 ---
 
 ## Feature — Reemplazar export CSV por PDF profesional 📄 *(completa)*
 
 Un solo botón "Exportar" (Historial de Noches) genera un PDF con `@react-pdf/renderer` (portada
-con logo, facturación semanal/mensual, detalle noche por noche) en vez de CSV. Detalle:
-`docs/specs/export-pdf-historial.md`.
+con logo, facturación semanal/mensual, detalle noche por noche) en vez de CSV.
+
+📁 Docs: [`specs/features/export-pdf-historial.md`](./specs/features/export-pdf-historial.md),
+plan: [`plans/features/2026-07-14-export-pdf-historial-design.md`](./plans/features/2026-07-14-export-pdf-historial-design.md).
 
 ---
 
@@ -141,7 +169,14 @@ con `e2e-playwright-tester` al cerrarse, y esa cobertura se considera suficiente
 ## Fase 5 — Pulir UI de caja ⚡ *(completa)*
 
 Cobro en caja más rápido: buscador con autocompletar, atajos de teclado (Enter/1-2-3/Monto
-exacto), delay artificial de 800ms sacado. Detalle: `docs/specs/pulir-ui-caja.md`.
+exacto), delay artificial de 800ms sacado.
+
+📁 Docs: [`specs/05-ui-caja/`](./specs/05-ui-caja/) —
+[`pulir-ui-caja.md`](./specs/05-ui-caja/pulir-ui-caja.md) (completa),
+[`adaptacion-caja-tablet.md`](./specs/05-ui-caja/adaptacion-caja-tablet.md) (`draft`, con
+[plan](./plans/05-ui-caja/2026-07-13-adaptacion-caja-tablet-design.md)).
+
+- [ ] **Adaptación de `/caja` a tablet + permiso `openNight`** — spec en `draft`, sin implementar.
 
 ---
 
@@ -154,12 +189,17 @@ explícitamente afuera de esta ronda.
 Resuelto: atomicidad del canje de ticket (R3), hardening de Kong/demo keys (R7), deuda
 estructural de Fase 2, restore de emergencia desde Supabase Cloud, `cash_sales` eliminado (feature
 muerta, nunca conectada a la UI), `audit_logs` aplicado en cloud (R13), y 15 campos/2 componentes
-sin consumidor eliminados de `useAdminAnalytics`/`lib/analytics.ts` (R12). Detalle:
-`docs/specs/atomicidad-canje-ticket.md`, `docs/specs/hardening-kong-demo-keys.md`,
-`docs/specs/restaurar-backup-desde-cloud.md`.
+sin consumidor eliminados de `useAdminAnalytics`/`lib/analytics.ts` (R12).
 
-- [ ] **Limpieza de lint a nivel repo** (R11) → spec
-  [`limpieza-lint-repo.md`](./specs/limpieza-lint-repo.md).
+📁 Docs: [`specs/deuda-pre-fase-6/`](./specs/deuda-pre-fase-6/) —
+[`atomicidad-canje-ticket.md`](./specs/deuda-pre-fase-6/atomicidad-canje-ticket.md),
+[`hardening-kong-demo-keys.md`](./specs/deuda-pre-fase-6/hardening-kong-demo-keys.md),
+[`restaurar-backup-desde-cloud.md`](./specs/deuda-pre-fase-6/restaurar-backup-desde-cloud.md),
+[`activar-sync-cloud.md`](./specs/deuda-pre-fase-6/activar-sync-cloud.md).
+La deuda estructural de Fase 2 vive con su fase:
+[`specs/02-auditoria-api/deuda-estructural-fase2.md`](./specs/02-auditoria-api/deuda-estructural-fase2.md).
+
+- [ ] **Limpieza de lint a nivel repo** (R11) — la spec todavía no se escribió.
 
 > 📌 Desde el 2026-07-21, el grueso del trabajo pre-Fase 6 es la **remediación de MP** y la **gestión
 > de Posnets** (las dos secciones que siguen), no esta lista.
@@ -173,9 +213,16 @@ webhooks) + sesiones de caja, **sin revisión**. Una auditoría en profundidad e
 altos**: cobros duplicables, la caja dependiendo de Supabase Cloud para cobrar, cobros MP invisibles
 en la conciliación, y la caja bloqueándose sola. No era desplegable en el boliche.
 
+📁 Docs: [`specs/mercadopago/`](./specs/mercadopago/) + [`plans/mercadopago/`](./plans/mercadopago/)
+(y la doc de referencia de la API en [`docs/mp/`](./mp/) y [`docs/fases-mp/`](./fases-mp/)).
+
 **Spec** (fuente de verdad, con los 6 entregables y sus criterios):
-[`remediacion-integracion-mp.md`](./specs/remediacion-integracion-mp.md).
-Log de deuda encontrada durante la implementación: [`deuda-remediacion-mp.md`](./plans/deuda-remediacion-mp.md).
+[`remediacion-integracion-mp.md`](./specs/mercadopago/remediacion-integracion-mp.md).
+Contexto: [`integracion-mp.md`](./specs/mercadopago/integracion-mp.md) (arquitectura de alto nivel)
+y [`cobro-posnet-mercadopago.md`](./specs/mercadopago/cobro-posnet-mercadopago.md) (cobro Posnet).
+Log de deuda encontrada durante la implementación:
+[`deuda-remediacion-mp.md`](./plans/mercadopago/deuda-remediacion-mp.md); plan original:
+[`plan-implementacion-mp.md`](./plans/mercadopago/plan-implementacion-mp.md).
 
 | PR | Contenido | Estado |
 |---|---|---|
@@ -186,11 +233,28 @@ Log de deuda encontrada durante la implementación: [`deuda-remediacion-mp.md`](
 | 5 | Conciliación: los cobros MP suben a la nube al cerrar la noche | ⏳ pendiente |
 | 6 | Sesiones de caja (que hoy se auto-bloquean) + cableado del CRUD de PDVs + docs | ⏳ pendiente |
 
-> 🔴 **Bloqueo actual (2026-07-21)**: el gate del PR 3 (cobro real de $15) no se puede correr porque
-> **cambiaron el Posnet físico** y el aparato nuevo todavía no está asociado a la cuenta de MP del
-> dueño — pide la clave de seguridad de 4 dígitos del equipo anterior para cerrar sesión. Se pidió
-> la clave al dueño del boliche. El PR 4 tiene el mismo gate (con la red a Cloud cortada), así que
-> esto bloquea la validación en vivo de ambos.
+> 🔴 **Bloqueo actual (2026-07-21) — es un problema de cuentas, no del aparato.** El gate del PR 3
+> (cobro real de $15) no se puede correr porque **cambiaron el Posnet físico** y el aparato nuevo
+> **pertenece al establecimiento del dueño del boliche**, mientras que Cocktrail cobra hoy con la
+> **cuenta personal de prueba** de Manuel (seller `1517393956`). Diagnóstico verificado:
+>
+> - El device nuevo **no figura** en `GET /point/integration-api/devices` — consultado con el token
+>   legacy del `.env` **y** con el del seller vinculado por OAuth; en ambos aparece solo el viejo.
+> - Al configurarlo, la app de MP responde *"Tu cuenta no tiene permiso para iniciar sesión — Podés
+>   ingresar usando una cuenta vinculada a este establecimiento"*. Cerrar sesión no alcanza (ya se
+>   hizo, con la clave de 4 dígitos que pasó el dueño): el lector sigue atado a ese establecimiento.
+>
+> **Regla que hay que respetar de acá en más: el Posnet y Cocktrail tienen que estar bajo la misma
+> cuenta de Mercado Pago.** Un device no se "muda" de cuenta desde la app.
+>
+> **Salida** (que además es lo que hay que hacer para producción, porque la plata tiene que entrar a
+> la cuenta del boliche): loguear el lector con la cuenta del dueño y **vincular Cocktrail a esa
+> cuenta** por OAuth desde `/admin` → Pagos. ⚠️ **Antes de vincular hay que limpiar las filas de
+> sellers viejas** — por R21 vincular acumula y gana el más viejo, así que la cuenta nueva quedaría
+> ignorada y el sistema seguiría cobrando con la vieja **en silencio**.
+>
+> El PR 4 tiene el mismo gate (con la red a Cloud cortada), así que esto bloquea la validación en
+> vivo de ambos.
 
 ---
 
@@ -232,6 +296,10 @@ el camino "device vinculado en la base → el cobro va a ese device".
 - [ ] El botón "Test $15" debe disparar al Posnet de la fila, no siempre al de la env (ya estaba como
   criterio G de la remediación, PR 6).
 
+📁 Docs: sin spec propia todavía — el contexto está en
+[`specs/mercadopago/`](./specs/mercadopago/) (PR 6 de
+[`remediacion-integracion-mp.md`](./specs/mercadopago/remediacion-integracion-mp.md)).
+
 > **Relación con la remediación**: el PR 6 de la spec de MP cablea la pantalla de PDVs; esta feature
 > le da la funcionalidad que hoy no existe. Conviene hacerlas juntas o esta inmediatamente después.
 > **Va antes de la Fase 6** porque entregar un producto empaquetado donde cambiar un Posnet exige
@@ -243,6 +311,10 @@ el camino "device vinculado en la base → el cobro va a ese device".
 
 **Objetivo**: que la **PC del boliche arranque el sistema sola al prenderse** y la tablet entre por la
 red, sin que nadie instale Docker ni Node ni levante nada a mano (ver "Topología del deploy" más abajo).
+
+📁 Docs: [`specs/06-empaquetado/`](./specs/06-empaquetado/) —
+[`empaquetado-windows.md`](./specs/06-empaquetado/empaquetado-windows.md) (`draft`), con
+[plan](./plans/06-empaquetado/2026-07-13-empaquetado-windows-design.md).
 
 > 🔑 **Decisión clave (bloqueante del empaquetado): sacar Docker.**
 > Hoy el stack corre con `docker compose` (Postgres + PostgREST + Kong). **Node sí se puede *embeber***
@@ -346,12 +418,12 @@ git.
 
 > Los riesgos R17-R21 salieron de la auditoría y de la implementación de la remediación MP. El
 > inventario **completo** de deuda encontrada (con file:line y contexto) vive en
-> [`docs/plans/deuda-remediacion-mp.md`](./plans/deuda-remediacion-mp.md); acá suben solo los que
+> [`docs/plans/mercadopago/deuda-remediacion-mp.md`](./plans/mercadopago/deuda-remediacion-mp.md); acá suben solo los que
 > tienen impacto transversal o de seguridad.
 
 | # | Riesgo | Impacto | Estado |
 |---|---|---|---|
-| R8 | La impresora térmica **no reporta "sin papel"** — verificado en vivo: con el rollo vacío/sin papel, `GET /api/printer/status` sigue devolviendo `connected: true` y la venta marca `printed: true` aunque no salió nada. La impresora no expone protocolo bidireccional confiable (por eso se evitó CUPS), así que el software solo confirma que el device node existe y acepta la escritura, no que el papel esté presente. | La cajera puede creer que el ticket salió cuando en realidad no imprimió nada (papel agotado). | Abierto — mitigación operativa por ahora: revisar visualmente el rollo antes de empezar el turno. Una detección real requeriría lectura de estado bidireccional (fuera de alcance, ver plan técnico de `docs/specs/impresora-termica.md`). |
+| R8 | La impresora térmica **no reporta "sin papel"** — verificado en vivo: con el rollo vacío/sin papel, `GET /api/printer/status` sigue devolviendo `connected: true` y la venta marca `printed: true` aunque no salió nada. La impresora no expone protocolo bidireccional confiable (por eso se evitó CUPS), así que el software solo confirma que el device node existe y acepta la escritura, no que el papel esté presente. | La cajera puede creer que el ticket salió cuando en realidad no imprimió nada (papel agotado). | Abierto — mitigación operativa por ahora: revisar visualmente el rollo antes de empezar el turno. Una detección real requeriría lectura de estado bidireccional (fuera de alcance, ver plan técnico de `docs/specs/01-tickets-impresora/impresora-termica.md`). |
 | R11 | `pnpm --filter web lint` sobre **todo** `apps/web` reporta errores preexistentes (reglas `react-hooks/refs`, `react-hooks/purity`, `react-hooks/set-state-in-effect` de una versión más estricta de `eslint-plugin-react-hooks`/reglas del React Compiler). Persisten en: `apps/carta/page.tsx`, `LogsSection.tsx`, `AnimatedNumber.tsx`, `Sparkline.tsx`, `Toast.tsx`, `orderStatus.ts`. No es una regresión de ninguna fase — las specs siempre corrieron `eslint` solo sobre los archivos tocados, nunca `eslint .` sobre el árbol completo. | Cosmético/mantenibilidad — no rompe build ni tests, pero el criterio "`eslint` en 0" de las specs nunca se cumplió a nivel repo completo. | En progreso — spec `limpieza-lint-repo` |
 | R14 | QR real de Mercado Pago (mostrar un código escaneable, vía la Orders API con `type: "qr"` + `external_pos_id`) no está implementado — confirmado con la doc oficial de MP que el Posnet físico (Point Integration API) no puede mostrar QR en su pantalla; es un producto distinto atado a otra superficie. | Ninguno hoy (se sacó la opción de UI que prometía algo que no existía). Si se quiere QR real hace falta una pantalla nueva donde mostrarlo y probablemente credenciales/config adicionales. | Abierto — ver también Fase 7 ("Mercado Pago online"), que ya cubre esto como feature futura. |
 | R15 | `modules/mercadopago` sigue sobre la Payment Intents API (legacy) de Mercado Pago, no la Orders API moderna que MP recomienda para nuevas features. | Ninguno funcional hoy — el flujo probado en producción con el Posnet real sigue andando. Riesgo a futuro si MP deprecara la API legacy. | Abierto — migración deliberadamente no abordada; el flujo actual es el único probado en vivo y migrar el contrato completo no se justificaba en esa iteración. |
@@ -373,4 +445,7 @@ Para features nuevas usamos **Spec-Driven Development nativo** (sin herramientas
 4. `/tasks` → checklist accionable.
 5. Implementar (Plan Mode de Claude Code para los cambios grandes).
 
-Ver `docs/specs/README.md` y los comandos en `.claude/commands/`.
+Las specs nacen en la raíz de `docs/specs/` y se archivan en la subcarpeta de su fase cuando la
+fase cierra (mismo criterio para los planes en `docs/plans/`).
+
+Ver [`docs/specs/README.md`](./specs/README.md) y los comandos en `.claude/commands/`.

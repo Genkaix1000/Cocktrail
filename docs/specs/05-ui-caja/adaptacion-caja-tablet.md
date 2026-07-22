@@ -2,7 +2,7 @@
 
 **Estado**: draft
 **Fecha**: 2026-07-13
-**Diseño/Plan**: [`docs/plans/2026-07-13-adaptacion-caja-tablet-design.md`](../plans/2026-07-13-adaptacion-caja-tablet-design.md)
+**Diseño/Plan**: [`docs/plans/05-ui-caja/2026-07-13-adaptacion-caja-tablet-design.md`](../../plans/05-ui-caja/2026-07-13-adaptacion-caja-tablet-design.md)
 
 ---
 

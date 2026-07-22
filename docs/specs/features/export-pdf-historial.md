@@ -127,7 +127,7 @@ CSV deja de existir como opción.
 Ninguna — todas las decisiones de alcance y diseño (formato PDF vs. CSV, librería
 `@react-pdf/renderer`, paleta blanca con acentos de marca, estructura del documento, qué datos
 entran en cada tabla) ya se validaron con el usuario en la sesión de brainstorming previa a esta
-spec (ver `docs/plans/2026-07-14-export-pdf-historial-design.md`).
+spec (ver `docs/plans/features/2026-07-14-export-pdf-historial-design.md`).
 
 ---
 

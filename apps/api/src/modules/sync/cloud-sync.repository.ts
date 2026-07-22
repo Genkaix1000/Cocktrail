@@ -7,7 +7,7 @@ import type { Ticket } from "../tickets/tickets.repository.js";
  * local↔cloud — la única parte de `SyncService` que legítimamente no puede modelarse con
  * los repos locales ya auditados (dirección de lectura opuesta para pull, bulk-upsert de
  * filas ya existentes para push, upsert de filas ya-en-forma-cloud sin semántica de
- * dominio para la escritura local del pull). Ver docs/specs/deuda-estructural-fase2.md
+ * dominio para la escritura local del pull). Ver docs/specs/02-auditoria-api/deuda-estructural-fase2.md
  * (punto 2) y la nota del agente `supabase-expert` de esa sesión.
  */
 

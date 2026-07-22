@@ -190,7 +190,7 @@ export default function AdminClient({
   // en vivo (quedan en $0, comparados contra la última noche daría "-100%"
   // engañoso) — en ese caso usa `historyEvents[0]` (última noche cerrada,
   // ya trae `totals`/`orders` completos) como fuente. Con noche abierta, sin
-  // cambios (comportamiento de siempre). Ver docs/specs/dashboard-sin-noche-abierta.md.
+  // cambios (comportamiento de siempre). Ver docs/specs/features/dashboard-sin-noche-abierta.md.
   const isNightOpen = event?.status === "activo";
   const lastNight = historyEvents[0] ?? null;
   const dashboardTotals = useMemo(

@@ -220,7 +220,7 @@ Es lo único que sale de orden. Sin suite confiable no hay forma de verificar qu
 
 ### D8 — Esto va antes del empaquetado
 
-El runner de migraciones que sale de acá es insumo de la Fase 6: `docs/specs/empaquetado-windows.md` depende de que exista una forma de actualizar una instalación desplegada.
+El runner de migraciones que sale de acá es insumo de la Fase 6: `docs/specs/06-empaquetado/empaquetado-windows.md` depende de que exista una forma de actualizar una instalación desplegada.
 
 ### D9 — El modelo es de UN solo seller: vincular debe REEMPLAZAR, y debe existir "Desvincular" (a partir de A17/A18)
 

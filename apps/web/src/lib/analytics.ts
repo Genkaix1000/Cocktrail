@@ -236,7 +236,7 @@ const RECORDS_WINDOW_DAYS = 30;
  * Subconjunto de noches dentro de los últimos `windowDays`, con fallback al
  * historial completo si no hay ninguna en la ventana — usado por los
  * récords y por "Promedio Noche" para no promediar/rankear contra eventos
- * de hace meses (ver docs/specs/simplificar-dashboard-admin.md).
+ * de hace meses (ver docs/specs/features/simplificar-dashboard-admin.md).
  */
 export function filterRecentNights(
   historyEvents: EventSummary[],
@@ -255,7 +255,7 @@ export function filterRecentNights(
  * mes flojo), cae al historial completo para no mostrar "sin datos"
  * habiendo datos más viejos. (Mejor/Peor Noche y Noche Más Larga se
  * eliminaron — no cambiaban ninguna decisión, ver
- * docs/specs/simplificar-historial-noches.md).
+ * docs/specs/features/simplificar-historial-noches.md).
  */
 export function computeNightRecords(
   historyEvents: EventSummary[],

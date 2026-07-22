@@ -48,7 +48,7 @@ function vibrate(pattern: number | number[]) {
  *
  * Extraído de BarraClient.tsx como unidad atómica — mezcla localStorage,
  * `navigator.onLine`/`navigator.vibrate` y un `setInterval` de reintento, así
- * que no se descompone en piezas más chicas (ver docs/specs/auditoria-web.md,
+ * que no se descompone en piezas más chicas (ver docs/specs/03-auditoria-web/auditoria-web.md,
  * tarea 9).
  *
  * `recentScans`/`deliveredCount` NO viven acá: los mutan también los handlers

@@ -12,7 +12,7 @@ type Props = {
   isBosko: boolean;
   // Puente Historial → Logs: mismo callback que antes vivía en el popup de
   // HistorialSection.tsx — este componente absorbió ese contenido al
-  // unificarse con el selector (ver docs/specs/simplificar-historial-noches.md).
+  // unificarse con el selector (ver docs/specs/features/simplificar-historial-noches.md).
   onRedirectToLogs: (ts: number) => void;
 };
 
@@ -139,7 +139,7 @@ const NONE = -1;
  * (totales + sesiones individuales, lo que antes vivía en un popup aparte),
  * elegir una 2da noche muestra la comparación lado a lado. Reemplaza la
  * tabla "Detalle por Noche" + su popup (ver
- * docs/specs/simplificar-historial-noches.md).
+ * docs/specs/features/simplificar-historial-noches.md).
  */
 export default function NightComparator({ nights, isBosko, onRedirectToLogs }: Props) {
   const { accentColor, accentBg, accentBorder } = getAccentColors(isBosko);

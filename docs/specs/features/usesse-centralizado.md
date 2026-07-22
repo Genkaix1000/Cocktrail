@@ -2,7 +2,7 @@
 
 **Estado**: done
 **Fecha**: 2026-07-05
-**Diseño validado**: [`docs/plans/2026-07-05-usesse-centralizado-design.md`](../plans/2026-07-05-usesse-centralizado-design.md)
+**Diseño validado**: [`docs/plans/features/2026-07-05-usesse-centralizado-design.md`](../../plans/features/2026-07-05-usesse-centralizado-design.md)
 
 ---
 
@@ -305,7 +305,7 @@ tenían (verificadas más arriba en cada shell, antes de llegar al hook).
   actual — no correspondían a ningún problema real).
 - [x] Actualizado `docs/ROADMAP.md`: el hallazgo "`useSSE` centralizado" pasa de deuda a
   resuelto, referenciando esta feature.
-- [x] Marcado `docs/specs/usesse-centralizado.md` como `estado: done`.
+- [x] Marcado `docs/specs/features/usesse-centralizado.md` como `estado: done`.
 - [x] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
 
 > Implementar con **Plan Mode** dado que toca el estado real-time de 2 shells en producción. Ir

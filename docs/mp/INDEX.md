@@ -18,8 +18,8 @@
 | [`api-point-devices.md`](./api-point-devices.md) | Point Integration API legacy — sistema actual de payment-intents, listar devices |
 | [`api-payments.md`](./api-payments.md) | Consultar un pago por ID (`GET /v1/payments/{id}`) — usado al resolver `CONFIRMATION_REQUIRED` |
 | [`api-orders-raw.md`](./api-orders-raw.md) | 📄 Documentación oficial completa de MP (raw) — leer solo si necesitás un parámetro específico que no está en los archivos destilados |
-| [`../specs/integracion-mp.md`](../specs/integracion-mp.md) | Arquitectura de alto nivel: cómo encajan OAuth, Store, POS, QR y Point en Cocktrail |
-| [`../specs/cobro-posnet-mercadopago.md`](../specs/cobro-posnet-mercadopago.md) | Spec técnica completa del módulo de cobro Posnet: estados, `CONFIRMATION_REQUIRED`, tareas |
+| [`../specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) | Arquitectura de alto nivel: cómo encajan OAuth, Store, POS, QR y Point en Cocktrail |
+| [`../specs/mercadopago/cobro-posnet-mercadopago.md`](../specs/mercadopago/cobro-posnet-mercadopago.md) | Spec técnica completa del módulo de cobro Posnet: estados, `CONFIRMATION_REQUIRED`, tareas |
 
 ---
 
@@ -46,7 +46,7 @@
 │    └─ → api-payments.md
 │
 └─ Entender la arquitectura general de la integración
-     └─ → ../specs/integracion-mp.md
+     └─ → ../specs/mercadopago/integracion-mp.md
 ```
 
 ---

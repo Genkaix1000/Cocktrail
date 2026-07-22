@@ -1,6 +1,6 @@
 # Plan MP — Fase 2: Resolución de Credenciales
 
-> **Docs relevantes**: [`docs/mp/INDEX.md`](../mp/INDEX.md), [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md)
+> **Docs relevantes**: [`docs/mp/INDEX.md`](../mp/INDEX.md), [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md)
 
 
 ### A) ¿Qué se hace?

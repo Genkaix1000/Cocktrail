@@ -2,7 +2,7 @@
 -- Correr:  docker exec -i cocktrail-db psql -U postgres -d <db> -f - < supabase/tests/phase0_schema_test.sql
 -- Requiere la extensión pgtap (migración 20260715000600_pgtap_extension.sql).
 --
--- Notas vs. plan-implementacion-mp.md § Fase 0 C.6:
+-- Notas vs. docs/plans/mercadopago/plan-implementacion-mp.md § Fase 0 C.6:
 --   * plan(32): el plan indicaba 31 pero enumera 32 asserts.
 --   * Firmas pgTAP corregidas respecto al pseudo-SQL del plan:
 --       - has_table(schema, table, desc)               [el plan usaba la forma de 2 args]

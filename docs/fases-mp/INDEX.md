@@ -1,7 +1,7 @@
 # Fases — Plan de Implementación MP
 
 > **Punto de partida**: ante cualquier tarea de MP, leer primero [`docs/mp/INDEX.md`](../mp/INDEX.md).  
-> Este plan se basa en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md).  
+> Este plan se basa en [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md).  
 > Cada fase depende de la anterior — ejecutar en orden.
 
 ---

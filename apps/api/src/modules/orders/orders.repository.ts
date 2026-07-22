@@ -14,7 +14,7 @@ export interface OrdersRepository {
    * `expectedStatus`, si se pasa, condiciona el UPDATE (`WHERE status = expectedStatus`) para
    * que la escritura sea atómica ante transiciones concurrentes — devuelve `undefined` (no
    * `Order`) si la fila no matcheaba esa condición en el momento del UPDATE, en vez de aplicar
-   * la escritura igual. Ver docs/specs/atomicidad-canje-ticket.md.
+   * la escritura igual. Ver docs/specs/deuda-pre-fase-6/atomicidad-canje-ticket.md.
    */
   updateStatus(
     id: string,

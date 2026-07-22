@@ -3,7 +3,7 @@
 **Estado**: done
 **Fecha**: 2026-07-04
 
-> Continuación de la Fase 3 (`docs/specs/auditoria-web.md`, estado `done`, rama
+> Continuación de la Fase 3 (`docs/specs/03-auditoria-web/auditoria-web.md`, estado `done`, rama
 > `refactor/auditoria-web`): esa fase modularizó los 3 god-components
 > (`AdminClient`/`CajaClient`/`BarraClient`) pero dejó fuera de alcance ~22 componentes que ya
 > existían en `apps/web/src/components/` antes de esa auditoría. Esta spec cierra esa brecha antes
@@ -16,7 +16,7 @@
 La Fase 3 dejó `apps/web/src/components/` con dos clases de componentes: los extraídos durante esa
 fase (con test de caracterización y auditoría SOLID vía `architect-reviewer`/
 `expert-react-frontend-engineer`) y ~22 componentes preexistentes que nunca se tocaron —
-explícitamente listados como fuera de alcance en `docs/specs/auditoria-web.md` ("Fuera de alcance").
+explícitamente listados como fuera de alcance en `docs/specs/03-auditoria-web/auditoria-web.md` ("Fuera de alcance").
 Ninguno de estos tiene test, y ninguno pasó por revisión arquitectónica.
 
 Entre ellos hay componentes que tocan los flujos más sensibles del sistema: `CloseNightModal.tsx`
@@ -63,7 +63,7 @@ deuda quedó anotada pero nadie volvió a tocarla.
 ## Criterios de aceptación
 
 - **Dado** cualquiera de los ~22 componentes listados en "Fuera de alcance" de
-  `docs/specs/auditoria-web.md`, **cuando** se corre `pnpm --filter cocktrail-app test`, **entonces**
+  `docs/specs/03-auditoria-web/auditoria-web.md`, **cuando** se corre `pnpm --filter cocktrail-app test`, **entonces**
   existe al menos un test de caracterización para ese componente (servicios de
   `apps/web/src/services/*.ts` mockeados, sin pegarle a la API real) — salvo `barra/DevPanel.tsx`,
   que se mantiene sin test por no correr en producción (mismo criterio ya aceptado en Fase 3).

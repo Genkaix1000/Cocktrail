@@ -1,6 +1,6 @@
 # Deuda encontrada durante la remediación MP
 
-> Log de trabajo de la implementación de `docs/specs/remediacion-integracion-mp.md`.
+> Log de trabajo de la implementación de `docs/specs/mercadopago/remediacion-integracion-mp.md`.
 > Cada deuda/hallazgo nuevo que aparezca durante los 6 PRs se anota acá; en el PR 6
 > se vuelca al `docs/ROADMAP.md` (lo que amerite) y este archivo se cierra.
 >

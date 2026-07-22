@@ -7,8 +7,8 @@
 
 ## Contexto
 
-Dos specs previas (`docs/specs/simplificar-dashboard-admin.md`,
-`docs/specs/simplificar-historial-noches.md`, ambas `done`) ya redujeron el Dashboard de
+Dos specs previas (`docs/specs/features/simplificar-dashboard-admin.md`,
+`docs/specs/features/simplificar-historial-noches.md`, ambas `done`) ya redujeron el Dashboard de
 `/admin` y el Historial de Noches a su forma actual. Esta vuelta ataca 3 problemas puntuales
 detectados en uso real (capturas del dashboard con noche cerrada, ver conversación de
 brainstorming):

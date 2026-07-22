@@ -112,7 +112,7 @@ describe("PagosSection", () => {
     expect(screen.getByText("bosko@example.com")).toBeInTheDocument();
   });
 
-  // ── SKIP DELIBERADO (PR 1 de docs/specs/remediacion-integracion-mp.md) ──
+  // ── SKIP DELIBERADO (PR 1 de docs/specs/mercadopago/remediacion-integracion-mp.md) ──
   // Estos 6 tests prueban la UI de PDVs/Posnets que D5 migra de PagosSection
   // a PdvSection. NO se arreglan acá: se MIGRAN a PdvSection.test.tsx en el
   // PR 6 (cableado de PdvSection), donde se des-skipean contra la UI real.

@@ -68,7 +68,7 @@ export function createSystemController(
 
   // POST /api/system/restore — solo admin (blast radius mayor que /sync: gana cloud en
   // conflicto, puede pisar datos locales recientes). Re-autentica con contraseña, mismo
-  // patrón que /shutdown. Ver docs/specs/restaurar-backup-desde-cloud.md.
+  // patrón que /shutdown. Ver docs/specs/deuda-pre-fase-6/restaurar-backup-desde-cloud.md.
   router.post("/restore", authMiddleware, requireRole("admin"), async (req, res, next) => {
     try {
       const { password } = req.body;

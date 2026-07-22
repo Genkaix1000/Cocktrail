@@ -4,7 +4,7 @@
 **Fecha**: 2026-07-01
 
 > Fase 3 de la iniciativa de auditoría (ver `docs/ROADMAP.md`): **API** (Fase 2, completa,
-> `docs/specs/auditoria-api.md`) → **Web** (esta spec) → **E2E post-refactor** (Fase 4, pendiente).
+> `docs/specs/02-auditoria-api/auditoria-api.md`) → **Web** (esta spec) → **E2E post-refactor** (Fase 4, pendiente).
 
 ---
 
@@ -501,7 +501,7 @@ Hallazgos estructurales dejados sin resolver a propósito (fuera de alcance de e
   (`useSSE` centralizado en los 3 componentes, `activeTab === "estadisticas"` inalcanzable desde la
   UI, `dynamicAlerts` sin usar en `DashboardSection`, `ToastItem` con timer que se resetea,
   `renderSidebar` sin extraer a componente en Caja/Barra).
-- [x] Cambiar el estado de esta spec (`docs/specs/auditoria-web.md`) de `approved` a `done`.
+- [x] Cambiar el estado de esta spec (`docs/specs/03-auditoria-web/auditoria-web.md`) de `approved` a `done`.
 
 ---
 

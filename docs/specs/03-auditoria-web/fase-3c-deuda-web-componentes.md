@@ -2,7 +2,7 @@
 
 **Estado**: done
 **Fecha**: 2026-07-05
-**Diseño validado**: [`docs/plans/2026-07-05-fase-3c-design.md`](../plans/2026-07-05-fase-3c-design.md)
+**Diseño validado**: [`docs/plans/03-auditoria-web/2026-07-05-fase-3c-design.md`](../../plans/03-auditoria-web/2026-07-05-fase-3c-design.md)
 
 ---
 
@@ -378,7 +378,7 @@ Sin cambios de roles ni `UserPermissions`. `UsersTable`/`UserFormDrawer` (extra�
   3 mecánicos movidos de "deuda" a "resuelto" en la sección de Fase 3B, documentada la
   eliminación de `CashSaleModal`/`cash-sales.service.ts` como decisión de esta fase, y agregado
   R11 (deuda de lint preexistente descubierta, sin relación con Fase 3C).
-- [x] Marcado `docs/specs/fase-3c-deuda-web-componentes.md` como `estado: done`.
+- [x] Marcado `docs/specs/03-auditoria-web/fase-3c-deuda-web-componentes.md` como `estado: done`.
 - [x] Commit de cierre siguiendo la convención del repo (sin co-author de Claude).
 
 > Implementar con **Plan Mode** dado el tamaño del bloque 4 (9 modales + 2 god-components). Ir

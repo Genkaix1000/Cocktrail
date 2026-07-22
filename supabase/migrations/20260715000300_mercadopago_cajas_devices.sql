@@ -1,6 +1,6 @@
 -- 20260715000300_mercadopago_cajas_devices.sql
 -- Vincula cada caja con su terminal Point física.
--- Ver docs/specs/integracion-mp.md § "Modelo de datos" + docs/mp/api-point-devices.md.
+-- Ver docs/specs/mercadopago/integracion-mp.md § "Modelo de datos" + docs/mp/api-point-devices.md.
 
 CREATE TABLE IF NOT EXISTS mercadopago_cajas_devices (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

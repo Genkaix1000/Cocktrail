@@ -9,7 +9,7 @@ Implementar el flujo OAuth con PKCE para que Cocktrail obtenga un `access_token`
 
 ### B) ¿Por qué?
 
-Es el Paso 1 del onboarding definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Flujo completo de onboarding". Sin el token de Bosko no se puede crear sucursales, cajas ni cobros — todo recurso MP se crea "en nombre de" Bosko usando su token. El refresh proactivo (5–7 días antes del vencimiento) evita que una sesión activa se caiga en medio de un turno, y el `refresh_token` es rotativo y de un solo uso: si no se persiste el nuevo inmediatamente, la sesión queda invalidada (ver [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Refresh Automático de Token").
+Es el Paso 1 del onboarding definido en [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Flujo completo de onboarding". Sin el token de Bosko no se puede crear sucursales, cajas ni cobros — todo recurso MP se crea "en nombre de" Bosko usando su token. El refresh proactivo (5–7 días antes del vencimiento) evita que una sesión activa se caiga en medio de un turno, y el `refresh_token` es rotativo y de un solo uso: si no se persiste el nuevo inmediatamente, la sesión queda invalidada (ver [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Refresh Automático de Token").
 
 
 ### C) Implementación

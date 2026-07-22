@@ -31,7 +31,7 @@ const REGISTRO_FALLIDO_MSG =
   "El cobro se realizó correctamente pero no se pudo registrar la venta. Quedó guardada para reintentar — no volvés a cobrar.";
 
 /** Métodos que se cobran vía Posnet. Hoy solo "debito" — el Posnet físico no puede
- * diferenciar un cobro con QR del resto (ver docs/specs/cobro-posnet-mercadopago.md). */
+ * diferenciar un cobro con QR del resto (ver docs/specs/mercadopago/cobro-posnet-mercadopago.md). */
 type PosnetMethod = Exclude<PaymentMethod, "efectivo" | "qr">;
 
 type UseCheckoutArgs = {

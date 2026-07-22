@@ -4,7 +4,7 @@
 // DB-less no interpola env vars en `key-auth`, así que el render se hace ACÁ, en
 // el host, antes de levantar el stack — no dentro del container. Sin dependencias
 // nuevas (solo node:crypto/node:fs/node:child_process). Ver docs/DEPLOY.md y
-// docs/specs/hardening-kong-demo-keys.md.
+// docs/specs/deuda-pre-fase-6/hardening-kong-demo-keys.md.
 //
 // Uso:
 //   node supabase/generate-keys.mjs --demo      # keys demo públicas de siempre (dev local, default de onboarding)

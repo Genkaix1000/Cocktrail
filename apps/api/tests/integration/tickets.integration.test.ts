@@ -103,7 +103,7 @@ describe("POST /api/tickets/redeem (integración)", () => {
 
     // Promise.all (no secuencial): las dos requests llegan al backend prácticamente
     // al mismo tiempo — es la condición real que reproduce la carrera de
-    // docs/specs/atomicidad-canje-ticket.md, no un mock que serialice las llamadas.
+    // docs/specs/deuda-pre-fase-6/atomicidad-canje-ticket.md, no un mock que serialice las llamadas.
     const [res1, res2] = await Promise.all([
       request(app).post("/api/tickets/redeem").set("Cookie", admin1Cookie).send({ code: order.ticketCode }),
       request(app).post("/api/tickets/redeem").set("Cookie", admin2Cookie).send({ code: order.ticketCode }),

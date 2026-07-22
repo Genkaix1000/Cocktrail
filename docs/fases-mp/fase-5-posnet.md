@@ -8,7 +8,7 @@ Gestión de terminals Point/Posnet desde la sección **Posnets** en `PagosSectio
 
 ### B) ¿Por qué?
 
-El spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Decisiones tomadas" indica explícitamente: la Point API es un producto distinto para terminales físicas. La migración a Orders API `type: "point"` es deuda técnica futura. Los endpoints legacy (`POST /pos/intent`, `GET /device/status`, etc.) ya están implementados y funcionando — solo se refactorizaron para usar `CredentialsResolverService` (Fase 2).
+El spec [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Decisiones tomadas" indica explícitamente: la Point API es un producto distinto para terminales físicas. La migración a Orders API `type: "point"` es deuda técnica futura. Los endpoints legacy (`POST /pos/intent`, `GET /device/status`, etc.) ya están implementados y funcionando — solo se refactorizaron para usar `CredentialsResolverService` (Fase 2).
 
 Esta fase agrega la **gestión administrativa** de los Posnets sin tocar el flujo de cobro: registrar terminals con alias, vincularlas a PDVs, y verificar conectividad.
 

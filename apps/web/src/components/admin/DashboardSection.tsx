@@ -49,7 +49,7 @@ type Props = {
 /**
  * Vista "Dashboard/Monitoreo" del panel admin — fusiona lo que antes eran
  * "Monitoreo" + "Estadísticas" en una sola vista de resumen (ver
- * docs/specs/simplificar-dashboard-admin.md). Los valores derivados
+ * docs/specs/features/simplificar-dashboard-admin.md). Los valores derivados
  * (productRevenue, hourlyData, peakHour, etc.) salen de useAdminAnalytics.
  */
 export default function DashboardSection({
@@ -205,7 +205,7 @@ export default function DashboardSection({
 
           {/* Row 2: Charts and Products (Height Unified to h-[380px]) */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            {/* Ventas por Hora — solo pesos, sin toggle (ver docs/specs/simplificar-dashboard-admin.md) */}
+            {/* Ventas por Hora — solo pesos, sin toggle (ver docs/specs/features/simplificar-dashboard-admin.md) */}
             <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between h-[380px] shadow-lg">
               <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none shrink-0">
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">

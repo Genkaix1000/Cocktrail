@@ -1,6 +1,6 @@
 -- 20260715000200_mercadopago_cajas.sql
 -- Caja (POS) de MP por barra. Persiste store_id, external_pos_id y el QR estático.
--- Ver docs/specs/integracion-mp.md § "Modelo de datos" + docs/mp/api-stores-pos.md.
+-- Ver docs/specs/mercadopago/integracion-mp.md § "Modelo de datos" + docs/mp/api-stores-pos.md.
 
 CREATE TABLE IF NOT EXISTS mercadopago_cajas (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

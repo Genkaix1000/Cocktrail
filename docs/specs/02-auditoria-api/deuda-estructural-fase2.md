@@ -487,7 +487,7 @@ cada uno con `pnpm typecheck` + suite completa en verde antes de pasar al siguie
 - [x] `system.integration.test.ts` — confirmar que `POST /api/system/sync` sigue funcionando
   igual.
 - [x] **Verificar un cierre de noche end-to-end real contra Supabase Cloud** (mismo patrón que
-  `docs/specs/activar-sync-cloud.md`: abrir noche, vender, cerrar, confirmar `sync_status:
+  `docs/specs/deuda-pre-fase-6/activar-sync-cloud.md`: abrir noche, vender, cerrar, confirmar `sync_status:
   "synced"` y datos coincidentes local↔cloud) — con `supabase-expert` si hace falta, antes de dar
   este commit por cerrado. Es el punto de mayor superficie productiva real de los 5.
 - [x] `pnpm --filter cocktrail-api typecheck` + suite completa (unit + integration) en verde.

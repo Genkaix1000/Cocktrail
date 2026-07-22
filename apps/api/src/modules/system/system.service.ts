@@ -40,7 +40,7 @@ export type SystemStatus = {
 /**
  * Lógica de negocio de `/api/system` — antes vivía inline en los route handlers de
  * system.controller.ts (sin capa Service, la única excepción a Controller→Service→
- * Repository del resto del proyecto). Ver docs/specs/deuda-estructural-fase2.md (punto 4).
+ * Repository del resto del proyecto). Ver docs/specs/02-auditoria-api/deuda-estructural-fase2.md (punto 4).
  */
 export class SystemService {
   constructor(

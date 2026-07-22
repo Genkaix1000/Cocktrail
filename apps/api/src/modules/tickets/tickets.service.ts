@@ -73,7 +73,7 @@ export class TicketsService {
     // Double-spend check: fail-fast en memoria para el caso obvio no-concurrente (evita ir
     // a la base para un error claro). La protección real ante una carrera de canje real vive
     // en el UPDATE condicional de orders.updateStatus más abajo — ver
-    // docs/specs/atomicidad-canje-ticket.md.
+    // docs/specs/deuda-pre-fase-6/atomicidad-canje-ticket.md.
     if (ticket.redeemedAt) {
       const timeStr = new Date(ticket.redeemedAt).toLocaleTimeString("es-AR", {
         hour: "2-digit",
@@ -101,7 +101,7 @@ export class TicketsService {
     // "canjeado" con una orden que en el medio se canceló. markDelivered ya valida
     // order.status === "pendiente" con el mismo mensaje que antes vivía acá — TicketsService
     // no necesita conocer la máquina de estados de OrdersService. Ver
-    // docs/specs/atomicidad-canje-ticket.md y docs/specs/deuda-estructural-fase2.md.
+    // docs/specs/deuda-pre-fase-6/atomicidad-canje-ticket.md y docs/specs/02-auditoria-api/deuda-estructural-fase2.md.
     const updatedOrder = await this.ordersService.markDelivered(order.id, username, {
       deliveredByBar: options?.barCode,
       redeemMethod: options?.method ?? "scan",

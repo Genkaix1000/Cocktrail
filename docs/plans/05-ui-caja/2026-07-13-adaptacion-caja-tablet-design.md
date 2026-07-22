@@ -1,7 +1,7 @@
 # Plan Técnico — Adaptación de Caja para Tablet y Permisos
 
 **Fecha**: 2026-07-13
-**Spec de referencia**: [`docs/specs/adaptacion-caja-tablet.md`](../specs/adaptacion-caja-tablet.md)
+**Spec de referencia**: [`docs/specs/05-ui-caja/adaptacion-caja-tablet.md`](../../specs/05-ui-caja/adaptacion-caja-tablet.md)
 
 ---
 

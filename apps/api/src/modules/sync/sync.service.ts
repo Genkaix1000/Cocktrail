@@ -35,7 +35,7 @@ export class SyncService {
    * usersRepo.create()/drinksRepo.create()) — esos métodos hacen dual-write a cloud si
    * `supabaseCloud` está configurado, y este seed de datos demo nunca debe empujarse a
    * cloud (comportamiento preexistente, preservado a propósito — ver pregunta abierta 1
-   * de docs/specs/deuda-estructural-fase2.md). Usa el cliente local directo por eso, no
+   * de docs/specs/02-auditoria-api/deuda-estructural-fase2.md). Usa el cliente local directo por eso, no
    * es una excepción al espíritu de "reusar repos": es la escritura, no la lectura, la
    * que necesita evitar el side-effect de dual-write.
    */
@@ -223,7 +223,7 @@ export class SyncService {
    * (noches cerradas + sus pedidos/tickets + auditoría) y hace merge/upsert
    * por id en local — nunca destructivo, nunca borra nada que ya esté en local. Gana la
    * versión de cloud en conflicto. Pensado como recuperación de emergencia (botón manual en
-   * /admin), no como parte del sync automático. Ver docs/specs/restaurar-backup-desde-cloud.md.
+   * /admin), no como parte del sync automático. Ver docs/specs/deuda-pre-fase-6/restaurar-backup-desde-cloud.md.
    *
    * Nunca lanza para abortar todo: cada tabla se intenta independientemente, un fallo en una
    * no impide intentar las demás (criterio 7 de la spec — parcial persiste, sin rollback).
@@ -240,7 +240,7 @@ export class SyncService {
     }
 
     // Orden importa: night_events primero (gate real de integridad referencial para
-    // orders/tickets, ver docs/specs/restaurar-backup-desde-cloud.md).
+    // orders/tickets, ver docs/specs/deuda-pre-fase-6/restaurar-backup-desde-cloud.md).
     // Cada pull ya maneja sus propios errores internamente y no lanza — el try/catch acá
     // es defensa en profundidad ante un fallo inesperado, para que uno no tumbe al resto.
     const safePull = async (label: string, fn: () => Promise<SyncTableResult>): Promise<SyncTableResult> => {

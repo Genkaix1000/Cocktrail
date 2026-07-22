@@ -13,7 +13,7 @@ type Props = {
  * Único record que sobrevive a la simplificación de Historial de Noches:
  * Trago Estrella (accionable — informa stock/promociones). Mejor/Peor
  * Noche y Noche Más Larga se eliminaron por no cambiar ninguna decisión
- * real (ver docs/specs/simplificar-historial-noches.md).
+ * real (ver docs/specs/features/simplificar-historial-noches.md).
  */
 export default function NightRecords({ records, isBosko }: Props) {
   if (records.length === 0) {

@@ -333,7 +333,7 @@ mockear el middleware de auth y así también cubrirlo con los tests de integrac
 - [x] Actualizar `docs/ARCHITECTURE.md` **solo si** algún refactor estructural cambió el mapa de
   capas/módulos descrito en §4; si los fixes fueron todos internos sin cambiar la forma pública del
   módulo, no hace falta tocarlo.
-- [x] Cambiar el estado de esta spec (`docs/specs/auditoria-api.md`) de `approved` a `done`.
+- [x] Cambiar el estado de esta spec (`docs/specs/02-auditoria-api/auditoria-api.md`) de `approved` a `done`.
 
 ---
 

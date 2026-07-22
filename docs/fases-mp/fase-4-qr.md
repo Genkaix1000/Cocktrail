@@ -8,7 +8,7 @@ Implementar el cobro por QR usando la Orders API de MP con `type: "qr"` y `mode:
 
 ### B) ¿Por qué?
 
-Es el Paso 3a del spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Operación de cobro — QR estático". La decisión de diseño (ver [`docs/mp/INDEX.md`](../mp/INDEX.md) § "Decisiones de diseño clave") es usar el modelo estático: cada barra tiene su QR fijo impreso, y al crear una order ese QR se "carga" con el monto. El cliente siempre escanea el mismo QR. Esto es más simple que el modelo dinámico y no requiere generar una imagen nueva por cada cobro.
+Es el Paso 3a del spec [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Operación de cobro — QR estático". La decisión de diseño (ver [`docs/mp/INDEX.md`](../mp/INDEX.md) § "Decisiones de diseño clave") es usar el modelo estático: cada barra tiene su QR fijo impreso, y al crear una order ese QR se "carga" con el monto. El cliente siempre escanea el mismo QR. Esto es más simple que el modelo dinámico y no requiere generar una imagen nueva por cada cobro.
 
 Esta fase introduce la tabla `mp_orders` (no incluida en el modelo de datos base de Fase 0 porque es específica al flujo de Orders API y no la requieren las fases de OAuth ni provisioning). La tabla persiste `order_id_mp`, `payment_transaction_id` (al crear), `payment_id` (al concretarse), `idempotency_key`, `external_reference`, y `status` para el polling + reconciliación por webhook (Fase 6).
 

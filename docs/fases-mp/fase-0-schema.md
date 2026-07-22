@@ -1,7 +1,7 @@
 # Plan de Implementación — Integración MP
 
 > **Punto de partida obligatorio**: ante cualquier tarea de MP, leer primero [`docs/mp/INDEX.md`](../mp/INDEX.md).  
-> Este plan se basa en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md).  
+> Este plan se basa en [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md).  
 > Las Fases se ejecutan en orden secuencial (cada una depende de la anterior).
 
 ---
@@ -10,7 +10,7 @@
 
 ### A) ¿Qué se hace?
 
-Crear las migraciones de Supabase con las 3 tablas del modelo de datos definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Modelo de datos (Cocktrail DB)" más la tabla `oauth_states` que requiere el flujo OAuth.
+Crear las migraciones de Supabase con las 3 tablas del modelo de datos definido en [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Modelo de datos (Cocktrail DB)" más la tabla `oauth_states` que requiere el flujo OAuth.
 
 **Dónde se aplican**: las migraciones corren en **ambos** Supabases (local Docker + Cloud), pero el flujo OAuth (Fase 1) usa exclusivamente **Cloud** para `oauth_states` y `mercadopago_sellers`. Las tablas `mercadopago_cajas` y `mercadopago_cajas_devices` (Fase 3) usan **Local**. Ver [arquitectura](#arquitectura-supabase-oauth-vs-operativo) al final de esta fase.
 
@@ -64,7 +64,7 @@ CREATE TABLE mercadopago_sellers (
 );
 ```
 
-**C.3) `mercadopago_cajas`** — [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Caja" (response: `id`, `qr.image`, `qr.template_document`)
+**C.3) `mercadopago_cajas`** — [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Caja" (response: `id`, `qr.image`, `qr.template_document`)
 
 ```sql
 CREATE TABLE mercadopago_cajas (
@@ -89,7 +89,7 @@ CREATE TABLE mercadopago_cajas (
 CREATE INDEX idx_cajas_seller ON mercadopago_cajas(seller_user_id);
 ```
 
-**C.4) `mercadopago_cajas_devices`** — [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-point-devices.md`](../mp/api-point-devices.md) § "Listar devices" (response: `id`, `operating_mode`)
+**C.4) `mercadopago_cajas_devices`** — [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-point-devices.md`](../mp/api-point-devices.md) § "Listar devices" (response: `id`, `operating_mode`)
 
 ```sql
 CREATE TABLE mercadopago_cajas_devices (

@@ -22,7 +22,7 @@ export interface TicketsRepository {
    * Condicionado a `redeemed_at IS NULL` — devuelve `undefined` si el ticket ya estaba
    * canjeado en el momento del UPDATE, en vez de pisarlo. Defensa en profundidad: el gate
    * real de la carrera de canje vive en `OrdersRepository.updateStatus` (ver
-   * docs/specs/atomicidad-canje-ticket.md), esto no debería activarse en el flujo normal.
+   * docs/specs/deuda-pre-fase-6/atomicidad-canje-ticket.md), esto no debería activarse en el flujo normal.
    */
   updateRedemption(
     code: string,

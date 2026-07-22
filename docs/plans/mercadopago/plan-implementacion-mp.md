@@ -1,7 +1,7 @@
 # Plan de Implementación — Integración MP
 
 > ⚠ **Este archivo ya no es la fuente canónica.** El plan se desarmó en archivos individuales por fase para optimizar tokens.  
-> **Ver [`docs/fases-mp/INDEX.md`](../fases-mp/INDEX.md)** — entrada única con orden de ejecución y enlaces a cada fase.
+> **Ver [`docs/fases-mp/INDEX.md`](../../fases-mp/INDEX.md)** — entrada única con orden de ejecución y enlaces a cada fase.
 >
 > El contenido legacy se mantiene abajo por referencia histórica.
 
@@ -11,17 +11,17 @@
 
 ### A) ¿Qué se hace?
 
-Crear las migraciones de Supabase con las 3 tablas del modelo de datos definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Modelo de datos (Cocktrail DB)" más la tabla `oauth_states` que requiere el flujo OAuth.
+Crear las migraciones de Supabase con las 3 tablas del modelo de datos definido en [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Modelo de datos (Cocktrail DB)" más la tabla `oauth_states` que requiere el flujo OAuth.
 
 **Dónde se aplican**: las migraciones corren en **ambos** Supabases (local Docker + Cloud), pero el flujo OAuth (Fase 1) usa exclusivamente **Cloud** para `oauth_states` y `mercadopago_sellers`. Las tablas `mercadopago_cajas` y `mercadopago_cajas_devices` (Fase 3) usan **Local**. Ver [arquitectura](#arquitectura-supabase-oauth-vs-operativo) al final de esta fase.
 
 ### B) ¿Por qué?
 
-El spec define exactamente 3 tablas como modelo de datos de la integración: `mercadopago_sellers` guarda los tokens OAuth de cada vendedor (Bosko), `mercadopago_cajas` persiste el `store_id`, `external_pos_id` y la `qr_image` estática de cada barra, y `mercadopago_cajas_devices` vincula cada caja con su terminal Point física. Sin estas tablas, ninguna fase posterior puede persistir su estado. `oauth_states` es auxiliar para el flujo OAuth (PKCE), con TTL de 10 minutos y una RPC atómica `consume_oauth_state` que consume el state en un solo paso (lee, valida TTL, elimina). Actualmente existen directorios de migración vacíos (`supabase/migrations/20260715000*_*/`) que hay que poblar con el SQL correspondiente. [`docs/mp/api-oauth.md`](../mp/api-oauth.md) provee el schema exacto de `oauth_states` y `mercadopago_sellers`. [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) indica qué campos guardar del response de crear Store y POS (`store_id`, `qr.image`, `qr.template_document`, `external_id`).
+El spec define exactamente 3 tablas como modelo de datos de la integración: `mercadopago_sellers` guarda los tokens OAuth de cada vendedor (Bosko), `mercadopago_cajas` persiste el `store_id`, `external_pos_id` y la `qr_image` estática de cada barra, y `mercadopago_cajas_devices` vincula cada caja con su terminal Point física. Sin estas tablas, ninguna fase posterior puede persistir su estado. `oauth_states` es auxiliar para el flujo OAuth (PKCE), con TTL de 10 minutos y una RPC atómica `consume_oauth_state` que consume el state en un solo paso (lee, valida TTL, elimina). Actualmente existen directorios de migración vacíos (`supabase/migrations/20260715000*_*/`) que hay que poblar con el SQL correspondiente. [`docs/mp/api-oauth.md`](../../mp/api-oauth.md) provee el schema exacto de `oauth_states` y `mercadopago_sellers`. [`docs/mp/api-stores-pos.md`](../../mp/api-stores-pos.md) indica qué campos guardar del response de crear Store y POS (`store_id`, `qr.image`, `qr.template_document`, `external_id`).
 
 ### C) Migraciones
 
-**C.1) `oauth_states`** — schema canónico en [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Tabla oauth_states"
+**C.1) `oauth_states`** — schema canónico en [`docs/mp/api-oauth.md`](../../mp/api-oauth.md) § "Tabla oauth_states"
 
 ```sql
 CREATE TABLE oauth_states (
@@ -49,7 +49,7 @@ REVOKE EXECUTE ON FUNCTION consume_oauth_state FROM PUBLIC;
 -- GRANT EXECUTE ON FUNCTION consume_oauth_state TO service_role;
 ```
 
-**C.2) `mercadopago_sellers`** — schema canónico en [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Tabla mercadopago_sellers"
+**C.2) `mercadopago_sellers`** — schema canónico en [`docs/mp/api-oauth.md`](../../mp/api-oauth.md) § "Tabla mercadopago_sellers"
 
 ```sql
 CREATE TABLE mercadopago_sellers (
@@ -65,7 +65,7 @@ CREATE TABLE mercadopago_sellers (
 );
 ```
 
-**C.3) `mercadopago_cajas`** — [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Caja" (response: `id`, `qr.image`, `qr.template_document`)
+**C.3) `mercadopago_cajas`** — [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-stores-pos.md`](../../mp/api-stores-pos.md) § "Crear Caja" (response: `id`, `qr.image`, `qr.template_document`)
 
 ```sql
 CREATE TABLE mercadopago_cajas (
@@ -90,7 +90,7 @@ CREATE TABLE mercadopago_cajas (
 CREATE INDEX idx_cajas_seller ON mercadopago_cajas(seller_user_id);
 ```
 
-**C.4) `mercadopago_cajas_devices`** — [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-point-devices.md`](../mp/api-point-devices.md) § "Listar devices" (response: `id`, `operating_mode`)
+**C.4) `mercadopago_cajas_devices`** — [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Modelo de datos" + [`docs/mp/api-point-devices.md`](../../mp/api-point-devices.md) § "Listar devices" (response: `id`, `operating_mode`)
 
 ```sql
 CREATE TABLE mercadopago_cajas_devices (
@@ -378,13 +378,13 @@ Implementar el flujo OAuth con PKCE para que Cocktrail obtenga un `access_token`
 
 ### B) ¿Por qué?
 
-Es el Paso 1 del onboarding definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Flujo completo de onboarding". Sin el token de Bosko no se puede crear sucursales, cajas ni cobros — todo recurso MP se crea "en nombre de" Bosko usando su token. El refresh proactivo (5–7 días antes del vencimiento) evita que una sesión activa se caiga en medio de un turno, y el `refresh_token` es rotativo y de un solo uso: si no se persiste el nuevo inmediatamente, la sesión queda invalidada (ver [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Refresh Automático de Token").
+Es el Paso 1 del onboarding definido en [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Flujo completo de onboarding". Sin el token de Bosko no se puede crear sucursales, cajas ni cobros — todo recurso MP se crea "en nombre de" Bosko usando su token. El refresh proactivo (5–7 días antes del vencimiento) evita que una sesión activa se caiga en medio de un turno, y el `refresh_token` es rotativo y de un solo uso: si no se persiste el nuevo inmediatamente, la sesión queda invalidada (ver [`docs/mp/api-oauth.md`](../../mp/api-oauth.md) § "Refresh Automático de Token").
 
 
 ### C) Implementación
 
-**Docs**: [`docs/mp/api-oauth.md`](../mp/api-oauth.md) — flujo completo  
-[`docs/mp/api-oauth-best-practices.md`](../mp/api-oauth-best-practices.md) — anti-patrones y checklists
+**Docs**: [`docs/mp/api-oauth.md`](../../mp/api-oauth.md) — flujo completo  
+[`docs/mp/api-oauth-best-practices.md`](../../mp/api-oauth-best-practices.md) — anti-patrones y checklists
 
 **Arquitectura**: dos piezas separadas con responsabilidades distintas:
 
@@ -638,7 +638,7 @@ supabase secrets set MP_REDIRECT_URI=https://<proyecto>.supabase.co/functions/v1
 supabase secrets set NEXT_PUBLIC_SITE_URL=https://cocktrail.com
 ```
 
-**Anti-patrones evitados** (ver [`api-oauth-best-practices.md`](../mp/api-oauth-best-practices.md) para lista completa):
+**Anti-patrones evitados** (ver [`api-oauth-best-practices.md`](../../mp/api-oauth-best-practices.md) para lista completa):
 
 | Anti-patrón | Cómo se evita |
 |---|---|
@@ -652,8 +652,8 @@ supabase secrets set NEXT_PUBLIC_SITE_URL=https://cocktrail.com
 
 **C.3) `refreshTokenIfNeeded(seller)`** — llamado antes de cualquier operación con token
 
-**Docs**: [`docs/mp/api-oauth.md`](../mp/api-oauth.md) § "Paso 3 — Refresh Automático de Token"  
-[`docs/mp/api-oauth-best-practices.md`](../mp/api-oauth-best-practices.md) § "Anti-patrones"
+**Docs**: [`docs/mp/api-oauth.md`](../../mp/api-oauth.md) § "Paso 3 — Refresh Automático de Token"  
+[`docs/mp/api-oauth-best-practices.md`](../../mp/api-oauth-best-practices.md) § "Anti-patrones"
 
 **⚠ Concurrencia**: el refresh_token es rotativo y de un solo uso. Dos requests concurrentes refrescando el mismo seller pueden "quemar" el token nuevo: el primero refresca y persiste el nuevo, el segundo usa el viejo (ya invalidado) y recibe `invalid_grant`. Solución: lock por seller con `SELECT ... FOR UPDATE`.
 
@@ -742,7 +742,7 @@ Datos que necesita el frontend: un endpoint `GET /api/mercadopago/seller-status?
 - MP no devuelve `refresh_token` → revisar scopes/config en la app de MP. El sistema ya tolera `refresh_token` nulo (el seller queda sin capacidad de refresh y eventualmente expira).
 - `redirect_uri` no coincide → MP rechaza el canje. Asegurar que `MP_REDIRECT_URI` en secrets coincida exactamente con la URL de redireccionamiento configurada en la app de MP. No se envía en refresh (solo en `authorization_code`).
 - PKCE no habilitado en la app de MP → `code_verifier` se ignora silenciosamente. Verificar en panel de MP > tu app > PKCE.
-- "Aplicación no está lista" / "La aplicación no puede conectarse a tu cuenta" → error pre-callback. Ver [`api-oauth-best-practices.md#troubleshooting`](../mp/api-oauth-best-practices.md#troubleshooting-aplicación-no-está-lista--la-aplicación-no-puede-conectarse-a-tu-cuenta): redirect_uri mismatch, app inactiva, o client_id incorrecto.
+- "Aplicación no está lista" / "La aplicación no puede conectarse a tu cuenta" → error pre-callback. Ver [`api-oauth-best-practices.md#troubleshooting`](../../mp/api-oauth-best-practices.md#troubleshooting-aplicación-no-está-lista--la-aplicación-no-puede-conectarse-a-tu-cuenta): redirect_uri mismatch, app inactiva, o client_id incorrecto.
 
 **C.5) Tests** — por capa
 
@@ -1025,13 +1025,13 @@ Backend: crear endpoints para gestionar la Store (sucursal), cajas/POS con QR es
 
 ### B) ¿Por qué?
 
-Es el Paso 2 del onboarding definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Provisionamiento". Sin Store y POS no existe la caja en MP, y sin la caja no hay `external_pos_id` → no se puede crear una order QR después. El `location` de la Store es obligatorio y afecta cálculos fiscales (ver [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Sucursal"). El QR que devuelve MP al crear el POS es **estático e inmutable** — se guarda una vez y se imprime en la barra.
+Es el Paso 2 del onboarding definido en [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Provisionamiento". Sin Store y POS no existe la caja en MP, y sin la caja no hay `external_pos_id` → no se puede crear una order QR después. El `location` de la Store es obligatorio y afecta cálculos fiscales (ver [`docs/mp/api-stores-pos.md`](../../mp/api-stores-pos.md) § "Crear Sucursal"). El QR que devuelve MP al crear el POS es **estático e inmutable** — se guarda una vez y se imprime en la barra.
 
 **Modelo operativo**: Cocktrail tiene 1 sola barra (`BARRA-01`/"Barra VIP"). La sucursal se crea automáticamente al onboardear (Fase 1). La UI de PDV muestra solo esta barra y su Posnet vinculado. El botón "+ Nueva barra" existe pero muestra una advertencia de que la funcionalidad multi-barra no está disponible todavía (está mapeado al `BAR_CODE` actual, no es dinámico).
 
 ### C) Backend — Endpoints de Provisionamiento
 
-**Docs**: [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md)
+**Docs**: [`docs/mp/api-stores-pos.md`](../../mp/api-stores-pos.md)
 
 **C.1) Store (sucursal) — se crea automáticamente, no desde la UI**
 
@@ -1269,13 +1269,13 @@ Implementar el cobro por QR usando la Orders API de MP con `type: "qr"` y `mode:
 
 ### B) ¿Por qué?
 
-Es el Paso 3a del spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Operación de cobro — QR estático". La decisión de diseño (ver [`docs/mp/INDEX.md`](../mp/INDEX.md) § "Decisiones de diseño clave") es usar el modelo estático: cada barra tiene su QR fijo impreso, y al crear una order ese QR se "carga" con el monto. El cliente siempre escanea el mismo QR. Esto es más simple que el modelo dinámico y no requiere generar una imagen nueva por cada cobro. El botón "Código QR" se sacó de `/caja` en la spec `cobro-posnet-mercadopago.md` porque no había implementación real — ahora que la hay, se re-agrega.
+Es el Paso 3a del spec [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Operación de cobro — QR estático". La decisión de diseño (ver [`docs/mp/INDEX.md`](../../mp/INDEX.md) § "Decisiones de diseño clave") es usar el modelo estático: cada barra tiene su QR fijo impreso, y al crear una order ese QR se "carga" con el monto. El cliente siempre escanea el mismo QR. Esto es más simple que el modelo dinámico y no requiere generar una imagen nueva por cada cobro. El botón "Código QR" se sacó de `/caja` en la spec `cobro-posnet-mercadopago.md` porque no había implementación real — ahora que la hay, se re-agrega.
 
-Esta fase introduce la tabla `mp_orders` (no incluida en el modelo de datos base de Fase 0 porque es específica al flujo de Orders API y no la requieren las fases de OAuth ni provisioning). [`docs/mp/api-orders-qr.md`](../mp/api-orders-qr.md) § "Response (modelo estático)" indica explícitamente: "Guardar `id` (order) y `transactions.payments[0].id` (pago) — necesarios para consultas y webhooks". La tabla persiste el `order_id_mp`, `payment_id_mp`, `external_reference` de Cocktrail, y el `status` de la order para el polling y la reconciliación por webhook (Fase 6).
+Esta fase introduce la tabla `mp_orders` (no incluida en el modelo de datos base de Fase 0 porque es específica al flujo de Orders API y no la requieren las fases de OAuth ni provisioning). [`docs/mp/api-orders-qr.md`](../../mp/api-orders-qr.md) § "Response (modelo estático)" indica explícitamente: "Guardar `id` (order) y `transactions.payments[0].id` (pago) — necesarios para consultas y webhooks". La tabla persiste el `order_id_mp`, `payment_id_mp`, `external_reference` de Cocktrail, y el `status` de la order para el polling y la reconciliación por webhook (Fase 6).
 
 ### C) Implementación
 
-**Docs**: [`docs/mp/api-orders-qr.md`](../mp/api-orders-qr.md)
+**Docs**: [`docs/mp/api-orders-qr.md`](../../mp/api-orders-qr.md)
 
 **C.0) Migración: `mp_orders`** — necesaria para persistir el estado de las orders MP y poder hacer polling + reconciliación por webhook
 
@@ -1388,7 +1388,7 @@ Nada a nivel funcional. El sistema actual de payment-intents legacy sigue andand
 
 ### B) ¿Por qué?
 
-El spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Decisiones tomadas" indica explícitamente: la Point API es un producto distinto para terminales físicas, y la migración a Orders API `type: "point"` ([`docs/mp/api-orders-point.md`](../mp/api-orders-point.md)) es deuda técnica futura. Migrar ahora rompería el único flujo de cobro que ya funciona en producción. [`docs/specs/cobro-posnet-mercadopago.md`](../specs/cobro-posnet-mercadopago.md) ya implementó el manejo de `CONFIRMATION_REQUIRED` y la limpieza del selector — eso no se toca.
+El spec [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Decisiones tomadas" indica explícitamente: la Point API es un producto distinto para terminales físicas, y la migración a Orders API `type: "point"` ([`docs/mp/api-orders-point.md`](../../mp/api-orders-point.md)) es deuda técnica futura. Migrar ahora rompería el único flujo de cobro que ya funciona en producción. [`docs/specs/mercadopago/cobro-posnet-mercadopago.md`](../../specs/mercadopago/cobro-posnet-mercadopago.md) ya implementó el manejo de `CONFIRMATION_REQUIRED` y la limpieza del selector — eso no se toca.
 
 ### C) Endpoints existentes (sin cambios de contrato)
 
@@ -1403,9 +1403,9 @@ POST   /api/mercadopago/device/test-charge   → [IMPLEMENTADO]
 **Único cambio**: internamente usar `getAccessTokenForContext({ deviceId })` en vez de `env.MP_ACCESS_TOKEN`.
 
 **Docs relevantes**:
-- Sistema actual: [`docs/mp/api-point-devices.md`](../mp/api-point-devices.md)
-- Resolución de `CONFIRMATION_REQUIRED`: [`docs/mp/api-payments.md`](../mp/api-payments.md)
-- Migración futura: [`docs/mp/api-orders-point.md`](../mp/api-orders-point.md)
+- Sistema actual: [`docs/mp/api-point-devices.md`](../../mp/api-point-devices.md)
+- Resolución de `CONFIRMATION_REQUIRED`: [`docs/mp/api-payments.md`](../../mp/api-payments.md)
+- Migración futura: [`docs/mp/api-orders-point.md`](../../mp/api-orders-point.md)
 
 ---
 
@@ -1417,11 +1417,11 @@ Exponer un endpoint público `POST /api/mercadopago/webhooks` que reciba notific
 
 ### B) ¿Por qué?
 
-Es el Paso 4 del spec [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Conciliación". Sin webhooks, la única forma de saber si un QR se pagó es haciendo polling desde el frontend — frágil (el cajero cierra la pantalla, se pierde la conexión). Con webhooks, MP notifica al backend y el pedido se concreta aunque el frontend ya no esté escuchando. La validación contra la API de MP antes de impactar es obligatoria: nunca se debe confiar ciegamente en el body del webhook.
+Es el Paso 4 del spec [`docs/specs/mercadopago/integracion-mp.md`](../../specs/mercadopago/integracion-mp.md) § "Conciliación". Sin webhooks, la única forma de saber si un QR se pagó es haciendo polling desde el frontend — frágil (el cajero cierra la pantalla, se pierde la conexión). Con webhooks, MP notifica al backend y el pedido se concreta aunque el frontend ya no esté escuchando. La validación contra la API de MP antes de impactar es obligatoria: nunca se debe confiar ciegamente en el body del webhook.
 
 **Docs**: 
-- [`docs/mp/api-orders-qr.md`](../mp/api-orders-qr.md) § "Estados de la order"
-- [`docs/mp/api-payments.md`](../mp/api-payments.md) para `GET /v1/payments/{id}`
+- [`docs/mp/api-orders-qr.md`](../../mp/api-orders-qr.md) § "Estados de la order"
+- [`docs/mp/api-payments.md`](../../mp/api-payments.md) para `GET /v1/payments/{id}`
 
 ### C) Implementación
 
@@ -1490,7 +1490,7 @@ Permitir reembolso total o parcial de una order (QR o Point) desde el panel de a
 
 Cubre el caso de negocio donde un pedido ya fue pagado pero necesita devolverse (error en el monto, producto no disponible, etc.). La Orders API de MP soporta reembolso total (sin body) y parcial (con `transactions[].id` y `amount`). Los plazos difieren: QR tiene 180 días, Point tiene 90 días.
 
-**Docs**: [`docs/mp/api-orders-qr.md`](../mp/api-orders-qr.md) § "Reembolso de una order QR"
+**Docs**: [`docs/mp/api-orders-qr.md`](../../mp/api-orders-qr.md) § "Reembolso de una order QR"
 
 ### C) Implementación
 

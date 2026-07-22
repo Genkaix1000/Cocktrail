@@ -126,7 +126,7 @@ activo, el nivel 2 empieza a devolverlo y **los cobros pasan a usar el token de 
 Supabase Cloud en cada cobro**.
 
 Eso te pone sobre los hallazgos **A1** y **A1b** de
-[`../specs/remediacion-integracion-mp.md`](../specs/remediacion-integracion-mp.md): con un seller
+[`../specs/remediacion-integracion-mp.md`](../specs/mercadopago/remediacion-integracion-mp.md): con un seller
 vinculado y Cloud sin responder, **no se cobra** — y ni siquiera cae al fallback, porque
 `findFirstActive()` lanza excepción antes de llegar a él.
 

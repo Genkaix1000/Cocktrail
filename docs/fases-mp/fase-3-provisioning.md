@@ -9,7 +9,7 @@ Backend: crear endpoints para gestionar la Store (sucursal), cajas/POS con QR es
 
 ### B) ¿Por qué?
 
-Es el Paso 2 del onboarding definido en [`docs/specs/integracion-mp.md`](../specs/integracion-mp.md) § "Provisionamiento". Sin Store y POS no existe la caja en MP, y sin la caja no hay `external_pos_id` → no se puede crear una order QR después. El `location` de la Store es obligatorio y afecta cálculos fiscales (ver [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Sucursal"). El QR que devuelve MP al crear el POS es **estático e inmutable** — se guarda una vez y se imprime en la barra.
+Es el Paso 2 del onboarding definido en [`docs/specs/mercadopago/integracion-mp.md`](../specs/mercadopago/integracion-mp.md) § "Provisionamiento". Sin Store y POS no existe la caja en MP, y sin la caja no hay `external_pos_id` → no se puede crear una order QR después. El `location` de la Store es obligatorio y afecta cálculos fiscales (ver [`docs/mp/api-stores-pos.md`](../mp/api-stores-pos.md) § "Crear Sucursal"). El QR que devuelve MP al crear el POS es **estático e inmutable** — se guarda una vez y se imprime en la barra.
 
 **Modelo operativo**: Cocktrail tiene 1 sola barra (`BARRA-01`/"Barra VIP"). La sucursal se crea automáticamente al onboardear (Fase 1). La UI de PDV muestra solo esta barra y su Posnet vinculado. El botón "+ Nueva barra" existe pero muestra una advertencia de que la funcionalidad multi-barra no está disponible todavía (está mapeado al `BAR_CODE` actual, no es dinámico).
 

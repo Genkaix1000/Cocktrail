@@ -146,7 +146,7 @@ export class OrdersService {
    * caller (TicketsService) necesite conocer el literal "entregado" ni la máquina de estados
    * interna. Wrapper delgado sobre updateOrderStatus — la atomicidad (UPDATE condicionado a
    * status="pendiente") es exactamente la misma, solo cambia quién arma los parámetros. Ver
-   * docs/specs/deuda-estructural-fase2.md (punto 5) y docs/specs/atomicidad-canje-ticket.md.
+   * docs/specs/02-auditoria-api/deuda-estructural-fase2.md (punto 5) y docs/specs/deuda-pre-fase-6/atomicidad-canje-ticket.md.
    */
   async markDelivered(
     orderId: string,

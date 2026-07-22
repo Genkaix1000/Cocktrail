@@ -41,7 +41,7 @@ apps/api/src/data/*.json
 coverage/
 
 # generado por supabase/generate-keys.mjs desde kong.yml.template (ver
-# docs/specs/hardening-kong-demo-keys.md) — el template SÍ se versiona, esto no.
+# docs/specs/deuda-pre-fase-6/hardening-kong-demo-keys.md) — el template SÍ se versiona, esto no.
 supabase/docker/kong.yml
 
 # estado local del CLI de Supabase (no versionar)

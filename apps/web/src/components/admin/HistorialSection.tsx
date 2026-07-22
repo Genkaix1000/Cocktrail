@@ -53,7 +53,7 @@ function formatDateRange(start: number, end: number): string {
  * Vista "Historial de Noches" del panel admin. `historyEvents`/
  * `historyLoaded` viven en el shell (AdminClient) porque useAdminAnalytics
  * y DashboardSection también dependen de esos datos.
- * Simplificada (ver docs/specs/simplificar-historial-noches.md): la tabla
+ * Simplificada (ver docs/specs/features/simplificar-historial-noches.md): la tabla
  * "Detalle por Noche" (filtro por mes, sort, paginación, popup) se
  * eliminó — `NightComparator` la reemplaza con un selector único de
  * detalle/comparación sobre `unifiedHistoryDays`.

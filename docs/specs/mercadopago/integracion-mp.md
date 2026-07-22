@@ -1,7 +1,7 @@
 # Spec — Integración MP en Cocktrail (Arquitectura de Alto Nivel)
 
 **Estado**: referencia activa
-**Ver también**: [`docs/mp/INDEX.md`](../mp/INDEX.md) para el mapa de archivos de API
+**Ver también**: [`docs/mp/INDEX.md`](../../mp/INDEX.md) para el mapa de archivos de API
 
 ---
 
@@ -44,8 +44,8 @@ Cocktrail (miBoliche / plataforma)
    - Crear N Cajas → `POST /pos` (1 por barra) → guardar `pos_id`, `qr.image`, `qr.template_document`
 
 3. **Operación de cobro**
-   - **QR estático**: cada barra tiene su QR fijo impreso. Al cobrar, Cocktrail crea una order (`POST /v1/orders`, `type:"qr"`, `mode:"static"`) que "carga" ese QR con el monto → ver [`api-orders-qr.md`](../mp/api-orders-qr.md)
-   - **Point/Posnet**: 1 terminal por POS. Actualmente usa payment-intents (legacy) → ver [`api-point-devices.md`](../mp/api-point-devices.md). Migración futura a Orders API (`type:"point"`) → ver [`api-orders-point.md`](../mp/api-orders-point.md)
+   - **QR estático**: cada barra tiene su QR fijo impreso. Al cobrar, Cocktrail crea una order (`POST /v1/orders`, `type:"qr"`, `mode:"static"`) que "carga" ese QR con el monto → ver [`api-orders-qr.md`](../../mp/api-orders-qr.md)
+   - **Point/Posnet**: 1 terminal por POS. Actualmente usa payment-intents (legacy) → ver [`api-point-devices.md`](../../mp/api-point-devices.md). Migración futura a Orders API (`type:"point"`) → ver [`api-orders-point.md`](../../mp/api-orders-point.md)
 
 4. **Conciliación**
    - Webhooks de MP notifican el pago → backend valida contra la API antes de impactar el pedido

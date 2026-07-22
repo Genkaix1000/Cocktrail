@@ -140,7 +140,7 @@ no repita información y muestre destacados el trago más vendido y la duración
 Ninguna — todas las decisiones de alcance (los 2 estados del Dashboard, el tratamiento de la
 torta en $0, qué datos sumar/ocultar en el detalle de noche, mantener el comparador A/B) ya se
 validaron con el usuario en la sesión de brainstorming previa a esta spec (ver
-`docs/plans/2026-07-14-dashboard-sin-noche-abierta-design.md`).
+`docs/plans/features/2026-07-14-dashboard-sin-noche-abierta-design.md`).
 
 ---
 
