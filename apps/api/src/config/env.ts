@@ -34,9 +34,19 @@ const EnvSchema = z.object({
     .url()
     .default("postgres://postgres:postgres@127.0.0.1:54322/postgres"),
 
-  // Mercado Pago — Posnet/Point legacy (single-seller, sandbox)
+  // Mercado Pago — fallback de emergencia (nivel 3 del resolver, F1) + lector.
+  // MP_ACCESS_TOKEN ya NO es la credencial principal: cobra solo si el seller
+  // OAuth local falla. Su utilidad real se mide en el preflight (mp-fallback-preflight.ts).
   MP_ACCESS_TOKEN: z.string().optional(),
   MP_POS_DEVICE_ID: z.string().optional(),
+
+  // Mercado Pago — cifrado app-level de tokens (PR 4).
+  // MP_TOKEN_SECRET: ikm del cifrado local de tokens del seller (si falta, AUTH_SECRET).
+  // MP_TOKEN_SECRET_PREVIOUS: clave anterior durante una rotación (se re-cifra en boot).
+  // MP_HANDOFF_KEY: secret del buzón de traspaso — DEBE ser idéntica en la Edge Function.
+  MP_TOKEN_SECRET: z.string().min(32, "MP_TOKEN_SECRET debe tener al menos 32 caracteres").optional(),
+  MP_TOKEN_SECRET_PREVIOUS: z.string().min(32).optional(),
+  MP_HANDOFF_KEY: z.string().min(32, "MP_HANDOFF_KEY debe tener al menos 32 caracteres").optional(),
 
   // Mercado Pago — OAuth (multi-seller, Fase 1). Credenciales de la app Cocktrail.
   // Para el split prod/test, apuntar estas 3 a las credenciales del entorno activo.

@@ -29,7 +29,11 @@ export function createSystemController(
   // GET /api/system/health — staff. Liviano (singleton en memoria, sin I/O) y
   // SIN systemStatusLimiter: lo pollea el banner de migraciones de /admin.
   // No confundir con el GET /health público de app.ts (liveness sin auth).
-  router.get("/health", authMiddleware, requireRole("admin", "caja"), (_req, res) => {
+  router.get("/health", authMiddleware, requireRole("admin", "caja"), async (req, res) => {
+    // ?refreshMpFallback=1 re-corre el preflight del fallback MP (F1.c, nunca lanza).
+    if (req.query.refreshMpFallback === "1") {
+      await systemService.refreshMpFallback();
+    }
     res.json(systemService.getHealth());
   });
 

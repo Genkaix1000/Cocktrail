@@ -1,4 +1,4 @@
-import { mpDb } from "../../shared/supabase.js";
+import { oauthDb } from "../../shared/supabase.js";
 
 /** Fila de `oauth_states` que se inserta al iniciar el flujo OAuth (PKCE). */
 export type NewOAuthState = {
@@ -22,7 +22,7 @@ export interface OAuthStatesRepository {
 
 export class SupabaseOAuthStatesRepository implements OAuthStatesRepository {
   async insert(state: NewOAuthState): Promise<void> {
-    const { error } = await mpDb.from("oauth_states").insert({
+    const { error } = await oauthDb.from("oauth_states").insert({
       state: state.state,
       code_verifier: state.codeVerifier,
       bar_id: state.barId,
@@ -36,7 +36,7 @@ export class SupabaseOAuthStatesRepository implements OAuthStatesRepository {
   }
 
   async consume(state: string): Promise<ConsumedOAuthState | null> {
-    const { data, error } = await mpDb.rpc("consume_oauth_state", { p_state: state });
+    const { data, error } = await oauthDb.rpc("consume_oauth_state", { p_state: state });
 
     if (error) {
       console.error("[SupabaseOAuthStatesRepository] Error consuming state:", error);

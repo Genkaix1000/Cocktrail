@@ -10,18 +10,6 @@ import type { MercadoPagoSellersRepository, Seller } from "./mercadopago-sellers
 import type { CredentialsResolverService } from "./credentials-resolver.service.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
 
-// Mock supabase (local) para que createPos no dispare fetch calls reales
-vi.mock("../../shared/supabase.js", () => ({
-  supabase: {
-    from: () => ({
-      upsert: () => ({ select: () => Promise.resolve({ data: [{ user_id: "seller-1" }], error: null }) }),
-      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { user_id: "seller-1" }, error: null }) }) }),
-    }),
-  },
-  supabaseCloud: null,
-  mpDb: null,
-}));
-
 function makeSeller(overrides: Partial<Seller> = {}): Seller {
   return {
     userId: "seller-1",
@@ -104,10 +92,13 @@ describe("MercadoPagoProvisioningService", () => {
     vi.stubGlobal("fetch", vi.fn());
 
     sellersRepo = {
-      upsert: vi.fn(),
+      // El stub local del seller (FK de mercadopago_cajas) sale por acá — PR 4.
+      upsert: vi.fn().mockImplementation(async (s) => makeSeller(s)),
       findByUserId: vi.fn().mockResolvedValue(makeSeller()),
-      findFirstActive: vi.fn().mockResolvedValue(makeSeller()),
+      findActive: vi.fn().mockResolvedValue(makeSeller()),
       update: vi.fn(),
+      wipeAllTokens: vi.fn().mockResolvedValue([]),
+      backfillEncryption: vi.fn().mockResolvedValue({ migrated: 0 }),
     };
 
     barsRepo = {
@@ -207,7 +198,7 @@ describe("MercadoPagoProvisioningService", () => {
     });
 
     it("lanza Conflict si no hay seller vinculado", async () => {
-      vi.mocked(sellersRepo.findFirstActive).mockResolvedValue(null);
+      vi.mocked(sellersRepo.findActive).mockResolvedValue(null);
       await expect(service.createStore({ name: "X" })).rejects.toBeInstanceOf(Conflict);
     });
   });
@@ -241,6 +232,18 @@ describe("MercadoPagoProvisioningService", () => {
       );
     });
 
+    it("garantiza la fila local del seller vía sellersRepo.upsert (sin tokens)", async () => {
+      vi.mocked(cajasRepo.findBySellerUserId).mockResolvedValue([makeCaja({ id: "other" })]);
+      mockFetchOk({ id: 2711382, qr: { image: "https://qr.png", template_document: null } });
+
+      await service.createPos({ barId: "BARRA-01", name: "Barra VIP" });
+
+      expect(sellersRepo.upsert).toHaveBeenCalledWith({
+        userId: "seller-1",
+        status: "active",
+      });
+    });
+
     it("crea store on-the-fly si el seller no tiene ninguna caja", async () => {
       // search store + createStore MP + createPos MP
       mockFetchOk({ results: [] });
@@ -252,7 +255,7 @@ describe("MercadoPagoProvisioningService", () => {
 
       await service.createPos({ barId: "BARRA-01", name: "Barra VIP" });
 
-      expect(fetch).toHaveBeenCalledTimes(3);  // solo MP calls (supabase está mockeado)
+      expect(fetch).toHaveBeenCalledTimes(3);  // solo MP calls (el stub del seller va por sellersRepo)
       expect(vi.mocked(fetch).mock.calls[0][0]).toContain("/stores/search");
       expect(vi.mocked(fetch).mock.calls[1][0]).toContain("/stores");
       expect(vi.mocked(fetch).mock.calls[2][0]).toContain("/pos");

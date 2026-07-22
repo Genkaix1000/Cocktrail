@@ -1,6 +1,54 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1"
 
+// ── Cifrado del handoff (contrato "cocktrail/mp-handoff/v1") ──────────────────
+// Blob: "v1." + b64url(salt 16B) + "." + b64url(iv 12B) + "." + b64url(ct||tag)
+// Clave: HKDF-SHA256(ikm=utf8(MP_HANDOFF_KEY), salt, info) → AES-256-GCM.
+// El backend Node implementa EXACTAMENTE el mismo contrato (mp-token-cipher.ts):
+// cualquier desvío acá rompe el descifrado del pull. No tocar sin tocar ambos.
+
+const HANDOFF_INFO = "cocktrail/mp-handoff/v1"
+
+function b64url(bytes: Uint8Array): string {
+  let bin = ""
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+
+async function encryptHandoff(plaintext: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+
+  const ikm = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    "HKDF",
+    false,
+    ["deriveBits"]
+  )
+  const keyBits = await crypto.subtle.deriveBits(
+    { name: "HKDF", hash: "SHA-256", salt, info: encoder.encode(HANDOFF_INFO) },
+    ikm,
+    256
+  )
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBits,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  )
+  // WebCrypto devuelve ciphertext||tag concatenado — compatible con Node.
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(plaintext)
+  )
+
+  return `v1.${b64url(salt)}.${b64url(iv)}.${b64url(new Uint8Array(ciphertext))}`
+}
+
 serve(async (req: Request) => {
   try {
     const url = new URL(req.url)
@@ -37,6 +85,17 @@ serve(async (req: Request) => {
       throw new Error("Configuración MP incompleta: faltan secrets")
     }
 
+    // El secret del handoff se valida ANTES del exchange: si falta, la
+    // vinculación falla con mensaje claro. NUNCA se escriben tokens en claro
+    // como fallback (D3).
+    const handoffKey = Deno.env.get("MP_HANDOFF_KEY")
+    if (!handoffKey) {
+      throw new Error(
+        "Falta el secret MP_HANDOFF_KEY en la Edge Function. " +
+        "Configuralo con `supabase secrets set MP_HANDOFF_KEY=...` y reintentá."
+      )
+    }
+
     const tokenResponse = await fetch(
       "https://api.mercadopago.com/oauth/token",
       {
@@ -66,22 +125,71 @@ serve(async (req: Request) => {
       throw new Error(tokenData.message || "Error al obtener tokens de Mercado Pago")
     }
 
-    // 3a) Persistir en mercadopago_sellers
+    // 3a) Persistir: los tokens van CIFRADOS al buzón de traspaso
+    // (mercadopago_seller_handoff); mercadopago_sellers Cloud queda con SOLO
+    // metadata. El backend local hace el pull, descifra y re-cifra local (PR 4).
     // Si expires_in no viene → NOW() para forzar refresh inmediato
     const expiresAt = tokenData.expires_in
       ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
       : new Date().toISOString()
+    const sellerUserId = String(tokenData.user_id)
+    const nowIso = new Date().toISOString()
 
+    // 3a.1) Higiene del buzón: fuera los handoffs vencidos y los del mismo user
+    const { error: cleanupError } = await supabaseAdmin
+      .from("mercadopago_seller_handoff")
+      .delete()
+      .or(`expires_at.lt.${nowIso},user_id.eq.${sellerUserId}`)
+
+    if (cleanupError) {
+      // No es fatal: el INSERT nuevo sigue siendo el más reciente
+      console.error("mp-auth-callback: limpieza de handoffs falló:", cleanupError)
+    }
+
+    // 3a.2) INSERT del handoff cifrado (expires_at: DEFAULT NOW() + 15 min)
+    const payloadEnc = await encryptHandoff(
+      JSON.stringify({
+        user_id: sellerUserId,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token ?? null,
+        expires_at: expiresAt,
+      }),
+      handoffKey
+    )
+
+    const { error: handoffError } = await supabaseAdmin
+      .from("mercadopago_seller_handoff")
+      .insert({
+        user_id: sellerUserId,
+        payload_enc: payloadEnc,
+        key_version: 1,
+      })
+
+    if (handoffError) throw handoffError
+
+    // 3a.3) Single-seller: expirar cualquier OTRO seller activo antes del
+    // upsert — el índice único parcial (WHERE status='active') rechazaría
+    // un segundo activo.
+    const { error: expireError } = await supabaseAdmin
+      .from("mercadopago_sellers")
+      .update({ status: "expired", updated_at: nowIso })
+      .eq("status", "active")
+      .neq("user_id", sellerUserId)
+
+    if (expireError) throw expireError
+
+    // 3a.4) Upsert de SOLO metadata. Los tokens en NULL EXPLÍCITOS: en un
+    // re-link pisan cualquier token en claro que hubiera quedado de antes.
     const { error: dbError } = await supabaseAdmin
       .from("mercadopago_sellers")
       .upsert(
         {
-          user_id: String(tokenData.user_id),
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token ?? null,
+          user_id: sellerUserId,
+          access_token: null,
+          refresh_token: null,
           expires_at: expiresAt,
           status: "active",
-          updated_at: new Date().toISOString(),
+          updated_at: nowIso,
         },
         { onConflict: "user_id" }
       )
@@ -92,7 +200,7 @@ serve(async (req: Request) => {
     if (bar_id) {
       await supabaseAdmin
         .from("bars")
-        .update({ seller_user_id: String(tokenData.user_id) })
+        .update({ seller_user_id: sellerUserId })
         .eq("id", bar_id)
     }
 
@@ -111,7 +219,7 @@ serve(async (req: Request) => {
           seller_last_name:   userData.last_name ?? null,
           seller_email:       userData.email ?? null,
         })
-        .eq("user_id", String(tokenData.user_id))
+        .eq("user_id", sellerUserId)
     }
 
     // 4) Redirect al frontend con bar_id

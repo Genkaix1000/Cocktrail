@@ -8,6 +8,7 @@ import { pdvService, type DeviceRow } from "@/services/pdv.service";
 import { apiFetch } from "@/services/api-client";
 import { useTheme } from "@/components/ThemeProvider";
 import Toast from "@/components/shared/Toast";
+import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 
 function formatRelative(iso: string | null): string | null {
   if (!iso) return null;
@@ -44,6 +45,11 @@ export default function PagosSection() {
   const [linkedNotice, setLinkedNotice] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<MpSellerStatus | null>(null);
   const [sandbox, setSandbox] = useState(false);
+
+  // Desvincular (D9) — confirmación en dos pasos + aviso de limpieza Cloud pendiente
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [cloudCleanupPending, setCloudCleanupPending] = useState(false);
 
   // Summary
   const [summary, setSummary] = useState<StoreSummary | null>(null);
@@ -146,6 +152,23 @@ export default function PagosSection() {
       setLinking(false);
     }
   }, []);
+
+  const handleUnlinkSeller = async () => {
+    setUnlinkConfirmOpen(false);
+    setUnlinking(true);
+    setError(null);
+    try {
+      const res = await mercadopagoService.unlinkSeller();
+      // cloudCleaned:false = el seller local se limpió pero Cloud no (sin conexión).
+      setCloudCleanupPending(res.cloudCleaned === false);
+      refreshSellerStatus();
+      loadData();
+    } catch {
+      setError("No se pudo desvincular la cuenta de Mercado Pago. Reintentá en unos segundos.");
+    } finally {
+      setUnlinking(false);
+    }
+  };
 
   const handleAddPosnet = async () => {
     const fullDeviceId = `PAX_A910__SMARTPOS${newDeviceSuffix.trim()}`;
@@ -650,22 +673,69 @@ export default function PagosSection() {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={handleLink}
-          disabled={linking}
-          className={`h-11 px-6 rounded-xl text-xs font-bold uppercase tracking-[0.12em] transition-all duration-300 flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 ${
-            sellerStatus?.linked && sellerStatus.status === "expired"
-              ? "bg-orange-500 text-white hover:brightness-110"
-              : isBosko
-                ? "bg-accent text-ink-950 hover:brightness-110"
-                : "bg-blue text-white hover:brightness-110"
-          }`}
-        >
-          {linking ? <Loader2 size={14} strokeWidth={2.5} className="animate-spin" /> : <Link2 size={14} strokeWidth={2.5} />}
-          {linking ? "Redirigiendo..." : sellerStatus?.linked && sellerStatus.status === "expired" ? "Re-vincular" : "Vincular"}
-        </button>
+        {cloudCleanupPending && (
+          <div
+            role="alert"
+            className="flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-[12px] text-amber-300"
+          >
+            <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
+            <span>
+              La cuenta se desvinculó de esta PC, pero quedó limpieza pendiente en la nube — reintentá la desvinculación con conexión.
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleLink}
+            disabled={linking}
+            className={`flex-1 h-11 px-6 rounded-xl text-xs font-bold uppercase tracking-[0.12em] transition-all duration-300 flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 ${
+              sellerStatus?.linked && sellerStatus.status === "expired"
+                ? "bg-orange-500 text-white hover:brightness-110"
+                : isBosko
+                  ? "bg-accent text-ink-950 hover:brightness-110"
+                  : "bg-blue text-white hover:brightness-110"
+            }`}
+          >
+            {linking ? <Loader2 size={14} strokeWidth={2.5} className="animate-spin" /> : <Link2 size={14} strokeWidth={2.5} />}
+            {linking ? "Redirigiendo..." : sellerStatus?.linked && sellerStatus.status === "expired" ? "Re-vincular" : "Vincular"}
+          </button>
+
+          {sellerStatus?.linked && (
+            <button
+              type="button"
+              onClick={() => setUnlinkConfirmOpen(true)}
+              disabled={unlinking}
+              className="h-11 px-5 rounded-xl text-xs font-bold uppercase tracking-[0.12em] transition-all duration-300 flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20"
+            >
+              {unlinking && <Loader2 size={14} strokeWidth={2.5} className="animate-spin" />}
+              {unlinking ? "Desvinculando..." : "Desvincular"}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Confirmación de desvinculación (D9 + aviso R22) */}
+      {unlinkConfirmOpen && (
+        <SafeDeleteModal
+          onClose={() => setUnlinkConfirmOpen(false)}
+          onConfirm={handleUnlinkSeller}
+          title="Desvincular Mercado Pago"
+          expectedText="DESVINCULAR"
+          typeLabel="la cuenta"
+          confirmLabel="Desvincular"
+          warning={
+            <>
+              Vas a desvincular la cuenta de Mercado Pago
+              {sellerStatus?.displayName ? <> <strong className="text-danger font-semibold">{sellerStatus.displayName}</strong></> : null}.
+              Las cajas provisionadas con esa cuenta van a quedar huérfanas, y al re-provisionar con otra
+              cuenta <strong className="text-danger font-semibold">el QR estático cambia</strong>: si el QR
+              ya está impreso, vas a tener que reimprimirlo.
+            </>
+          }
+        />
+      )}
 
       {/* Toasts */}
       {linkedNotice && (

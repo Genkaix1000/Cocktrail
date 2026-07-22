@@ -89,12 +89,17 @@ const mpSellersRepo = new SupabaseMercadoPagoSellersRepository();
 const mpCajasRepo = new SupabaseMercadoPagoCajasRepository();
 const mpCajasDevicesRepo = new SupabaseMercadoPagoCajasDevicesRepository();
 const barsRepo = new SupabaseBarsRepository();
-const mpOAuthService = new MercadoPagoOAuthService(oauthStatesRepo, mpSellersRepo, {
-  appId: env.MP_APP_ID,
-  clientSecret: env.MP_CLIENT_SECRET,
-  redirectUri: env.MP_REDIRECT_URI,
-  refreshMarginDays: env.MP_REFRESH_MARGIN_DAYS,
-});
+const mpOAuthService = new MercadoPagoOAuthService(
+  oauthStatesRepo,
+  mpSellersRepo,
+  {
+    appId: env.MP_APP_ID,
+    clientSecret: env.MP_CLIENT_SECRET,
+    redirectUri: env.MP_REDIRECT_URI,
+    refreshMarginDays: env.MP_REFRESH_MARGIN_DAYS,
+  },
+  supabaseCloud, // buzón de handoff + limpieza de metadata al desvincular
+);
 
 // Fase 2 — resuelve el access_token del único seller vinculado (single-seller).
 const credentialsResolver = new CredentialsResolverService(mpSellersRepo, mpOAuthService);
@@ -265,4 +270,6 @@ app.use("/api", createEventsController(eventsService, usersRepo));
 // Error handler global (ÚLTIMO)
 app.use(errorHandler);
 
-export { app, eventsService, syncService, mpWebhooksService };
+// mpSellersRepo y mpOAuthService se exportan para el boot de server.ts
+// (backfill de cifrado + pull del seller — fail-open).
+export { app, eventsService, syncService, mpWebhooksService, mpSellersRepo, mpOAuthService };

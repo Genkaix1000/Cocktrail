@@ -53,6 +53,10 @@ export function verifySession(raw: string | undefined): Session | null {
   return { role: role as Role, username, expiresAt };
 }
 
+// SameSite=Lax (no Strict) a propósito: la vuelta del OAuth de MP es una
+// navegación top-level cross-site (MP → Edge Function → redirect a /admin);
+// con Strict el browser no mandaría la cookie y el admin aterrizaría
+// deslogueado en /admin?linked=true.
 export function buildSessionCookie(username: string, role: Role): string {
   const { value, maxAgeSeconds } = signSession(username, role);
   const secure = env.NODE_ENV === "production" ? "Secure; " : "";

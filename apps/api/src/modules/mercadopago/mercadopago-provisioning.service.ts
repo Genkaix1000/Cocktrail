@@ -9,7 +9,6 @@ import type {
 } from "./mercadopago-cajas-devices.repository.js";
 import type { MercadoPagoSellersRepository, Seller } from "./mercadopago-sellers.repository.js";
 import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
-import { supabase } from "../../shared/supabase.js";
 
 const MP_API = "https://api.mercadopago.com";
 const EXTERNAL_STORE_ID = "COCKTRAILSUC001";
@@ -292,42 +291,14 @@ export class MercadoPagoProvisioningService {
       }
     }
 
-    // El seller vive en Cloud (OAuth Fase 1). Local solo necesita un stub
-    // para que la FK mercadopago_cajas.seller_user_id no falle (23503).
-    // Cloud sigue siendo la fuente de verdad para tokens.
-    const { error: upsertErr } = await supabase
-      .from("mercadopago_sellers")
-      .upsert(
-        {
-          user_id: seller.userId,
-          status: seller.status,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      )
-      .select("user_id");
-
-    if (upsertErr) {
-      console.error("[Provisioning] Failed to upsert seller stub in local DB:", upsertErr);
-      throw upsertErr;
-    }
-
-    // Verificación post-upsert — el seller debe existir en Local antes del insert de caja
-    const { data: exists, error: existsErr } = await supabase
-      .from("mercadopago_sellers")
-      .select("user_id")
-      .eq("user_id", seller.userId)
-      .maybeSingle();
-
-    if (existsErr) {
-      console.error("[Provisioning] Failed to verify seller stub in local DB:", existsErr);
-      throw existsErr;
-    }
-    if (!exists) {
-      throw new Error(
-        `[Provisioning] seller stub ${seller.userId} was not created in local DB — check RLS or permissions.`,
-      );
-    }
+    // Garantizar la fila del seller en local antes del insert de la caja (FK
+    // mercadopago_cajas.seller_user_id, 23503). Post-PR 4 el seller YA vive en
+    // local — si vino por findActive la fila existe y esto es un no-op; si vino
+    // por el fallback de env todavía puede faltar. Sin tokens: upsert parcial.
+    await this.sellersRepo.upsert({
+      userId: seller.userId,
+      status: seller.status,
+    });
 
     const caja = await this.cajasRepo.create({
       barId: bar.id,
@@ -517,7 +488,7 @@ export class MercadoPagoProvisioningService {
   // ── helpers ──────────────────────────────────────────────────────────
 
   private async requireActiveSeller(): Promise<Seller> {
-    const seller = await this.sellersRepo.findFirstActive();
+    const seller = await this.sellersRepo.findActive();
     if (!seller) {
       throw new Conflict(
         "No hay ninguna cuenta de Mercado Pago vinculada. Vinculala desde /admin?tab=pagos.",

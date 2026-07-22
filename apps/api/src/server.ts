@@ -1,6 +1,7 @@
 import { env } from "./config/env.js";
-import { app, eventsService, syncService, mpWebhooksService } from "./app.js";
+import { app, eventsService, syncService, mpWebhooksService, mpSellersRepo, mpOAuthService } from "./app.js";
 import { supabase } from "./shared/supabase.js";
+import { runMpFallbackPreflight } from "./modules/mercadopago/mp-fallback-preflight.js";
 import { runMigrations } from "./infra/migrations/migration-runner.js";
 import { PgMigrationsRepository } from "./infra/migrations/pg-migrations.repository.js";
 import { exec } from "node:child_process";
@@ -128,6 +129,30 @@ async function boot() {
     } catch (err: any) {
       console.error("[boot] MP webhook replay failed:", err?.message || err);
     }
+
+    // PR 4 — MP (todo fail-open: ninguno de estos pasos frena el arranque y
+    // ninguno loguea tokens):
+    // 1. Backfill de cifrado: filas legacy en claro → _enc; blobs abiertos con
+    //    MP_TOKEN_SECRET_PREVIOUS → re-cifrados con la clave actual.
+    try {
+      const { migrated } = await mpSellersRepo.backfillEncryption();
+      if (migrated > 0) console.log(`[boot] MP: ${migrated} seller(s) re-cifrados en local.`);
+    } catch (err: any) {
+      console.warn("[boot] MP token backfill skipped:", err?.message || err);
+    }
+    // 2. Pull del buzón de traspaso si no hay seller activo local (instalación
+    //    nueva o restore — el token NUNCA viaja por el sync normal, D3).
+    try {
+      const active = await mpSellersRepo.findActive().catch(() => null);
+      if (!active) {
+        const pull = await mpOAuthService.pullSellerFromCloud();
+        if (pull.pulled) console.log(`[boot] MP: seller ${pull.userId} traído del buzón de traspaso.`);
+      }
+    } catch (err: any) {
+      console.warn("[boot] MP seller pull skipped:", err?.message || err);
+    }
+    // 3. Preflight del fallback de emergencia (F1.c) — nunca lanza.
+    await runMpFallbackPreflight();
 
     await eventsService.initialize();
     console.log("[boot] EventsService initialized");

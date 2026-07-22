@@ -9,12 +9,19 @@ import {
   isDegraded,
   type MigrationsStatus,
 } from "../../infra/migrations/migrations-status.js";
+import {
+  getMpFallbackStatus,
+  runMpFallbackPreflight,
+  type MpFallbackStatus,
+} from "../mercadopago/mp-fallback-preflight.js";
 
 const serverStartedAt = Date.now();
 
 export type SystemHealth = {
   status: "ok" | "degraded";
   migrations: MigrationsStatus;
+  /** F1.d — estado del preflight del fallback de emergencia de MP. */
+  mpFallback: MpFallbackStatus;
   serverStartedAt: number;
 };
 
@@ -62,8 +69,16 @@ export class SystemService {
     return {
       status: isDegraded(migrations) ? "degraded" : "ok",
       migrations,
+      // F1.d: singleton del preflight — un fallback degradado NO marca el
+      // health general como "degraded" (es la red de seguridad, no el camino activo).
+      mpFallback: getMpFallbackStatus(),
       serverStartedAt,
     };
+  }
+
+  /** F1.c — re-evaluación on-demand del preflight (nunca lanza). */
+  async refreshMpFallback(): Promise<MpFallbackStatus> {
+    return runMpFallbackPreflight();
   }
 
   async checkInternet(): Promise<boolean> {

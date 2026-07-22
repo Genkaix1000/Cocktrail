@@ -1,10 +1,32 @@
 # Setup de OAuth de Mercado Pago — checklist
 
-**Fecha**: 2026-07-20
+**Fecha**: 2026-07-20 · **Actualizado**: 2026-07-22 (PR 4: handoff cifrado, tokens locales)
 **Estado del entorno al escribir esto**: `MP_ACCESS_TOKEN` y `MP_POS_DEVICE_ID` seteadas (camino legacy, es el que cobra hoy); `MP_APP_ID`, `MP_CLIENT_SECRET` y `MP_REDIRECT_URI` **vacías** → el OAuth no puede ejecutarse.
 
 > El detalle de implementación está en [`fase-1-oauth.md`](./fase-1-oauth.md). Este archivo es solo el
 > procedimiento de configuración, que estaba disperso.
+
+---
+
+## Cómo funciona el flujo desde el PR 4 (handoff cifrado)
+
+**La Edge Function ya no escribe tokens en claro en ningún lado.** El flujo nuevo:
+
+1. El admin toca **Vincular** en `/admin?tab=pagos` → autoriza en Mercado Pago.
+2. La Edge Function `mp-auth-callback` canjea el `code`, **cifra el payload de tokens** con
+   `MP_HANDOFF_KEY` (AES-256-GCM, contrato `cocktrail/mp-handoff/v1`) y lo deposita en el buzón
+   `mercadopago_seller_handoff` de Cloud. Vence a los **15 minutos**.
+   En `mercadopago_sellers` Cloud queda **solo metadata** (user_id, status, expiración, nickname…),
+   con `access_token`/`refresh_token` en `NULL` explícito.
+3. El **backend local** hace el pull del handoff (lazy al consultar el estado del seller, o en el
+   boot), lo **descifra con la misma `MP_HANDOFF_KEY`**, re-cifra los tokens con `MP_TOKEN_SECRET`
+   y los guarda en la **base local**. Después borra el handoff.
+4. Desde ahí, **cada cobro lee el token de la base local**: no depende de internet ni de Cloud.
+
+Si `MP_HANDOFF_KEY` falta en la Edge Function, la vinculación **falla con mensaje claro**
+(`linked=false&message=...`) — jamás cae a escribir tokens en claro. Si la clave difiere entre la
+Edge Function y el backend, el pull falla con un error accionable ("handoff ilegible: verificá
+`MP_HANDOFF_KEY` en ambos lados").
 
 ---
 
@@ -54,6 +76,14 @@ MP_REDIRECT_URI=https://nmdvrmglmnbpoyfjmgab.supabase.co/functions/v1/mp-auth-ca
 # Opcional (default 5, rango 1-7): días antes del vencimiento para refrescar
 MP_REFRESH_MARGIN_DAYS=5
 
+# ── Cifrado (PR 4) ──
+# Clave del cifrado local de tokens (≥32 chars). Si falta, cae a AUTH_SECRET.
+MP_TOKEN_SECRET=<random ≥32 chars>
+# Clave del buzón de traspaso del OAuth. DEBE ser EXACTAMENTE la misma acá y
+# en el secret de la Edge Function (paso 3) — si difieren, el pull del seller
+# falla con "handoff ilegible".
+MP_HANDOFF_KEY=<random ≥32 chars>
+
 # Webhooks (Fase 6). Se genera en el panel de MP al configurar notificaciones.
 # Sin esto, POST /api/mercadopago/webhooks responde 401 (fail-closed, a propósito).
 MP_WEBHOOK_SECRET=<clave secreta de notificaciones>
@@ -71,18 +101,30 @@ y el plan de remediación los conserva deliberadamente durante toda esta ronda.
 La Edge Function corre en Supabase Cloud, en **otro proceso**, y **no lee** el `.env` del backend. Es ella
 la que canjea el `code` por el token (`mp-auth-callback/index.ts:32-34`).
 
+Procedimiento completo con el CLI (una sola vez el `login` + `link`):
+
 ```bash
+supabase login                                     # abre el navegador
+supabase link --project-ref nmdvrmglmnbpoyfjmgab   # vincula el repo al proyecto Cloud
+
 supabase secrets set MP_APP_ID=<mismo valor que en el .env>
 supabase secrets set MP_CLIENT_SECRET=<mismo valor que en el .env>
 supabase secrets set MP_REDIRECT_URI=https://nmdvrmglmnbpoyfjmgab.supabase.co/functions/v1/mp-auth-callback
 supabase secrets set NEXT_PUBLIC_SITE_URL=http://<ip-lan-de-la-mini-pc>:3000
+
+# PR 4 — clave del handoff cifrado. MISMO valor que MP_HANDOFF_KEY en apps/api/.env.
+supabase secrets set MP_HANDOFF_KEY=<el valor de apps/api/.env>
 ```
 
-Y desplegarla:
+Y desplegarla (cada vez que cambia `supabase/functions/mp-auth-callback/index.ts`):
 
 ```bash
 supabase functions deploy mp-auth-callback
 ```
+
+> ⚠ **Sin `MP_HANDOFF_KEY` la vinculación falla a propósito** (la Edge Function no tiene fallback a
+> tokens en claro). Si después de vincular ves `linked=false&message=Falta el secret MP_HANDOFF_KEY...`,
+> es esto.
 
 > `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` las inyecta Supabase automáticamente en las Edge
 > Functions — **no** hay que setearlas como secrets.
@@ -120,20 +162,33 @@ Esa URL tiene que ser **alcanzable desde el navegador que está haciendo el OAut
 
 ## ⚠ Qué cambia en el momento en que vinculás
 
-**Tu camino de cobro se muda solo.** Hoy no hay ningún seller, así que
-`credentials-resolver.service.ts` cae siempre al nivel 3 (`env.MP_ACCESS_TOKEN`). Apenas exista un seller
-activo, el nivel 2 empieza a devolverlo y **los cobros pasan a usar el token de OAuth, leído desde
-Supabase Cloud en cada cobro**.
+**Tu camino de cobro se muda solo.** Sin seller activo, `credentials-resolver.service.ts` cae al
+nivel 3 (`env.MP_ACCESS_TOKEN`). Apenas exista un seller activo, el nivel 2 empieza a devolverlo y
+los cobros pasan a usar el token de OAuth — que desde el PR 4 se lee **de la base local, cifrado**:
+el cobro ya **no** depende de Cloud ni de internet (los hallazgos A1/A1b de la
+[spec de remediación](../specs/mercadopago/remediacion-integracion-mp.md) quedaron cerrados por diseño).
 
-Eso te pone sobre los hallazgos **A1** y **A1b** de
-[`../specs/remediacion-integracion-mp.md`](../specs/mercadopago/remediacion-integracion-mp.md): con un seller
-vinculado y Cloud sin responder, **no se cobra** — y ni siquiera cae al fallback, porque
-`findFirstActive()` lanza excepción antes de llegar a él.
+**Es reversible**: el botón **Desvincular** de `/admin?tab=pagos` hace el wipe de tokens y deja el
+seller en `expired` (local y Cloud); el resolver vuelve al fallback de la env.
 
-**Es reversible**: borrando la fila del seller (o poniéndole `status` distinto de `active`) el resolver
-vuelve al fallback legacy.
+---
 
-**Recomendación**: hacé la vinculación en un momento tranquilo para validar el flujo de punta a punta
-—la Fase 1 figura como "⏳ E2E cloud" pendiente en [`INDEX.md`](./INDEX.md)— pero **no** dejes un seller
-vinculado corriendo en un turno real hasta que salga el PR 4 del plan de remediación, que es el que hace
-que leer el token no dependa de internet.
+## Re-provisión al cambiar de cuenta (R22)
+
+Cambiar la cuenta de Mercado Pago vinculada **deja huérfanas las cajas ya provisionadas**: el
+`store_id`/`pos_id` de cada caja viven **dentro de la cuenta del seller viejo**, y el **QR estático
+apunta a esa cuenta**. No hay re-provisión automática. El procedimiento:
+
+1. **Desvincular** el seller saliente desde `/admin?tab=pagos` (la confirmación ya avisa esto).
+2. Si el Posnet físico es de la cuenta vieja: sacarlo con **"Eliminar el lector de mi cuenta"** en la
+   app de MP, y que el dueño **lo reclame desde SU cuenta** (paso manual irreductible — MP no expone
+   API para transferir hardware).
+3. **Vincular** la cuenta nueva por OAuth (flujo de este doc).
+4. **Re-provisionar** local/caja desde la app: se crean store/POS nuevos **en la cuenta nueva** y
+   **el QR estático CAMBIA**.
+5. Si el QR viejo ya estaba impreso, **reimprimirlo**. Un cliente que escanee el QR viejo estaría
+   pagando contra un punto de venta de la cuenta vieja.
+
+> Las cajas viejas quedan en `mercadopago_cajas` apuntando al seller expirado; la detección de cajas
+> huérfanas y el panel de salud son de
+> [`gestion-posnets.md`](../specs/mercadopago/gestion-posnets.md) (bloques G/H).

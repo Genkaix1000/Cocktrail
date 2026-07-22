@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Trash2, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 
 type Props = {
   onClose: () => void;
@@ -9,9 +9,13 @@ type Props = {
   title: string;
   expectedText: string;
   typeLabel: string; // e.g. "el trago" o "el usuario"
+  /** Reemplaza el mensaje de advertencia default (para acciones con consecuencias específicas). */
+  warning?: ReactNode;
+  /** Texto del botón de confirmación (default: "Eliminar"). */
+  confirmLabel?: string;
 };
 
-export default function SafeDeleteModal({ onClose, onConfirm, title, expectedText, typeLabel }: Props) {
+export default function SafeDeleteModal({ onClose, onConfirm, title, expectedText, typeLabel, warning, confirmLabel }: Props) {
   const [inputText, setInputText] = useState("");
   const isMatched = inputText === expectedText;
 
@@ -52,7 +56,11 @@ export default function SafeDeleteModal({ onClose, onConfirm, title, expectedTex
 
         {/* Warning Message */}
         <div className="mb-5 bg-danger-soft/30 border border-danger-line/20 rounded-xl p-3.5 text-xs text-ink-200 leading-relaxed">
-          Estás a punto de eliminar permanentemente {typeLabel} <strong className="text-danger font-semibold">{expectedText}</strong>. Esta acción no se puede deshacer.
+          {warning ?? (
+            <>
+              Estás a punto de eliminar permanentemente {typeLabel} <strong className="text-danger font-semibold">{expectedText}</strong>. Esta acción no se puede deshacer.
+            </>
+          )}
         </div>
 
         {/* Confirmation Form */}
@@ -89,7 +97,7 @@ export default function SafeDeleteModal({ onClose, onConfirm, title, expectedTex
               className="flex-1 h-11 bg-danger text-white font-semibold rounded-xl text-xs uppercase tracking-[0.08em] flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.1)]"
             >
               <Trash2 size={13} />
-              Eliminar
+              {confirmLabel ?? "Eliminar"}
             </button>
           </div>
         </form>

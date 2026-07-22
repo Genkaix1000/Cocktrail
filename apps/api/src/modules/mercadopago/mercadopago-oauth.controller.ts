@@ -32,5 +32,24 @@ export function createMercadoPagoOAuthController(service: MercadoPagoOAuthServic
     }
   });
 
+  // POST /api/mercadopago/oauth/pull-seller — baja el seller del buzón de traspaso Cloud (admin).
+  router.post("/oauth/pull-seller", authMiddleware, requireRole("admin"), async (_req, res, next) => {
+    try {
+      res.json(await service.pullSellerFromCloud());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // DELETE /api/mercadopago/oauth/seller — desvincular (wipe local + Cloud) (admin).
+  // Contrato con el frontend: { ok: true, cloudCleaned: boolean }.
+  router.delete("/oauth/seller", authMiddleware, requireRole("admin"), async (_req, res, next) => {
+    try {
+      res.json(await service.unlinkSeller());
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }

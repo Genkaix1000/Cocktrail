@@ -18,10 +18,12 @@ export const supabaseCloud = env.SUPABASE_CLOUD_URL && env.SUPABASE_CLOUD_SERVIC
   : null;
 
 /**
- * Cliente para la data de la integración MP (oauth_states + mercadopago_sellers).
- * En producción vive en Cloud — la Edge Function `mp-auth-callback` escribe ahí y
- * el backend debe leer/escribir el MISMO proyecto para que el flujo OAuth (state,
- * tokens) sea coherente. Si no hay Cloud configurado (dev), cae a la DB local, que
- * tiene las mismas tablas/RPC (migraciones de Fase 0).
+ * Cliente SOLO para `oauth_states`: la Edge Function `mp-auth-callback` (Cloud)
+ * consume el state, así que el backend debe escribirlo en el MISMO proyecto.
+ * Si no hay Cloud configurado (dev), cae a la DB local, que tiene la misma
+ * tabla/RPC (migraciones de Fase 0).
+ *
+ * ⚠ Los SELLERS ya NO van por acá (PR 4): viven en la base local con tokens
+ * cifrados; Cloud solo guarda metadata + el buzón `mercadopago_seller_handoff`.
  */
-export const mpDb = supabaseCloud ?? supabase;
+export const oauthDb = supabaseCloud ?? supabase;

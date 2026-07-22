@@ -14,6 +14,8 @@ vi.mock("@/services/mercadopago.service", () => ({
     getOAuthUrl: vi.fn(),
     getSellerStatus: vi.fn(),
     testDeviceChargeFor: vi.fn(),
+    unlinkSeller: vi.fn(),
+    pullSeller: vi.fn(),
   },
 }));
 
@@ -46,10 +48,20 @@ const mockedConfigService = vi.mocked(configService);
 
 const UNLINKED_STATUS = { linked: false, status: null, nickname: null, email: null, linkedAt: null, displayName: null };
 
+const LINKED_STATUS = {
+  linked: true,
+  status: "active" as const,
+  nickname: "BOSKO BAR",
+  displayName: "Bosko Bar",
+  email: "bosko@example.com",
+  linkedAt: new Date().toISOString(),
+};
+
 beforeEach(() => {
   mockedUseTheme.mockReturnValue({ theme: "bosko", setTheme: vi.fn(), isDark: true } as any);
   mockedMpService.getSellerStatus.mockResolvedValue(UNLINKED_STATUS);
   mockedMpService.getOAuthUrl.mockResolvedValue({ url: "https://auth.mercadopago.com/authorization?..." });
+  mockedMpService.unlinkSeller.mockResolvedValue({ ok: true, cloudCleaned: true });
   mockedMpService.testDeviceChargeFor.mockResolvedValue({
     reachedDevice: true,
     message: "ok",
@@ -236,7 +248,8 @@ describe("PagosSection", () => {
     render(<PagosSection />);
 
     expect(await screen.findByText(/Sesión expirada/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Vincular/i })).toBeInTheDocument();
+    // /Vincular/i también matchearía "Desvincular" (nuevo con el seller linked).
+    expect(screen.getByRole("button", { name: /Re-vincular/i })).toBeInTheDocument();
   });
 
   it("persiste el toggle Sandbox al cambiarlo", async () => {
@@ -254,5 +267,71 @@ describe("PagosSection", () => {
       }),
     );
     expect(toggle).toHaveAttribute("aria-pressed", "true");
+  });
+
+  // ── Desvincular (D9 + aviso R22) ──
+
+  /** Abre la confirmación, tipea DESVINCULAR y confirma. */
+  async function confirmUnlink(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole("button", { name: "Desvincular" }));
+    await user.type(screen.getByLabelText(/escribe/i), "DESVINCULAR");
+    const submit = screen
+      .getAllByRole("button", { name: "Desvincular" })
+      .find((b) => b.getAttribute("type") === "submit");
+    expect(submit).toBeDefined();
+    await user.click(submit!);
+  }
+
+  it("no muestra Desvincular cuando no hay cuenta vinculada", async () => {
+    render(<PagosSection />);
+    await screen.findByText("Pagos");
+    expect(screen.queryByRole("button", { name: "Desvincular" })).not.toBeInTheDocument();
+  });
+
+  it("muestra Desvincular cuando hay cuenta vinculada", async () => {
+    mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
+    render(<PagosSection />);
+    expect(await screen.findByRole("button", { name: "Desvincular" })).toBeInTheDocument();
+  });
+
+  it("la confirmación muestra el aviso R22 (cajas huérfanas + QR que cambia + reimpresión)", async () => {
+    const user = userEvent.setup();
+    mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
+    render(<PagosSection />);
+
+    await user.click(await screen.findByRole("button", { name: "Desvincular" }));
+
+    expect(screen.getByText("Desvincular Mercado Pago")).toBeInTheDocument();
+    expect(screen.getByText(/quedar huérfanas/i)).toBeInTheDocument();
+    expect(screen.getByText(/el QR estático cambia/i)).toBeInTheDocument();
+    expect(screen.getByText(/reimprimirlo/i)).toBeInTheDocument();
+    expect(mockedMpService.unlinkSeller).not.toHaveBeenCalled();
+  });
+
+  it("llama a unlinkSeller tras confirmar tipeando DESVINCULAR y refresca el estado", async () => {
+    const user = userEvent.setup();
+    mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
+    render(<PagosSection />);
+
+    const statusCallsBefore = mockedMpService.getSellerStatus.mock.calls.length;
+    await confirmUnlink(user);
+
+    await waitFor(() => expect(mockedMpService.unlinkSeller).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mockedMpService.getSellerStatus.mock.calls.length).toBeGreaterThan(statusCallsBefore),
+    );
+    // cloudCleaned:true → sin aviso de limpieza pendiente
+    expect(screen.queryByText(/limpieza pendiente en la nube/i)).not.toBeInTheDocument();
+  });
+
+  it("muestra el aviso persistente cuando cloudCleaned es false", async () => {
+    const user = userEvent.setup();
+    mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
+    mockedMpService.unlinkSeller.mockResolvedValue({ ok: true, cloudCleaned: false });
+    render(<PagosSection />);
+
+    await confirmUnlink(user);
+
+    expect(await screen.findByText(/limpieza pendiente en la nube/i)).toBeInTheDocument();
   });
 });

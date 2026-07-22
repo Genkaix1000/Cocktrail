@@ -90,6 +90,24 @@ export const mercadopagoService = {
     return apiFetch<MpSellerStatus>(`/api/mercadopago/seller-status${qs}`);
   },
 
+  /**
+   * D9 — desvincula la cuenta MP (wipe de tokens local + Cloud). `cloudCleaned: false`
+   * significa que el seller local se limpió pero Cloud no se pudo limpiar (sin conexión):
+   * queda limpieza pendiente para reintentar con internet.
+   */
+  unlinkSeller() {
+    return apiFetch<{ ok: boolean; cloudCleaned: boolean }>("/api/mercadopago/oauth/seller", {
+      method: "DELETE",
+    });
+  },
+
+  /** Re-intenta bajar el seller desde el buzón de traspaso en Cloud (post-OAuth). */
+  pullSeller() {
+    return apiFetch<{ ok: boolean }>("/api/mercadopago/oauth/pull-seller", {
+      method: "POST",
+    });
+  },
+
   getDeviceStatus() {
     return apiFetch<PosnetDeviceStatus>("/api/mercadopago/device/status");
   },
