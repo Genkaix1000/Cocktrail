@@ -273,7 +273,8 @@ Se levantó el entorno y se ejercitó la vinculación de punta a punta en un nav
 
 - **El flujo OAuth funciona.** Vincular redirige a `auth.mercadopago.com/authorization` con `client_id`, `redirect_uri` a la Edge Function y PKCE S256 correctos. La Edge Function `mp-auth-callback` está desplegada en Cloud, con sus 4 secrets cargados (verificados por digest SHA256). El estado "⏳ E2E cloud pendiente" del `docs/fases-mp/INDEX.md` ya se puede cerrar.
 - **El token vive en Cloud, no en local.** Confirmado en vivo: la DB local **no tiene** la tabla `mercadopago_sellers` ("relation does not exist"); el seller vive en el Postgres de Supabase Cloud. Es la evidencia empírica directa de A1/D1.
-- **A17 reproducido.** Había 2 sellers activos en Cloud (una cuenta de prueba de 07-17 + la del dueño real vinculada el 20-07); la UI mostraba la vieja por el `order asc`. Se resolvió borrando la fila vieja a mano (DELETE contra la REST API de Cloud) — exactamente el "desvincular" que A18 dice que falta en la app.
+- **A17 reproducido.** Había 2 sellers activos en Cloud (la cuenta del otro desarrollador, del 07-17, + la cuenta de prueba de Manuel vinculada el 20-07); la UI mostraba la vieja por el `order asc`. Se resolvió borrando la fila vieja a mano (DELETE contra la REST API de Cloud) — exactamente el "desvincular" que A18 dice que falta en la app.
+  > **Corrección (2026-07-21)**: una versión previa decía que la cuenta vinculada el 20-07 era "la del dueño real". **Es falso** — es la cuenta de prueba de Manuel (`GARCIAMANUEL…`, user `1517393956`). **La cuenta del dueño del boliche nunca se vinculó todavía.** Además el borrado manual no fue definitivo: al 2026-07-21 vuelven a estar las dos filas activas.
 - **Setup de OAuth documentado** en `docs/fases-mp/setup-oauth.md` (nuevo): las 3 env del backend, los 4 secrets de la Edge Function, el registro del redirect URI y PKCE en el panel de MP.
 
 ### Bugs de infraestructura encontrados y corregidos en esta sesión
@@ -393,7 +394,13 @@ El desalojo por force-logout mantiene `requireRole("admin")`, que ya estaba bien
 
 ### Riesgos
 
-**Alto — el flujo de cobro con Posnet físico es el único probado en vivo, y hoy corre por el fallback legacy.** Verificado en el entorno real: `MP_ACCESS_TOKEN` y `MP_POS_DEVICE_ID` están seteadas, pero **`MP_APP_ID` y `MP_CLIENT_SECRET` están vacías** — el OAuth ni siquiera se puede ejecutar (`mercadopago-oauth.service.ts:51` lanzaría). Por lo tanto no hay ningún seller vinculado, `findFirstActive()` nunca devuelve uno, y **todo cobro de hoy sale por el nivel 3 del resolver**. Lo validado el 2026-07-13 fue ese camino.
+**Alto — el flujo de cobro con Posnet físico es el único probado en vivo.** Lo validado el 2026-07-13 fue el camino del fallback legacy (`env.MP_ACCESS_TOKEN`, nivel 3 del resolver).
+
+> **Corrección (2026-07-21) — el estado del entorno cambió y la afirmación original ya no vale.** Una versión previa decía: *"`MP_APP_ID` y `MP_CLIENT_SECRET` están vacías, el OAuth ni siquiera se puede ejecutar, no hay ningún seller vinculado y todo cobro de hoy sale por el nivel 3"*. **Hoy es al revés**: las tres envs de OAuth están seteadas, hay **dos sellers activos con token** en Cloud, y por lo tanto `findFirstActive()` **sí devuelve uno** — los cobros salen por el **nivel 2** (seller OAuth), no por el fallback.
+>
+> Que en la práctica no se haya notado es una casualidad: el seller que gana (el más viejo) resulta ser la misma cuenta que la del `MP_ACCESS_TOKEN` del `.env`, así que el token efectivo es equivalente. **No hay que apoyarse en esa casualidad** — es exactamente el riesgo R21.
+>
+> **Impacto en el PR 4**: el argumento "no se toca el fallback porque es el camino activo" ya no aplica — el camino activo es el OAuth. El fallback igual **se conserva** como red de seguridad (y A1b lo vuelve alcanzable), pero por precaución, no porque sea lo que está en uso.
 
 Por eso: **el fallback a `MP_ACCESS_TOKEN` no se elimina en esta ronda.** El PR 4 cambia de dónde sale el token, que es justo el tipo de cambio con bugs sutiles posibles (token mal descifrado, seller que no bajó, migración a medias); si se borra la red de seguridad en el mismo entregable que cambia la fuente, el peor caso pasa de "cae al camino viejo que funciona" a "el boliche no cobra". Se elimina en una ronda posterior, recién con el camino nuevo validado contra el Posnet físico.
 
