@@ -209,8 +209,20 @@ export class EventsService {
 
     this.emit({ type: "event.closed", summary });
 
-    // Perform cloud sync in the background
-    this.syncEventToCloudBackground(closedEvent, totals);
+    if (totals.total === 0) {
+      // Noche cerrada sin ventas: se elimina en vez de archivarse, y NO se sincroniza
+      // a Cloud (así no seguimos fabricando noches vacías en la nube que después
+      // vuelven con cada restore). orders/tickets cascadean por ON DELETE CASCADE.
+      console.log(`[EventsService] Noche ${closedEvent.id} cerrada sin ventas — se elimina en vez de archivarse.`);
+      try {
+        await this.eventsRepo.delete(closedEvent.id);
+      } catch (dbErr) {
+        console.error(`[EventsService] No se pudo eliminar la noche vacía ${closedEvent.id}:`, dbErr);
+      }
+    } else {
+      // Perform cloud sync in the background
+      this.syncEventToCloudBackground(closedEvent, totals);
+    }
 
     // Ya no se crea la noche siguiente automáticamente: queda sin noche activa
     // hasta que la admin abra una manualmente (POST /api/events/open).
@@ -227,17 +239,14 @@ export class EventsService {
       const orders = await this.ordersRepo.listForEvent(ev.id);
       const totals = computeTotals(orders);
 
-      // Auto-cleanup: If a closed night has $0 total, delete it permanently from the database
-      if (totals.total === 0) {
-        console.log(`[EventsService] Night event ${ev.id} has $0 total. Automatically deleting from database...`);
-        try {
-          // orders/tickets/cash_sales cascadean solos (ON DELETE CASCADE en night_events).
-          await this.eventsRepo.delete(ev.id);
-        } catch (dbErr) {
-          console.error(`[EventsService] Failed to delete $0 event ${ev.id} from Supabase:`, dbErr);
-        }
-        continue; // Skip returning it to the client
-      }
+      // Filtro de presentación: las noches en $0 no se muestran en el Historial,
+      // pero NO se tocan en la base. Antes acá se las borraba (efecto colateral
+      // destructivo en un camino de lectura), lo que además peleaba con el restore:
+      // las noches vacías de Cloud volvían a bajar en cada restore y se borraban
+      // de nuevo, en un ciclo infinito. La limpieza real vive en
+      // src/scripts/cleanup-empty-nights.ts (manual) o en closeEvent() (una noche que
+      // cierra en $0 se elimina en vez de archivarse).
+      if (totals.total === 0) continue;
 
       summaries.push({
         ...ev,

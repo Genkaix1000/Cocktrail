@@ -3,13 +3,13 @@ import { EventsService } from "./events.service.js";
 import type { EventsRepository } from "./events.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
-import type { NightEvent } from "@cocktrail/shared";
+import type { NightEvent, Order } from "@cocktrail/shared";
 
 function makeEventsRepo(overrides?: Partial<EventsRepository>): EventsRepository {
   return {
     getActive: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockImplementation(async (e) => e),
-    update: vi.fn().mockImplementation(async (_id, partial) => ({ id: "event-1", status: "activo", startedAt: Date.now(), orderCounter: 0, ...partial })),
+    update: vi.fn().mockImplementation(async (id, partial) => ({ id, status: "activo", startedAt: Date.now(), orderCounter: 0, ...partial })),
     findById: vi.fn(),
     listClosed: vi.fn().mockResolvedValue([]),
     delete: vi.fn(),
@@ -49,11 +49,30 @@ function makeSyncService() {
   } as any;
 }
 
-function makeService(overrides?: { eventsRepo?: EventsRepository }) {
+function makeService(overrides?: {
+  eventsRepo?: EventsRepository;
+  ordersRepo?: OrdersRepository;
+  syncService?: ReturnType<typeof makeSyncService>;
+}) {
   const eventsRepo = overrides?.eventsRepo ?? makeEventsRepo();
-  const ordersRepo = makeOrdersRepo();
+  const ordersRepo = overrides?.ordersRepo ?? makeOrdersRepo();
   const drinksRepo = makeDrinksRepo();
-  return new EventsService(eventsRepo, ordersRepo, drinksRepo, vi.fn(), makeSyncService());
+  const syncService = overrides?.syncService ?? makeSyncService();
+  return new EventsService(eventsRepo, ordersRepo, drinksRepo, vi.fn(), syncService);
+}
+
+/** Pedido cobrado en efectivo por $1000, para simular una noche con ventas. */
+function makePaidOrder(): Order {
+  return {
+    id: "order-1",
+    token: "tok-1",
+    displayNumber: 1,
+    items: [{ drinkId: 1, name: "Fernet", qty: 1, unitPrice: 1000, subtotal: 1000 }],
+    total: 1000,
+    paymentMethod: "efectivo",
+    status: "entregado",
+    createdAt: Date.now(),
+  };
 }
 
 describe("EventsService.initialize", () => {
@@ -127,6 +146,46 @@ describe("EventsService.openEvent / setKeyword / closeEvent", () => {
     expect(summary.closedBy).toBe("admin1");
     expect(await service.getCurrentEvent()).toBeNull();
   });
+
+  it("closeEvent con total $0 elimina la noche y NO la sincroniza a Cloud", async () => {
+    const eventsRepo = makeEventsRepo();
+    const syncService = makeSyncService();
+    // Sin pedidos → totals.total === 0 → la noche se elimina en vez de archivarse
+    const service = makeService({ eventsRepo, syncService });
+    await service.initialize();
+    const event = await service.openEvent("clave");
+
+    const summary = await service.closeEvent("admin1");
+
+    // El summary se devuelve igual que siempre, para que la UI no cambie
+    expect(summary.status).toBe("cerrado");
+    expect(summary.totals.total).toBe(0);
+    expect(eventsRepo.delete).toHaveBeenCalledWith(event.id);
+    expect(syncService.pushEventData).not.toHaveBeenCalled();
+    expect(await service.getCurrentEvent()).toBeNull();
+  });
+
+  it("closeEvent con total > 0 no borra la noche y sí la sincroniza", async () => {
+    const eventsRepo = makeEventsRepo();
+    const syncService = makeSyncService();
+    const ordersRepo = makeOrdersRepo({
+      listForEvent: vi.fn().mockResolvedValue([makePaidOrder()]),
+    });
+    const service = makeService({ eventsRepo, ordersRepo, syncService });
+    await service.initialize();
+    const event = await service.openEvent("clave");
+
+    const summary = await service.closeEvent("admin1");
+
+    expect(summary.totals.total).toBe(1000);
+    expect(eventsRepo.delete).not.toHaveBeenCalled();
+    expect(syncService.pushEventData).toHaveBeenCalledWith(
+      event.id,
+      expect.objectContaining({ id: event.id, status: "cerrado" }),
+      expect.objectContaining({ total: 1000 }),
+    );
+    expect(await service.getCurrentEvent()).toBeNull();
+  });
 });
 
 describe("EventsService.incrementOrderCounter", () => {
@@ -146,7 +205,12 @@ describe("EventsService.incrementOrderCounter", () => {
 });
 
 describe("EventsService.listClosedEvents", () => {
-  it("auto-elimina (vía el repositorio) las noches cerradas con total $0 y no las devuelve", async () => {
+  // Antes este test verificaba que listClosedEvents BORRABA las noches en $0.
+  // Ese borrado era un efecto colateral destructivo en un camino de lectura y
+  // peleaba con el restore desde Cloud (las noches vacías volvían a bajar en
+  // cada restore y se borraban de nuevo, en loop). Ahora el filtrado es solo
+  // de presentación: no se devuelven, pero no se tocan en la base.
+  it("filtra las noches en $0 pero NO las borra de la base", async () => {
     const closedZero: NightEvent = { id: "e-zero", status: "cerrado", startedAt: Date.now(), orderCounter: 0 };
     const eventsRepo = makeEventsRepo({ listClosed: vi.fn().mockResolvedValue([closedZero]) });
     const service = makeService({ eventsRepo });
@@ -155,7 +219,24 @@ describe("EventsService.listClosedEvents", () => {
     const result = await service.listClosedEvents();
 
     expect(result).toHaveLength(0);
-    expect(eventsRepo.delete).toHaveBeenCalledWith("e-zero");
+    expect(eventsRepo.delete).not.toHaveBeenCalled();
+  });
+
+  it("devuelve las noches cerradas con ventas", async () => {
+    const closedWithSales: NightEvent = { id: "e-ok", status: "cerrado", startedAt: Date.now(), orderCounter: 1 };
+    const eventsRepo = makeEventsRepo({ listClosed: vi.fn().mockResolvedValue([closedWithSales]) });
+    const ordersRepo = makeOrdersRepo({
+      listForEvent: vi.fn().mockResolvedValue([makePaidOrder()]),
+    });
+    const service = makeService({ eventsRepo, ordersRepo });
+    await service.initialize();
+
+    const result = await service.listClosedEvents();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("e-ok");
+    expect(result[0].totals.total).toBe(1000);
+    expect(eventsRepo.delete).not.toHaveBeenCalled();
   });
 });
 
