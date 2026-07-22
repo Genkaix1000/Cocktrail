@@ -1,8 +1,9 @@
 # Cobro verificado — el sistema registra ventas que Mercado Pago rechazó
 
-**Estado**: `in-progress` — plan técnico aprobado y en implementación (2026-07-22); evidencia
-empírica capturada (18:31) y la pregunta abierta sobre `payment.id` **resuelta**. Gate físico
-(tarjeta sin fondos + camino feliz de $15 contra el Posnet real) pendiente para pasar a `done`.
+**Estado**: `done` — implementada y **gate físico pasado el 2026-07-22**: tarjeta sin fondos contra
+el Posnet real → rechazo visible con motivo, sin ticket y sin pedido (4 intents `rejected` /
+`cc_rejected_insufficient_amount` persistidos en `mp_orders`, 0 pedidos creados); cobro aprobado de
+$101 → pedido ligado a su pago (`mp_payment_id`) con monto verificado.
 **Fecha**: 2026-07-22 (última actualización: 2026-07-22, tras la reproducción controlada)
 **Origen**: reproducción en vivo del 2026-07-22 — se cobró con el Posnet físico usando una tarjeta
 sin fondos, Mercado Pago rechazó el pago, y **Cocktrail imprimió el ticket y registró la venta como
@@ -1114,5 +1115,7 @@ justamente porque este bug nació de asumir cosas sobre una API sin verificarlas
   nuevas; DDL aplicado en Cloud (sin FK) y **cierre de noche verificado de punta a punta** —
   `sync_status: synced` y la fila en Cloud con `payment_status: 'cobrado'`.
 - [x] Tests: 602 unit api + 96 integración + 388 web + typecheck, todo en verde.
-- [ ] **Gate físico** (bloquea el pase a `done`): tarjeta sin fondos → rechazo visible, sin ticket,
-  sin pedido; camino feliz de $15 → ticket OK.
+- [x] **Gate físico pasado (2026-07-22)**: tarjeta sin fondos → rechazo visible, sin ticket, sin
+  pedido (verificado en `mp_orders`: 4 rechazos persistidos, 1 cancelación distinguida, 0 pedidos
+  fantasma); cobro aprobado de $101 → pedido con `payment_status='cobrado'` y `mp_payment_id`
+  ligado, monto verificado.
