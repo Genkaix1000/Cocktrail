@@ -2,6 +2,7 @@ import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { Conflict, BadRequest } from "../../shared/errors/http-errors.js";
 import type { OAuthStatesRepository } from "./oauth-states.repository.js";
 import type { MercadoPagoSellersRepository, Seller } from "./mercadopago-sellers.repository.js";
+import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
 
 const AUTH_BASE_URL = "https://auth.mercadopago.com/authorization";
 const TOKEN_URL = "https://api.mercadopago.com/oauth/token";
@@ -135,16 +136,28 @@ export class MercadoPagoOAuthService {
 
     const { appId, clientSecret } = this.assertConfigured();
 
-    const res = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body: new URLSearchParams({
-        client_id: appId,
-        client_secret: clientSecret,
-        grant_type: "refresh_token",
-        refresh_token: seller.refreshToken ?? "",
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(TOKEN_URL, {
+        method: "POST",
+        signal: AbortSignal.timeout(MP_HTTP_TIMEOUT_MS),
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: new URLSearchParams({
+          client_id: appId,
+          client_secret: clientSecret,
+          grant_type: "refresh_token",
+          refresh_token: seller.refreshToken ?? "",
+        }),
+      });
+    } catch (err) {
+      if (isFetchTimeout(err)) {
+        throw new Conflict(
+          `No se pudo refrescar el token de Mercado Pago: no respondió en ${MP_HTTP_TIMEOUT_MS / 1000} segundos. Probá de nuevo.`,
+          "MP_TIMEOUT",
+        );
+      }
+      throw err;
+    }
 
     const response = (await res.json().catch(() => ({}))) as MpTokenResponse;
 

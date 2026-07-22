@@ -31,6 +31,32 @@
 - [PR1] El retry-loop de `server.ts:139-141` traga errores en silencio (`catch {}` anti-spam) — deuda pre-existente al merge MP; el runner loguea por su cuenta, pero el loop sigue opaco.
 - [spec] R17: los controllers MP nuevos validan a mano con `typeof` en vez del `validate.ts` con zod existente — ya identificado en la spec, va al ROADMAP en PR 6.
 
+## Integridad del cobro (detectadas en el PR 3)
+
+- [PR3] **Reintento A11 puede duplicar el pedido de dominio**: `POST /api/orders` no tiene idempotencia propia — si el create llegó al servidor pero la respuesta se perdió, el reintento desde el banner crea un segundo pedido. La solución real es llevar la misma semilla de idempotencia a `orders` (candidato PR 5/6).
+- [PR3] **La ligadura orders↔mp_orders sigue sin existir** — la conciliación "cobro processed sin pedido" es manual (cruzando `mp_orders` con la constancia local de `pendingSales`).
+- [PR3] **Los cobros Posnet no dejan fila en `mp_orders`** (el service legacy no inserta) — `event_id` y el push del PR 5 solo verán cobros QR. Afecta el criterio C para débito.
+- [PR3] La constancia A11 vive en localStorage — se pierde con "borrar datos de navegación" (mitigada por la fila `processed` en el servidor).
+- [PR3] La frescura del webhook depende del reloj de la mini-PC (ventana 300s) — conviene NTP en la máquina del boliche.
+- [PR3] Estado `unknown` persistente: si MP inventa un estado no terminal, el polling corre hasta el expiresAt y cancela — la order podría quedar pagada en MP y cancelada local (el reconcile/webhook la corrige). Vigilar en producción.
+- [PR3] La semilla de idempotencia solo viaja en QR; el intent del Posnet queda con la protección del device (un intent abierto por vez + retries DEVICE_BUSY).
+- [PR3] Truncado de `external_ref` (`COCKTRAIL-{key}` a 64 chars): dos keys que compartan los primeros 54 chars colisionarían — con UUIDs (36) no pasa nunca; solo con keys largas artesanales.
+- [PR3] Webhooks sin header `x-request-id` se persisten con id sintético — sin dedupe posible entre sus reintentos (solo ruido: el reconcile es idempotente).
+- [PR3] `markFailed` de webhook events no es atómico (read-modify-write de `attempts`; PostgREST no incrementa) — depende del single-writer de un solo proceso Node (supuesto del frente H).
+- [PR3] Ventana mínima de doble reconcile entre el drain oportunista y un webhook en proceso (sin lock por evento) — inofensivo por idempotencia del reconcile.
+- [PR3] El reset de la semilla en cancelaciones manuales de QR depende de que la UI llame `resetPaymentAttempt()` — un camino de cancelación futuro que lo olvide podría replayear una order cancelada. Candidato: mover la cancelación QR adentro del hook.
+- [PR3] `retryPendingSale` exitoso desde el banner no muestra la pantalla de éxito/ticket (el registro va a barra igual) — si se quiere ticket para ventas recuperadas, es trabajo aparte.
+
+## Gestión de dispositivos Posnet (hallazgo 2026-07-21, NO previsto en la spec)
+
+- [PR3] **La UI de Posnets del admin es decorativa a los fines de cobrar.** El cobro de `/caja` resuelve el device en `mercadopago.service.ts:178` (`deviceId || env.MP_POS_DEVICE_ID`), y el `deviceId` sale del header `x-device-id` que **el frontend nunca envía** (`api-client.ts` solo manda `X-Bar-Id`; grep de `x-device-id` en `apps/web/src` = 0). Registrar o vincular un Posnet desde `/admin?tab=pagos` **solo escribe en `mercadopago_cajas_devices`**, tabla que ningún camino de cobro lee. Consecuencia práctica: cambiar de Posnet físico obliga a editar `apps/api/.env` y reiniciar el backend — no se puede hacer desde la app.
+  - La spec contempló los **síntomas** (criterio G línea 125: el botón de prueba apunta al device correcto → PR 6; A12 línea 388: validar `x-device-id` server-side → PR 4; D5: cablear el CRUD con "vincular Posnet" → PR 6) pero **no la causa**: no existe el camino "device vinculado en la base → cobro a ese device".
+  - Atenuante: la spec se compromete con **un solo PDV** (línea 143), así que el device en env no es incoherente con el modelo. El defecto es que la UI aparente lo contrario.
+  - **Decisión pendiente para el PR 6**: o el cobro resuelve el device desde la caja vinculada (y la env queda como fallback), o la env queda como fuente única y la UI se vuelve honesta (mostrar el device activo, sin prometer que se administra ahí).
+- [PR3] El formulario de alta de Posnet tiene el prefijo **hardcodeado** `PAX_A910__SMARTPOS` y solo acepta el sufijo numérico (`PagosSection.tsx:151`, `:504`) — un aparato de otro modelo no se puede registrar desde la UI.
+- [PR3] **No hay forma de descubrir el device ID desde la app**: `GET /point/integration-api/devices` se consulta en dos lugares (`mercadopago.service.ts:432-455` y `mercadopago-provisioning.service.ts:617-628`) pero ambos filtran por un ID conocido y descartan el resto. No existe endpoint que liste los devices de la cuenta — hay que sacar el ID del aparato o del panel de MP. Un `GET /api/mercadopago/devices` que exponga la lista sería barato y resolvería el alta a ciegas.
+- [PR3] **A17 reapareció**: al 2026-07-21 hay **2 sellers activos** en Cloud (`1517393956` GARCIAMANUEL del 20/07 18:38 y `225043369` ASMA4106894 del 20/07 21:12, que se había borrado a mano y volvió a vincularse). Hoy el cobro usa el correcto solo porque `findFirstActive` toma el más viejo y ese resulta ser el del dueño. Confirma la urgencia de D9 (vincular reemplaza + Desvincular) en el PR 4.
+
 ## Tests / higiene
 
 - [PR1] Los 6 tests de PDV/Posnet de `PagosSection.test.tsx` quedaron en `it.skip` con vencimiento en el PR 6 (migran a `PdvSection.test.tsx`). Si el PR 6 se recorta, quedan skips permanentes.

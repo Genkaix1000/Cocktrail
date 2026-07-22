@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   Check,
   Loader2,
   Minus,
@@ -413,6 +414,10 @@ export default function VentaSection({ drinks, printer }: Props) {
     setQrImage,
     latestOrder,
     saleError,
+    pendingSales,
+    retryPendingSale,
+    discardPendingSale,
+    resetPaymentAttempt,
     displayCashValue,
     change,
     canConfirmCash,
@@ -427,6 +432,20 @@ export default function VentaSection({ drinks, printer }: Props) {
   } = useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCart });
 
   const { reprintTicket, printError, reprinting } = printer;
+
+  // Banner de ventas cobradas sin registrar (A11): estados locales de la UI —
+  // qué entrada está pidiendo confirmación de descarte y cuál está reintentando.
+  const [confirmingDiscardId, setConfirmingDiscardId] = useState<string | null>(null);
+  const [retryingSaleId, setRetryingSaleId] = useState<string | null>(null);
+
+  async function handleRetryPendingSale(id: string) {
+    setRetryingSaleId(id);
+    try {
+      await retryPendingSale(id);
+    } finally {
+      setRetryingSaleId(null);
+    }
+  }
 
   // GSAP pulse on shopping bag totalItems change
   useEffect(() => {
@@ -463,6 +482,7 @@ export default function VentaSection({ drinks, printer }: Props) {
     setPosnetErrorMessage(null);
     setCurrentIntentId(null);
     setQrImage(null);
+    resetPaymentAttempt();
     stopPolling();
   }
 
@@ -492,6 +512,7 @@ export default function VentaSection({ drinks, printer }: Props) {
     if (isPosInProgress || isQrInProgress) {
       if (isPosInProgress && paymentIntentState === "ON_TERMINAL") return; // no se puede salir con el cobro activo en el lector
       stopPolling();
+      resetPaymentAttempt();
       if (currentIntentId) {
         if (isQrInProgress) {
           mercadopagoService.cancelQrOrder(currentIntentId).catch((err) => console.warn("Error canceling QR order (handled):", err));
@@ -548,6 +569,93 @@ export default function VentaSection({ drinks, printer }: Props) {
 
   return (
     <>
+      {/* Banner A11: cobros ya hechos en MP cuya venta no llegó a registrarse.
+          Persistente hasta que la cajera reintente con éxito o descarte. */}
+      {pendingSales.length > 0 && (
+        <div
+          role="alert"
+          className="shrink-0 mx-5 mt-4 bg-danger-soft border border-danger-line rounded-2xl p-4 flex flex-col gap-3"
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={16} className="text-danger shrink-0" />
+            <p className="text-sm font-black text-danger">
+              {pendingSales.length === 1
+                ? "Hay 1 venta cobrada sin registrar"
+                : `Hay ${pendingSales.length} ventas cobradas sin registrar`}
+            </p>
+          </div>
+          <p className="text-xs text-ink-300 leading-relaxed">
+            El cobro ya se hizo en Mercado Pago — <span className="font-bold">no vuelvas a cobrar</span>.
+            Reintentá el registro, o descartá la constancia solo si ya la resolviste a mano.
+          </p>
+          <div className="flex flex-col gap-2">
+            {pendingSales.map((sale) => (
+              <div
+                key={sale.id}
+                className="flex flex-wrap items-center justify-between gap-3 bg-ink-950/60 border border-ink-800 rounded-xl px-3 py-2.5"
+              >
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs">
+                  <span className="font-black text-ink-50 tabular">
+                    ${sale.amount.toLocaleString("es-AR")}
+                  </span>
+                  <span className="text-ink-400">
+                    {new Date(sale.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-ink-300 px-1.5 py-0.5 bg-ink-850 border border-ink-800 rounded">
+                    {sale.paymentMethod === "qr" ? "QR" : "Débito"}
+                  </span>
+                  {sale.lastError && (
+                    <span className="text-danger/80 text-[10px]">Último error: {sale.lastError}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {confirmingDiscardId === sale.id ? (
+                    <>
+                      <span className="text-[10px] font-bold text-danger">
+                        ¿Descartar la constancia? El cobro en MP no se devuelve.
+                      </span>
+                      <button
+                        onClick={() => {
+                          discardPendingSale(sale.id);
+                          setConfirmingDiscardId(null);
+                        }}
+                        className="h-8 px-3 rounded-lg bg-danger-soft border border-danger-line text-danger text-[10px] font-black uppercase tracking-wider hover:brightness-125 active:scale-95 transition-all cursor-pointer"
+                      >
+                        Sí, descartar
+                      </button>
+                      <button
+                        onClick={() => setConfirmingDiscardId(null)}
+                        className="h-8 px-3 rounded-lg bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 text-[10px] font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
+                      >
+                        No
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleRetryPendingSale(sale.id)}
+                        disabled={retryingSaleId !== null}
+                        className="ct-checkout-btn h-8 px-4 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {retryingSaleId === sale.id && <Loader2 size={12} className="animate-spin" />}
+                        {retryingSaleId === sale.id ? "Reintentando…" : "Reintentar"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmingDiscardId(sale.id)}
+                        disabled={retryingSaleId !== null}
+                        className="h-8 px-3 rounded-lg bg-ink-850 border border-ink-750 text-ink-300 hover:text-danger text-[10px] font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Descartar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden min-h-0 w-full">
         {/* Products column */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -1032,6 +1140,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                         <button
                           onClick={async () => {
                             stopPolling();
+                            resetPaymentAttempt();
                             if (currentIntentId) {
                               if (paymentMethod === "qr") {
                                 mercadopagoService.cancelQrOrder(currentIntentId).catch((err) => console.warn("Error canceling QR order (handled):", err));
@@ -1412,14 +1521,29 @@ export default function VentaSection({ drinks, printer }: Props) {
                     {paymentMethod === "qr" && (
                       <div className="flex flex-col gap-4">
                         <div className="py-8 flex flex-col items-center text-center gap-4 bg-ink-950 border border-ink-800 rounded-2xl animate-pulse">
-                          <Loader2 size={48} className="text-accent animate-spin" />
+                          <Loader2 size={48} className={`animate-spin ${paymentIntentState === "unknown" ? "text-amber-500" : "text-accent"}`} />
                           <div className="flex flex-col gap-1.5">
-                            <p className="text-sm font-bold text-ink-50">
-                              Esperando pago QR...
-                            </p>
-                            <p className="text-xs text-ink-400 px-8 leading-relaxed">
-                              El cliente debe escanear el QR fijo de la barra con la app de Mercado Pago.
-                            </p>
+                            {paymentIntentState === "unknown" ? (
+                              // MP devolvió un estado no reconocido: advertencia, nunca
+                              // "pendiente" — el polling sigue acotado por el expiresAt.
+                              <>
+                                <p className="text-sm font-bold text-amber-500">
+                                  Estado del cobro desconocido — verificando…
+                                </p>
+                                <p className="text-xs text-ink-400 px-8 leading-relaxed">
+                                  Mercado Pago devolvió un estado no reconocido. Seguimos consultando — no vuelvas a cobrar.
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-bold text-ink-50">
+                                  Esperando pago QR...
+                                </p>
+                                <p className="text-xs text-ink-400 px-8 leading-relaxed">
+                                  El cliente debe escanear el QR fijo de la barra con la app de Mercado Pago.
+                                </p>
+                              </>
+                            )}
                           </div>
                           {qrImage && (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1435,6 +1559,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                           <button
                             onClick={async () => {
                               stopPolling();
+                              resetPaymentAttempt();
                               try {
                                 await mercadopagoService.cancelQrOrder(currentIntentId);
                                 setPosnetStatus("idle");

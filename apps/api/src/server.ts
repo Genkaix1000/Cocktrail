@@ -1,5 +1,5 @@
 import { env } from "./config/env.js";
-import { app, eventsService, syncService } from "./app.js";
+import { app, eventsService, syncService, mpWebhooksService } from "./app.js";
 import { supabase } from "./shared/supabase.js";
 import { runMigrations } from "./infra/migrations/migration-runner.js";
 import { PgMigrationsRepository } from "./infra/migrations/pg-migrations.repository.js";
@@ -120,6 +120,14 @@ async function boot() {
   // verificar conexión y ANTES de que nada lea el schema.
   async function initializeDatabaseCore() {
     await runMigrationsFailOpen();
+
+    // Webhooks de MP que quedaron persistidos sin procesar (el proceso murió
+    // entre el 200 y el reconcile). Fail-open: un fallo acá no frena el boot.
+    try {
+      await mpWebhooksService.replayPending();
+    } catch (err: any) {
+      console.error("[boot] MP webhook replay failed:", err?.message || err);
+    }
 
     await eventsService.initialize();
     console.log("[boot] EventsService initialized");

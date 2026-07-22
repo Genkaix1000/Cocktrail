@@ -1,10 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NightEvent } from "@cocktrail/shared";
 import { MercadoPagoOrdersService } from "./mercadopago-orders.service.js";
 import type { BarsRepository, Bar } from "./bars.repository.js";
 import type { MercadoPagoCajasRepository, Caja } from "./mercadopago-cajas.repository.js";
 import type { MpOrder, MpOrdersRepository } from "./mp-orders.repository.js";
 import type { CredentialsResolverService } from "./credentials-resolver.service.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
+
+const STABLE_KEY = "11111111-2222-4333-8444-555555555555";
+
+function makeEvent(overrides: Partial<NightEvent> = {}): NightEvent {
+  return {
+    id: "event-1",
+    status: "activo",
+    startedAt: Date.now(),
+    orderCounter: 0,
+    ...overrides,
+  };
+}
 
 function makeBar(overrides: Partial<Bar> = {}): Bar {
   return {
@@ -44,6 +57,9 @@ function makeMpOrder(overrides: Partial<MpOrder> = {}): MpOrder {
     type: "qr",
     barId: "bar-uuid-1",
     cajaId: "caja-1",
+    eventId: "event-1",
+    qrData: "https://mp.example/qr.png",
+    expiresAt: "2026-07-17T00:15:00Z",
     createdAt: "2026-07-17T00:00:00Z",
     updatedAt: "2026-07-17T00:00:00Z",
     ...overrides,
@@ -75,6 +91,7 @@ describe("MercadoPagoOrdersService", () => {
   let cajasRepo: MercadoPagoCajasRepository;
   let mpOrdersRepo: MpOrdersRepository;
   let credentialsResolver: CredentialsResolverService;
+  let getActiveEvent: ReturnType<typeof vi.fn>;
   let service: MercadoPagoOrdersService;
 
   beforeEach(() => {
@@ -109,11 +126,15 @@ describe("MercadoPagoOrdersService", () => {
           type: input.type,
           barId: input.barId ?? null,
           cajaId: input.cajaId ?? null,
+          eventId: input.eventId ?? null,
+          qrData: input.qrData ?? null,
+          expiresAt: input.expiresAt ?? null,
         }),
       ),
       findByMpId: vi.fn(),
       findByPaymentId: vi.fn(),
       findByExternalRef: vi.fn(),
+      findByIdempotencyKey: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockImplementation(async (orderIdMp, patch) =>
         makeMpOrder({ orderIdMp, ...patch }),
       ),
@@ -126,11 +147,14 @@ describe("MercadoPagoOrdersService", () => {
       resolve: vi.fn().mockResolvedValue("AT-test"),
     } as unknown as CredentialsResolverService;
 
+    getActiveEvent = vi.fn().mockResolvedValue(makeEvent());
+
     service = new MercadoPagoOrdersService(
       credentialsResolver,
       barsRepo,
       cajasRepo,
       mpOrdersRepo,
+      getActiveEvent as () => Promise<NightEvent | null>,
     );
   });
 
@@ -208,6 +232,104 @@ describe("MercadoPagoOrdersService", () => {
         code: "POS_NOT_FOUND",
       });
     });
+
+    it("409 sin tocar MP si no hay una noche abierta", async () => {
+      getActiveEvent.mockResolvedValue(null);
+      await expect(service.createQrOrder({ amount: 100 })).rejects.toMatchObject({
+        name: "Conflict",
+        code: "NO_ACTIVE_EVENT",
+        message: expect.stringContaining("No hay una noche abierta"),
+      });
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mpOrdersRepo.create).not.toHaveBeenCalled();
+    });
+
+    it("409 si la noche existe pero está cerrada", async () => {
+      getActiveEvent.mockResolvedValue(makeEvent({ status: "cerrado" }));
+      await expect(service.createQrOrder({ amount: 100 })).rejects.toBeInstanceOf(Conflict);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("usa la idempotencyKey del frontend en el header y deriva external_ref estable", async () => {
+      mockFetchOk({ id: "ORD01NEW", status: "created" });
+
+      await service.createQrOrder({ amount: 1500, idempotencyKey: STABLE_KEY });
+
+      const [, init] = vi.mocked(fetch).mock.calls[0]!;
+      const headers = (init as RequestInit).headers as Record<string, string>;
+      expect(headers["X-Idempotency-Key"]).toBe(STABLE_KEY);
+      const body = JSON.parse(String((init as RequestInit).body));
+      expect(body.external_reference).toBe(`COCKTRAIL-${STABLE_KEY}`.slice(0, 64));
+    });
+
+    it("persiste event_id, qr_data y expires_at al crear", async () => {
+      mockFetchOk({ id: "ORD01NEW", status: "created" });
+
+      const result = await service.createQrOrder({ amount: 1500 });
+
+      expect(mpOrdersRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventId: "event-1",
+          qrData: "https://mp.example/qr.png",
+          expiresAt: result.expiresAt,
+        }),
+      );
+    });
+
+    it("key repetida + mismo monto: devuelve la order existente sin tocar MP", async () => {
+      vi.mocked(mpOrdersRepo.findByIdempotencyKey).mockResolvedValue(
+        makeMpOrder({ idempotencyKey: STABLE_KEY, amount: 1500 }),
+      );
+
+      const result = await service.createQrOrder({ amount: 1500, idempotencyKey: STABLE_KEY });
+
+      expect(result).toMatchObject({
+        orderId: "ORD01ABC",
+        qrImage: "https://mp.example/qr.png",
+        status: "created",
+        expiresAt: "2026-07-17T00:15:00Z",
+      });
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mpOrdersRepo.create).not.toHaveBeenCalled();
+    });
+
+    it("key repetida + monto distinto: 409 IDEMPOTENCY_AMOUNT_MISMATCH", async () => {
+      vi.mocked(mpOrdersRepo.findByIdempotencyKey).mockResolvedValue(
+        makeMpOrder({ idempotencyKey: STABLE_KEY, amount: 1500 }),
+      );
+
+      await expect(
+        service.createQrOrder({ amount: 2000, idempotencyKey: STABLE_KEY }),
+      ).rejects.toMatchObject({ name: "Conflict", code: "IDEMPOTENCY_AMOUNT_MISMATCH" });
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("carrera de 2 POSTs: el insert choca con el UNIQUE (23505) y devuelve la fila que ganó", async () => {
+      mockFetchOk({ id: "ORD01NEW", status: "created" });
+      vi.mocked(mpOrdersRepo.create).mockRejectedValueOnce(
+        Object.assign(new Error("duplicate key value"), { code: "23505" }),
+      );
+      vi.mocked(mpOrdersRepo.findByIdempotencyKey)
+        .mockResolvedValueOnce(null) // lookup previo: todavía no existía
+        .mockResolvedValueOnce(makeMpOrder({ idempotencyKey: STABLE_KEY, amount: 1500 }));
+
+      const result = await service.createQrOrder({ amount: 1500, idempotencyKey: STABLE_KEY });
+
+      expect(result.orderId).toBe("ORD01ABC");
+    });
+
+    it("timeout de MP: Conflict con mensaje claro y code MP_TIMEOUT", async () => {
+      const timeoutErr = new Error("The operation was aborted due to timeout");
+      timeoutErr.name = "TimeoutError";
+      vi.mocked(fetch).mockRejectedValueOnce(timeoutErr);
+
+      await expect(service.createQrOrder({ amount: 1500 })).rejects.toMatchObject({
+        name: "Conflict",
+        code: "MP_TIMEOUT",
+        message: expect.stringContaining("no respondió"),
+      });
+      expect(mpOrdersRepo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("getOrderStatus", () => {
@@ -242,6 +364,38 @@ describe("MercadoPagoOrdersService", () => {
     it("404 si la order no existe localmente", async () => {
       vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(null);
       await expect(service.getOrderStatus("ORD-MISSING")).rejects.toBeInstanceOf(NotFound);
+    });
+
+    it("failed es terminal: devuelve directo sin consultar a MP", async () => {
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder({ status: "failed" }));
+
+      const result = await service.getOrderStatus("ORD01ABC");
+      expect(result.status).toBe("failed");
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("action_required NO es terminal: sigue consultando a MP", async () => {
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(
+        makeMpOrder({ status: "action_required" }),
+      );
+      mockFetchOk({ id: "ORD01ABC", status: "action_required" });
+
+      await service.getOrderStatus("ORD01ABC");
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(mpOrdersRepo.update).toHaveBeenCalledWith("ORD01ABC", {
+        status: "action_required",
+      });
+    });
+
+    it("estado desconocido de MP se registra como unknown (no created) con log warn", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(makeMpOrder());
+      mockFetchOk({ id: "ORD01ABC", status: "estado_inventado" });
+
+      await service.getOrderStatus("ORD01ABC");
+      expect(mpOrdersRepo.update).toHaveBeenCalledWith("ORD01ABC", { status: "unknown" });
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("estado_inventado"));
+      warnSpy.mockRestore();
     });
   });
 

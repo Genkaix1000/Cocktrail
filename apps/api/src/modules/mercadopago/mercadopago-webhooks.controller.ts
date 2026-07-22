@@ -6,14 +6,16 @@ export function createMercadoPagoWebhooksController(
 ): Router {
   const router = Router();
 
-  // POST /api/mercadopago/webhooks — público, validado por HMAC (Fase 6)
-  router.post("/webhooks", (req, res, next) => {
+  // POST /api/mercadopago/webhooks — público, validado por HMAC (Fase 6).
+  // El 200 sale recién después de persistir el evento: un error de DB devuelve
+  // 500 y MP reintenta (durabilidad, PR 3).
+  router.post("/webhooks", async (req, res, next) => {
     try {
       const dataId =
         typeof req.query["data.id"] === "string" ? req.query["data.id"] : undefined;
       const type = typeof req.query.type === "string" ? req.query.type : undefined;
 
-      service.handleWebhook({
+      await service.handleWebhook({
         dataId,
         type,
         xSignature:

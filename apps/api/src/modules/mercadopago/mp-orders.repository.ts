@@ -1,6 +1,14 @@
 import { supabase } from "../../shared/supabase.js";
 
-export type MpOrderStatus = "created" | "processed" | "canceled" | "refunded" | "expired";
+export type MpOrderStatus =
+  | "created"
+  | "processed"
+  | "canceled"
+  | "refunded"
+  | "expired"
+  | "failed"
+  | "action_required"
+  | "unknown";
 export type MpOrderType = "qr" | "point";
 
 export type MpOrder = {
@@ -15,6 +23,9 @@ export type MpOrder = {
   type: MpOrderType;
   barId: string | null;
   cajaId: string | null;
+  eventId: string | null;
+  qrData: string | null;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -30,6 +41,9 @@ export type NewMpOrder = {
   type: MpOrderType;
   barId?: string | null;
   cajaId?: string | null;
+  eventId?: string | null;
+  qrData?: string | null;
+  expiresAt?: string | null;
 };
 
 export type MpOrderUpdate = {
@@ -50,6 +64,9 @@ type MpOrderRow = {
   type: MpOrderType;
   bar_id: string | null;
   caja_id: string | null;
+  event_id: string | null;
+  qr_data: string | null;
+  expires_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -67,19 +84,23 @@ export function mapMpOrderRow(row: MpOrderRow): MpOrder {
     type: row.type,
     barId: row.bar_id,
     cajaId: row.caja_id,
+    eventId: row.event_id,
+    qrData: row.qr_data,
+    expiresAt: row.expires_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 const SELECT_COLS =
-  "id, order_id_mp, external_ref, idempotency_key, payment_transaction_id, payment_id, amount, status, type, bar_id, caja_id, created_at, updated_at";
+  "id, order_id_mp, external_ref, idempotency_key, payment_transaction_id, payment_id, amount, status, type, bar_id, caja_id, event_id, qr_data, expires_at, created_at, updated_at";
 
 export interface MpOrdersRepository {
   create(order: NewMpOrder): Promise<MpOrder>;
   findByMpId(orderIdMp: string): Promise<MpOrder | null>;
   findByPaymentId(paymentId: string): Promise<MpOrder | null>;
   findByExternalRef(externalRef: string): Promise<MpOrder | null>;
+  findByIdempotencyKey(idempotencyKey: string): Promise<MpOrder | null>;
   update(orderIdMp: string, patch: MpOrderUpdate): Promise<MpOrder>;
   updateStatus(orderIdMp: string, status: MpOrderStatus): Promise<MpOrder>;
 }
@@ -99,6 +120,9 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
         type: order.type,
         bar_id: order.barId ?? null,
         caja_id: order.cajaId ?? null,
+        event_id: order.eventId ?? null,
+        qr_data: order.qrData ?? null,
+        expires_at: order.expiresAt ?? null,
       })
       .select(SELECT_COLS)
       .single();
@@ -150,6 +174,21 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
 
     if (error) {
       console.error("[SupabaseMpOrdersRepository] Error finding by external_ref:", error);
+      throw error;
+    }
+
+    return data ? mapMpOrderRow(data as MpOrderRow) : null;
+  }
+
+  async findByIdempotencyKey(idempotencyKey: string): Promise<MpOrder | null> {
+    const { data, error } = await supabase
+      .from("mp_orders")
+      .select(SELECT_COLS)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[SupabaseMpOrdersRepository] Error finding by idempotency_key:", error);
       throw error;
     }
 

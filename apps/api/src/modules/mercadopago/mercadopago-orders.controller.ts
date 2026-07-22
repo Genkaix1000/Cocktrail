@@ -3,6 +3,10 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { mpContextMiddleware } from "./mp-context.middleware.js";
 import type { MercadoPagoOrdersService } from "./mercadopago-orders.service.js";
 
+// Semilla que genera el frontend con crypto.randomUUID() (36 chars) — se aceptan
+// variantes alfanuméricas con guiones de 16 a 64.
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9-]{16,64}$/;
+
 export function createMercadoPagoOrdersController(service: MercadoPagoOrdersService): Router {
   const router = Router();
   const cajaOrAdmin = [authMiddleware, requireRole("admin", "caja"), mpContextMiddleware] as const;
@@ -10,9 +14,18 @@ export function createMercadoPagoOrdersController(service: MercadoPagoOrdersServ
   // POST /api/mercadopago/orders/qr — crear order QR estática
   router.post("/orders/qr", ...cajaOrAdmin, async (req, res, next) => {
     try {
-      const { amount, barId, description } = req.body ?? {};
+      const { amount, barId, description, idempotencyKey } = req.body ?? {};
       if (amount == null || typeof amount !== "number") {
         res.status(400).json({ error: "amount es requerido y debe ser un número." });
+        return;
+      }
+      if (
+        idempotencyKey !== undefined &&
+        (typeof idempotencyKey !== "string" || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
+      ) {
+        res.status(400).json({
+          error: "idempotencyKey inválida: debe ser alfanumérica (con guiones) de 16 a 64 caracteres.",
+        });
         return;
       }
       res.status(201).json(
@@ -23,6 +36,7 @@ export function createMercadoPagoOrdersController(service: MercadoPagoOrdersServ
               ? barId
               : req.mpContext?.barId,
           description: typeof description === "string" ? description : undefined,
+          idempotencyKey,
         }),
       );
     } catch (err) {

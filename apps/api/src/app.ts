@@ -46,6 +46,7 @@ import { CredentialsResolverService } from "./modules/mercadopago/credentials-re
 import { MercadoPagoProvisioningService } from "./modules/mercadopago/mercadopago-provisioning.service.js";
 import { MercadoPagoOrdersService } from "./modules/mercadopago/mercadopago-orders.service.js";
 import { SupabaseMpOrdersRepository } from "./modules/mercadopago/mp-orders.repository.js";
+import { SupabaseMpWebhookEventsRepository } from "./modules/mercadopago/mp-webhook-events.repository.js";
 import {
   BarSessionsService,
   barSessionUserId,
@@ -135,17 +136,25 @@ const mpProvisioningService = new MercadoPagoProvisioningService(
   mpCajasDevicesRepo,
 );
 
-// Fase 4 — Orders QR estático.
+// Fase 4 — Orders QR estático. `getActiveEvent` liga cada cobro a la noche
+// abierta (mismo patrón que OrdersService).
 const mpOrdersRepo = new SupabaseMpOrdersRepository();
 const mpOrdersService = new MercadoPagoOrdersService(
   credentialsResolver,
   barsRepo,
   mpCajasRepo,
   mpOrdersRepo,
+  async () => eventsService.getCurrentEvent(),
 );
 
-// Fase 6 — Webhooks Orders API (conciliación async).
-const mpWebhooksService = new MercadoPagoWebhooksService(mpOrdersService, emit);
+// Fase 6 — Webhooks Orders API (durables: se persisten antes del 200 y se
+// reconcilian async; replayPending() corre en el boot desde server.ts).
+const mpWebhookEventsRepo = new SupabaseMpWebhookEventsRepository();
+const mpWebhooksService = new MercadoPagoWebhooksService(
+  mpOrdersService,
+  mpWebhookEventsRepo,
+  emit,
+);
 
 const systemService = new SystemService(eventsRepo, mpService, printerService, supabase, supabaseCloud);
 
@@ -225,4 +234,4 @@ app.use("/api", createEventsController(eventsService, usersRepo));
 // Error handler global (ÚLTIMO)
 app.use(errorHandler);
 
-export { app, eventsService, syncService };
+export { app, eventsService, syncService, mpWebhooksService };

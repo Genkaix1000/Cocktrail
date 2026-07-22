@@ -8,6 +8,7 @@ import type {
   MercadoPagoCajasDevicesRepository,
 } from "./mercadopago-cajas-devices.repository.js";
 import type { MercadoPagoSellersRepository, Seller } from "./mercadopago-sellers.repository.js";
+import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
 import { supabase } from "../../shared/supabase.js";
 
 const MP_API = "https://api.mercadopago.com";
@@ -204,7 +205,11 @@ export class MercadoPagoProvisioningService {
     try {
       const response = await fetch(
         `${this.baseUrl}/users/${userId}/stores/search?external_id=${encodeURIComponent(externalId)}`,
-        { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+        {
+          method: "GET",
+          signal: AbortSignal.timeout(MP_HTTP_TIMEOUT_MS),
+          headers: { Authorization: `Bearer ${token}` },
+        },
       );
       if (!response.ok) return null;
 
@@ -628,14 +633,26 @@ export class MercadoPagoProvisioningService {
     init: RequestInit,
     errorMessage: string,
   ): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        ...init,
+        signal: AbortSignal.timeout(MP_HTTP_TIMEOUT_MS),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+          ...init.headers,
+        },
+      });
+    } catch (err) {
+      if (isFetchTimeout(err)) {
+        throw new Conflict(
+          `${errorMessage}: Mercado Pago no respondió en ${MP_HTTP_TIMEOUT_MS / 1000} segundos. Probá de nuevo.`,
+          "MP_TIMEOUT",
+        );
+      }
+      throw err;
+    }
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));

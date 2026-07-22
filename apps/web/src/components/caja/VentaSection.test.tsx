@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import VentaSection from "./VentaSection";
@@ -70,7 +70,27 @@ const printer = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
+
+function seedPendingSale(overrides: Record<string, unknown> = {}) {
+  localStorage.setItem(
+    "cocktrail:pendingSales",
+    JSON.stringify([
+      {
+        id: "ps-1",
+        createdAt: Date.now(),
+        paymentMethod: "qr",
+        mpRef: "ORD01QR",
+        amount: 2500,
+        items: [{ drinkId: 1, qty: 1 }],
+        attempts: 1,
+        lastError: "network down",
+        ...overrides,
+      },
+    ]),
+  );
+}
 
 async function waitForProductsGrid() {
   // El grid tiene un skeleton simulado de 800ms antes de mostrar productos.
@@ -218,7 +238,11 @@ describe("VentaSection", () => {
     await user.click(qrButton);
 
     await waitFor(() =>
-      expect(mockedMercadopagoService.createQrOrder).toHaveBeenCalledWith(2500, "Fernet con Coca x1"),
+      expect(mockedMercadopagoService.createQrOrder).toHaveBeenCalledWith(
+        2500,
+        "Fernet con Coca x1",
+        { idempotencyKey: expect.any(String) },
+      ),
     );
 
     expect(await screen.findByText(/Esperando pago QR/i)).toBeInTheDocument();
@@ -292,5 +316,81 @@ describe("VentaSection", () => {
 
     await waitFor(() => expect(mockedMercadopagoService.cancelPosIntent).toHaveBeenCalledWith("intent-1"));
     expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
+  });
+
+  it("muestra el banner de ventas cobradas sin registrar al montar", async () => {
+    seedPendingSale();
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+
+    const banner = await screen.findByRole("alert");
+    expect(within(banner).getByText("Hay 1 venta cobrada sin registrar")).toBeInTheDocument();
+    expect(within(banner).getByText("$2.500")).toBeInTheDocument();
+    expect(within(banner).getByText("QR")).toBeInTheDocument();
+    expect(within(banner).getByText(/network down/)).toBeInTheDocument();
+    expect(within(banner).getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
+    expect(within(banner).getByRole("button", { name: /descartar/i })).toBeInTheDocument();
+  });
+
+  it("Reintentar registra la venta pendiente y limpia el banner", async () => {
+    seedPendingSale();
+    mockedOrdersService.create.mockResolvedValue(makeOrder({ paymentMethod: "qr" }));
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = userEvent.setup();
+
+    const banner = await screen.findByRole("alert");
+    await user.click(within(banner).getByRole("button", { name: /reintentar/i }));
+
+    await waitFor(() =>
+      expect(mockedOrdersService.create).toHaveBeenCalledWith({
+        items: [{ drinkId: 1, qty: 1 }],
+        paymentMethod: "qr",
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(JSON.parse(localStorage.getItem("cocktrail:pendingSales")!)).toEqual([]);
+  });
+
+  it("si el reintento vuelve a fallar, el banner queda", async () => {
+    seedPendingSale();
+    mockedOrdersService.create.mockRejectedValue(new Error("sigue caído"));
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = userEvent.setup();
+
+    const banner = await screen.findByRole("alert");
+    await user.click(within(banner).getByRole("button", { name: /reintentar/i }));
+
+    await waitFor(() => expect(mockedOrdersService.create).toHaveBeenCalled());
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(await within(screen.getByRole("alert")).findByText(/sigue caído/)).toBeInTheDocument();
+  });
+
+  it("Descartar pide confirmación explícita y recién ahí borra la constancia", async () => {
+    seedPendingSale();
+
+    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    const user = userEvent.setup();
+
+    const banner = await screen.findByRole("alert");
+    await user.click(within(banner).getByRole("button", { name: /^descartar$/i }));
+
+    // Todavía no borró nada: apareció la confirmación.
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(/¿Descartar la constancia\?/)).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("cocktrail:pendingSales")!)).toHaveLength(1);
+
+    // "No" cancela y deja todo como estaba.
+    await user.click(screen.getByRole("button", { name: /^no$/i }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText(/¿Descartar la constancia\?/)).not.toBeInTheDocument();
+
+    // Descartar → "Sí, descartar" borra de verdad.
+    await user.click(within(screen.getByRole("alert")).getByRole("button", { name: /^descartar$/i }));
+    await user.click(screen.getByRole("button", { name: /sí, descartar/i }));
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(JSON.parse(localStorage.getItem("cocktrail:pendingSales")!)).toEqual([]);
   });
 });

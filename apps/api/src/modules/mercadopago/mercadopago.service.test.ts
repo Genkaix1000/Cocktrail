@@ -150,6 +150,27 @@ describe("MercadoPagoService", () => {
       );
     });
 
+    it("timeout de la Point API: Conflict con mensaje claro y code MP_TIMEOUT", async () => {
+      const timeoutErr = new Error("The operation was aborted due to timeout");
+      timeoutErr.name = "TimeoutError";
+      vi.mocked(fetch).mockRejectedValueOnce(timeoutErr);
+
+      await expect(service.createPaymentIntent(1000)).rejects.toMatchObject({
+        name: "Conflict",
+        code: "MP_TIMEOUT",
+        message: expect.stringContaining("no respondi"),
+      });
+    });
+
+    it("manda AbortSignal (timeout por request individual) en el fetch", async () => {
+      mockFetchOnce({ ok: true, body: { id: "intent-1", status: "OPEN" } });
+
+      await service.createPaymentIntent(1000);
+
+      const call = vi.mocked(fetch).mock.calls[0];
+      expect((call[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    });
+
     it("ante un 2205 sin id de intencion en el error, propaga el error tal cual (sin inventar recuperacion)", async () => {
       mockFetchOnce({
         ok: false,

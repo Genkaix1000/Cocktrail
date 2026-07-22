@@ -48,6 +48,8 @@ const EnvSchema = z.object({
 
   // Webhooks Orders API (Fase 6) — clave secreta del panel de MP.
   MP_WEBHOOK_SECRET: z.string().optional(),
+  // Ventana de frescura del `ts` de la firma de webhooks (anti-replay), en segundos.
+  MP_WEBHOOK_TS_TOLERANCE_SECONDS: z.coerce.number().positive().default(300),
 });
 
 function loadEnv() {

@@ -1,10 +1,12 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import type { NightEvent } from "@cocktrail/shared";
 import { env } from "../../config/env.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
 import type { BarsRepository } from "./bars.repository.js";
 import type { CredentialsResolverService } from "./credentials-resolver.service.js";
 import type { MercadoPagoCajasRepository } from "./mercadopago-cajas.repository.js";
 import { MpApiError } from "./mercadopago.service.js";
+import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
 import type {
   MpOrder,
   MpOrderStatus,
@@ -12,30 +14,39 @@ import type {
 } from "./mp-orders.repository.js";
 
 const MP_API = "https://api.mercadopago.com";
+// Coherente con expiration_time: "PT15M" en el create.
+const QR_EXPIRATION_MS = 15 * 60 * 1000;
 const FINAL_STATUSES: ReadonlySet<MpOrderStatus> = new Set([
   "processed",
   "canceled",
   "refunded",
   "expired",
+  "failed",
 ]);
+// "action_required" y "unknown" NO son terminales: el corte lo pone la
+// expiración del QR (A10) del lado del cliente, no un mapeo optimista.
 const KNOWN_STATUSES: ReadonlySet<string> = new Set([
   "created",
   "processed",
   "canceled",
   "refunded",
   "expired",
+  "failed",
+  "action_required",
 ]);
 
 export type CreateQrOrderInput = {
   amount: number;
   barId?: string;
   description?: string;
+  /** Semilla estable por intento de cobro (la genera el frontend). Sin ella se genera una por request. */
+  idempotencyKey?: string;
 };
 
 export type CreateQrOrderResult = {
   orderId: string;
   qrImage: string | null;
-  status: "created";
+  status: MpOrderStatus;
   expiresAt: string;
 };
 
@@ -76,11 +87,28 @@ export class MercadoPagoOrdersService {
     private readonly barsRepo: BarsRepository,
     private readonly cajasRepo: MercadoPagoCajasRepository,
     private readonly mpOrdersRepo: MpOrdersRepository,
+    private readonly getActiveEvent: () => Promise<NightEvent | null>,
   ) {}
 
   async createQrOrder(input: CreateQrOrderInput): Promise<CreateQrOrderResult> {
     if (typeof input.amount !== "number" || !Number.isFinite(input.amount) || input.amount <= 0) {
       throw new BadRequest("amount es requerido y debe ser un número positivo.");
+    }
+
+    // Semilla estable: si el frontend la manda, un doble click / reintento con la
+    // misma key devuelve la order ya creada sin volver a tocar MP.
+    const idempotencyKey = input.idempotencyKey ?? randomUUID();
+    const existing = await this.mpOrdersRepo.findByIdempotencyKey(idempotencyKey);
+    if (existing) {
+      return this.replayExistingOrder(existing, input.amount);
+    }
+
+    const event = await this.getActiveEvent();
+    if (!event || event.status !== "activo") {
+      throw new Conflict(
+        "No hay una noche abierta. Abrila desde /admin para poder cobrar.",
+        "NO_ACTIVE_EVENT",
+      );
     }
 
     const barIdOrCode = (input.barId?.trim() || env.BAR_CODE).trim();
@@ -99,8 +127,7 @@ export class MercadoPagoOrdersService {
     });
 
     const amountStr = input.amount.toFixed(2);
-    const externalRef = this.buildExternalRef();
-    const idempotencyKey = randomUUID();
+    const externalRef = this.buildExternalRef(idempotencyKey);
     const description =
       (typeof input.description === "string" && input.description.trim()) ||
       `Consumo ${bar.name ?? bar.code ?? "barra"}`;
@@ -142,24 +169,57 @@ export class MercadoPagoOrdersService {
 
     // payments[0].id al crear es la transacción, NO el payment_id real.
     const paymentTransactionId = response.transactions?.payments?.[0]?.id ?? null;
+    const expiresAt = new Date(Date.now() + QR_EXPIRATION_MS).toISOString();
 
-    await this.mpOrdersRepo.create({
-      orderIdMp: response.id,
-      externalRef,
-      idempotencyKey,
-      paymentTransactionId,
-      amount: amountStr,
-      status: "created",
-      type: "qr",
-      barId: bar.id,
-      cajaId: caja.id,
-    });
+    try {
+      await this.mpOrdersRepo.create({
+        orderIdMp: response.id,
+        externalRef,
+        idempotencyKey,
+        paymentTransactionId,
+        amount: amountStr,
+        status: "created",
+        type: "qr",
+        barId: bar.id,
+        cajaId: caja.id,
+        eventId: event.id,
+        qrData: caja.qrImage,
+        expiresAt,
+      });
+    } catch (err) {
+      // Carrera de 2 POSTs simultáneos con la misma key: MP dedupe por
+      // X-Idempotency-Key y acá dedupe el UNIQUE — devolver la fila que ganó.
+      if ((err as { code?: string })?.code === "23505") {
+        const winner = await this.mpOrdersRepo.findByIdempotencyKey(idempotencyKey);
+        if (winner) return this.replayExistingOrder(winner, input.amount);
+      }
+      throw err;
+    }
 
     return {
       orderId: response.id,
       qrImage: caja.qrImage,
       status: "created",
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      expiresAt,
+    };
+  }
+
+  /** Replay idempotente: misma key + mismo monto → misma respuesta, 0 llamadas a MP. */
+  private replayExistingOrder(existing: MpOrder, amount: number): CreateQrOrderResult {
+    if (Number(existing.amount) !== amount) {
+      throw new Conflict(
+        "Esa idempotency key ya se usó con otro monto. Generá un cobro nuevo.",
+        "IDEMPOTENCY_AMOUNT_MISMATCH",
+      );
+    }
+    return {
+      orderId: existing.orderIdMp,
+      qrImage: existing.qrData,
+      status: existing.status,
+      expiresAt:
+        existing.expiresAt ??
+        // Filas pre-migración sin expires_at: derivarlo del created_at + PT15M.
+        new Date(new Date(existing.createdAt).getTime() + QR_EXPIRATION_MS).toISOString(),
     };
   }
 
@@ -270,14 +330,15 @@ export class MercadoPagoOrdersService {
     if (raw && KNOWN_STATUSES.has(raw)) return raw as MpOrderStatus;
     // MP a veces usa "cancelled" (doble L) — normalizar.
     if (raw === "cancelled") return "canceled";
-    return "created";
+    // Nunca mapear un estado desconocido a algo optimista: queda 'unknown'
+    // (no terminal) y el corte lo pone la expiración del QR.
+    console.warn(`[MP Orders] Estado desconocido de MP: ${JSON.stringify(raw)} — se registra como 'unknown'.`);
+    return "unknown";
   }
 
-  /** external_reference: máx 64 chars, sin PII. */
-  private buildExternalRef(): string {
-    const ts = Date.now().toString(36);
-    const rand = randomBytes(2).toString("hex");
-    return `COCKTRAIL-${ts}-${rand}`.slice(0, 64);
+  /** external_reference: máx 64 chars, sin PII, derivado estable de la idempotency key. */
+  private buildExternalRef(idempotencyKey: string): string {
+    return `COCKTRAIL-${idempotencyKey}`.slice(0, 64);
   }
 
   private async resolveBar(barIdOrCode: string) {
@@ -303,14 +364,26 @@ export class MercadoPagoOrdersService {
     init: RequestInit,
     errorMessage: string,
   ): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        ...init,
+        signal: AbortSignal.timeout(MP_HTTP_TIMEOUT_MS),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+          ...init.headers,
+        },
+      });
+    } catch (err) {
+      if (isFetchTimeout(err)) {
+        throw new Conflict(
+          `${errorMessage}: Mercado Pago no respondió en ${MP_HTTP_TIMEOUT_MS / 1000} segundos. Probá de nuevo.`,
+          "MP_TIMEOUT",
+        );
+      }
+      throw err;
+    }
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));

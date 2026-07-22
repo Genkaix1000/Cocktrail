@@ -55,6 +55,22 @@ describe("mercadopagoService", () => {
     expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/pos/intent/intent-1");
   });
 
+  it("createQrOrder manda la idempotencyKey en el body cuando se le pasa", async () => {
+    mockedApiFetch.mockResolvedValueOnce({
+      orderId: "ORD01QR",
+      qrImage: null,
+      status: "created",
+      expiresAt: "2026-07-21T03:00:00.000Z",
+    });
+
+    await mercadopagoService.createQrOrder(5000, "2 Fernet", { idempotencyKey: "key-abc" });
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/orders/qr", {
+      method: "POST",
+      body: { amount: 5000, description: "2 Fernet", idempotencyKey: "key-abc" },
+    });
+  });
+
   it("cancelPosIntent hace DELETE a /api/mercadopago/pos/intent/:id", async () => {
     mockedApiFetch.mockResolvedValueOnce({ status: "cancelled" });
 

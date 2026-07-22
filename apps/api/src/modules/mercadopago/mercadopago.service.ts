@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { env } from "../../config/env.js";
 import { Conflict } from "../../shared/errors/http-errors.js";
 import type { CredentialsResolverService } from "./credentials-resolver.service.js";
+import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
 
 type MpNormalizedStatus = "OPEN" | "ON_TERMINAL" | "FINISHED" | "CANCELED" | "PENDING";
 
@@ -133,14 +134,26 @@ export class MercadoPagoService {
   }
 
   private async pointApiRequest<T>(token: string, path: string, init: RequestInit, errorMessage: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        ...init,
+        signal: AbortSignal.timeout(MP_HTTP_TIMEOUT_MS),
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+          ...init.headers,
+        },
+      });
+    } catch (err) {
+      if (isFetchTimeout(err)) {
+        throw new Conflict(
+          `${errorMessage}: Mercado Pago no respondió en ${MP_HTTP_TIMEOUT_MS / 1000} segundos. Probá de nuevo.`,
+          "MP_TIMEOUT",
+        );
+      }
+      throw err;
+    }
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
@@ -415,6 +428,7 @@ export class MercadoPagoService {
     try {
       const response = await fetch(`${this.baseUrl}/point/integration-api/devices?offset=0&limit=50`, {
         method: "GET",
+        signal: AbortSignal.timeout(MP_HTTP_TIMEOUT_MS),
         headers: {
           "Authorization": `Bearer ${token}`,
         },
@@ -439,6 +453,9 @@ export class MercadoPagoService {
         return { connected: false, message: `El dispositivo con ID ${env.MP_POS_DEVICE_ID} no está vinculado a esta cuenta de Mercado Pago.` };
       }
     } catch (err: any) {
+      if (isFetchTimeout(err)) {
+        return { connected: false, message: `Mercado Pago no respondió en ${MP_HTTP_TIMEOUT_MS / 1000} segundos. Probá de nuevo.` };
+      }
       return { connected: false, message: `Error de red al conectar con Mercado Pago: ${err.message || err}` };
     }
   }
