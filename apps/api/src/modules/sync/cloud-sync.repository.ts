@@ -194,10 +194,17 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
   }
 
   /**
-   * Restore de `orders` cloud → local. Columnas confirmadas 1:1 con local (verificado en
-   * vivo), passthrough directo. `event_id` tiene FK a `night_events` (ON DELETE CASCADE) —
-   * si `pullNightEvents` falló parcialmente para algún evento, el upsert de sus orders
-   * falla con 23503 (constraint real de Postgres); se reporta distinguible en `error`.
+   * Restore de `orders` cloud → local. Passthrough con normalización puntual por drift
+   * local↔cloud (mismo criterio que el mapeo explícito de pullNightEvents):
+   * - `payment_status`: las filas cloud pre-migración de cobro lo traen en NULL explícito,
+   *   que NO dispara el DEFAULT local ('desconocido', NOT NULL) y rechaza la fila entera.
+   * - `mp_order_id`: FK a `mp_orders` local, pero el restore todavía NO baja `mp_orders`
+   *   (recién entra al pull en el PR 5) — se conserva solo si la fila existe localmente,
+   *   si no va NULL. `mp_payment_id` se conserva SIEMPRE: es la denormalización
+   *   deliberada que sobrevive a un restore parcial.
+   * `event_id` tiene FK a `night_events` (ON DELETE CASCADE) — si `pullNightEvents`
+   * falló parcialmente para algún evento, el upsert de sus orders falla con 23503
+   * (constraint real de Postgres); se reporta distinguible en `error`.
    */
   async pullOrders(): Promise<SyncTableResult> {
     if (!supabaseCloud) return { ok: 0, failed: 0 };
@@ -206,7 +213,27 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
       console.error("[SupabaseCloudSyncRepository] Error descargando orders:", error.message);
       return { ok: 0, failed: 0, error: error.message };
     }
-    const result = await batchUpsertLocal("orders", data ?? []);
+    const cloudRows = data ?? [];
+
+    // Un solo lookup local (no una query por fila): qué mp_order_id de cloud existen acá.
+    const mpIds = [...new Set(cloudRows.map((o: any) => o.mp_order_id).filter((id: any) => id != null))];
+    let localMpIds = new Set<string>();
+    if (mpIds.length > 0) {
+      const { data: mpRows, error: mpError } = await supabase.from("mp_orders").select("id").in("id", mpIds);
+      if (mpError) {
+        // Conservador: si no se puede chequear, se anulan las FK (mp_payment_id queda igual).
+        console.error("[SupabaseCloudSyncRepository] Error consultando mp_orders local:", mpError.message);
+      } else {
+        localMpIds = new Set((mpRows ?? []).map((r: any) => r.id));
+      }
+    }
+
+    const rows = cloudRows.map((o: any) => ({
+      ...o,
+      payment_status: o.payment_status ?? "desconocido",
+      mp_order_id: o.mp_order_id != null && localMpIds.has(o.mp_order_id) ? o.mp_order_id : null,
+    }));
+    const result = await batchUpsertLocal("orders", rows);
     if (result.error?.includes("foreign key") || result.error?.includes("violates")) {
       result.error = `Pedidos no restaurados: la noche asociada no llegó de cloud (${result.error})`;
     }

@@ -4,7 +4,7 @@ type QueryResult = { data: any; error: any };
 
 function makeQueryBuilder(result: QueryResult) {
   const builder: any = {};
-  const chainable = ["select", "upsert"];
+  const chainable = ["select", "upsert", "in"];
   for (const method of chainable) {
     builder[method] = vi.fn(() => builder);
   }
@@ -14,13 +14,20 @@ function makeQueryBuilder(result: QueryResult) {
 
 const localResults = new Map<string, QueryResult>();
 const cloudResults = new Map<string, QueryResult>();
-/** Último builder creado por tabla en cloud, para inspeccionar qué se upserteó. */
+/** Último builder creado por tabla (cloud y local), para inspeccionar qué se upserteó. */
 const cloudBuilders = new Map<string, any>();
+const localBuilders = new Map<string, any>();
 let cloudConfigured = true;
 
 vi.mock("../../shared/supabase.js", () => ({
   get supabase() {
-    return { from: (table: string) => makeQueryBuilder(localResults.get(table) ?? { data: null, error: null }) };
+    return {
+      from: (table: string) => {
+        const builder = makeQueryBuilder(localResults.get(table) ?? { data: null, error: null });
+        localBuilders.set(table, builder);
+        return builder;
+      },
+    };
   },
   get supabaseCloud() {
     if (!cloudConfigured) return null;
@@ -40,6 +47,7 @@ beforeEach(() => {
   localResults.clear();
   cloudResults.clear();
   cloudBuilders.clear();
+  localBuilders.clear();
   cloudConfigured = true;
 });
 
@@ -189,6 +197,58 @@ describe("SupabaseCloudSyncRepository.pullOrders", () => {
     const repo = new SupabaseCloudSyncRepository();
 
     expect(await repo.pullOrders()).toEqual({ ok: 2, failed: 0 });
+  });
+
+  it("normaliza payment_status NULL de cloud a 'desconocido' (el NULL explícito no dispara el DEFAULT local y violaba el NOT NULL)", async () => {
+    cloudResults.set("orders", {
+      data: [{ id: "o1", event_id: "e1", payment_status: null, mp_order_id: null, mp_payment_id: null, idempotency_key: null }],
+      error: null,
+    });
+    localResults.set("orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullOrders();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    const upserted = localBuilders.get("orders").upsert.mock.calls[0][0];
+    expect(upserted[0].payment_status).toBe("desconocido");
+  });
+
+  it("mp_order_id sin fila en la mp_orders local se anula; mp_payment_id se conserva SIEMPRE (restore parcial: mp_orders recién entra al pull en el PR 5)", async () => {
+    cloudResults.set("orders", {
+      data: [{ id: "o1", event_id: "e1", payment_status: "cobrado", mp_order_id: "mp-huerfano", mp_payment_id: "pay-99" }],
+      error: null,
+    });
+    localResults.set("mp_orders", { data: [], error: null });
+    localResults.set("orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullOrders();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    const upserted = localBuilders.get("orders").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({
+      id: "o1",
+      mp_order_id: null,
+      mp_payment_id: "pay-99",
+      payment_status: "cobrado",
+    });
+  });
+
+  it("mp_order_id que SÍ existe en la mp_orders local se conserva", async () => {
+    cloudResults.set("orders", {
+      data: [{ id: "o1", event_id: "e1", payment_status: "cobrado", mp_order_id: "mp-1", mp_payment_id: "pay-1" }],
+      error: null,
+    });
+    localResults.set("mp_orders", { data: [{ id: "mp-1" }], error: null });
+    localResults.set("orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullOrders();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    const upserted = localBuilders.get("orders").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({ mp_order_id: "mp-1", mp_payment_id: "pay-1" });
   });
 
   it("si el upsert falla por FK (night_event no restaurada), el error queda distinguible", async () => {
