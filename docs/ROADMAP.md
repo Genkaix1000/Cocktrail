@@ -38,12 +38,13 @@ espera.
 | 4 | **PR 5** — conciliación / sync | Se beneficia del #1: hoy el Posnet **no deja fila en `mp_orders`** (R19), y el #1 obliga a persistir el intent. Hacerlo antes sería conciliar sobre datos que no existen. | pendiente |
 | 5 | **Fase 6** — empaquetado | Nada de lo anterior es opcional para poder entregar el producto. | pendiente |
 
-### Decisiones pendientes del dueño del proyecto
+### Decisiones tomadas por el dueño del proyecto (2026-07-22)
 
-- ¿El **chequeo de salud** de la vinculación MP debe **bloquear** el cobro o solo advertir?
-  (criterio G de `gestion-posnets.md`)
-- ¿Un mismo Posnet puede **rotar entre dos barras** en noches distintas? Hoy el modelo dice que no
-  — hay que confirmar que no existe el caso de un local con un solo aparato que lo mueve.
+- **Chequeo de salud MP → bloquear solo lo grave**: frena el cobro únicamente cuando la plata iría
+  a otra cuenta (seller ≠ dueño del lector); el resto solo advierte con cartel en `/caja` y
+  `/admin`. Ver "Preguntas respondidas" en `gestion-posnets.md`.
+- **El Posnet queda fijo a su caja para siempre** (no rota entre barras): trazabilidad perfecta y
+  esquema simple; si el local real alguna vez lo necesitara, se reformula en ese momento.
 
 ---
 

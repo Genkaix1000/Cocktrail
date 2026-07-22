@@ -418,26 +418,36 @@ hacerlas **juntas**, o esta **inmediatamente después**.
 
 ---
 
+## Preguntas respondidas (decididas por el dueño del proyecto el 2026-07-22)
+
+**¿El chequeo de salud debe bloquear el cobro o solo advertir?** → **Bloquear solo lo grave.**
+El sistema frena el cobro no-efectivo únicamente cuando la incoherencia implica que **la plata
+iría a otra cuenta** (el seller activo no es el dueño del lector — el escenario que ya ocurrió en
+vivo con el cobro de $15 que entró a la cuenta del otro desarrollador). Todo lo demás (lector en
+STANDALONE, caja provisionada desactualizada, etc.) **solo advierte** con cartel visible en
+`/caja` y `/admin`: esos casos fallan solos al cobrar y lo que necesita la cajera es el mensaje
+claro, no un bloqueo preventivo que pueda dejar la caja parada por un falso positivo.
+
+**¿Un mismo lector puede servir a dos cajas en momentos distintos?** → **No: el modelo queda
+rígido.** Un Posnet pertenece a su caja para siempre. Si el local tiene dos barras, cada una tiene
+su aparato (o solo una cobra con MP). No existe el caso de un único lector rotando entre barras, y
+la rigidez compra trazabilidad perfecta de los cobros históricos y un esquema más simple. Si el
+boliche real algún día lo necesitara, se reformula el invariante en ese momento — no se paga la
+complejidad por adelantado.
+
 ## Preguntas abiertas
 
-Ninguna bloquea escribir el plan técnico, pero todas hay que responderlas antes de implementar.
+Ninguna bloquea escribir el plan técnico, pero hay que responderlas antes de implementar.
 
 1. **¿Qué pasa con los cobros históricos de un Posnet que se desvincula?** El modelo dice que el
    device queda histórico y no se borra, pero falta definir **cómo se muestra** (¿en la lista con un
    estado "histórico"? ¿en un detalle aparte?), si se puede **reactivar** (por ejemplo, el aparato
    volvió del service), y qué pasa con sus cobros en la conciliación.
-2. **¿Un mismo lector puede servir a dos cajas en momentos distintos del tiempo?** El modelo dice
-   que **no**. Hay que confirmar que no existe un caso de uso real — por ejemplo, un solo Posnet
-   rotando entre dos barras en noches distintas. Si existe, el invariante "un device pertenece a una
-   caja para siempre" hay que reformularlo.
-3. **¿El chequeo de salud debe bloquear el cobro o solo advertir?** Bloquear evita cobros que van a
-   fallar (o a la cuenta equivocada); advertir evita dejar la caja parada por un falso positivo del
-   diagnóstico. La respuesta no es obvia y hay que elegirla a conciencia.
-4. **¿Cómo se descubre un lector nuevo si el dueño todavía no lo reclamó en su cuenta?** No aparece
+2. **¿Cómo se descubre un lector nuevo si el dueño todavía no lo reclamó en su cuenta?** No aparece
    en `GET /devices` hasta que es suyo. Hay que decidir **qué le muestra la UI en ese estado** para
    que no parezca un error del sistema, y cómo se distingue "todavía no lo reclamaste" de "el token
    es de otra aplicación" (R24), que producen el mismo listado vacío.
-5. **¿Conviene renombrar la sucursal en Mercado Pago vía API, o solo mostrar un alias local?**
+3. **¿Conviene renombrar la sucursal en Mercado Pago vía API, o solo mostrar un alias local?**
    Afecta si el nombre **viaja o no** a MP, y por lo tanto qué ve el dueño en su panel de Mercado
    Pago comparado con lo que ve en Cocktrail.
 
