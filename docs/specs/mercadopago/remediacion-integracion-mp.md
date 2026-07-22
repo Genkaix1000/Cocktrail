@@ -1,8 +1,26 @@
 # Remediación de la integración Mercado Pago + bar-sessions
 
-**Estado**: `aprobada` — decisiones cerradas el 2026-07-20; plan técnico escrito; enriquecida con hallazgos de verificación en vivo (A1b, A17, A18) y bugs de infraestructura ya corregidos. Lista para `/tasks`.
+**Estado**: `en ejecución` — PR 1-3 implementados (ba7c113, 2745f7c, e3f1a29), PR 4-6 pendientes. Ver "Estado actual" abajo. Decisiones cerradas el 2026-07-20; plan técnico escrito; enriquecida con hallazgos de verificación en vivo (A1b, A17, A18) y bugs de infraestructura ya corregidos.
 **Fecha**: 2026-07-20
 **Origen**: auditoría del merge `e95404a..8b559b2` (5 commits de Genkaix1000, 2026-07-17, +13.934/−4.066 en 162 archivos)
+
+---
+
+## Estado actual (2026-07-21)
+
+| PR | Estado |
+|---|---|
+| 1 — Suite en verde + comentarios falsos | ✅ `ba7c113` |
+| 2 — Runner de migraciones | ✅ `2745f7c` |
+| 3 — Integridad del cobro (bloque A) | ✅ `e3f1a29` — gate físico pendiente (ver abajo) |
+| 4 — Inversión del token + single-seller + seguridad | ← **siguiente** |
+| 5 — Sync / conciliación | pendiente |
+| 6 — Sesiones de caja + PDVs + docs | pendiente |
+
+- **Criterios cumplidos**: A1-A5 y el bloque F completo. A6 (refresh concurrente) se cierra por construcción en el PR 4 con D1.
+- **Entorno**: hay **dos sellers activos en Cloud** — la cuenta de prueba de Manuel (`1517393956`, que gana por el `order asc` de A17) y la del otro desarrollador (`225043369`). **La cuenta del dueño del boliche nunca se vinculó.** Los cobros salen por el **nivel 2 del resolver (seller OAuth)**, no por el fallback env.
+- **Gate físico bloqueado**: los 2 lectores Point están registrados en la cuenta del otro desarrollador y en modo STANDALONE — la titularidad no se libera con cerrar sesión, así que el test de $15 queda diferido hasta que él los dé de baja.
+- **Punteros**: riesgos R17-R23 en `docs/ROADMAP.md`; deuda diferida en `docs/plans/mercadopago/deuda-remediacion-mp.md`.
 
 ---
 
@@ -14,7 +32,7 @@ Pero se mergeó sin revisión, y una auditoría en profundidad encontró **12 de
 
 Hay cuatro dolores distintos, y conviene no confundirlos:
 
-**1. Se puede perder o duplicar plata.** `mp_orders` no tiene ninguna restricción de unicidad, así que un webhook reintentado por Mercado Pago —cosa que MP hace por diseño— inserta filas de cobro duplicadas. Si el registro del pedido falla *después* de que MP confirmó el pago, se cobró la plata y no queda pedido: no hay retry ni compensación. Un doble click en "Cobrar" genera dos órdenes reales. Y las llamadas a Mercado Pago no tienen timeout, con lo cual una conexión colgada bloquea el cobro sin límite.
+**1. Se podía perder o duplicar plata.** `mp_orders` no tenía ninguna restricción de unicidad, así que un webhook reintentado por Mercado Pago —cosa que MP hace por diseño— insertaba filas de cobro duplicadas. Si el registro del pedido fallaba *después* de que MP confirmó el pago, se cobró la plata y no quedaba pedido: no había retry ni compensación. Un doble click en "Cobrar" generaba dos órdenes reales. Y las llamadas a Mercado Pago no tenían timeout, con lo cual una conexión colgada bloqueaba el cobro sin límite. *(Cerrado en el PR 3.)*
 
 **2. Se rompió la promesa central del producto.** `ARCHITECTURE.md` §2 dice, textual: *"La caja nunca depende de internet"*. Hoy, si están configuradas las variables de cloud, **cada cobro —incluido el del Posnet físico— consulta Supabase Cloud por internet** antes de tocar a Mercado Pago. El Posnet, que antes funcionaba con una variable de entorno local, ahora depende de que un servicio remoto esté vivo. Un corte de Supabase Cloud deja al boliche sin cobrar, aunque MP esté perfecto. Esto no es un bug puntual: es una decisión arquitectónica que se tomó de hecho, sin discutirse ni documentarse.
 
@@ -24,11 +42,11 @@ Hay cuatro dolores distintos, y conviene no confundirlos:
 
 A esto se suman tres deudas de higiene que bloquean trabajar con confianza sobre esta base:
 
-- **Se pushearon 7 tests rotos** a `origin/develop` (`PagosSection.test.tsx`). La suite ya no es una señal confiable: quien corra los tests de ahora en más va a ver rojo y aprender a ignorarlo.
+- **Se pushearon 7 tests rotos** a `origin/develop` (`PagosSection.test.tsx`). La suite dejó de ser una señal confiable: quien corriera los tests iba a ver rojo y aprender a ignorarlo. *(Cerrado en el PR 1: 1 test arreglado, 6 en skip hasta el PR 6.)*
 - **641 líneas de código muerto** (`PdvSection.tsx`, `PdvTable.tsx`, `PdvFormModal.tsx`) que nadie importa, conviviendo con una versión embebida y peor de la misma funcionalidad dentro de un `PagosSection.tsx` de 681 líneas.
 - **Hay comentarios que mienten sobre el código que documentan.** El más peligroso afirma que el refresh de tokens usa `FOR UPDATE` en transacción; el código que efectivamente lo implementa admite en su propio comentario que no hay lock. Un comentario falso es peor que ninguno: el próximo que lea eso va a asumir que el problema está resuelto.
 
-Finalmente, un problema que la auditoría destapó y que es **independiente de Mercado Pago pero bloqueante para producción**: **no existe ningún mecanismo para actualizar el schema de una base ya desplegada.** Las 14 migraciones nuevas se aplican únicamente como init-scripts de Docker, y esos solo corren con el volumen vacío. `ARCHITECTURE.md` §9 incluso canoniza esto como convención ("cada migración nueva se agrega como `14-…`, `15-…` en el compose"). El único script de base que existe (`db:reset`) borra datos, no aplica schema. Consecuencia concreta: **hoy no hay forma de llevarle esta actualización a la mini-PC del boliche sin destruir su historial de noches.** Se descubrió porque la propia base local de desarrollo tiene las 8 tablas viejas con 29 tragos y 109 noches, y ninguna de las 14 nuevas.
+Finalmente, un problema que la auditoría destapó y que es **independiente de Mercado Pago pero bloqueante para producción**: **no existía ningún mecanismo para actualizar el schema de una base ya desplegada.** Las 14 migraciones nuevas se aplicaban únicamente como init-scripts de Docker, y esos solo corren con el volumen vacío. `ARCHITECTURE.md` §9 incluso canonizaba esto como convención ("cada migración nueva se agrega como `14-…`, `15-…` en el compose"). El único script de base que existía (`db:reset`) borraba datos, no aplicaba schema. Consecuencia concreta: **no había forma de llevarle esta actualización a la mini-PC del boliche sin destruir su historial de noches.** Se descubrió porque la propia base local de desarrollo tenía las 8 tablas viejas con 29 tragos y 109 noches, y ninguna de las 14 nuevas. *(Resuelto en el PR 2 — runner en `apps/api/src/infra/migrations/`; la base local ya tiene las 23 migraciones aplicadas.)*
 
 **Para qué rol**: el dueño (no puede confiar en la conciliación ni actualizar su sistema), la cajera (caja que se bloquea, cobros que cuelgan), y quien mantenga el código (suite en rojo, código muerto, comentarios falsos).
 
@@ -67,12 +85,12 @@ Se decide explícitamente **remediar, no revertir**: el trabajo es valioso y rev
 
 ### A. Integridad del cobro (bloqueante)
 
-- [ ] **Dado** que Mercado Pago reenvía una notificación ya procesada, **cuando** llega al sistema, **entonces** no se crea un segundo registro de cobro ni se impacta el pedido dos veces. Verificable reenviando la misma notificación N veces y comprobando que el resultado es idéntico al de una sola.
-- [ ] **Dado** un cajero que hace doble click en cobrar, **cuando** se dispara la segunda solicitud, **entonces** no se genera una segunda orden de cobro real en Mercado Pago.
-- [ ] **Dado** que el cobro se confirmó en Mercado Pago pero falla el registro local del pedido, **cuando** ocurre el fallo, **entonces** el sistema deja constancia recuperable del cobro y lo señala para conciliación — nunca lo descarta en silencio.
-- [ ] **Dado** que Mercado Pago no responde, **cuando** pasa un tiempo acotado, **entonces** la operación corta con un error claro para la cajera en vez de colgarse indefinidamente. Aplica tanto al backend como a la espera del pago por QR en pantalla.
-- [ ] **Dado** que Mercado Pago devuelve un estado que el sistema no conoce, **cuando** se interpreta, **entonces** no se lo reporta como "pendiente" — se lo distingue de un cobro efectivamente en curso.
-- [ ] **Dado** dos cobros simultáneos con el token de acceso próximo a vencer, **cuando** ambos disparan la renovación, **entonces** la cuenta no queda marcada como vencida ni se corta la capacidad de cobrar.
+- [x] **Dado** que Mercado Pago reenvía una notificación ya procesada, **cuando** llega al sistema, **entonces** no se crea un segundo registro de cobro ni se impacta el pedido dos veces. Verificable reenviando la misma notificación N veces y comprobando que el resultado es idéntico al de una sola.
+- [x] **Dado** un cajero que hace doble click en cobrar, **cuando** se dispara la segunda solicitud, **entonces** no se genera una segunda orden de cobro real en Mercado Pago.
+- [x] **Dado** que el cobro se confirmó en Mercado Pago pero falla el registro local del pedido, **cuando** ocurre el fallo, **entonces** el sistema deja constancia recuperable del cobro y lo señala para conciliación — nunca lo descarta en silencio.
+- [x] **Dado** que Mercado Pago no responde, **cuando** pasa un tiempo acotado, **entonces** la operación corta con un error claro para la cajera en vez de colgarse indefinidamente. Aplica tanto al backend como a la espera del pago por QR en pantalla.
+- [x] **Dado** que Mercado Pago devuelve un estado que el sistema no conoce, **cuando** se interpreta, **entonces** no se lo reporta como "pendiente" — se lo distingue de un cobro efectivamente en curso.
+- [ ] **Dado** dos cobros simultáneos con el token de acceso próximo a vencer, **cuando** ambos disparan la renovación, **entonces** la cuenta no queda marcada como vencida ni se corta la capacidad de cobrar. *(→ PR 4, se cierra por construcción con D1)*
 
 ### B. Local-first / disponibilidad (bloqueante)
 
@@ -106,11 +124,11 @@ Se decide explícitamente **remediar, no revertir**: el trabajo es valioso y rev
 
 ### F. Actualización de schema (bloqueante para producción)
 
-- [ ] Existe un procedimiento **único y repetible** para llevar una base existente a la última versión del schema, sin borrar datos.
-- [ ] **Dado** el procedimiento corrido dos veces seguidas, **cuando** termina la segunda, **entonces** el resultado es idéntico al de la primera y no falla.
-- [ ] **Dado** una base creada de cero y una base migrada incrementalmente, **cuando** ambas terminan, **entonces** tienen el mismo schema.
-- [ ] La base local de desarrollo queda actualizada con las 14 tablas nuevas **conservando** sus 29 tragos y 109 noches.
-- [ ] El procedimiento está documentado para el día que haya que actualizar la mini-PC del boliche.
+- [x] Existe un procedimiento **único y repetible** para llevar una base existente a la última versión del schema, sin borrar datos.
+- [x] **Dado** el procedimiento corrido dos veces seguidas, **cuando** termina la segunda, **entonces** el resultado es idéntico al de la primera y no falla.
+- [x] **Dado** una base creada de cero y una base migrada incrementalmente, **cuando** ambas terminan, **entonces** tienen el mismo schema.
+- [x] La base local de desarrollo queda actualizada con las 14 tablas nuevas **conservando** sus 29 tragos y 109 noches.
+- [x] El procedimiento está documentado para el día que haya que actualizar la mini-PC del boliche.
 
 ### G. Higiene de código
 
@@ -118,8 +136,7 @@ Se decide explícitamente **remediar, no revertir**: el trabajo es valioso y rev
 - [ ] `pnpm typecheck` sigue pasando.
 - [ ] `PdvSection`, `PdvTable` y `PdvFormModal` quedan **cableados** y en uso, y la versión duplicada embebida en `PagosSection` se elimina. No quedan las dos implementaciones conviviendo.
 - [ ] Los tres componentes cableados tienen tests (hoy no tienen ninguno).
-- [ ] El formulario de alta de PDV es accesible: sus etiquetas están asociadas a sus campos, cierra con `Escape`, lleva el foco al primer campo al abrirse y lo devuelve al disparador al cerrarse.
-  > **Corrección (2026-07-20)**: una versión previa exigía "atrapa el foco, se comporta como un diálogo real". **Era incorrecto.** `PdvFormModal` no es un modal: es un **panel lateral inline** (`PdvFormModal.tsx:32` → `w-full lg:w-[420px] shrink-0`, montado como hermano de la tabla en `PdvSection.tsx:254-277`) que no bloquea el fondo. Poner un focus trap ahí **violaría** WAI-ARIA. Por eso el criterio pide foco inicial y retorno, pero **sin trap**. El archivo debería renombrarse a `PdvFormPanel` para que el nombre no siga mintiendo.
+- [ ] El formulario de alta de PDV es accesible: sus etiquetas están asociadas a sus campos, cierra con `Escape`, lleva el foco al primer campo al abrirse y lo devuelve al disparador al cerrarse — **sin focus trap**: `PdvFormModal` no es un modal sino un **panel lateral inline** (`PdvFormModal.tsx:32` → `w-full lg:w-[420px] shrink-0`, montado como hermano de la tabla en `PdvSection.tsx:254-277`) que no bloquea el fondo, y poner un trap ahí violaría WAI-ARIA. El archivo debería renombrarse a `PdvFormPanel` para que el nombre no siga mintiendo.
 - [ ] El nombre y el código del punto de venta que se muestran en pantalla son los reales, no literales fijos.
 - [ ] No quedan comentarios que afirmen garantías que el código no da. Especialmente el que asegura un bloqueo transaccional inexistente.
 - [ ] Los defectos de UI verificados quedan resueltos: el botón de prueba de Posnet apunta al dispositivo correcto y su resultado se muestra al usuario.
@@ -171,7 +188,7 @@ Ese último punto además **elimina el hallazgo A8 en vez de parchearlo**: el `r
 
 **Escenario que vuelve esto no-negociable — la pausa por inactividad de Supabase.** En el plan gratuito, un proyecto de Supabase **se pausa tras ~7 días de inactividad** y queda caído hasta reactivarlo a mano. Esto no es una falla rara: encaja con cómo opera el local-first — el sistema trabaja offline y solo toca la nube al cerrar la noche, así que es previsible que el proyecto se pause. Con el token leído de Cloud en cada cobro (estado actual), la secuencia es: proyecto pausado → llega el primer cobro → intenta leer el token de Cloud → **error → no cobra**. Con D1, el token ya está en local y el refresh va a MP, no a Supabase; la pausa deja de tener cualquier efecto sobre la caja. La alternativa (pagar el plan Pro para que no se pause) cuesta plata y depende de mantener la nube despierta — D1 no.
 
-Se gana: cobrar sobrevive una caída **o una pausa por inactividad** de Cloud, desaparece la clave foránea entre dos bases, y se cierra A8. Se asume: un camino de sync nuevo, que sigue exactamente el patrón que el repo ya usa para las noches.
+Se gana: cobrar sobrevive una caída **o una pausa por inactividad** de Cloud, desaparece la incoherencia de leer de Cloud contra una FK local satisfecha por stubs (ver D2), y se cierra A8. Se asume: un camino de sync nuevo, que sigue exactamente el patrón que el repo ya usa para las noches.
 
 **Opción complementaria evaluada — keep-alive ("ping-pong") de la nube.** Un pinger externo siempre-encendido (UptimeRobot / cron-job.org / un GitHub Action programado) que golpee un endpoint de Supabase cada pocos días evita que el proyecto se pause por inactividad. Se considera **defensa en profundidad, no un reemplazo de D1**, por tres motivos: (1) solo cubre la pausa, no una caída real ni un problema de conectividad; (2) el pinger tiene que correr fuera de la mini-PC —que está apagada justo durante la inactividad— y fuera de `pg_cron` —que se pausa junto con el proyecto—, o sea suma una pieza externa que también puede fallar; (3) no cambia que, sin D1, el cobro siga *dependiendo* de la nube. **Recomendación**: el ping tiene sentido para mantener disponible la nube para sus usos legítimos (push al cerrar la noche, restore, OAuth), nunca para justificar que la caja dependa de ella. Para producción con plata real, evaluar además el plan Pro de Supabase (no se pausa); pero D1 hace que el sistema aguante en el plan gratuito igual. **Fuera del alcance de esta spec** — es infra de operación, no código del repo.
 
@@ -179,20 +196,19 @@ Se gana: cobrar sobrevive una caída **o una pausa por inactividad** de Cloud, d
 
 Consecuencia directa de D1. Cloud es donde escribe la Edge Function; local tiene la copia completa que se lee para cobrar y es el único que refresca.
 
-> **Corrección (2026-07-20)**: una versión previa decía que la clave foránea "apunta a otra base". Es impreciso: `mercadopago_cajas.seller_user_id REFERENCES mercadopago_sellers(user_id)` (`20260715000200:13`) siempre se declaró **dentro** de cada base. Lo que cruzaba bases era la **lectura** (`mpDb` → Cloud) contra una FK local satisfecha por filas stub sin tokens — que es lo que motivó `20260718010000_sellers_nullable_tokens.sql`. Con D1 los stubs se vuelven filas completas y la incoherencia desaparece **sin DDL sobre la FK**.
+La FK `mercadopago_cajas.seller_user_id REFERENCES mercadopago_sellers(user_id)` (`20260715000200:13`) siempre se declaró **dentro** de cada base. Lo que cruzaba bases era la **lectura** (`mpDb` → Cloud) contra una FK local satisfecha por filas stub sin tokens — que es lo que motivó `20260718010000_sellers_nullable_tokens.sql`. Con D1 los stubs se vuelven filas completas y la incoherencia desaparece **sin DDL sobre la FK**.
 
 ### D3 — Los tokens se cifran a nivel aplicación
 
 D1 hace que los tokens ahora también vivan en el disco de la mini-PC del boliche, no solo en Cloud: la superficie crece y el texto plano deja de ser aceptable. Se cifran **a nivel aplicación**, y se descarta `pgsodium`/Vault por agregar una dependencia de Postgres que choca con el Postgres embebido de la Fase 6.
 
-> **Enmienda (2026-07-20)**, a partir del diseño técnico. La formulación original —"clave derivada del `AUTH_SECRET`"— era insuficiente por dos motivos:
->
-> 1. **Acopla rotar la cookie de sesión con poder cobrar.** Hoy rotar `AUTH_SECRET` solo desloguea gente; si además cifrara los tokens, rotarlo **dejaría al boliche sin cobrar**. Se usa una env dedicada `MP_TOKEN_SECRET` (con `AUTH_SECRET` como default para no romper instalaciones existentes), más `key_version` por fila y una `MP_TOKEN_SECRET_PREVIOUS` opcional para re-cifrar en el boot.
-> 2. **No decía nada de la Edge Function**, que es donde los tokens nacen. Y no se resuelve compartiéndole la clave: guardar la clave en los secrets de Supabase, al lado del ciphertext en la misma base de Supabase, no protege contra el atacante que motiva el criterio E.
->
-> **Cloud deja de ser almacén de tokens y pasa a ser buzón de traspaso**: la Edge Function cifra las credenciales con una `MP_HANDOFF_KEY` propia y las deja en una tabla de handoff con vencimiento corto; en `mercadopago_sellers` de Cloud escribe **solo metadata no secreta**. El local baja el handoff, lo re-cifra con su clave, persiste y **borra el handoff**. Resultado: en Cloud no queda token legible **ni recuperable**, lo que cumple el criterio E de forma más fuerte que cifrarlo con una clave guardada al lado.
->
-> **Consecuencia aceptada**: un restore desde la nube tras romperse el disco de la mini-PC recupera cajas, dispositivos y cobros, pero **no el token** — hay que re-vincular por OAuth (dos minutos de un admin). El criterio C se redactó excluyendo tokens.
+**Clave de cifrado local**: una env dedicada `MP_TOKEN_SECRET` (con `AUTH_SECRET` como default para no romper instalaciones existentes), más `key_version` por fila y una `MP_TOKEN_SECRET_PREVIOUS` opcional para re-cifrar en el boot. Así, rotar `AUTH_SECRET` sigue haciendo lo único que hacía —desloguear gente— sin dejar al boliche sin cobrar.
+
+**Cloud no es almacén de tokens: es buzón de traspaso.** La Edge Function —que es donde los tokens nacen— cifra las credenciales con una `MP_HANDOFF_KEY` propia y las deja en una tabla de handoff con vencimiento corto; en `mercadopago_sellers` de Cloud escribe **solo metadata no secreta**. El local baja el handoff, lo re-cifra con su clave, persiste y **borra el handoff**. Resultado: en Cloud no queda token legible **ni recuperable**, lo que cumple el criterio E de forma más fuerte que cifrarlo con una clave guardada al lado — compartirle la clave a la Edge Function no serviría, porque guardar la clave en los secrets de Supabase, al lado del ciphertext en la misma base, no protege contra el atacante que motiva el criterio E.
+
+**Consecuencia aceptada**: un restore desde la nube tras romperse el disco de la mini-PC recupera cajas, dispositivos y cobros, pero **no el token** — hay que re-vincular por OAuth (dos minutos de un admin). El criterio C se redactó excluyendo tokens.
+
+**Formulación original descartada** (2026-07-20): "clave derivada del `AUTH_SECRET`" — insuficiente por (1) acoplar rotar la cookie de sesión con poder cobrar (rotarlo **dejaría al boliche sin cobrar**) y (2) no resolver la Edge Function.
 
 ### D4 — Runner de migraciones propio en el boot del backend
 
@@ -224,7 +240,7 @@ El runner de migraciones que sale de acá es insumo de la Fase 6: `docs/specs/06
 
 ### D9 — El modelo es de UN solo seller: vincular debe REEMPLAZAR, y debe existir "Desvincular" (a partir de A17/A18)
 
-El negocio es de un solo comercio (un dueño recibe toda la plata — ver `docs/fases-mp/INDEX.md`, "single-seller"). Pero el código quedó en un híbrido roto: acumula filas (upsert por `user_id` → vincular otra cuenta crea una segunda fila) pero solo usa una (la más vieja, por el `order asc` de A17). Resultado observado en vivo: se vincula una cuenta nueva y el sistema sigue cobrando con la vieja, en silencio.
+El negocio es de un solo comercio (un dueño recibe toda la plata — ver `docs/fases-mp/INDEX.md`, "single-seller"). Pero el código quedó en un híbrido roto: acumula filas pero solo usa una (el mecanismo exacto está en A17). Resultado observado en vivo: se vincula una cuenta nueva y el sistema sigue cobrando con la vieja, en silencio.
 
 Se decide **comprometerse con el modelo single-seller de verdad**:
 - **Vincular reemplaza**, no acumula: al completar un OAuth nuevo, el seller anterior se desactiva o se borra, de modo que siempre haya a lo sumo un seller activo. (Alternativa evaluada y descartada por ahora: volver `findFirstActive` a `desc` para que gane el más nuevo — no alcanza, porque dejaría filas viejas activas acumulándose y con tokens vivos; el problema es la acumulación, no solo el orden.)
@@ -273,21 +289,20 @@ Se levantó el entorno y se ejercitó la vinculación de punta a punta en un nav
 
 - **El flujo OAuth funciona.** Vincular redirige a `auth.mercadopago.com/authorization` con `client_id`, `redirect_uri` a la Edge Function y PKCE S256 correctos. La Edge Function `mp-auth-callback` está desplegada en Cloud, con sus 4 secrets cargados (verificados por digest SHA256). El estado "⏳ E2E cloud pendiente" del `docs/fases-mp/INDEX.md` ya se puede cerrar.
 - **El token vive en Cloud, no en local.** Confirmado en vivo: la DB local **no tiene** la tabla `mercadopago_sellers` ("relation does not exist"); el seller vive en el Postgres de Supabase Cloud. Es la evidencia empírica directa de A1/D1.
-- **A17 reproducido.** Había 2 sellers activos en Cloud (la cuenta del otro desarrollador, del 07-17, + la cuenta de prueba de Manuel vinculada el 20-07); la UI mostraba la vieja por el `order asc`. Se resolvió borrando la fila vieja a mano (DELETE contra la REST API de Cloud) — exactamente el "desvincular" que A18 dice que falta en la app.
-  > **Corrección (2026-07-21)**: una versión previa decía que la cuenta vinculada el 20-07 era "la del dueño real". **Es falso** — es la cuenta de prueba de Manuel (`GARCIAMANUEL…`, user `1517393956`). **La cuenta del dueño del boliche nunca se vinculó todavía.** Además el borrado manual no fue definitivo: al 2026-07-21 vuelven a estar las dos filas activas.
+- **A17 reproducido.** Había 2 sellers activos en Cloud: la cuenta del otro desarrollador (del 07-17) + la cuenta de prueba de Manuel (`GARCIAMANUEL…`, user `1517393956`) vinculada el 20-07 — **la cuenta del dueño del boliche nunca se vinculó todavía**. La UI mostraba la vieja por el `order asc`. Se intentó resolver borrando la fila vieja a mano (DELETE contra la REST API de Cloud) — exactamente el "desvincular" que A18 dice que falta en la app — pero el borrado no fue definitivo: al 2026-07-21 vuelven a estar las dos filas activas (ver "Estado actual").
 - **Setup de OAuth documentado** en `docs/fases-mp/setup-oauth.md` (nuevo): las 3 env del backend, los 4 secrets de la Edge Function, el registro del redirect URI y PKCE en el panel de MP.
 
 ### Bugs de infraestructura encontrados y corregidos en esta sesión
 
-No estaban en la auditoría original (aparecieron al levantar el entorno). **Ya corregidos** — pendientes de commit:
+No estaban en la auditoría original (aparecieron al levantar el entorno). **Ya corregidos y commiteados** (`next.config.ts` en `d3fd06f`):
 
 - **Login roto por cookie cross-origin.** `apps/web/.env` tenía `NEXT_PUBLIC_API_URL` apuntando a la IP LAN, así que el navegador hacía el fetch de login cross-origin y la cookie de sesión **no se guardaba** para `localhost:3000` → login daba 200 pero la app rebotaba a `/login`. Arreglo: `NEXT_PUBLIC_API_URL` vacío (cliente same-origin, la cookie pega, y anda igual desde la LAN sin CORS).
 - **Puerto del backend hardcodeado en el proxy de Next.** `apps/web/next.config.ts` tenía `destination: "http://localhost:3001/api/..."` fijo, pero el backend corre en 8080 → el proxy daba ECONNREFUSED. Arreglo: el rewrite ahora lee `API_PROXY_TARGET` (default 3001). Bug real del repo: cualquiera que cambie `PORT` se lo comía.
 - Se agregó `API_PROXY_TARGET=http://localhost:8080` a `apps/web/.env`.
 
-Estos tres tocan config local (`.env`) y un archivo commiteado (`next.config.ts`). El cambio de `next.config.ts` conviene commitearlo — es una corrección genuina, independiente del `.env` de cada uno.
+Estos tres tocan config local (`.env`) y un archivo commiteado (`next.config.ts`). El cambio de `next.config.ts` era una corrección genuina, independiente del `.env` de cada uno, y ya se commiteó (`d3fd06f`).
 
-### Actualización de schema en producción — análisis
+### Actualización de schema en producción — análisis (2026-07-20, resuelto por el PR 2)
 
 **Por qué hoy es imposible.** Las migraciones se montan en `/docker-entrypoint-initdb.d/` (`docker-compose.yml:55-79`). El entrypoint oficial de Postgres ejecuta ese directorio **únicamente cuando el data dir está vacío**, es decir en el primer arranque del volumen. Sobre un volumen existente lo **saltea entero, sin error ni log**. El boot autocurativo de `apps/api/src/server.ts:48-56` solo *arranca* la base (`supabase start` → `docker compose up -d`); nunca la migra. Evidencia directa: la base local corrió `docker compose up` sin fallar y quedó con las 8 tablas viejas y ninguna de las 14 nuevas.
 
@@ -306,8 +321,7 @@ Hoy, actualizar una instalación desplegada solo se puede (a) borrando el volume
 **Forma de la solución recomendada**: tabla `schema_migrations`, leer `supabase/migrations/*.sql` en orden de nombre, aplicar los pendientes cada uno en su transacción, antes de aceptar tráfico.
 
 **Dos consecuencias a resolver en `/plan`:**
-- **Backfill**: en una instalación creada por init-scripts, las 14 migraciones ya están aplicadas. Hay que marcarlas como tales o el runner las reintentará.
-  > **Corrección (2026-07-20)**: una versión previa de esta spec afirmaba que `20260719000000_bars_code.sql` no era idempotente. **Es idempotente** — su seed usa `INSERT ... SELECT ... WHERE NOT EXISTS (SELECT 1 FROM bars WHERE code = 'BARRA-01')`. Eso habilita la estrategia de backfill por re-ejecución que adopta el plan técnico.
+- **Backfill**: en una instalación creada por init-scripts, las 14 migraciones ya están aplicadas. Hay que marcarlas como tales o el runner las reintentará. `20260719000000_bars_code.sql` **es idempotente** — su seed usa `INSERT ... SELECT ... WHERE NOT EXISTS (SELECT 1 FROM bars WHERE code = 'BARRA-01')` — y eso habilita la estrategia de backfill por re-ejecución que adopta el plan técnico.
 - **Política de fallo**: si una migración falla a mitad, ¿el backend arranca igual con schema viejo, o se niega a arrancar? Para una caja en pleno turno, la respuesta no es obvia y hay que elegirla a conciencia.
 
 ### Lo que está bien hecho (no tocar sin motivo)
@@ -322,7 +336,7 @@ PKCE S256 correcto · `consume_oauth_state` genuinamente atómico (`DELETE ... R
 
 ### Enfoque
 
-Se ataca en seis entregables secuenciales, cada uno desplegable y verificable por separado. El criterio de corte es que **cada PR o no cambia comportamiento observable, o cierra un bloque completo de criterios con su migración adentro** — nunca se deja el sistema en un estado intermedio roto. El orden lo manda una dependencia dura que no es de deploy sino de *verificabilidad*: la base local no tiene ninguna de las 14 migraciones nuevas, así que **sin el runner de migraciones nada de lo que requiera schema nuevo se puede probar localmente** — y los frentes de cobro, sync, seguridad y sesiones requieren todos migración nueva. Por eso el runner va segundo, apenas detrás de dejar la suite en verde.
+Se ataca en seis entregables secuenciales, cada uno desplegable y verificable por separado. El criterio de corte es que **cada PR o no cambia comportamiento observable, o cierra un bloque completo de criterios con su migración adentro** — nunca se deja el sistema en un estado intermedio roto. El orden lo manda una dependencia dura que no es de deploy sino de *verificabilidad*: la base local no tiene ninguna de las 14 migraciones nuevas, así que **sin el runner de migraciones nada de lo que requiera schema nuevo se puede probar localmente** — y los frentes de cobro, sync, seguridad y sesiones requieren todos migración nueva. Por eso el runner va segundo, apenas detrás de dejar la suite en verde. *(ya resuelto — el runner corre desde el PR 2)*
 
 Dos decisiones de diseño gobiernan el resto: **D1 no se implementa como un parche sino como una inversión de dirección** (el local pasa a ser el único que lee y refresca el token), lo que *disuelve* el hallazgo A8 en vez de mitigarlo; y **el cifrado se implementa antes de escribir tokens en local**, para no tener que backfillear texto plano después.
 
@@ -396,7 +410,7 @@ El desalojo por force-logout mantiene `requireRole("admin")`, que ya estaba bien
 
 **Alto — el flujo de cobro con Posnet físico es el único probado en vivo.** Lo validado el 2026-07-13 fue el camino del fallback legacy (`env.MP_ACCESS_TOKEN`, nivel 3 del resolver).
 
-> **Corrección (2026-07-21) — el estado del entorno cambió y la afirmación original ya no vale.** Una versión previa decía: *"`MP_APP_ID` y `MP_CLIENT_SECRET` están vacías, el OAuth ni siquiera se puede ejecutar, no hay ningún seller vinculado y todo cobro de hoy sale por el nivel 3"*. **Hoy es al revés**: las tres envs de OAuth están seteadas, hay **dos sellers activos con token** en Cloud, y por lo tanto `findFirstActive()` **sí devuelve uno** — los cobros salen por el **nivel 2** (seller OAuth), no por el fallback.
+> **Actualización (2026-07-21) — el estado del entorno cambió y la afirmación original ya no vale.** Una versión previa decía que las envs de OAuth estaban vacías y todo cobro salía por el nivel 3. Hoy es al revés: los cobros salen por el **nivel 2** (seller OAuth) — ver el bloque "Estado actual" al inicio.
 >
 > Que en la práctica no se haya notado es una casualidad: el seller que gana (el más viejo) resulta ser la misma cuenta que la del `MP_ACCESS_TOKEN` del `.env`, así que el token efectivo es equivalente. **No hay que apoyarse en esa casualidad** — es exactamente el riesgo R21.
 >
@@ -409,11 +423,9 @@ Por eso: **el fallback a `MP_ACCESS_TOKEN` no se elimina en esta ronda.** El PR 
 **Gate obligatorio**: cobro real con el Posnet físico (el test de $15) al cerrar el PR 3 y al cerrar el PR 4 — este último **con la red hacia Supabase Cloud cortada a mano**, que es la única prueba de que D1 realmente funciona.
 
 > **Actualización 2026-07-21 — el gate del PR 3 quedó pendiente por un bloqueo de titularidad del
-> Posnet, no por el código.** Cambiaron el aparato físico y el nuevo **ya estaba registrado en la
-> cuenta de MP del otro desarrollador** (de cuando desarrolló esta integración). Cerrar sesión en el
-> equipo **no libera la titularidad**, así que ninguna otra cuenta lo puede reclamar hasta que él lo
-> dé de baja. Detalle completo y estado en `ROADMAP.md` → "Remediación de la integración Mercado
-> Pago". **No bloquea la implementación del PR 4**, solo su validación en vivo.
+> Posnet, no por el código** — ver el bloque "Estado actual" al inicio; detalle completo en
+> `ROADMAP.md` → "Remediación de la integración Mercado Pago". **No bloquea la implementación del
+> PR 4**, solo su validación en vivo.
 >
 > Lo que este episodio deja como aprendizaje para la puesta en producción — el lector, el seller
 > vinculado y la caja provisionada tienen que ser **de la misma cuenta de MP**; la titularidad manda
@@ -446,12 +458,12 @@ Por eso: **el fallback a `MP_ACCESS_TOKEN` no se elimina en esta ronda.** El PR 
 
 El corte 3/4 es el único delicado: el PR 3 arregla idempotencia asumiendo que el token todavía viene de Cloud, y el PR 4 le cambia la fuente. Es tolerable porque el PR 3 no toca `credentials-resolver`.
 
-**Nota sobre D7**: la spec asumía que "los 7 tests rotos se arreglan primero" era un paso independiente. Al inspeccionarlos resultó que **6 de los 7 prueban PDVs y Posnets**, es decir código que D5 muda a `PdvSection` — no se reparan, **se migran**, y por eso viajan en el PR 6. El séptimo (toggle Sandbox) es un defecto real de accesibilidad donde **el test tiene razón y el componente está mal** (`PagosSection.tsx:599-612`: un `<button>` sin nombre accesible ni `aria-pressed`, con un `<span>Sandbox</span>` al lado), y ese sí se arregla primero, en el PR 1.
+**Nota sobre D7**: ver el matiz en la decisión D7 — 6 de los 7 tests migran a `PdvSection` en el PR 6; el séptimo (toggle Sandbox) se arregló en el PR 1.
 
 ### Alternativas consideradas
 
 - **Revertir el merge** — descartado: perdería semanas de integración con MP que en buena parte está bien hecha (PKCE correcto, RPC atómica, HMAC timing-safe, exclusividad por constraint real).
-- **CLI de Supabase (`supabase db push`) como mecanismo de migración** — descartado: mete una dependencia externa en la mini-PC justo cuando la Fase 6 quiere eliminar Docker, y el compose es un Supabase mínimo hecho a mano, no el stack del CLI. El runner propio sobrevive al Postgres embebido porque habla el protocolo de Postgres, no Docker.
+- **CLI de Supabase como mecanismo de migración** — descartado; ver la tabla de opciones del anexo "Actualización de schema".
 - **`postgres.js` en vez de `pg`** — descartado: `pg` ejecuta un `.sql` completo con múltiples statements en una sola llamada por protocolo simple, mientras que `postgres.js` tiene un parseo propio que puede tropezar con bloques `DO $$ ... $$`.
 - **Backfill por manifiesto de "probes"** (una consulta por migración para detectar si ya se aplicó) — descartado a favor de **backfill por re-ejecución**: se auditan las 19 migraciones para que sean idempotentes y en el primer arranque se aplican todas. En una base nueva son no-ops; en la de dev, las 5 viejas son no-ops y las 14 nuevas se aplican de verdad. No hay mapeo a mano que se pueda equivocar, y satisface literalmente los criterios F ("correr dos veces = mismo resultado", "de cero == incremental").
 - **Compartirle la clave de cifrado a la Edge Function** — descartado: guardar la clave en los secrets de Supabase, al lado del ciphertext en la misma base de Supabase, no protege contra el atacante que motiva el criterio E. De ahí el diseño de Cloud como buzón de traspaso y no como almacén.
@@ -496,16 +508,16 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 
 ### PR 3 — Integridad del cobro (cierra el bloque A)
 
-- [ ] 🟦 Migración: UNIQUE en `mp_orders` sobre `order_id_mp`, `external_ref`, `idempotency_key` (A3).
-- [ ] 🟦 Migración: `ALTER TABLE mp_orders ADD COLUMN event_id UUID REFERENCES night_events(id)` + índice (prerrequisito del sync — PR 5).
-- [ ] 🟩 `mercadopago-orders.service.ts`: idempotency key **estable** por cobro (no `randomUUID()` por request) → evita doble cobro por doble click.
-- [ ] 🟩 `mercadopago-orders.service.ts`, `-provisioning.service.ts`, `-oauth.service.ts`, `mercadopago.service.ts` (`pointApiRequest`): `AbortSignal.timeout` en toda llamada a MP (A9). Sobre cada HTTP individual, **nunca** sobre el polling del intent.
-- [ ] 🟩 `mercadopago-orders.service.ts:mapMpStatus`: no mapear estados desconocidos a `"created"` — distinguir `failed`/`action_required` de "en curso".
-- [ ] 🟩 `mercadopago-webhooks.service.ts`: reemplazar el `setImmediate` fire-and-forget por un camino que sobreviva un reinicio (deja constancia recuperable); agregar ventana de frescura del `ts` en la validación de firma (anti-replay).
-- [ ] 🟨 `useCheckout.ts`: timeout de cliente honrando el `expiresAt` del backend (A10); si el registro del pedido falla tras confirmar el cobro, dejar constancia recuperable en vez de descartar (A11).
-- [ ] 🟩 Poblar `mp_orders.event_id` al crear la order desde el evento abierto.
-- [ ] 🟪 **Gate**: cobro real con el Posnet físico (test de $15) — debe seguir funcionando (usa el fallback env, sin tocar `credentials-resolver`).
-- [ ] `pnpm typecheck` + tests.
+- [x] 🟦 Migración: UNIQUE en `mp_orders` sobre `order_id_mp`, `external_ref`, `idempotency_key` (A3).
+- [x] 🟦 Migración: `ALTER TABLE mp_orders ADD COLUMN event_id UUID REFERENCES night_events(id)` + índice (prerrequisito del sync — PR 5).
+- [x] 🟩 `mercadopago-orders.service.ts`: idempotency key **estable** por cobro (no `randomUUID()` por request) → evita doble cobro por doble click.
+- [x] 🟩 `mercadopago-orders.service.ts`, `-provisioning.service.ts`, `-oauth.service.ts`, `mercadopago.service.ts` (`pointApiRequest`): `AbortSignal.timeout` en toda llamada a MP (A9). Sobre cada HTTP individual, **nunca** sobre el polling del intent.
+- [x] 🟩 `mercadopago-orders.service.ts:mapMpStatus`: no mapear estados desconocidos a `"created"` — distinguir `failed`/`action_required` de "en curso".
+- [x] 🟩 `mercadopago-webhooks.service.ts`: reemplazar el `setImmediate` fire-and-forget por un camino que sobreviva un reinicio (deja constancia recuperable); agregar ventana de frescura del `ts` en la validación de firma (anti-replay).
+- [x] 🟨 `useCheckout.ts`: timeout de cliente honrando el `expiresAt` del backend (A10); si el registro del pedido falla tras confirmar el cobro, dejar constancia recuperable en vez de descartar (A11).
+- [x] 🟩 Poblar `mp_orders.event_id` al crear la order desde el evento abierto.
+- [ ] 🟪 **Gate**: cobro real con el Posnet físico (test de $15) — debe seguir funcionando (sale por el seller OAuth — nivel 2 del resolver, que no se toca; bloqueado por la titularidad del lector, ver Estado actual).
+- [x] `pnpm typecheck` + tests.
 
 ### PR 4 — Inversión del token + modelo single-seller + seguridad
 
@@ -524,9 +536,14 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 - [ ] `mp-context.middleware.ts` + backend: validar `X-Bar-Id`/`x-device-id` contra la sesión autenticada (A12) — el header deja de ser autoritativo.
 - [ ] Revisar si el `SameSite=Lax` de `session.ts:59,64` sigue siendo necesario ahora que el callback aterriza en la Edge Function; si no, volver a `Strict`.
 - [ ] 🟨 UI: botón "Desvincular" en la tarjeta de OAuth de `PagosSection.tsx`.
-- [ ] Envs nuevas en `.env.example`: `MP_TOKEN_SECRET`, `MP_TOKEN_SECRET_PREVIOUS` (opcional), `MP_HANDOFF_KEY` (secret de la Edge Function), `DATABASE_URL`, `API_PROXY_TARGET`.
-- [ ] 🟪 **Gate crítico**: cobro real con el Posnet físico **con la red a Supabase Cloud cortada a mano** — debe cobrar igual (prueba de que D1 funciona). Verificar además los 3 modos: seller vinculado sin Cloud, sin seller con solo `MP_ACCESS_TOKEN`, Cloud apagado.
+- [ ] Envs nuevas en `.env.example`: `MP_TOKEN_SECRET`, `MP_TOKEN_SECRET_PREVIOUS` (opcional), `MP_HANDOFF_KEY` (secret de la Edge Function). (`DATABASE_URL` ya está desde el PR 2 y `API_PROXY_TARGET` desde `d3fd06f` — quedan solo las 3 de MP.)
+- [ ] 🟩 **Saneamiento inicial de sellers**: antes/al desplegar, desvincular las DOS filas activas preexistentes en Cloud (cuenta de prueba de Manuel `1517393956` + la del otro desarrollador `225043369` — ninguna es la del dueño). El botón Desvincular de A18 es la herramienta; sin esto, "vincular reemplaza" solo protege vinculaciones futuras.
+- [ ] 🟩 **Cajas huérfanas al cambiar de cuenta (R22)**: Desvincular debe avisar (o limpiar) las cajas provisionadas del seller saliente — su store/pos/QR viven en la cuenta vieja y el QR CAMBIA al re-provisionar. Mínimo: aviso en la UI + doc del procedimiento de re-provisión.
+- [ ] 🟩 **Purga de tokens en claro en Cloud**: las filas actuales de `mercadopago_sellers` en Cloud ya contienen access/refresh tokens en claro; el diseño post-PR 4 dice que en Cloud no debe quedar token legible. Purgarlos al migrar al handoff (no alcanza el DROP local diferido).
+- [ ] 🟪 **Gate crítico**: cobro real con el Posnet físico **con la red a Supabase Cloud cortada a mano** — debe cobrar igual (prueba de que D1 funciona). Verificar además los 3 modos: seller vinculado sin Cloud, sin seller con solo `MP_ACCESS_TOKEN`, Cloud apagado. *(Implementación NO bloqueada; la validación en vivo queda diferida hasta destrabar la titularidad del lector — ver Estado actual.)*
 - [ ] `pnpm typecheck` + tests.
+
+> ⚠️ Las referencias de línea de este bloque (y las del plan técnico para estos archivos) son anteriores al PR 3 — `mercadopago-oauth.service.ts` y `mercadopago-provisioning.service.ts` fueron modificados; re-verificar offsets antes de usarlas como guía.
 
 ### PR 5 — Conciliación / sync (aditivo)
 
@@ -548,7 +565,7 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 - [ ] 🟨 `PagosSection.tsx`: arreglar `handleTestCharge` (pasar el `deviceId`, `:182`), renderizar `testResult` (`:57,:183`), y el `catch {}` que traga fallos de carga (`:107`).
 - [ ] 🟨 Migrar los 6 tests de PDV/Posnet de `PagosSection.test.tsx` a `PdvSection.test.tsx` (des-skipear los de PR 1). Sumar tests de `PdvSection`/`PdvTable`/`PdvFormPanel` (hoy sin ninguno).
 - [ ] **Docs**: actualizar `docs/ARCHITECTURE.md` (modelo de datos MP, flujo OAuth con Edge Function, resolución de credenciales local-first, sesiones de caja, runner de migraciones — corregir §2 sobre internet y §9/§217 sobre init-scripts).
-- [ ] **Docs**: actualizar `docs/ROADMAP.md` (cerrar/reformular R14 y R15; sumar R17 —validación con zod en controllers nuevos— y lo que no se resuelva acá).
+- [ ] **Docs**: actualizar `docs/ROADMAP.md` (cerrar/reformular R14 y R15; sumar R17 —validación con zod en controllers nuevos— y lo que no se resuelva acá). (R17-R23 ya cargados en el ROADMAP el 21-07.)
 - [ ] **Docs**: `CLAUDE.md` — módulos nuevos (bar-sessions, infra/migrations) y convenciones. Documentar el supuesto "único proceso Node" del que depende el cierre de A8.
 - [ ] **Docs**: cerrar la Fase 1 de MP en `docs/fases-mp/INDEX.md` (E2E cloud validado esta sesión). Considerar renombrar las fases MP para no colisionar con las del roadmap ("Fase 6" ambigua).
 - [ ] 🟪 Verificación E2E completa de los 4 flujos + SSE.
@@ -560,3 +577,15 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 - [ ] Actualizar el estado de la spec a `implementada` y registrar en `ROADMAP.md`.
 
 > **Recordatorio**: PR 2, 4 y 5 son grandes — usar **Plan Mode**. Los gates 🟪 de PR 3 y PR 4 (cobro con Posnet físico real) son **bloqueantes**: no cerrar el PR sin pasarlos, y el de PR 4 con la red a Cloud cortada.
+
+---
+
+## Changelog de correcciones
+
+Correcciones que se integraron directamente al texto (la versión corregida es la que se lee arriba); acá queda el registro de qué decía la versión previa.
+
+- 2026-07-20 — G/focus-trap: el criterio original pedía focus trap ("se comporta como un diálogo real"); `PdvFormModal` es un panel inline, un trap sería anti-WAI-ARIA.
+- 2026-07-20 — D2/FK "entre bases": la spec decía que la clave foránea "apunta a otra base"; la FK siempre fue intra-base — lo que cruzaba bases era la lectura (`mpDb` → Cloud).
+- 2026-07-20 — D3/cifrado: la formulación original ("clave derivada del `AUTH_SECRET`") se descartó por acoplar la rotación de la cookie con poder cobrar y por no resolver la Edge Function; el diseño vigente (buzón de traspaso + `MP_TOKEN_SECRET`) pasó al cuerpo de D3.
+- 2026-07-20 — Backfill/`bars_code.sql`: la spec afirmaba que `20260719000000_bars_code.sql` no era idempotente; sí lo es (seed con `WHERE NOT EXISTS`), lo que habilitó el backfill por re-ejecución.
+- 2026-07-21 — A17/verificación en vivo: la cuenta vinculada el 20-07 no era "la del dueño real" sino la cuenta de prueba de Manuel (`1517393956`); la cuenta del dueño del boliche nunca se vinculó, y el borrado manual de la fila vieja no fue definitivo.

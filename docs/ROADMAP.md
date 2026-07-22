@@ -229,9 +229,24 @@ Log de deuda encontrada durante la implementación:
 | 1 | Suite de tests en verde + comentarios falsos | ✅ `ba7c113` |
 | 2 | **Runner de migraciones** — antes no existía forma de actualizar el schema de una base ya desplegada sin borrarla (bloqueante de producción, independiente de MP) | ✅ `2745f7c` |
 | 3 | Integridad del cobro: idempotencia real, timeouts, webhooks durables, constancia de ventas cobradas sin registrar | ✅ `e3f1a29` — **falta el gate**: cobro real con Posnet físico (bloqueado, ver abajo) |
-| 4 | **Invertir la dirección del token**: cobrar deja de depender de Supabase Cloud (D1). Cifrado de tokens, modelo single-seller (vincular reemplaza + Desvincular), validación server-side de barra/dispositivo | ⏳ pendiente |
+| 4 | **Invertir la dirección del token**: cobrar deja de depender de Supabase Cloud (D1). Cifrado de tokens, modelo single-seller (vincular reemplaza + Desvincular), validación server-side de barra/dispositivo | ⏳ **← SIGUIENTE** |
 | 5 | Conciliación: los cobros MP suben a la nube al cerrar la noche | ⏳ pendiente |
 | 6 | Sesiones de caja (que hoy se auto-bloquean) + cableado del CRUD de PDVs + docs | ⏳ pendiente |
+
+> 🎯 **Próxima sesión (definido el 2026-07-21): arrancar por el PR 4.** Es el que cierra la fuga
+> más peligrosa que dejó a la vista el episodio del Posnet: **hoy hay dos sellers activos y el
+> sistema cobra con el "correcto" por casualidad** (R21) — vincular cualquier cuenta nueva la
+> dejaría ignorada y la plata seguiría yendo a la vieja en silencio. Con D9 (vincular reemplaza +
+> botón Desvincular) eso se vuelve imposible por construcción, y de paso queda el camino limpio
+> para migrar a la cuenta del dueño cuando toque.
+>
+> Antes de codear: **re-verificar los supuestos del PR 4 contra el estado real** — la sección se
+> escribió antes de los hallazgos del 21-07 y al menos uno ya cayó (los cobros salen por el nivel 2
+> OAuth, no por el fallback env como asumía el plan). Hay una pasada de auditoría de la spec en
+> curso con ese objetivo.
+>
+> En paralelo (no bloquea el PR 4): pedirle al otro desarrollador que **dé de baja el lector de su
+> cuenta** para poder correr los gates físicos de PR 3 y PR 4.
 
 > 🟡 **Bloqueo actual (2026-07-21) — titularidad del Posnet, NO es la cuenta del dueño.** El gate del
 > PR 3 (cobro real de $15) está frenado por una causa mundana: **el Posnet nuevo ya estaba registrado
