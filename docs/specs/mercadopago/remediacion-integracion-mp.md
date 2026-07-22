@@ -401,6 +401,19 @@ Por eso: **el fallback a `MP_ACCESS_TOKEN` no se elimina en esta ronda.** El PR 
 
 **Gate obligatorio**: cobro real con el Posnet físico (el test de $15) al cerrar el PR 3 y al cerrar el PR 4 — este último **con la red hacia Supabase Cloud cortada a mano**, que es la única prueba de que D1 realmente funciona.
 
+> **Actualización 2026-07-21 — el gate del PR 3 quedó pendiente por un bloqueo de titularidad del
+> Posnet, no por el código.** Cambiaron el aparato físico y el nuevo **ya estaba registrado en la
+> cuenta de MP del otro desarrollador** (de cuando desarrolló esta integración). Cerrar sesión en el
+> equipo **no libera la titularidad**, así que ninguna otra cuenta lo puede reclamar hasta que él lo
+> dé de baja. Detalle completo y estado en `ROADMAP.md` → "Remediación de la integración Mercado
+> Pago". **No bloquea la implementación del PR 4**, solo su validación en vivo.
+>
+> Lo que este episodio deja como aprendizaje para la puesta en producción — el lector, el seller
+> vinculado y la caja provisionada tienen que ser **de la misma cuenta de MP**; la titularidad manda
+> sobre el login (entrar como colaborador no cambia a qué cuenta entra la plata); y el lector debe
+> estar en modo **PDV**, no STANDALONE. Los riesgos derivados quedaron como R22 (cajas huérfanas al
+> cambiar de cuenta) y R23 (el sistema no detecta la vinculación incoherente) en el roadmap.
+
 **Alto — el cifrado puede dejar al boliche sin cobrar.** Un backfill fallido devuelve basura. Mitigación: el descifrado tolera token en claro durante al menos una versión, y el drop de las columnas viejas se difiere a una migración posterior.
 
 **Medio — los timeouts pueden apretar de más.** La cajera espera a que el cliente pase la tarjeta. El timeout va sobre **cada llamada HTTP individual**, nunca sobre el polling del intent.

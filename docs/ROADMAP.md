@@ -233,28 +233,35 @@ Log de deuda encontrada durante la implementación:
 | 5 | Conciliación: los cobros MP suben a la nube al cerrar la noche | ⏳ pendiente |
 | 6 | Sesiones de caja (que hoy se auto-bloquean) + cableado del CRUD de PDVs + docs | ⏳ pendiente |
 
-> 🔴 **Bloqueo actual (2026-07-21) — es un problema de cuentas, no del aparato.** El gate del PR 3
-> (cobro real de $15) no se puede correr porque **cambiaron el Posnet físico** y el aparato nuevo
-> **pertenece al establecimiento del dueño del boliche**, mientras que Cocktrail cobra hoy con la
-> **cuenta personal de prueba** de Manuel (seller `1517393956`). Diagnóstico verificado:
+> 🟡 **Bloqueo actual (2026-07-21) — titularidad del Posnet, NO es la cuenta del dueño.** El gate del
+> PR 3 (cobro real de $15) está frenado por una causa mundana: **el Posnet nuevo ya estaba registrado
+> en la cuenta de Mercado Pago del otro desarrollador** (Matías Asin, `ASMA4106894` /
+> `logzone@outlook.com`), probablemente de cuando desarrolló la integración. **No hace falta esperar
+> a la cuenta del dueño del boliche para destrabarlo.**
 >
-> - El device nuevo **no figura** en `GET /point/integration-api/devices` — consultado con el token
->   legacy del `.env` **y** con el del seller vinculado por OAuth; en ambos aparece solo el viejo.
-> - Al configurarlo, la app de MP responde *"Tu cuenta no tiene permiso para iniciar sesión — Podés
->   ingresar usando una cuenta vinculada a este establecimiento"*. Cerrar sesión no alcanza (ya se
->   hizo, con la clave de 4 dígitos que pasó el dueño): el lector sigue atado a ese establecimiento.
+> Diagnóstico verificado por API y en el panel de MP:
 >
-> **Regla que hay que respetar de acá en más: el Posnet y Cocktrail tienen que estar bajo la misma
-> cuenta de Mercado Pago.** Un device no se "muda" de cuenta desde la app.
+> - En el panel del lector, el campo **"Cuenta"** muestra `log****@outlook.com` → la **titularidad**
+>   es de esa cuenta, y está asignado a su caja "Local - QR #1".
+> - **Cerrar sesión no libera la titularidad**: el lector aparece "Sin sesión activa" y aun así sigue
+>   figurando en esa cuenta. Por eso, al reconfigurarlo con otra cuenta, MP responde *"Tu cuenta no
+>   tiene permiso para iniciar sesión — Podés ingresar usando una cuenta vinculada a este
+>   establecimiento"*.
+> - Como Manuel es **colaborador** de esa cuenta (con su mismo email), el lector sí se configura
+>   desde ese contexto — pero entonces **los cobros entran a la cuenta del colaborado**. Comprobado:
+>   un cobro de prueba de $15 quedó registrado en las ventas de esa cuenta.
+> - Estado al momento: los **dos** lectores (`…1494025317` y `…1493600985`) están en esa cuenta, en
+>   modo **STANDALONE**; la cuenta de prueba de Manuel quedó con **cero** lectores.
 >
-> **Salida** (que además es lo que hay que hacer para producción, porque la plata tiene que entrar a
-> la cuenta del boliche): loguear el lector con la cuenta del dueño y **vincular Cocktrail a esa
-> cuenta** por OAuth desde `/admin` → Pagos. ⚠️ **Antes de vincular hay que limpiar las filas de
-> sellers viejas** — por R21 vincular acumula y gana el más viejo, así que la cuenta nueva quedaría
-> ignorada y el sistema seguiría cobrando con la vieja **en silencio**.
+> **Salida**: que el otro desarrollador **dé de baja el lector de su cuenta** (o el trámite de cambio
+> de titularidad de MP). Liberado el aparato, se reclama desde el menú del equipo con la cuenta que
+> corresponda y se cierra el gate.
 >
-> El PR 4 tiene el mismo gate (con la red a Cloud cortada), así que esto bloquea la validación en
-> vivo de ambos.
+> **Reglas que deja este episodio** (aplican también a la puesta en producción):
+> 1. El **lector y el seller vinculado a Cocktrail tienen que ser de la misma cuenta de MP**.
+> 2. La **titularidad manda sobre el login**: entrar como colaborador con tu email no cambia a qué
+>    cuenta entra la plata.
+> 3. El lector debe estar en **modo PDV**, no STANDALONE, para recibir cobros de un sistema externo.
 
 ---
 
@@ -431,7 +438,9 @@ git.
 | R18 | **Las 8 tablas legacy son escribibles por el rol anónimo**: `20240101000000_schema.sql:69` y `20240102000000_edge_sync.sql:47` hacen `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role`. Las tablas nuevas de MP sí revocan `anon` una por una; las viejas (`night_events`, `orders`, `tickets`, `drinks`, `users`, `app_config`, `audit_logs`, `cash_sales`) no. | **Seguridad**: cualquiera con la `anon key` pública y acceso a la LAN puede escribir/borrar pedidos, tickets y usuarios vía PostgREST. Hoy acotado a la red local del boliche; sería crítico si el stack se expusiera. | Abierto — el criterio E de la remediación solo cubrió las tablas nuevas. Descubierto el 2026-07-21 al implementar el runner de migraciones. |
 | R19 | **No existe ligadura entre `mp_orders` y los pedidos de dominio (`orders`)**, y los cobros con **Posnet no dejan fila en `mp_orders`** (solo los de QR). | La conciliación "cobro cobrado sin pedido registrado" es manual, y el push a la nube del PR 5 solo va a ver los cobros por QR — el débito con Posnet, que es el medio real de uso hoy, queda afuera del criterio C. | Abierto — candidato a resolverse junto con el PR 5 de la remediación. |
 | R20 | El reintento de una "venta cobrada sin registrar" (constancia del PR 3) puede **crear un pedido duplicado**: `POST /api/orders` no tiene idempotencia propia, así que si el registro llegó al servidor pero se perdió la respuesta, el reintento inserta un segundo pedido. | La cajera podría generar dos pedidos para un solo cobro al usar el botón "Reintentar". Preferible a perder la venta (el trade-off se tomó a conciencia), pero hay que cerrarlo. | Abierto — la solución es llevar la misma semilla de idempotencia a `orders`. |
-| R21 | **Hoy hay dos sellers de Mercado Pago activos** en Cloud (el del dueño y uno de prueba de un colaborador que se creía borrado y volvió a vincularse). `findFirstActive()` toma el **más viejo**, y da la casualidad de que el más viejo es el correcto. | Si se vincula otra cuenta, el sistema puede **cobrar con la cuenta equivocada en silencio** — la plata iría a otro. Verificado en vivo el 2026-07-21. | Abierto — lo cierra el PR 4 de la remediación (D9: vincular reemplaza + botón Desvincular). |
+| R21 | **Hoy hay dos sellers de Mercado Pago activos** en Cloud (la cuenta de prueba de Manuel y la del otro desarrollador). `findFirstActive()` toma el **más viejo**, y da la casualidad de que el más viejo es el correcto. | Si se vincula otra cuenta, el sistema puede **cobrar con la cuenta equivocada en silencio** — la plata iría a otro. Verificado en vivo el 2026-07-21. | Abierto — lo cierra el PR 4 de la remediación (D9: vincular reemplaza + botón Desvincular). |
+| R22 | **Cambiar de cuenta de Mercado Pago deja huérfanas las cajas ya provisionadas.** `mercadopago_cajas` estampa `seller_user_id` y su `store_id`/`pos_id_mp` viven **dentro de la cuenta de ese seller**, pero no existe ninguna lógica de re-provisión ni de limpieza cuando se vincula otra cuenta (verificado: nadie llama a `cajasRepo.deleteById` por cambio de seller). | Al migrar a la cuenta del dueño, la caja y **el QR estático quedan apuntando a un punto de venta de la cuenta vieja**. Hay que re-provisionar a mano, y **el QR cambia** — si ya se imprimió, hay que reimprimirlo. | Abierto — resolver junto con el PR 4 (que es el que cambia la cuenta) o con la feature de gestión de Posnets. |
+| R23 | **El sistema no detecta ni avisa cuando la vinculación de MP quedó incoherente**: seller de una cuenta y lector de otra, lector en modo STANDALONE en vez de PDV, o caja provisionada en una cuenta que ya no es la activa. El cobro simplemente falla con un error de MP. | Diagnosticar el problema del 2026-07-21 llevó horas de consultas manuales a la API. En producción, un sábado a la noche, eso es la caja parada sin saber por qué. | Abierto — un chequeo de "salud de la vinculación MP" en `/admin` (seller único activo · lector en la misma cuenta · lector en PDV · caja provisionada en la cuenta activa) lo haría evidente de un vistazo. |
 | R16 | Los tests de integración (`apps/api/tests/integration/`) pegan contra el MISMO Supabase local que usa el dev server — no hay una DB de test aislada. `cleanNightEvents()`/`cleanOrders`/etc. en `db-helpers.ts` borran/crean sin acotar a un rango/prefijo de test, a diferencia de `cleanDrinks()`/`cleanUsers()` (ya arregladas con `TEST_DRINK_ID_FLOOR`/`TEST_USERNAME_PREFIX`). | Corriendo la suite de integración repetidas veces en una sesión de desarrollo larga, se acumulan decenas de `night_events`/`orders`/`tickets` de test reales en la base compartida. No hay riesgo de perder catálogo/usuarios reales (ya protegidos), pero sí de ensuciar el Historial de Noches con datos falsos si no se corre `cleanup-empty-nights.ts` después. | Abierto — aplicar el mismo patrón de rango/prefijo de test a `night_events`/`orders`/`tickets`, o directamente provisionar una segunda instancia local de Supabase dedicada a tests. |
 
 ---

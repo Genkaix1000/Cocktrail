@@ -57,6 +57,14 @@
 - [PR3] **No hay forma de descubrir el device ID desde la app**: `GET /point/integration-api/devices` se consulta en dos lugares (`mercadopago.service.ts:432-455` y `mercadopago-provisioning.service.ts:617-628`) pero ambos filtran por un ID conocido y descartan el resto. No existe endpoint que liste los devices de la cuenta — hay que sacar el ID del aparato o del panel de MP. Un `GET /api/mercadopago/devices` que exponga la lista sería barato y resolvería el alta a ciegas.
 - [PR3] **A17 reapareció**: al 2026-07-21 hay **2 sellers activos** en Cloud (`1517393956` GARCIAMANUEL del 20/07 18:38 y `225043369` ASMA4106894 del 20/07 21:12, que se había borrado a mano y volvió a vincularse). Hoy el cobro usa el correcto solo porque `findFirstActive` toma el más viejo y ese resulta ser el del dueño. Confirma la urgencia de D9 (vincular reemplaza + Desvincular) en el PR 4.
 
+## Vinculación de cuentas MP ↔ Posnet (hallazgos del 2026-07-21, en vivo)
+
+- [PR3] **La titularidad del lector manda sobre el login.** Un Point queda registrado en la cuenta que lo reclamó, y **cerrar sesión no la libera** (verificado: el lector figura "Sin sesión activa" y sigue listado en la cuenta ajena). Entrar como *colaborador* con el propio email permite configurarlo, pero **los cobros entran a la cuenta del titular** — comprobado con un cobro de prueba de $15 que quedó en las ventas de la otra cuenta. Para moverlo hay que darlo de baja desde la cuenta titular o hacer el cambio de titularidad de MP.
+- [PR3] **El lector, el seller vinculado por OAuth y la caja provisionada tienen que ser de la misma cuenta de MP.** Hoy nada valida ni advierte esta coherencia (→ R23).
+- [PR3] **Los lectores deben estar en modo `PDV`, no `STANDALONE`**, para recibir cobros por la Integration API. Nada en la app lo muestra ni lo corrige (la API sí permite cambiarlo por `PATCH`).
+- [PR3] **Cambiar de cuenta deja las cajas huérfanas** (→ R22): `mercadopago_cajas` guarda `seller_user_id` y su `store_id`/`pos_id_mp` viven en la cuenta de ese seller, pero no hay re-provisión ni limpieza al vincular otra. **Ojo: el QR cambia** si se re-provisiona en otra cuenta.
+- [PR3] Diagnosticar todo esto requirió consultas manuales a `/users/me` y `/point/integration-api/devices` con cada token. **Un endpoint de diagnóstico** (o el chequeo de salud de R23) habría ahorrado horas.
+
 ## Tests / higiene
 
 - [PR1] Los 6 tests de PDV/Posnet de `PagosSection.test.tsx` quedaron en `it.skip` con vencimiento en el PR 6 (migran a `PdvSection.test.tsx`). Si el PR 6 se recorta, quedan skips permanentes.
