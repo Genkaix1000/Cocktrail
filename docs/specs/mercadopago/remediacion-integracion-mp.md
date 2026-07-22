@@ -12,7 +12,7 @@
 |---|---|
 | 1 — Suite en verde + comentarios falsos | ✅ `ba7c113` |
 | 2 — Runner de migraciones | ✅ `2745f7c` |
-| 3 — Integridad del cobro (bloque A) | ✅ `e3f1a29` — gate físico pendiente, **ya no bloqueado** (ver abajo) |
+| 3 — Integridad del cobro (bloque A) | ✅ `e3f1a29` — **gate físico pasado el 2026-07-22** (cobro real aprobado con el Posnet en PDV, ticket impreso) |
 | 4 — Inversión del token + single-seller + seguridad | ← **siguiente** |
 | 5 — Sync / conciliación | pendiente |
 | 6 — Sesiones de caja + PDVs + docs | pendiente |
@@ -595,7 +595,7 @@ Las **sesiones de barra** viven hoy embebidas en la tarjeta de PDV de `PagosSect
 - [x] 🟩 `mercadopago-webhooks.service.ts`: reemplazar el `setImmediate` fire-and-forget por un camino que sobreviva un reinicio (deja constancia recuperable); agregar ventana de frescura del `ts` en la validación de firma (anti-replay).
 - [x] 🟨 `useCheckout.ts`: timeout de cliente honrando el `expiresAt` del backend (A10); si el registro del pedido falla tras confirmar el cobro, dejar constancia recuperable en vez de descartar (A11).
 - [x] 🟩 Poblar `mp_orders.event_id` al crear la order desde el evento abierto.
-- [ ] 🟪 **Gate**: cobro real con el Posnet físico (test de $15) — debe seguir funcionando (sale por el seller OAuth, nivel 2 del resolver, que no se toca). **Ya no bloqueado por la titularidad** (destrabada el 2026-07-22) y **los tres pasos previos ya están hechos**: el lector `PAX_A910__SMARTPOS1493600985` está en `operating_mode: PDV`, atado al store `85068168` / POS `135641665`, y `MP_POS_DEVICE_ID` ya apunta a él (verificado contra la API el 22-07). Queda solo correr el cobro. **Ojo**: R27 (cobro rechazado registrado como venta) es bloqueante y tiene prioridad sobre este gate.
+- [x] 🟪 **Gate PASADO (2026-07-22)**: cobro real con el Posnet físico en PDV, aprobado y con ticket impreso (sale por el seller OAuth, nivel 2 del resolver). La misma jornada cerró además R27 (`cobro-verificado.md`, `done`): un rechazo real ya no genera venta.
 - [x] `pnpm typecheck` + tests.
 
 ### PR 4 — Inversión del token + modelo single-seller + seguridad
