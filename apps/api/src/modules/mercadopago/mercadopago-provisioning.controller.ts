@@ -82,10 +82,35 @@ export function createMercadoPagoProvisioningController(
     }
   });
 
+  // POST /api/mercadopago/provisioning/pos/:id/reprovision — re-provisiona la
+  // caja en la cuenta del seller activo (gestion-posnets H, R22). El QR cambia;
+  // el aviso previo es del front. Devuelve la caja actualizada completa.
+  router.post("/provisioning/pos/:id/reprovision", ...adminOnly, async (req, res, next) => {
+    try {
+      res.json(await service.reprovisionCaja(req.params.id as string));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // POST /api/mercadopago/provisioning/pos/:id/refresh-qr — recupera QR desde MP
   router.post("/provisioning/pos/:id/refresh-qr", ...adminOnly, async (req, res, next) => {
     try {
       res.json(await service.refreshQr(req.params.id as string));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PUT /api/mercadopago/provisioning/store — renombrar la sucursal (bloque E)
+  router.put("/provisioning/store", ...adminOnly, async (req, res, next) => {
+    try {
+      const { name } = req.body ?? {};
+      if (typeof name !== "string" || !name.trim() || name.trim().length > 60) {
+        res.status(400).json({ error: "name es requerido (1 a 60 caracteres)." });
+        return;
+      }
+      res.json(await service.renameStore(name));
     } catch (err) {
       next(err);
     }
@@ -99,6 +124,35 @@ export function createMercadoPagoProvisioningController(
       next(err);
     }
   });
+
+  // GET /api/mercadopago/provisioning/mp-devices — lista CRUDA de la cuenta de
+  // MP + contexto de credenciales para la pantalla guía (gestion-posnets B).
+  router.get("/provisioning/mp-devices", ...adminOnly, async (_req, res, next) => {
+    try {
+      res.json(await service.listMpDevices());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PATCH /api/mercadopago/provisioning/device/:id/operating-mode — modo PDV
+  // desde la app (gestion-posnets C): body { mode: "PDV" | "STANDALONE" }.
+  router.patch(
+    "/provisioning/device/:id/operating-mode",
+    ...adminOnly,
+    async (req, res, next) => {
+      try {
+        const { mode } = req.body ?? {};
+        if (mode !== "PDV" && mode !== "STANDALONE") {
+          res.status(400).json({ error: 'mode debe ser "PDV" o "STANDALONE".' });
+          return;
+        }
+        res.json(await service.setDeviceOperatingMode(req.params.id as string, mode));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   // POST /api/mercadopago/provisioning/device
   // - { deviceId, deviceUsername? } → registra Posnet (sin PDV)

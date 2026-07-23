@@ -7,10 +7,12 @@ import type {
 import {
   BAR_SESSION_TTL_MS,
   BarSessionsService,
-  barSessionUserId,
+  type AuthenticatedUser,
 } from "./bar-sessions.service.js";
 
 const NOW = Date.parse("2026-07-17T23:00:00.000Z");
+
+const ANA: AuthenticatedUser = { username: "ana", role: "caja" };
 
 function makeBar(overrides: Partial<Bar> = {}): Bar {
   return {
@@ -68,11 +70,17 @@ describe("BarSessionsService", () => {
     service = new BarSessionsService(repo, barsRepo, () => NOW);
   });
 
-  it("genera identidades distintas por dispositivo", () => {
-    expect(barSessionUserId("caja", "caja", "dev1")).toBe("caja:caja:dev1");
-    expect(barSessionUserId("marina", "caja", "dev2")).toBe("caja:marina:dev2");
-    // Mismo usuario, distinto dispositivo → IDs distintos
-    expect(barSessionUserId("caja", "caja", "dev1")).not.toBe(barSessionUserId("caja", "caja", "dev2"));
+  it("la identidad deriva de la sesión autenticada, sin deviceId de pestaña (D6)", () => {
+    // Mismo usuario, cualquier pestaña/navegador → SIEMPRE la misma identidad.
+    expect(service.identityFor({ username: "caja", role: "caja" })).toBe("caja:caja");
+    expect(service.identityFor({ username: "marina", role: "caja" })).toBe("caja:marina");
+    // Usuarios distintos (o roles distintos) → identidades distintas.
+    expect(service.identityFor({ username: "caja", role: "caja" })).not.toBe(
+      service.identityFor({ username: "marina", role: "caja" }),
+    );
+    expect(service.identityFor({ username: "manu", role: "admin" })).not.toBe(
+      service.identityFor({ username: "manu", role: "caja" }),
+    );
   });
 
   it("lista cajas disponibles, ocupadas y la sesión propia", async () => {
@@ -91,8 +99,9 @@ describe("BarSessionsService", () => {
     vi.mocked(repo.listAll).mockResolvedValue([own, occupied]);
     vi.mocked(repo.findByUserId).mockResolvedValue(own);
 
-    const result = await service.listOptions("caja:ana");
+    const result = await service.listOptions(ANA);
 
+    expect(repo.findByUserId).toHaveBeenCalledWith("caja:ana");
     expect(result.currentSession).toEqual(own);
     expect(result.boxes.map((box) => [box.name, box.status])).toEqual([
       ["Caja VIP", "mine"],
@@ -109,7 +118,7 @@ describe("BarSessionsService", () => {
     });
     vi.mocked(repo.findByBarId).mockResolvedValue(occupied);
 
-    const result = await service.join("bar-1", "caja:ana", "ana", "caja");
+    const result = await service.join("bar-1", ANA);
 
     expect(result).toMatchObject({
       joined: false,
@@ -120,13 +129,15 @@ describe("BarSessionsService", () => {
     expect(repo.create).not.toHaveBeenCalled();
   });
 
-  it("reutiliza de forma idempotente la sesión propia", async () => {
+  it("reutiliza de forma idempotente la sesión propia (reentrar desde otra pestaña)", async () => {
     const own = makeSession();
     const refreshed = makeSession({ lastSeenAt: new Date(NOW).toISOString() });
     vi.mocked(repo.findByBarId).mockResolvedValue(own);
     vi.mocked(repo.touchByUserId).mockResolvedValue(refreshed);
 
-    const result = await service.join("bar-1", own.userId, own.username, "caja");
+    // Una pestaña nueva ya no es "otra persona": la identidad es la misma
+    // y el join devuelve la propia caja.
+    const result = await service.join("bar-1", ANA);
 
     expect(result).toEqual({ joined: true, session: refreshed });
     expect(repo.create).not.toHaveBeenCalled();
@@ -136,7 +147,7 @@ describe("BarSessionsService", () => {
     vi.mocked(repo.findByBarId).mockResolvedValue(null);
     vi.mocked(repo.findByUserId).mockResolvedValue(null);
 
-    const result = await service.join("bar-1", "caja:ana", "ana", "caja");
+    const result = await service.join("bar-1", ANA);
 
     expect(result.joined).toBe(true);
     expect(repo.deleteExpired).toHaveBeenCalledWith(
@@ -147,6 +158,7 @@ describe("BarSessionsService", () => {
         barId: "bar-1",
         userId: "caja:ana",
         username: "ana",
+        role: "caja",
         lastSeenAt: new Date(NOW).toISOString(),
       }),
     );
@@ -163,7 +175,7 @@ describe("BarSessionsService", () => {
     vi.mocked(repo.findByUserId).mockResolvedValue(null);
     vi.mocked(repo.create).mockRejectedValue({ code: "23505" });
 
-    const result = await service.join("bar-1", "caja:ana", "ana", "caja");
+    const result = await service.join("bar-1", ANA);
 
     expect(result).toMatchObject({
       joined: false,
@@ -176,15 +188,17 @@ describe("BarSessionsService", () => {
     const refreshed = makeSession({ lastSeenAt: new Date(NOW).toISOString() });
     vi.mocked(repo.touchByUserId).mockResolvedValue(refreshed);
 
-    await expect(service.heartbeat("caja:ana")).resolves.toEqual(refreshed);
+    await expect(service.heartbeat(ANA)).resolves.toEqual(refreshed);
+    expect(repo.touchByUserId).toHaveBeenCalledWith("caja:ana");
   });
 
-  it("leave solo elimina la sesión del usuario actual", async () => {
+  it("leave (logout incluido) libera la caja del usuario autenticado", async () => {
     const own = makeSession();
     vi.mocked(repo.findByUserId).mockResolvedValue(own);
 
-    await expect(service.leave(own.userId)).resolves.toEqual(own);
-    expect(repo.deleteByUserId).toHaveBeenCalledWith(own.userId);
+    await expect(service.leave(ANA)).resolves.toEqual(own);
+    expect(repo.findByUserId).toHaveBeenCalledWith("caja:ana");
+    expect(repo.deleteByUserId).toHaveBeenCalledWith("caja:ana");
     expect(repo.deleteByBarId).not.toHaveBeenCalled();
   });
 });

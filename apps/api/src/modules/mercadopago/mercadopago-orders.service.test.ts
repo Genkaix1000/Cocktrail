@@ -39,6 +39,7 @@ function makeCaja(overrides: Partial<Caja> = {}): Caja {
     qrImage: "https://mp.example/qr.png",
     qrTemplate: "https://mp.example/qr.pdf",
     sellerUserId: "seller-1",
+    storeName: null,
     createdAt: "2026-07-17T00:00:00Z",
     ...overrides,
   };
@@ -120,6 +121,7 @@ describe("MercadoPagoOrdersService", () => {
       listAll: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateProvisioning: vi.fn(),
       deleteById: vi.fn(),
     };
 

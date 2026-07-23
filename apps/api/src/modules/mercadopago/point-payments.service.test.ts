@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { NightEvent } from "@cocktrail/shared";
 import type { MercadoPagoService } from "./mercadopago.service.js";
 import type { MpOrder, MpOrdersRepository } from "./mp-orders.repository.js";
+import type { ResolvedPosnet } from "./posnet-resolver.service.js";
 import { PointPaymentsService } from "./point-payments.service.js";
 
 vi.mock("../../config/env.js", () => ({
@@ -47,6 +48,7 @@ describe("PointPaymentsService", () => {
   let row: MpOrder | null;
   let service: PointPaymentsService;
   let emit: ReturnType<typeof vi.fn>;
+  let resolvePosnet: Mock<(barId: string | undefined) => Promise<ResolvedPosnet>>;
 
   beforeEach(() => {
     row = makeRow();
@@ -74,29 +76,35 @@ describe("PointPaymentsService", () => {
       updateStatus: vi.fn(),
     } as unknown as MpOrdersRepository;
     emit = vi.fn();
+    // gestion-posnets: el device se resuelve server-side (caja → device activo).
+    resolvePosnet = vi.fn().mockResolvedValue({ deviceId: "device-1", source: "caja", cajaId: "caja-1" });
     service = new PointPaymentsService(
       mpService as unknown as MercadoPagoService,
       repo,
       async () => EVENT,
+      resolvePosnet,
       emit as unknown as import("../../shared/sse/sse-manager.js").EmitFn,
     );
   });
 
   describe("createIntent", () => {
-    it("persiste el intent en mp_orders (type point, monto en PESOS) y devuelve expiresAt", async () => {
+    it("persiste el intent en mp_orders (type point, monto en PESOS, device y caja RESUELTOS) y devuelve expiresAt", async () => {
       const result = await service.createIntent({
         amount: 1500,
         description: "Fernet",
+        barId: "bar-uuid-1",
         attemptId: "attempt-1111-2222",
         items: [{ drinkId: 1, qty: 2 }],
       });
 
+      expect(resolvePosnet).toHaveBeenCalledWith("bar-uuid-1");
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           orderIdMp: "intent-1",
           type: "point",
           amount: 1500, // pesos, NUNCA centavos
           deviceId: "device-1",
+          cajaId: "caja-1", // la caja resuelta server-side, para trazabilidad
           attemptId: "attempt-1111-2222",
           idempotencyKey: "key-generada",
           externalRef: "cocktrail-1-abc",
@@ -109,14 +117,66 @@ describe("PointPaymentsService", () => {
       expect(result.id).toBe("intent-1");
     });
 
+    it("crea el intent en MP contra el device RESUELTO (nunca uno del cliente)", async () => {
+      await service.createIntent({ amount: 1500, barId: "bar-uuid-1" });
+
+      expect(mpService.createPaymentIntent).toHaveBeenCalledWith(
+        1500,
+        undefined,
+        "device-1",
+        expect.any(String),
+      );
+    });
+
+    it("resolución por env (instalación legacy): persiste cajaId null", async () => {
+      resolvePosnet.mockResolvedValue({ deviceId: "env-device", source: "env", cajaId: null });
+      mpService.createPaymentIntent.mockResolvedValue({
+        id: "intent-1",
+        state: "OPEN",
+        idempotencyKeyUsed: "key-generada",
+        externalReferenceUsed: "cocktrail-1-abc",
+        deviceIdUsed: "env-device",
+      });
+
+      await service.createIntent({ amount: 1500 });
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: "env-device", cajaId: null }),
+      );
+    });
+
+    it("si el resolver da 409 (caja sin Posnet), propaga SIN llamar a MP", async () => {
+      resolvePosnet.mockRejectedValue(
+        Object.assign(new Error("Esta caja no tiene Posnet vinculado."), { name: "Conflict" }),
+      );
+
+      await expect(service.createIntent({ amount: 1500, barId: "bar-uuid-1" })).rejects.toMatchObject({
+        message: expect.stringContaining("no tiene Posnet vinculado"),
+      });
+      expect(mpService.createPaymentIntent).not.toHaveBeenCalled();
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
     it("si el INSERT local falla, propaga el error (no devuelve un intent inverificable)", async () => {
       vi.mocked(repo.create).mockRejectedValue(new Error("db caída"));
       await expect(service.createIntent({ amount: 1500 })).rejects.toThrow("db caída");
     });
 
-    it("rechaza amount inválido sin llamar a MP", async () => {
+    it("rechaza amount inválido sin llamar a MP ni al resolver", async () => {
       await expect(service.createIntent({ amount: 0 })).rejects.toMatchObject({ name: "BadRequest" });
       expect(mpService.createPaymentIntent).not.toHaveBeenCalled();
+      expect(resolvePosnet).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("findIntentDeviceId", () => {
+    it("devuelve el device de la fila del intent (para cancelar contra el MISMO aparato)", async () => {
+      await expect(service.findIntentDeviceId("intent-1")).resolves.toBe("device-1");
+    });
+
+    it("devuelve null si el intent no está registrado", async () => {
+      row = null;
+      await expect(service.findIntentDeviceId("intent-ajeno")).resolves.toBeNull();
     });
   });
 

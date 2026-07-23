@@ -14,11 +14,23 @@ export type Caja = {
   qrImage: string | null;
   qrTemplate: string | null;
   sellerUserId: string;
+  /** Cache del nombre real de la sucursal en MP (rama A) o alias local (rama B). */
+  storeName: string | null;
   createdAt: string;
 };
 
 /** Datos para crear una caja (el id y created_at los pone la DB). */
-export type NewCaja = Omit<Caja, "id" | "createdAt">;
+export type NewCaja = Omit<Caja, "id" | "createdAt" | "storeName"> & {
+  storeName?: string | null;
+};
+
+/**
+ * Patch del re-provisioning (gestion-posnets bloque H): actualiza la MISMA fila
+ * (mismo UUID) para que los vínculos históricos de devices sobrevivan.
+ */
+export type CajaProvisioningPatch = Partial<
+  Pick<Caja, "storeId" | "posIdMp" | "qrImage" | "qrTemplate" | "sellerUserId" | "storeName">
+>;
 
 export type CajaRow = {
   id: string;
@@ -29,6 +41,7 @@ export type CajaRow = {
   qr_image: string | null;
   qr_template: string | null;
   seller_user_id: string;
+  store_name: string | null;
   created_at: string;
 };
 
@@ -42,12 +55,13 @@ export function mapCajaRow(row: CajaRow): Caja {
     qrImage: row.qr_image,
     qrTemplate: row.qr_template,
     sellerUserId: row.seller_user_id,
+    storeName: row.store_name,
     createdAt: row.created_at,
   };
 }
 
 const SELECT_COLS =
-  "id, bar_id, store_id, external_pos_id, pos_id_mp, qr_image, qr_template, seller_user_id, created_at";
+  "id, bar_id, store_id, external_pos_id, pos_id_mp, qr_image, qr_template, seller_user_id, store_name, created_at";
 
 export interface MercadoPagoCajasRepository {
   findById(id: string): Promise<Caja | null>;
@@ -56,6 +70,7 @@ export interface MercadoPagoCajasRepository {
   listAll(): Promise<Caja[]>;
   create(caja: NewCaja): Promise<Caja>;
   update(id: string, patch: Partial<Pick<Caja, "qrImage" | "qrTemplate" | "posIdMp">>): Promise<Caja>;
+  updateProvisioning(cajaId: string, patch: CajaProvisioningPatch): Promise<Caja>;
   deleteById(id: string): Promise<void>;
 }
 
@@ -129,6 +144,7 @@ export class SupabaseMercadoPagoCajasRepository implements MercadoPagoCajasRepos
         qr_image: caja.qrImage,
         qr_template: caja.qrTemplate,
         seller_user_id: caja.sellerUserId,
+        store_name: caja.storeName ?? null,
       })
       .select(SELECT_COLS)
       .single();
@@ -165,6 +181,30 @@ export class SupabaseMercadoPagoCajasRepository implements MercadoPagoCajasRepos
 
     if (error) {
       console.error("[SupabaseMercadoPagoCajasRepository] Error updating caja:", error);
+      throw error;
+    }
+
+    return mapCajaRow(data as CajaRow);
+  }
+
+  async updateProvisioning(cajaId: string, patch: CajaProvisioningPatch): Promise<Caja> {
+    const payload: Record<string, unknown> = {};
+    if (patch.storeId !== undefined) payload.store_id = patch.storeId;
+    if (patch.posIdMp !== undefined) payload.pos_id_mp = patch.posIdMp;
+    if (patch.qrImage !== undefined) payload.qr_image = patch.qrImage;
+    if (patch.qrTemplate !== undefined) payload.qr_template = patch.qrTemplate;
+    if (patch.sellerUserId !== undefined) payload.seller_user_id = patch.sellerUserId;
+    if (patch.storeName !== undefined) payload.store_name = patch.storeName;
+
+    const { data, error } = await supabase
+      .from("mercadopago_cajas")
+      .update(payload)
+      .eq("id", cajaId)
+      .select(SELECT_COLS)
+      .single();
+
+    if (error) {
+      console.error("[SupabaseMercadoPagoCajasRepository] Error updating provisioning:", error);
       throw error;
     }
 

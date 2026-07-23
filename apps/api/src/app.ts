@@ -46,14 +46,14 @@ import { CredentialsResolverService } from "./modules/mercadopago/credentials-re
 import { MercadoPagoProvisioningService } from "./modules/mercadopago/mercadopago-provisioning.service.js";
 import { MercadoPagoOrdersService } from "./modules/mercadopago/mercadopago-orders.service.js";
 import { PointPaymentsService } from "./modules/mercadopago/point-payments.service.js";
+import { PosnetResolverService } from "./modules/mercadopago/posnet-resolver.service.js";
+import { MpHealthService } from "./modules/mercadopago/mp-health.service.js";
+import { resolveInstallationBarId } from "./modules/mercadopago/mp-context.middleware.js";
 import { createMercadoPagoPaymentAdapter } from "./modules/mercadopago/mercadopago-payment-adapter.js";
 import { SupabaseMpOrdersRepository } from "./modules/mercadopago/mp-orders.repository.js";
 import { getMigrationsStatus } from "./infra/migrations/migrations-status.js";
 import { SupabaseMpWebhookEventsRepository } from "./modules/mercadopago/mp-webhook-events.repository.js";
-import {
-  BarSessionsService,
-  barSessionUserId,
-} from "./modules/bar-sessions/bar-sessions.service.js";
+import { BarSessionsService } from "./modules/bar-sessions/bar-sessions.service.js";
 import { SupabaseBarSessionsRepository } from "./modules/bar-sessions/bar-sessions.repository.js";
 import { PrinterService } from "./modules/printer/printer.service.js";
 import { emit } from "./shared/sse/sse-manager.js";
@@ -130,12 +130,38 @@ const mpOrdersService = new MercadoPagoOrdersService(
   async () => eventsService.getCurrentEvent(),
 );
 
+// gestion-posnets bloque G — salud de la vinculación (4 chequeos + F1 +
+// usingEnvDevice, cache 30 s). El listado de devices es EL MISMO camino que el
+// provisioning (listMpDevices, que además re-sincroniza el operating_mode):
+// se inyecta la función para no acoplar health al service entero — la
+// dependencia va en un solo sentido (health → provisioning), sin ciclo.
+const mpHealthService = new MpHealthService(
+  mpSellersRepo,
+  mpCajasRepo,
+  mpCajasDevicesRepo,
+  resolveInstallationBarId,
+  () => mpProvisioningService.listMpDevices(),
+);
+
+// gestion-posnets bloque A — el cobro resuelve el Posnet server-side:
+// barId (A12) → caja → device activo, con env.MP_POS_DEVICE_ID como último
+// recurso observable (D2). La guarda grave (T17) es real: bloquea el cobro
+// SOLO si el listado con credenciales activas no ve el device (la plata iría
+// a otra cuenta); unknown (MP caído) jamás bloquea.
+const posnetResolver = new PosnetResolverService(
+  mpCajasRepo,
+  mpCajasDevicesRepo,
+  (deviceId, cajaId) => mpHealthService.assertDeviceNotGrave(deviceId, cajaId),
+);
+const resolvePosnet = (barId: string | undefined) => posnetResolver.resolveForCharge(barId);
+
 // cobro-verificado (R27) — política del cobro con Posnet: crea+persiste el
 // intent y resuelve el veredicto contra el pago real.
 const pointPaymentsService = new PointPaymentsService(
   mpService,
   mpOrdersRepo,
   async () => eventsService.getCurrentEvent(),
+  resolvePosnet,
   emit,
 );
 
@@ -192,7 +218,17 @@ const mpWebhooksService = new MercadoPagoWebhooksService(
   emit,
 );
 
-const systemService = new SystemService(eventsRepo, mpService, printerService, supabase, supabaseCloud);
+// T18: el bloque posnet de getStatus() usa la MISMA verdad que el cobro (el
+// resolver), vía peek() — sin marcar el flag de uso de env (eso es de cobros).
+// El `?? env.BAR_CODE` replica el contexto que arma mpContextMiddleware.
+const systemService = new SystemService(
+  eventsRepo,
+  mpService,
+  printerService,
+  supabase,
+  supabaseCloud,
+  async () => posnetResolver.peek((await resolveInstallationBarId()) ?? env.BAR_CODE),
+);
 
 // ── Express App ──
 
@@ -246,8 +282,11 @@ import { createSystemController } from "./modules/system/system.controller.js";
 app.use(
   "/api/auth",
   createAuthController(usersRepo, {
+    // D6: la identidad la deriva el service de la sesión autenticada,
+    // así que el logout libera la caja de verdad (antes solo soltaba la
+    // identidad ficticia "…:default", nunca la de la pestaña real).
     onLogout: async (user) => {
-      await barSessionsService.leave(barSessionUserId(user.username, user.role, "default"));
+      await barSessionsService.leave(user);
     },
   }),
 );
@@ -261,7 +300,12 @@ app.use("/api/mercadopago", createMercadoPagoOAuthController(mpOAuthService));
 app.use("/api/mercadopago", createMercadoPagoProvisioningController(mpProvisioningService));
 app.use("/api/mercadopago", createMercadoPagoOrdersController(mpOrdersService));
 app.use("/api/mercadopago", createMercadoPagoWebhooksController(mpWebhooksService));
-app.use("/api/mercadopago", createMercadoPagoController(mpService, pointPaymentsService));
+app.use(
+  "/api/mercadopago",
+  createMercadoPagoController(mpService, pointPaymentsService, resolvePosnet, (refresh) =>
+    mpHealthService.getHealth(refresh),
+  ),
+);
 app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
 app.use("/api/system", createSystemController(usersRepo, systemService, syncService));

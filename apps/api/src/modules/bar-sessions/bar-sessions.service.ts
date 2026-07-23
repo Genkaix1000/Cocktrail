@@ -4,9 +4,13 @@ import type { BarSessionsRepository, BarSession } from "./bar-sessions.repositor
 
 export const BAR_SESSION_TTL_MS = 2 * 60 * 1000;
 
-export function barSessionUserId(username: string, role: "caja" | "admin", deviceId: string): string {
-  return `${role}:${username}:${deviceId}`;
-}
+/**
+ * D6: la identidad de la sesión de caja deriva de la sesión autenticada
+ * (rol + usuario), no del navegador. Sin deviceId por pestaña: reentrar
+ * desde cualquier pestaña devuelve la propia caja, y el logout la libera
+ * de verdad. El TTL queda solo como red de seguridad (corte de luz).
+ */
+export type AuthenticatedUser = { username: string; role: "caja" | "admin" };
 
 export type JoinResult = {
   joined: true;
@@ -47,7 +51,13 @@ export class BarSessionsService {
     private readonly now: () => number = Date.now,
   ) {}
 
-  async join(barId: string, userId: string, username: string, role: "caja" | "admin"): Promise<JoinResult> {
+  /** Identidad estable "rol:username" (D6). También cubre los usuarios fallback de .env. */
+  identityFor(user: AuthenticatedUser): string {
+    return `${user.role}:${user.username}`;
+  }
+
+  async join(barId: string, user: AuthenticatedUser): Promise<JoinResult> {
+    const userId = this.identityFor(user);
     await this.removeExpired();
 
     const bar = await this.barsRepo.findById(barId);
@@ -76,8 +86,8 @@ export class BarSessionsService {
       const session = await this.repo.create({
         barId,
         userId,
-        username,
-        role,
+        username: user.username,
+        role: user.role,
         lastSeenAt: new Date(this.now()).toISOString(),
       });
       return { joined: true, session };
@@ -99,7 +109,8 @@ export class BarSessionsService {
     }
   }
 
-  async leave(userId: string): Promise<BarSession | null> {
+  async leave(user: AuthenticatedUser): Promise<BarSession | null> {
+    const userId = this.identityFor(user);
     const session = await this.repo.findByUserId(userId);
     if (!session) return null;
     await this.repo.deleteByUserId(userId);
@@ -119,7 +130,8 @@ export class BarSessionsService {
     return this.repo.listAll();
   }
 
-  async listOptions(userId: string): Promise<BarSessionOptions> {
+  async listOptions(user: AuthenticatedUser): Promise<BarSessionOptions> {
+    const userId = this.identityFor(user);
     await this.removeExpired();
     const [bars, sessions, currentSession] = await Promise.all([
       this.barsRepo.listAll(),
@@ -149,9 +161,9 @@ export class BarSessionsService {
     };
   }
 
-  async heartbeat(userId: string): Promise<BarSession> {
+  async heartbeat(user: AuthenticatedUser): Promise<BarSession> {
     await this.removeExpired();
-    const session = await this.repo.touchByUserId(userId);
+    const session = await this.repo.touchByUserId(this.identityFor(user));
     if (!session) {
       throw new Conflict("La sesión de caja ya no está activa.", "BAR_SESSION_EXPIRED");
     }

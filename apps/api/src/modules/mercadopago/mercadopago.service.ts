@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { env } from "../../config/env.js";
 import { Conflict } from "../../shared/errors/http-errors.js";
 import type { CredentialsResolverService } from "./credentials-resolver.service.js";
 import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
@@ -145,17 +144,6 @@ export class MercadoPagoService {
   constructor(private readonly credentialsResolver: CredentialsResolverService) {}
 
   /**
-   * Ya NO valida `MP_ACCESS_TOKEN`: el token lo resuelve `credentialsResolver`
-   * (Fase 2) según el contexto (device/barra/seller/env fallback). Solo valida
-   * que exista el device del Posnet cuando la operación lo requiere.
-   */
-  private assertConfigured(requireDevice = true): void {
-    if (requireDevice && !env.MP_POS_DEVICE_ID) {
-      throw new Conflict("Mercado Pago no está configurado (falta la variable de entorno MP_POS_DEVICE_ID).");
-    }
-  }
-
-  /**
    * Resuelve el access_token a usar para el contexto dado. Posnet siempre habilita
    * el fallback global/env: si no hay caja/seller mapeado (pre-Fase 3), cae al
    * seller activo o al token legacy, preservando el comportamiento actual.
@@ -202,33 +190,32 @@ export class MercadoPagoService {
    * intención en cola (error 2205), intenta cancelarla y reintenta UNA sola
    * vez — sin esto, dos cobros seguidos siempre chocan (ver docs/ARCHITECTURE.md §11).
    *
-   * `deviceId` (opcional) viene de `req.mpContext` para resolver la cuenta MP
-   * dueña. Si no viene, el resolver cae al fallback global/env (comportamiento legacy).
+   * `deviceId` es OBLIGATORIO y viene YA RESUELTO server-side
+   * (PosnetResolverService: caja → device activo, env como último recurso).
+   * El gateway no conoce `MP_POS_DEVICE_ID` (gestion-posnets, D2).
    */
   async createPaymentIntent(
     amount: number,
-    description?: string,
-    deviceId?: string,
+    description: string | undefined,
+    deviceId: string,
     idempotencyKey?: string,
   ): Promise<MpPaymentIntentResponse & CreatedIntentMeta> {
-    const resolvedDeviceId = deviceId || env.MP_POS_DEVICE_ID;
-    if (!resolvedDeviceId) {
-      throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
+    if (!deviceId) {
+      throw new Conflict(
+        "No hay un Posnet resuelto para este cobro. Vinculá un Posnet a la caja desde /admin → Pagos.",
+      );
     }
     const token = await this.resolveToken(deviceId);
-    return this.createPaymentIntentWithToken(token, amount, description, resolvedDeviceId, idempotencyKey);
+    return this.createPaymentIntentWithToken(token, amount, description, deviceId, idempotencyKey);
   }
 
   private async createPaymentIntentWithToken(
     token: string,
     amount: number,
-    description?: string,
-    deviceId: string | undefined = env.MP_POS_DEVICE_ID,
+    description: string | undefined,
+    deviceId: string,
     idempotencyKey?: string,
   ): Promise<MpPaymentIntentResponse & CreatedIntentMeta> {
-    if (!deviceId) {
-      throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
-    }
     // El reintento post-2205 crea un intent NUEVO (el viejo se canceló), así que
     // usa una key nueva — reusar la del intento fallido haría que MP dedupe.
     const attempt = (key: string) => this.createPaymentIntentAttempt(token, amount, description, deviceId, key);
@@ -292,7 +279,6 @@ export class MercadoPagoService {
   }
 
   async getPayment(paymentId: string, deviceId?: string): Promise<MpPayment> {
-    this.assertConfigured(false);
     const token = await this.resolveToken(deviceId);
     return this.getPaymentWithToken(token, paymentId);
   }
@@ -307,7 +293,6 @@ export class MercadoPagoService {
   }
 
   async getPaymentIntentStatus(paymentIntentId: string, deviceId?: string): Promise<MpPaymentIntentResponse & { status: MpNormalizedStatus }> {
-    this.assertConfigured(false);
     const token = await this.resolveToken(deviceId);
     return this.getPaymentIntentStatusWithToken(token, paymentIntentId);
   }
@@ -338,7 +323,6 @@ export class MercadoPagoService {
    * DTO crudo — sin normalizar ni decidir: el veredicto es de PointPaymentsService.
    */
   async resolveIntentOutcome(paymentIntentId: string, deviceId?: string): Promise<IntentOutcome> {
-    this.assertConfigured(false);
     const token = await this.resolveToken(deviceId);
 
     const data = await this.pointApiRequest<MpPaymentIntentResponse>(
@@ -365,13 +349,15 @@ export class MercadoPagoService {
     return outcome;
   }
 
-  async cancelPaymentIntent(paymentIntentId: string, deviceId?: string): Promise<MpPaymentIntentResponse> {
-    const resolvedDeviceId = deviceId || env.MP_POS_DEVICE_ID;
-    if (!resolvedDeviceId) {
-      throw new Conflict("Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).");
+  /** `deviceId` obligatorio: el del intent (fila de mp_orders) o el resuelto por la caja. */
+  async cancelPaymentIntent(paymentIntentId: string, deviceId: string): Promise<MpPaymentIntentResponse> {
+    if (!deviceId) {
+      throw new Conflict(
+        "No se sabe contra qué Posnet cancelar la intención. Vinculá un Posnet a la caja desde /admin → Pagos.",
+      );
     }
     const token = await this.resolveToken(deviceId);
-    return this.cancelPaymentIntentWithToken(token, paymentIntentId, resolvedDeviceId);
+    return this.cancelPaymentIntentWithToken(token, paymentIntentId, deviceId);
   }
 
   private cancelPaymentIntentWithToken(
@@ -421,15 +407,15 @@ export class MercadoPagoService {
    * en el propio dispositivo. Solo se auto-cancela por API si nunca salió
    * de OPEN (no llegó al device), para no dejarla colgada.
    *
-   * Fase 5: `deviceId` apunta al Posnet bajo test (Card 3). Si no viene,
-   * cae al legacy `MP_POS_DEVICE_ID`.
+   * `deviceId` es OBLIGATORIO: el Posnet bajo test (fila elegida en /admin,
+   * criterio F) o el resuelto server-side para la caja. El gateway ya no
+   * conoce `MP_POS_DEVICE_ID` (gestion-posnets, D2).
    */
-  async testDeviceReachability(deviceId?: string): Promise<{ reachedDevice: boolean; message: string }> {
-    const resolvedDeviceId = deviceId || env.MP_POS_DEVICE_ID;
-    if (!resolvedDeviceId) {
+  async testDeviceReachability(deviceId: string): Promise<{ reachedDevice: boolean; message: string }> {
+    if (!deviceId) {
       return {
         reachedDevice: false,
-        message: "Mercado Pago no está configurado (falta deviceId / MP_POS_DEVICE_ID).",
+        message: "No hay un Posnet para probar. Vinculá un Posnet a la caja desde /admin → Pagos.",
       };
     }
 
@@ -446,7 +432,7 @@ export class MercadoPagoService {
         token,
         15,
         "Prueba de conexion Cocktrail",
-        resolvedDeviceId,
+        deviceId,
       );
     } catch (err) {
       return { reachedDevice: false, message: err instanceof Error ? err.message : "Error al crear la intención de prueba." };
@@ -480,7 +466,7 @@ export class MercadoPagoService {
     }
 
     try {
-      await this.cancelPaymentIntentWithToken(token, intentId, resolvedDeviceId);
+      await this.cancelPaymentIntentWithToken(token, intentId, deviceId);
     } catch (cancelErr) {
       console.error(`No se pudo cancelar la intención de prueba ${intentId}:`, cancelErr);
     }
@@ -488,9 +474,10 @@ export class MercadoPagoService {
     return { reachedDevice: false, message: "El Posnet no respondió en 15 segundos. Reiniciálo y volvé a probar." };
   }
 
-  async checkDeviceConnection(deviceId?: string): Promise<{ connected: boolean; message: string; device?: { model: string; serialNumber: string; operatingMode: string } }> {
-    if (!env.MP_POS_DEVICE_ID) {
-      return { connected: false, message: "Mercado Pago no está configurado (falta la variable de entorno MP_POS_DEVICE_ID)." };
+  /** `deviceId` obligatorio: consulta la vinculación de ESE Posnet (el de la caja, no el de la env). */
+  async checkDeviceConnection(deviceId: string): Promise<{ connected: boolean; message: string; device?: { model: string; serialNumber: string; operatingMode: string } }> {
+    if (!deviceId) {
+      return { connected: false, message: "No hay un Posnet para consultar. Vinculá un Posnet a la caja desde /admin → Pagos." };
     }
 
     // El token ya no sale de env: lo resuelve el resolver. Si no hay cuenta vinculada
@@ -517,7 +504,7 @@ export class MercadoPagoService {
       }
       const data = await response.json();
       const devices: MpDevice[] = data?.devices || [];
-      const matchedDevice = devices.find((d) => d.id === env.MP_POS_DEVICE_ID);
+      const matchedDevice = devices.find((d) => d.id === deviceId);
       if (matchedDevice) {
         return {
           connected: true,
@@ -529,7 +516,7 @@ export class MercadoPagoService {
           },
         };
       } else {
-        return { connected: false, message: `El dispositivo con ID ${env.MP_POS_DEVICE_ID} no está vinculado a esta cuenta de Mercado Pago.` };
+        return { connected: false, message: `El dispositivo con ID ${deviceId} no está vinculado a esta cuenta de Mercado Pago.` };
       }
     } catch (err: any) {
       if (isFetchTimeout(err)) {

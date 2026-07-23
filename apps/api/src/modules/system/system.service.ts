@@ -2,8 +2,8 @@ import { exec } from "node:child_process";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EventsRepository } from "../events/events.repository.js";
 import type { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
+import type { ResolvedPosnet } from "../mercadopago/posnet-resolver.service.js";
 import type { PrinterService } from "../printer/printer.service.js";
-import { env } from "../../config/env.js";
 import {
   getMigrationsStatus,
   isDegraded,
@@ -56,6 +56,13 @@ export class SystemService {
     private printerService: PrinterService,
     private localDb: SupabaseClient,
     private cloudDb: SupabaseClient | null,
+    /**
+     * T18 (gestion-posnets): el device del bloque `posnet` sale del
+     * PosnetResolver — la MISMA verdad que el cobro (caja → device activo, env
+     * como último recurso) — nunca más de `env.MP_POS_DEVICE_ID` directo.
+     * app.ts inyecta `peek()` (sin efectos: reportar no es cobrar).
+     */
+    private resolvePosnetForStatus: () => Promise<ResolvedPosnet>,
   ) {}
 
   /**
@@ -141,22 +148,38 @@ export class SystemService {
       }
     } catch {}
 
-    // Posnet Check
-    const posnetConfigured = !!env.MP_ACCESS_TOKEN && !!env.MP_POS_DEVICE_ID;
+    // Posnet Check — vía PosnetResolver (T18): el mismo device que usaría el
+    // cobro. `configured` = hay un device resoluble (caja o env-fallback);
+    // "caja sin Posnet vinculado" llega como estado con el mensaje del 409 del
+    // resolver, nunca como un error del endpoint.
+    let posnetConfigured = false;
     let posnetConnected = false;
+    let posnetDeviceId: string | null = null;
     let posnetMessage = "No configurado";
-    let posnetDetails = null;
-
-    if (posnetConfigured) {
+    let posnetDetails: unknown = null;
+    try {
+      const resolved = await this.resolvePosnetForStatus();
+      posnetConfigured = true;
+      posnetDeviceId = resolved.deviceId;
       try {
-        const check = await this.mpService.checkDeviceConnection();
+        const check = await this.mpService.checkDeviceConnection(resolved.deviceId);
         posnetConnected = check.connected;
         posnetMessage = check.message;
         posnetDetails = check.device || null;
-      } catch (err: any) {
+      } catch (err) {
         posnetConnected = false;
-        posnetMessage = err.message || "Error al conectar con Posnet API";
+        posnetMessage =
+          err instanceof Error ? err.message : "Error al conectar con Posnet API";
       }
+      if (resolved.source === "env") {
+        // D2: cobrar por la env es el último recurso y tiene que ser VISIBLE.
+        posnetMessage =
+          `${posnetMessage} — Se cobra por MP_POS_DEVICE_ID de la env (último recurso): ` +
+          "vinculá el Posnet a la caja desde /admin → Pagos.";
+      }
+    } catch (err) {
+      posnetMessage =
+        err instanceof Error ? err.message : "No se pudo resolver el Posnet de la caja.";
     }
 
     const internetConnected = await internetPromise;
@@ -182,7 +205,7 @@ export class SystemService {
         connected: posnetConnected,
         configured: posnetConfigured,
         paired: posnetConnected,
-        deviceId: env.MP_POS_DEVICE_ID || null,
+        deviceId: posnetDeviceId,
         message: posnetMessage,
         details: posnetDetails,
       },

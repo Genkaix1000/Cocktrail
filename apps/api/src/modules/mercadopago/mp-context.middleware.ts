@@ -31,7 +31,13 @@ export function _setBarsRepoForTests(repo: BarsRepository) {
   cachedAt = 0;
 }
 
-async function resolveInstallationBarId(): Promise<string | null> {
+/**
+ * UUID de la barra de la instalación (bars.findByCode(BAR_CODE)), cacheado con
+ * TTL corto. Exportada para los consumidores que necesitan la MISMA resolución
+ * barId → caja que el cobro fuera de una request (MpHealthService, el bloque
+ * posnet de SystemService.getStatus vía app.ts).
+ */
+export async function resolveInstallationBarId(): Promise<string | null> {
   const now = Date.now();
   if (cachedBarId && now - cachedAt < BAR_ID_CACHE_TTL_MS) return cachedBarId;
   try {
@@ -53,19 +59,27 @@ async function resolveInstallationBarId(): Promise<string | null> {
  *
  * A12 (mínimo): los headers dejan de ser autoritativos a ciegas — `x-bar-id`
  * debe ser la barra de la instalación (por code `BARRA-01` o por su UUID en la
- * base local, que es lo que manda la web) y `x-device-id` debe tener formato
- * de device de Point. El cableado device↔caja llega con gestion-posnets.
+ * base local, que es lo que manda la web).
+ *
+ * `x-device-id` está DEPRECADO (gestion-posnets, A5): la resolución del Posnet
+ * es server-side (PosnetResolverService: barId → caja → device activo) y el
+ * cobro IGNORA `mpContext.deviceId`. Se sigue validando el formato y dejándolo
+ * en el contexto solo para no romper clientes viejos mientras exista el único
+ * emisor (bar-sessions.service.ts:51 — lo elimina el PR 6).
  */
 export async function mpContextMiddleware(req: Request, _res: Response, next: NextFunction) {
-  const barId = req.header("x-bar-id")?.trim();
+  const headerBarId = req.header("x-bar-id")?.trim();
   const deviceId = req.header("x-device-id")?.trim();
 
-  if (barId && barId !== env.BAR_CODE) {
-    const installationBarId = await resolveInstallationBarId();
-    if (barId !== installationBarId) {
-      next(new Forbidden(`La barra ${barId} no corresponde a esta instalación (${env.BAR_CODE}).`));
-      return;
-    }
+  // El contexto siempre lleva el UUID de bars.id: los consumidores del barId
+  // (PosnetResolver → cajasRepo.findByBarId) esperan el UUID, nunca el code —
+  // si acá quedara BARRA-01 una request sin header caería a la env aunque la
+  // caja exista. La resolución está cacheada (TTL arriba), no es un hit por request.
+  const installationBarId = await resolveInstallationBarId();
+
+  if (headerBarId && headerBarId !== env.BAR_CODE && headerBarId !== installationBarId) {
+    next(new Forbidden(`La barra ${headerBarId} no corresponde a esta instalación (${env.BAR_CODE}).`));
+    return;
   }
   if (deviceId && !DEVICE_ID_RE.test(deviceId)) {
     next(new BadRequest("x-device-id inválido: se esperaba un id de Posnet (alfanumérico, _ o -)."));
@@ -73,8 +87,10 @@ export async function mpContextMiddleware(req: Request, _res: Response, next: Ne
   }
 
   req.mpContext = {
-    // Ausente → default de la instalación; presente → ya validado arriba.
-    barId: barId || env.BAR_CODE,
+    // Siempre el UUID resuelto de la instalación (venga o no el header); el
+    // code queda solo como último recurso si la barra todavía no existe en la
+    // DB (instalación legacy → el resolver de Posnet degrada a la env).
+    barId: installationBarId ?? env.BAR_CODE,
     ...(deviceId ? { deviceId } : {}),
   };
   next();

@@ -31,24 +31,24 @@ describe("mpContextMiddleware (A12 mínimo)", () => {
     _setBarsRepoForTests(fakeBarsRepo());
   });
 
-  it("sin headers → contexto con la barra default de la instalación", async () => {
+  it("sin headers → el barId del contexto es el UUID resuelto de la instalación (no el code: cajasRepo.findByBarId espera bars.id)", async () => {
     const req = makeReq();
     const next = vi.fn();
 
     await mpContextMiddleware(req, {} as Response, next);
 
     expect(next).toHaveBeenCalledWith();
-    expect(req.mpContext).toEqual({ barId: env.BAR_CODE });
+    expect(req.mpContext).toEqual({ barId: INSTALL_BAR_UUID });
   });
 
-  it("x-bar-id coincidente con BAR_CODE → pasa", async () => {
+  it("x-bar-id coincidente con BAR_CODE → pasa y el contexto lleva el UUID resuelto", async () => {
     const req = makeReq({ "x-bar-id": env.BAR_CODE });
     const next = vi.fn();
 
     await mpContextMiddleware(req, {} as Response, next);
 
     expect(next).toHaveBeenCalledWith();
-    expect(req.mpContext?.barId).toBe(env.BAR_CODE);
+    expect(req.mpContext?.barId).toBe(INSTALL_BAR_UUID);
   });
 
   it("x-bar-id con el UUID de la barra de la instalación → pasa (es lo que manda la web)", async () => {
@@ -94,6 +94,8 @@ describe("mpContextMiddleware (A12 mínimo)", () => {
     const next2 = vi.fn();
     await mpContextMiddleware(codeReq, {} as Response, next2);
     expect(next2).toHaveBeenCalledWith();
+    // Sin UUID resoluble, el contexto degrada al code (instalación legacy).
+    expect(codeReq.mpContext?.barId).toBe(env.BAR_CODE);
   });
 
   it("cachea el lookup de la barra (no consulta la DB en cada request)", async () => {

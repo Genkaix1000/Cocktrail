@@ -5,6 +5,7 @@ import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
 import type { MercadoPagoService, MpPaymentIntentResponse, CreatedIntentMeta, IntentOutcome } from "./mercadopago.service.js";
 import type { MpCartItem, MpOrder, MpOrdersRepository, MpOrderStatus } from "./mp-orders.repository.js";
+import type { ResolvedPosnet } from "./posnet-resolver.service.js";
 
 /**
  * Deadline server-side del cobro con Posnet: pasado esto sin confirmación, el
@@ -40,7 +41,11 @@ export type CreatePointIntentInput = {
   /** ⚠ En PESOS. */
   amount: number;
   description?: string;
-  deviceId?: string;
+  /**
+   * Barra del contexto (A12). El device NO viene del cliente (anti-spoof A5):
+   * se resuelve server-side con `resolvePosnet` (caja → device activo).
+   */
+  barId?: string;
   /** Semilla estable por intento de cobro (la genera el frontend). */
   attemptId?: string;
   /** Carrito de la venta: sobrevive al cierre de la pestaña (deuda anotada: dato de dominio en tabla de pagos). */
@@ -80,6 +85,9 @@ export class PointPaymentsService {
     private readonly mpService: MercadoPagoService,
     private readonly mpOrdersRepo: MpOrdersRepository,
     private readonly getActiveEvent: () => Promise<NightEvent | null>,
+    // Se inyecta la FUNCIÓN (no el service entero) — mismo criterio que
+    // getActiveEvent: esta clase solo necesita resolver, no toda la clase.
+    private readonly resolvePosnet: (barId: string | undefined) => Promise<ResolvedPosnet>,
     private readonly emit?: EmitFn,
   ) {}
 
@@ -87,6 +95,11 @@ export class PointPaymentsService {
     if (typeof input.amount !== "number" || !Number.isFinite(input.amount) || input.amount <= 0) {
       throw new BadRequest("amount es requerido y debe ser un número positivo.");
     }
+
+    // El Posnet se resuelve PRIMERO y server-side (caja → device activo, env
+    // como último recurso): si la caja no tiene Posnet vinculado, el 409 corta
+    // acá, antes de tocar Mercado Pago.
+    const resolved = await this.resolvePosnet(input.barId);
 
     // No exige noche abierta (el registro de la venta sí la exige) — solo la liga si hay.
     const event = await this.getActiveEvent();
@@ -96,7 +109,7 @@ export class PointPaymentsService {
     const intent = await this.mpService.createPaymentIntent(
       input.amount,
       input.description,
-      input.deviceId,
+      resolved.deviceId,
       randomUUID(),
     );
     if (!intent.id) {
@@ -114,7 +127,10 @@ export class PointPaymentsService {
       amount: input.amount,
       status: "created",
       type: "point",
+      // Trazabilidad del cobro: device y caja RESUELTOS (no lo que dijo el
+      // cliente) — resolveIntentOutcome después opera con este device_id.
       deviceId: intent.deviceIdUsed,
+      cajaId: resolved.cajaId,
       attemptId: input.attemptId ?? null,
       eventId: event?.id ?? null,
       cartItems: input.items ?? null,
@@ -173,6 +189,10 @@ export class PointPaymentsService {
         amount: outcome.transactionAmount,
         status: "processed",
         type: "point",
+        // Etiqueta best-effort, NO el device real del cobro (se perdió con la
+        // fila). No se resuelve por la caja a propósito: este camino no trae
+        // barId y resolvePosnet marcaría el flag de uso de env / warn de un
+        // cobro que no está ocurriendo (anotado en gestion-posnets T18).
         deviceId: env.MP_POS_DEVICE_ID || "desconocido",
         paymentId: outcome.paymentId,
         paidAmount: outcome.transactionAmount,
@@ -203,6 +223,17 @@ export class PointPaymentsService {
     } catch (err) {
       console.error(`[PointPayments] No se pudo marcar cancelado localmente el intent ${intentId}:`, err);
     }
+  }
+
+  /**
+   * Device con el que se CREÓ un intent (su fila en mp_orders): para operar
+   * sobre el intent en MP (ej. DELETE) contra el mismo aparato, sin
+   * re-resolver por la caja. `null` si el intent no está registrado.
+   */
+  async findIntentDeviceId(intentId: string): Promise<string | null> {
+    if (!intentId?.trim()) return null;
+    const row = await this.mpOrdersRepo.findByMpId(intentId.trim());
+    return row?.type === "point" ? row.deviceId ?? null : null;
   }
 
   private async findPointRow(intentId: string): Promise<MpOrder> {
