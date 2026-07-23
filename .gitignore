@@ -17,6 +17,9 @@ build/
 .claude/
 .cursor/
 .vscode/
+.gemini/
+.opencode/
+.agents/
 tsconfig.tsbuildinfo
 *.log
 
