@@ -1,16 +1,6 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
-  // Evita que Turbopack tome un lockfile fuera del monorepo (p. ej. ~/pnpm-lock.yaml).
-  turbopack: {
-    root: path.join(__dirname, "../.."),
-  },
-  // 2 workers = equilibrio entre velocidad de compilación y consumo de RAM.
-  // En Macs con poca RAM (p. ej. M1 8GB), bajá a 1 si ves thrashing.
-  experimental: {
-    cpus: 2,
-  },
   // Permite que el celular del cliente acceda al dev server por LAN durante la demo.
   // Si tu IP local cambia, agregala acá.
   allowedDevOrigins: [

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { countRows, resetData, TABLES_TO_RESET } from "./reset-data.js";
-import { parseArgs } from "./args.js";
+import { countRows, parseArgs, resetData, TABLES_TO_RESET } from "./reset-data.js";
 
 type TableConfig = {
   count?: number;

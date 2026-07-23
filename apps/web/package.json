@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/print-lan-url.mjs && node scripts/dev-next.mjs",
+    "dev": "node scripts/print-lan-url.mjs && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

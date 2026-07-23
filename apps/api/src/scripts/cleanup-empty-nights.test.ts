@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { deleteEmptyNights, findEmptyNightIds } from "./cleanup-empty-nights.js";
-import { parseArgs } from "./args.js";
+import { deleteEmptyNights, findEmptyNightIds, parseArgs } from "./cleanup-empty-nights.js";
 
 type FindResult = { data?: { id: string }[]; error?: { message: string } };
 

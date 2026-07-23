@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { type Target, type ParsedArgs, parseArgs } from "./args.js";
+
+export type Target = "local" | "cloud";
 
 /**
  * Noches "vacías": `order_counter = 0` (nunca se cargó un pedido). En local
@@ -30,6 +31,27 @@ export async function deleteEmptyNights(client: SupabaseClient, ids: string[]): 
   return ids.length;
 }
 
+export type ParsedArgs = {
+  target: Target;
+  yes: boolean;
+};
+
+export function parseArgs(argv: string[]): ParsedArgs {
+  const targetArg = argv.find((a) => a.startsWith("--target="));
+  const target = targetArg?.slice("--target=".length);
+
+  if (target !== "local" && target !== "cloud") {
+    throw new Error('Falta o es inválido --target. Uso: --target=local o --target=cloud (obligatorio, sin default).');
+  }
+
+  const yes = argv.includes("--yes");
+  if (yes && target === "cloud") {
+    throw new Error("--yes no está permitido con --target=cloud: la limpieza en producción siempre pide confirmación tipeada.");
+  }
+
+  return { target, yes };
+}
+
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 
 if (isMainModule) {
@@ -37,7 +59,7 @@ if (isMainModule) {
   const { supabase, supabaseCloud } = await import("../shared/supabase.js");
   const { createInterface } = await import("node:readline/promises");
 
-  const { target, yes } = parseArgs(process.argv.slice(2), "la limpieza en producción siempre pide confirmación tipeada.");
+  const { target, yes } = parseArgs(process.argv.slice(2));
 
   const client = target === "local" ? supabase : supabaseCloud;
   if (!client) {
