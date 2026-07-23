@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { type Target, type ParsedArgs, parseArgs } from "./args.js";
 
 /**
  * Tablas que se vacían en un reset. `night_events` arrastra `orders`,
@@ -7,8 +8,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * propósito: son contenido real del local, no dato de prueba.
  */
 export const TABLES_TO_RESET = ["night_events", "users", "audit_logs"] as const;
-
-export type Target = "local" | "cloud";
 
 export async function countRows(client: SupabaseClient, table: string): Promise<number> {
   const { count, error } = await client.from(table).select("*", { count: "exact", head: true });
@@ -52,27 +51,6 @@ export async function resetData(
   return deleted;
 }
 
-export type ParsedArgs = {
-  target: Target;
-  yes: boolean;
-};
-
-export function parseArgs(argv: string[]): ParsedArgs {
-  const targetArg = argv.find((a) => a.startsWith("--target="));
-  const target = targetArg?.slice("--target=".length);
-
-  if (target !== "local" && target !== "cloud") {
-    throw new Error('Falta o es inválido --target. Uso: --target=local o --target=cloud (obligatorio, sin default).');
-  }
-
-  const yes = argv.includes("--yes");
-  if (yes && target === "cloud") {
-    throw new Error("--yes no está permitido con --target=cloud: el reset de producción siempre pide confirmación tipeada.");
-  }
-
-  return { target, yes };
-}
-
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 
 if (isMainModule) {
@@ -80,7 +58,7 @@ if (isMainModule) {
   const { supabase, supabaseCloud } = await import("../shared/supabase.js");
   const { createInterface } = await import("node:readline/promises");
 
-  const { target, yes } = parseArgs(process.argv.slice(2));
+  const { target, yes } = parseArgs(process.argv.slice(2), "el reset de producción siempre pide confirmación tipeada.");
 
   const client = target === "local" ? supabase : supabaseCloud;
   if (!client) {

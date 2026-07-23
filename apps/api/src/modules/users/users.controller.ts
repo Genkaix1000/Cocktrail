@@ -2,11 +2,10 @@ import { Router } from "express";
 import type { UsersService } from "./users.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, CreateUserSchema, UpdateUserSchema } from "../../shared/middleware/validate.js";
-import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
+import { logAction } from "../audit-logs/audit-logs.service.js";
 
 export function createUsersController(
   service: UsersService,
-  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
 ): Router {
   const router = Router();
 
@@ -33,7 +32,7 @@ export function createUsersController(
     async (req, res, next) => {
       try {
         const user = await service.createUser(req.body);
-        await auditLogsService.log(
+        await logAction(
           "staff.created",
           `Staff creado - ${user.username}`,
           req.session?.username || "admin"
@@ -54,7 +53,7 @@ export function createUsersController(
       try {
         const id = req.params.id as string;
         await service.deleteUser(id);
-        await auditLogsService.log(
+        await logAction(
           "staff.deleted",
           `Staff eliminado - ID #${id}`,
           req.session?.username || "admin"
@@ -76,7 +75,7 @@ export function createUsersController(
       try {
         const id = req.params.id as string;
         const user = await service.updateUser(id, req.body);
-        await auditLogsService.log(
+        await logAction(
           "staff.updated",
           `Staff actualizado - ${user.username}`,
           req.session?.username || "admin"

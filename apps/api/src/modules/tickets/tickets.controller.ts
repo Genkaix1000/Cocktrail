@@ -4,11 +4,10 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, RedeemTicketSchema } from "../../shared/middleware/validate.js";
 import { ticketLimiter } from "../../shared/middleware/rate-limit.js";
 import { env } from "../../config/env.js";
-import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
+import { logAction } from "../audit-logs/audit-logs.service.js";
 
 export function createTicketsController(
   service: TicketsService,
-  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
 ): Router {
   const router = Router();
 
@@ -30,7 +29,7 @@ export function createTicketsController(
           method: resolvedMethod,
         });
 
-        await auditLogsService.log(
+        await logAction(
           "ticket.redeemed",
           `Ticket ${code} canjeado en ${resolvedBarCode} (${resolvedMethod})`,
           redeemer,

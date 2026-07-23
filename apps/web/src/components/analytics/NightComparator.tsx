@@ -4,30 +4,18 @@ import { useId, useState, useMemo } from "react";
 import { GitCompareArrows, ChevronDown, FileText, User } from "lucide-react";
 import type { UnifiedNightDay } from "@/lib/analytics";
 import { formatNightDateLong, formatEventDuration } from "@/lib/analytics";
-import { getAccentColors } from "@/lib/accentColors";
-import { formatHm } from "@/lib/utils";
+import { formatHm, formatMoney, MONTHS_SHORT } from "@/lib/utils";
 
 type Props = {
   nights: UnifiedNightDay[];
   isBosko: boolean;
-  // Puente Historial → Logs: mismo callback que antes vivía en el popup de
-  // HistorialSection.tsx — este componente absorbió ese contenido al
-  // unificarse con el selector (ver docs/specs/features/simplificar-historial-noches.md).
   onRedirectToLogs: (ts: number) => void;
 };
 
 const WEEKDAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MONTHS_SHORT = [
-  "ene", "feb", "mar", "abr", "may", "jun",
-  "jul", "ago", "sep", "oct", "nov", "dic",
-];
 function formatNightDate(ts: number): string {
   const d = new Date(ts);
   return `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
-}
-
-function formatMoney(n: number): string {
-  return `$${n.toLocaleString("es-AR")}`;
 }
 
 function getDurationMs(e: UnifiedNightDay): number | null {
@@ -142,7 +130,9 @@ const NONE = -1;
  * docs/specs/features/simplificar-historial-noches.md).
  */
 export default function NightComparator({ nights, isBosko, onRedirectToLogs }: Props) {
-  const { accentColor, accentBg, accentBorder } = getAccentColors(isBosko);
+  const accentColor = isBosko ? "text-[#4ade80]" : "text-blue";
+  const accentBg = isBosko ? "bg-[#4ade80]/10" : "bg-blue/10";
+  const accentBorder = isBosko ? "border-[#4ade80]/20" : "border-blue-line";
 
   const sortedNights = useMemo(
     () =>

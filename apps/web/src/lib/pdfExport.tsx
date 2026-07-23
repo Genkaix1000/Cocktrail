@@ -16,6 +16,7 @@ import {
   groupNightsByDay,
   formatEventDuration,
 } from "@/lib/analytics";
+import { formatMoney } from "@/lib/utils";
 import type { EventSummary } from "@cocktrail/shared";
 
 type ExportInput = {
@@ -30,10 +31,6 @@ const ACCENT = {
   bosko: "#16a34a",
   default: "#2563eb",
 };
-
-function formatMoney(n: number): string {
-  return `$${n.toLocaleString("es-AR")}`;
-}
 
 function formatShortDate(ts: number): string {
   const d = new Date(ts);

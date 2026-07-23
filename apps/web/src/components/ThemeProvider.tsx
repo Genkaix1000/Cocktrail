@@ -35,28 +35,6 @@ export function useThemeSafe() {
   return useContext(ThemeContext);
 }
 
-/** All CSS custom properties that we manage */
-const MANAGED_VARS = [
-  "--bg-primary", "--bg-surface", "--text-accent", "--text-primary",
-  "--ink-950", "--ink-925", "--ink-900", "--ink-850", "--ink-800", "--ink-750",
-  "--ink-700", "--ink-600", "--ink-500", "--ink-450", "--ink-400", "--ink-300", "--ink-200", "--ink-100", "--ink-50",
-  "--primary-base", "--primary-soft", "--primary-line",
-  "--accent-base", "--accent-soft", "--accent-line", "--accent-border",
-  "--success-base", "--success-soft", "--success-line",
-  "--danger-base", "--danger-soft", "--danger-line",
-] as const;
-
-const clearCustomVars = () => {
-  for (const v of MANAGED_VARS) {
-    document.documentElement.style.removeProperty(v);
-  }
-};
-
-const applyThemeColors = () => {
-  document.documentElement.setAttribute("data-theme", "bosko");
-  clearCustomVars();
-};
-
 const getIsDarkKey = () => {
   let role = "public";
   if (typeof window !== "undefined") {
@@ -93,11 +71,6 @@ export function ThemeProvider({
       document.documentElement.classList.remove("dark");
     }
   };
-
-  // Re-run whenever theme, customTheme or isDark changes
-  useEffect(() => {
-    applyThemeColors();
-  }, [theme, customTheme, isDark]);
 
   // Cargar localmente al montar para evitar delay y consultar al backend
   useEffect(() => {

@@ -26,6 +26,8 @@ services:
     image: supabase/postgres:17.6.1.136
     container_name: cocktrail-db
     restart: unless-stopped
+    # Cap en laptops con poca RAM (M1 8GB). En el boliche con más RAM no molesta.
+    mem_limit: 768m
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
       interval: 5s
@@ -59,6 +61,7 @@ services:
     image: postgrest/postgrest:v14.12
     container_name: cocktrail-rest
     restart: unless-stopped
+    mem_limit: 256m
     depends_on:
       db:
         condition: service_healthy
@@ -85,6 +88,7 @@ services:
     image: kong/kong:3.9.1
     container_name: cocktrail-kong
     restart: unless-stopped
+    mem_limit: 512m
     depends_on:
       rest:
         condition: service_healthy

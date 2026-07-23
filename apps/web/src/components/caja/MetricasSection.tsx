@@ -3,10 +3,9 @@
 import { TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type { NightEvent, Order } from "@cocktrail/shared";
-import type { computeTotals } from "@/lib/totals";
+import type { EventTotals, NightEvent, Order } from "@cocktrail/shared";
 
-type Totals = ReturnType<typeof computeTotals>;
+type Totals = EventTotals;
 
 type Props = {
   event: NightEvent | null;

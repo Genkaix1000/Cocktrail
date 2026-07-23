@@ -23,7 +23,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { OSHeadbar } from "@/components/shared/OSHeadbar";
 import { OSProfileFooter } from "@/components/shared/OSProfileFooter";
 
-import { computeTotals } from "@/lib/totals";
+import { computeTotals } from "@cocktrail/shared";
 import { useEventState } from "@/hooks/useEventState";
 
 import { eventsService } from "@/services/events.service";

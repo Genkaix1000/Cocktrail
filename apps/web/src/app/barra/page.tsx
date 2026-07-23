@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import BarraClient from "./BarraClient";
 import { authService } from "@/services/auth.service";
 
-export const dynamic = "force-dynamic";
-
 export default function BarraPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);

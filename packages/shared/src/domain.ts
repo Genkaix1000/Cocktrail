@@ -4,7 +4,7 @@ export type CustomTheme = {
   surfaceColor: string;
   accentColor: string;
 };
-export type Theme = "bosko";
+export type Theme = string;
 
 export type Drink = {
   id: number;
@@ -35,19 +35,6 @@ export type OrderStatus =
 
 export type PaymentMethod = "efectivo" | "qr" | "debito";
 
-/**
- * Estado de cobro de la venta. "desconocido" es solo para filas pre-migración
- * y pedidos de /carta; "pendiente_de_cobro" queda reservado para la Fase 7.
- */
-export type PaymentStatus = "cobrado" | "pendiente_de_cobro" | "desconocido";
-
-/** Prueba de pago que la caja presenta al registrar una venta no-efectivo. */
-export type PaymentProofInput = {
-  provider: "mercadopago";
-  kind: "point_intent" | "qr_order";
-  id: string;
-};
-
 export type Order = {
   id: string;
   token: string;
@@ -66,20 +53,15 @@ export type Order = {
   deliveredBy?: string;
   deliveredByBar?: string;
   redeemMethod?: "scan" | "manual";
-  paymentStatus?: PaymentStatus;
-  /** Id del pago en el proveedor (ej. payment_id de MP) — lo que se busca en su panel. */
+  paymentStatus?: "cobrado" | "pendiente_de_cobro" | "desconocido";
   paymentRef?: string;
-  /** Id interno de la fila de cobro ligada (orders.mp_order_id). */
   paymentRecordId?: string;
-  /** Key de replay del registro (orders.idempotency_key). */
   idempotencyKey?: string;
 };
 
-export type EventStatus = "activo" | "cerrado";
-
 export type NightEvent = {
   id: string;
-  status: EventStatus;
+  status: "activo" | "cerrado";
   startedAt: number;
   closedAt?: number;
   orderCounter: number;
@@ -115,8 +97,68 @@ export type EventSummary = NightEvent & {
 export type NewOrderInput = {
   items: { drinkId: number; qty: number }[];
   paymentMethod: PaymentMethod;
-  /** Obligatoria para ventas de caja no-efectivo (el server la verifica). */
-  payment?: PaymentProofInput;
-  /** Replay: mismo key → misma Order, sin doble registro. */
+  payment?: { provider: "mercadopago"; kind: "point_intent" | "qr_order"; id: string };
   idempotencyKey?: string;
 };
+
+export function computeTotals(orders: Order[]): EventTotals {
+  let webTotal = 0;
+  let webCount = 0;
+  let efectivoTotal = 0;
+  let efectivoCount = 0;
+  let qrTotal = 0;
+  let qrCount = 0;
+  let debitoTotal = 0;
+  let debitoCount = 0;
+  const drinksByDrinkId = new Map<number, DrinkSold>();
+
+  for (const order of orders) {
+    if (order.status === "cancelado") continue;
+
+    if (order.createdBy === "Cliente") {
+      webTotal += order.total;
+      webCount += 1;
+    }
+
+    if (order.paymentMethod === "efectivo") {
+      efectivoTotal += order.total;
+      efectivoCount += 1;
+    } else if (order.paymentMethod === "qr") {
+      qrTotal += order.total;
+      qrCount += 1;
+    } else if (order.paymentMethod === "debito") {
+      debitoTotal += order.total;
+      debitoCount += 1;
+    }
+
+    for (const item of order.items) {
+      const acc = drinksByDrinkId.get(item.drinkId);
+      if (acc) {
+        acc.qty += item.qty;
+        acc.subtotal += item.subtotal;
+      } else {
+        drinksByDrinkId.set(item.drinkId, {
+          drinkId: item.drinkId,
+          name: item.name,
+          qty: item.qty,
+          subtotal: item.subtotal,
+        });
+      }
+    }
+  }
+
+  return {
+    webTotal,
+    webCount,
+    efectivoTotal,
+    efectivoCount,
+    qrTotal,
+    qrCount,
+    debitoTotal,
+    debitoCount,
+    drinksSold: Array.from(drinksByDrinkId.values()).sort(
+      (a, b) => b.qty - a.qty,
+    ),
+    total: efectivoTotal + qrTotal + debitoTotal,
+  };
+}

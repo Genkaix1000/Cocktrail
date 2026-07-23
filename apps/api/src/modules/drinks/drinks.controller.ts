@@ -2,11 +2,10 @@ import { Router } from "express";
 import type { DrinksService } from "./drinks.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, CreateDrinkSchema, UpdateDrinkSchema } from "../../shared/middleware/validate.js";
-import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
+import { logAction } from "../audit-logs/audit-logs.service.js";
 
 export function createDrinksController(
   service: DrinksService,
-  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
 ): Router {
   const router = Router();
 
@@ -47,7 +46,7 @@ export function createDrinksController(
     async (req, res, next) => {
       try {
         const drink = await service.createDrink(req.body);
-        await auditLogsService.log(
+        await logAction(
           "drink.created",
           `Producto creado - ${drink.name}`,
           req.session?.username || "admin"
@@ -73,7 +72,7 @@ export function createDrinksController(
           return;
         }
         const drink = await service.updateDrink(id, req.body);
-        await auditLogsService.log(
+        await logAction(
           "drink.updated",
           `Producto actualizado - ${drink.name}`,
           req.session?.username || "admin"
@@ -105,7 +104,7 @@ export function createDrinksController(
         } catch {}
 
         await service.deleteDrink(id);
-        await auditLogsService.log(
+        await logAction(
           "drink.deleted",
           `Producto eliminado - ${drinkName}`,
           req.session?.username || "admin"

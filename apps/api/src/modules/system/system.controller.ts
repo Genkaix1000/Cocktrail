@@ -6,7 +6,7 @@ import type { SystemService } from "./system.service.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import { verifySession } from "../auth/session.js";
 import { systemStatusLimiter } from "../../shared/middleware/rate-limit.js";
-import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
+import { getLatestLogs } from "../audit-logs/audit-logs.service.js";
 import { supabaseCloud } from "../../shared/supabase.js";
 
 export function createSystemController(
@@ -19,7 +19,7 @@ export function createSystemController(
   // GET /api/system/logs — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
   router.get("/logs", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
     try {
-      const logs = await AuditLogsService.getLatest(10);
+      const logs = await getLatestLogs(10);
       res.json(logs);
     } catch (err) {
       next(err);

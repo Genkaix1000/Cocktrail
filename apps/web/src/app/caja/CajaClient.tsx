@@ -9,7 +9,7 @@ import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
 import { useTheme } from "@/components/ThemeProvider";
 import CloseNightModal from "@/components/shared/CloseNightModal";
-import { computeTotals } from "@/lib/totals";
+import { computeTotals } from "@cocktrail/shared";
 import { usePrinterStatus } from "@/hooks/usePrinterStatus";
 import { usePosnetStatus } from "@/hooks/usePosnetStatus";
 import VentaSection from "@/components/caja/VentaSection";

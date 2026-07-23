@@ -11,7 +11,7 @@ import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { ConfigRepository } from "../config/config.repository.js";
 import type { SyncService } from "../sync/sync.service.js";
 import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
-import { computeTotals } from "../../shared/utils/totals.js";
+import { computeTotals } from "@cocktrail/shared";
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
 import { toSafeConfig } from "../config/config.repository.js";
 
@@ -324,20 +324,4 @@ export class EventsService {
     this.syncService.pushAuditLogsIfConfigured().catch(console.error);
   }
 
-  async seedClosedEvent(summary: EventSummary): Promise<void> {
-    await this.ensureInitialized();
-    const event: NightEvent = {
-      id: summary.id,
-      status: summary.status,
-      startedAt: summary.startedAt,
-      closedAt: summary.closedAt,
-      orderCounter: summary.orderCounter,
-      closedBy: summary.closedBy,
-    };
-    await this.eventsRepo.create(event);
-
-    for (const o of summary.orders) {
-      await this.ordersRepo.create(o, event.id);
-    }
-  }
 }

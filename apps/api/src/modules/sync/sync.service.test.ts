@@ -6,7 +6,7 @@ import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { TicketsRepository } from "../tickets/tickets.repository.js";
 import type { EventsRepository } from "../events/events.repository.js";
 import type { CloudSyncRepository } from "./cloud-sync.repository.js";
-import { computeTotals } from "../../shared/utils/totals.js";
+import { computeTotals } from "@cocktrail/shared";
 import type { NightEvent } from "@cocktrail/shared";
 
 const EMPTY_TOTALS = computeTotals([]);

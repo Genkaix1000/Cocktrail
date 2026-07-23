@@ -16,6 +16,7 @@ import Toast from "@/components/shared/Toast";
 import { groupNightsByDay } from "@/lib/analytics";
 import { exportHistorialPdf } from "@/lib/pdfExport";
 import { useTheme } from "@/components/ThemeProvider";
+import { MONTHS_SHORT, formatShortDate } from "@/lib/utils";
 
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
 import type { UnifiedNightDay } from "@/lib/analytics";
@@ -32,13 +33,6 @@ type Props = {
   // sección no conoce nada de LogsSection, solo invoca el callback.
   onRedirectToLogs: (ts: number) => void;
 };
-
-const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
-function formatShortDate(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
-}
 
 // "Esta Semana" (semana calendario, lun-dom) y "Este Mes" (desde el día 1)
 // son ventanas distintas que pueden solaparse solo parcialmente — al
@@ -160,7 +154,6 @@ export default function HistorialSection({
               delta={weeklyDelta.delta}
               icon={CalendarDays}
               color="#10b981"
-              sparklineData={historyEvents.slice(0, 5).reverse().map(e => e.totals.total)}
               subtitle={weekRange}
             />
             <MetricCard
@@ -170,7 +163,6 @@ export default function HistorialSection({
               delta={monthlyDelta.delta}
               icon={TrendingUp}
               color="#3b82f6"
-              sparklineData={historyEvents.slice(0, 5).reverse().map(e => e.totals.total)}
               subtitle={monthRange}
             />
             <MetricCard
@@ -180,7 +172,6 @@ export default function HistorialSection({
               delta={{ label: `${historyEvents.length} noches`, direction: "up", value: 0, pct: 0 }}
               icon={History}
               color="#a855f7"
-              sparklineData={historyEvents.slice().reverse().map(e => e.totals.total)}
               subtitle="acumulado"
             />
           </div>

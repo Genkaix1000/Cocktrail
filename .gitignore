@@ -3,7 +3,6 @@ node_modules/
 out/
 dist/
 build/
-.turbo/
 .DS_Store
 
 # ignore all env files except env.example templates
@@ -18,12 +17,8 @@ build/
 .claude/
 .cursor/
 .vscode/
-.playwright-mcp/
 tsconfig.tsbuildinfo
 *.log
-
-# capturas y artefactos de tests manuales
-paso*-summary.png
 
 # notas locales del proyecto (config de agentes IA, local a cada dev)
 CLAUDE.md
@@ -47,8 +42,3 @@ supabase/docker/kong.yml
 # estado local del CLI de Supabase (no versionar)
 supabase/.temp/
 **/.branches/
-
-# agentes / skills local (no versionar)
-.agents/
-.agent/
-skills-lock.json

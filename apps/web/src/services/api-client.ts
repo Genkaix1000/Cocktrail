@@ -1,5 +1,6 @@
-import { API_URL } from "@/config/env";
 import { ACTIVE_BAR_STORAGE_KEY } from "@/lib/bar-context";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type RequestOptions = {
   method?: string;
