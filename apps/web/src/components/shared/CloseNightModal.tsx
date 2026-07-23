@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { formatHm } from "@/lib/utils";
+import { formatDuration } from "@/lib/analytics";
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
 
 type Props = {
@@ -23,14 +24,6 @@ type Props = {
   onConfirm: (password: string) => Promise<void>;
   onClose: () => void;
 };
-
-function formatDuration(ms: number): string {
-  const totalMinutes = Math.floor(ms / 60_000);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  if (h === 0) return `${m}m`;
-  return `${h}h ${m}m`;
-}
 
 // ── Native Canvas Confetti Emitter ──
 function triggerConfetti() {

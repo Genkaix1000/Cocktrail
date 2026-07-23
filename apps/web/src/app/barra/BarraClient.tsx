@@ -21,9 +21,6 @@ import { ordersService } from "@/services/orders.service";
 import { authService } from "@/services/auth.service";
 import { useOfflineScanQueue } from "@/hooks/useOfflineScanQueue";
 import { eventsService } from "@/services/events.service";
-import SectionTitle from "@/components/shared/SectionTitle";
-import Stat from "@/components/shared/Stat";
-import Sep from "@/components/shared/Sep";
 import PendingOrdersList from "@/components/barra/PendingOrdersList";
 import ManualRedeemModal from "@/components/barra/ManualRedeemModal";
 import CancelOrderModal from "@/components/barra/CancelOrderModal";
@@ -427,14 +424,20 @@ export default function BarraClient() {
             <span className="font-mono text-xs font-bold text-blue tabular">{barCode}</span>
             <Pencil size={11} className="text-ink-600 group-hover:text-ink-400" />
           </button>
-          <Stat label="Entregados" value={deliveredCount} tone="green" />
+          <div className="flex flex-col gap-0.5 select-none items-end">
+            <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-ink-500 leading-none">Entregados</span>
+            <span className="text-[15px] tabular leading-none text-green font-mono font-bold">{deliveredCount}</span>
+          </div>
           {offlineQueue.length > 0 && (
             <>
-              <Sep />
-              <Stat label="Cola offline" value={offlineQueue.length} tone="amber" />
+              <span className="w-px h-6 bg-ink-800" />
+              <div className="flex flex-col gap-0.5 select-none items-end">
+                <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-ink-500 leading-none">Cola offline</span>
+                <span className="text-[15px] tabular leading-none text-orange-500 font-mono font-bold">{offlineQueue.length}</span>
+              </div>
             </>
           )}
-          <Sep />
+          <span className="w-px h-6 bg-ink-800" />
           <button
             type="button"
             onClick={logout}
@@ -469,12 +472,16 @@ export default function BarraClient() {
         <div className="flex-1 flex flex-col gap-5 min-w-0 min-h-0">
           {/* Hero: last 3 scans side by side */}
           <section className="flex-1 flex flex-col min-h-[280px] md:min-h-[320px]">
-            <SectionTitle icon={<CheckCircle2 size={12} />}>
-              Últimos canjes
-              <span className="ml-auto text-[10px] font-mono font-normal normal-case tracking-normal text-ink-600">
-                {heroScans.length}/{HERO_SCANS_COUNT}
-              </span>
-            </SectionTitle>
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="text-ink-500"><CheckCircle2 size={12} /></span>
+              <h3 className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400 flex items-center gap-2 w-full">
+                Últimos canjes
+                <span className="ml-auto text-[10px] font-mono font-normal normal-case tracking-normal text-ink-600">
+                  {heroScans.length}/{HERO_SCANS_COUNT}
+                </span>
+              </h3>
+              <span className="flex-1 h-px bg-ink-800/80" />
+            </div>
 
             {heroScans.length === 0 ? (
               <div className="relative flex-1 overflow-hidden rounded-3xl border border-dashed border-ink-700/80 bg-ink-900/30 backdrop-blur-sm flex flex-col items-center justify-center text-center px-6 py-12">
@@ -521,14 +528,18 @@ export default function BarraClient() {
 
           {/* History */}
           <section className="shrink-0">
-            <SectionTitle icon={<History size={12} />}>
-              Historial reciente
-              {historicalScans.length > 0 && (
-                <span className="ml-auto text-[10px] font-mono font-normal normal-case tracking-normal text-ink-600">
-                  {historicalScans.length} canje{historicalScans.length !== 1 ? "s" : ""}
-                </span>
-              )}
-            </SectionTitle>
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="text-ink-500"><History size={12} /></span>
+              <h3 className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400 flex items-center gap-2 w-full">
+                Historial reciente
+                {historicalScans.length > 0 && (
+                  <span className="ml-auto text-[10px] font-mono font-normal normal-case tracking-normal text-ink-600">
+                    {historicalScans.length} canje{historicalScans.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </h3>
+              <span className="flex-1 h-px bg-ink-800/80" />
+            </div>
 
             {historicalScans.length === 0 ? (
               <div className="rounded-2xl border border-ink-800/60 bg-ink-900/20 px-4 py-8 text-center">

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "anthropic-cybersecurity-skills": {
+      "source": "Aradotso/security-skills",
+      "sourceType": "github",
+      "skillPath": "skills/anthropic-cybersecurity-skills/SKILL.md",
+      "computedHash": "4e568bb6856c4e960f1935a18cba25befcc0d8a84687804773306ea7c5b67d95"
+    }
+  }
+}

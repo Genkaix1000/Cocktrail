@@ -3,10 +3,20 @@
 import { Inbox, Package, X } from "lucide-react";
 import type { MouseEvent } from "react";
 
-import { getPendingStatus } from "./orderStatus";
 import type { CurrentUser } from "./types";
 import type { Order } from "@cocktrail/shared";
 import Toast from "@/components/shared/Toast";
+
+function getPendingStatus(status: Order["status"]) {
+  switch (status) {
+    case "entregado":
+      return { label: "Entregado", className: "bg-green-soft text-green border-green-line" };
+    case "cancelado":
+      return { label: "Cancelado", className: "bg-danger-soft text-danger border-danger-line" };
+    default:
+      return { label: "Pendiente", className: "bg-amber-soft text-amber border-amber-line" };
+  }
+}
 
 type ToastNotification = {
   id: string;

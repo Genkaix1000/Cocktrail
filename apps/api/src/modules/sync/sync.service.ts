@@ -6,7 +6,7 @@ import type { TicketsRepository } from "../tickets/tickets.repository.js";
 import type { EventsRepository } from "../events/events.repository.js";
 import type { CloudSyncRepository, SyncTableResult } from "./cloud-sync.repository.js";
 import type { EventTotals, NightEvent } from "@cocktrail/shared";
-import { computeTotals } from "../../shared/utils/totals.js";
+import { computeTotals } from "@cocktrail/shared";
 import { supabase } from "../../shared/supabase.js";
 
 function hashPassword(password: string): string {

@@ -4,12 +4,11 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { COOKIE_NAME, verifySession } from "../auth/session.js";
 import { validate, CreateOrderSchema, UpdateOrderStatusSchema } from "../../shared/middleware/validate.js";
 import { orderLimiter } from "../../shared/middleware/rate-limit.js";
-import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
+import { logAction } from "../audit-logs/audit-logs.service.js";
 import type { OrderStatus } from "@cocktrail/shared";
 
 export function createOrdersController(
   service: OrdersService,
-  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
 ): Router {
   const router = Router();
 
@@ -38,7 +37,7 @@ export function createOrdersController(
       const createdBy = session ? session.username : "Cliente";
 
       const order = await service.createOrder({ items, paymentMethod, payment, idempotencyKey }, createdBy);
-      await auditLogsService.log(
+      await logAction(
         "order.created",
         `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,
         createdBy
@@ -105,7 +104,7 @@ export function createOrdersController(
 
       const auditAction = STATUS_AUDIT_ACTION[status as OrderStatus];
       if (auditAction) {
-        await auditLogsService.log(auditAction, statusAuditMessage(status as OrderStatus, order), username);
+        await logAction(auditAction, statusAuditMessage(status as OrderStatus, order), username);
       }
 
       res.json(order);

@@ -1,5 +1,6 @@
-import { API_URL } from "@/config/env";
 import { ACTIVE_BAR_STORAGE_KEY } from "@/lib/bar-context";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type RequestOptions = {
   method?: string;
@@ -28,7 +29,7 @@ export async function apiFetch<T>(
   path: string,
   opts: RequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, headers = {}, signal } = opts;
+  const { method = "GET", body, headers = {}, signal = AbortSignal.timeout(15_000) } = opts;
   const activeBarId =
     typeof window !== "undefined"
       ? localStorage.getItem(ACTIVE_BAR_STORAGE_KEY)

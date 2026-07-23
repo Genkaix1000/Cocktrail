@@ -6,8 +6,6 @@ import TicketLive from "@/components/carta/TicketLive";
 import { ordersService } from "@/services/orders.service";
 import type { Order } from "@cocktrail/shared";
 
-export const dynamic = "force-dynamic";
-
 export default function PedidoPage() {
   const params = useParams<{ token: string }>();
   const [order, setOrder] = useState<Order | null>(null);

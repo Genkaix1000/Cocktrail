@@ -127,9 +127,6 @@ export async function getLastClosedEventId(localClient: SupabaseClient): Promise
   return (data as { id: string } | null)?.id ?? null;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Reintenta `compareEventSync` unas pocas veces con espera corta — el push
@@ -149,7 +146,7 @@ export async function verifyWithRetries(
     if (last.ok) return last;
     const isPending = last.mismatches.some((m) => m.includes("todavía no llegó a cloud"));
     if (!isPending) return last; // error real, no tiene sentido reintentar
-    if (i < attempts - 1) await sleep(delayMs);
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
   }
   return last;
 }

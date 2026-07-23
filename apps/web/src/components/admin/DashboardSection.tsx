@@ -11,7 +11,6 @@ import {
 
 import PaymentDonut from "@/components/analytics/PaymentDonut";
 import MetricCard from "@/components/shared/MetricCard";
-import EmptyCard from "@/components/shared/EmptyCard";
 
 import { formatNightDateLong } from "@/lib/analytics";
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
@@ -352,7 +351,9 @@ function TopProductsList({ products }: { products: ProductRevenue[] }) {
       </h3>
 
       {products.length === 0 ? (
-        <EmptyCard text="Aún no hay ventas esta noche" />
+        <div className="bg-ink-925/50 border border-dashed border-ink-800/60 rounded-xl p-6 text-center text-[13px] text-ink-400/80">
+          Aún no hay ventas esta noche
+        </div>
       ) : (
         <div className="flex flex-col gap-3 overflow-y-auto no-scrollbar flex-1">
           {products.slice(0, 5).map((d, i) => (

@@ -4,6 +4,8 @@
  * pendiente es esto.
  */
 
+import { isBrowser } from "@/lib/utils";
+
 const STORAGE_KEY = "cocktrail:lastOrder";
 
 export type ActiveOrderRef = {
@@ -11,11 +13,6 @@ export type ActiveOrderRef = {
   displayNumber: number;
   createdAt: number;
 };
-
-function isBrowser() {
-  return typeof window !== "undefined" && typeof localStorage !== "undefined";
-}
-
 
 export function saveActiveOrder(ref: ActiveOrderRef): void {
   if (!isBrowser()) return;

@@ -36,10 +36,9 @@ async function verifySessionEdge(
   const expiresAt = Number(expRaw);
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
 
-  // Validar HMAC con Web Crypto API (compatible con Edge runtime)
   const secret =
-    process.env.COCKTRAIL_AUTH_SECRET ??
-    process.env.AUTH_SECRET ??
+    process.env.COCKTRAIL_AUTH_SECRET?.trim() ||
+    process.env.AUTH_SECRET?.trim() ||
     "dev-secret-change-me-in-production-longer-than-32-chars";
 
   const encoder = new TextEncoder();
@@ -62,61 +61,69 @@ async function verifySessionEdge(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Constant-length comparison (no timing safe en Edge, pero sí length check)
   if (sig.length !== expected.length) return null;
   if (sig !== expected) return null;
 
   return { role, username, expiresAt };
 }
 
-export default async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export async function proxy(request: NextRequest) {
+  try {
+    const { pathname } = request.nextUrl;
 
-  const session = await verifySessionEdge(
-    request.cookies.get(COOKIE_NAME)?.value,
-  );
+    const session = await verifySessionEdge(
+      request.cookies.get(COOKIE_NAME)?.value,
+    );
 
-  // /admin → requiere admin
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    if (!session) {
-      return NextResponse.redirect(new URL("/login", request.url));
+    // /admin → requiere admin
+    if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+      if (!session) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      if (session.role !== "admin") {
+        const home = session.role === "caja" ? "/caja" : "/login";
+        return NextResponse.redirect(new URL(home, request.url));
+      }
+      return NextResponse.next();
     }
-    if (session.role !== "admin") {
-      const home = session.role === "caja" ? "/caja" : "/login";
+
+    // /caja → requiere caja
+    if (pathname === "/caja" || pathname.startsWith("/caja/")) {
+      if (!session) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      if (session.role !== "caja") {
+        const home = session.role === "admin" ? "/admin" : "/login";
+        return NextResponse.redirect(new URL(home, request.url));
+      }
+      return NextResponse.next();
+    }
+
+    // /barra → requiere admin (canje manual, ya no hay rol "barman" dedicado)
+    if (pathname === "/barra" || pathname.startsWith("/barra/")) {
+      if (!session) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      if (session.role !== "admin") {
+        const home = session.role === "caja" ? "/caja" : "/login";
+        return NextResponse.redirect(new URL(home, request.url));
+      }
+      return NextResponse.next();
+    }
+
+    // /login → si ya estás logueado, redirigir a tu home
+    if (pathname === "/login" && session) {
+      const home = session.role === "admin" ? "/admin" : "/caja";
       return NextResponse.redirect(new URL(home, request.url));
     }
+
     return NextResponse.next();
+  } catch (err) {
+    // Next.js en dev intenta mutar err.message (deobfuscate). DOMException y
+    // algunos errores de Web Crypto tienen message solo-getter → TypeError y
+    // a veces 404 engañoso. Re-lanzamos un Error plano con el mensaje original.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[proxy] unexpected error:", message);
+    return NextResponse.redirect(new URL("/login", request.url));
   }
-
-  // /caja → requiere caja
-  if (pathname === "/caja" || pathname.startsWith("/caja/")) {
-    if (!session) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-    if (session.role !== "caja") {
-      const home = session.role === "admin" ? "/admin" : "/login";
-      return NextResponse.redirect(new URL(home, request.url));
-    }
-    return NextResponse.next();
-  }
-
-  // /barra → requiere admin (canje manual, ya no hay rol "barman" dedicado)
-  if (pathname === "/barra" || pathname.startsWith("/barra/")) {
-    if (!session) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-    if (session.role !== "admin") {
-      const home = session.role === "caja" ? "/caja" : "/login";
-      return NextResponse.redirect(new URL(home, request.url));
-    }
-    return NextResponse.next();
-  }
-
-  // /login → si ya estás logueado, redirigir a tu home
-  if (pathname === "/login" && session) {
-    const home = session.role === "admin" ? "/admin" : "/caja";
-    return NextResponse.redirect(new URL(home, request.url));
-  }
-
-  return NextResponse.next();
 }

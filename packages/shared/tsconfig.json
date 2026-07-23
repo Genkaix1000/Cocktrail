@@ -4,11 +4,9 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
-    "declaration": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "isolatedModules": true,
-    "outDir": "./dist"
+    "isolatedModules": true
   },
   "include": ["src/**/*.ts"]
 }

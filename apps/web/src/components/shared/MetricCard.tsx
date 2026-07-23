@@ -1,7 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import type { DeltaInfo } from "@/lib/analytics";
-import AnimatedNumber from "./AnimatedNumber";
-import Sparkline from "./Sparkline";
 
 export default function MetricCard({
   label,
@@ -10,7 +8,6 @@ export default function MetricCard({
   delta,
   icon: Icon,
   color,
-  sparklineData,
   subtitle = "vs. última noche",
   noDeltaLabel = "EN VIVO",
 }: {
@@ -20,9 +17,7 @@ export default function MetricCard({
   delta: DeltaInfo | null | undefined;
   icon: LucideIcon;
   color: string;
-  sparklineData?: number[];
   subtitle?: string;
-  /** Texto mostrado cuando no hay `delta` (ej. "Noche del 14 jul" al mostrar la última noche sin comparación) — default "EN VIVO" preserva el comportamiento de siempre. */
   noDeltaLabel?: string;
 }) {
   const deltaTone = delta?.direction === "down" ? "down" : "up";
@@ -34,7 +29,7 @@ export default function MetricCard({
             {label}
           </span>
           <div className="text-[26px] font-black text-ink-50 leading-none tracking-tight font-mono tabular">
-            <AnimatedNumber value={value} isCurrency={isCurrency} />
+            <>{isCurrency && <span className="text-ink-500 text-[0.7em] mr-0.5">$</span>}{value.toLocaleString("es-AR")}</>
           </div>
         </div>
         {delta ? (
@@ -58,13 +53,6 @@ export default function MetricCard({
           <Icon size={18} strokeWidth={2} />
         </div>
       </div>
-
-      {/* Sparkline positioned absolutely in the background at the bottom-right */}
-      {sparklineData && (
-        <div className="absolute right-3.5 bottom-3.5 w-[85px] h-9 overflow-hidden select-none pointer-events-none opacity-80">
-          <Sparkline data={sparklineData} color={color} />
-        </div>
-      )}
     </div>
   );
 }

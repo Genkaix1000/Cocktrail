@@ -1,6 +1,37 @@
 import { accessSync, constants, existsSync, readdirSync, writeFileSync } from "node:fs";
 import type { NightEvent, Order } from "@cocktrail/shared";
-import { toCP437 } from "./printer.charset.js";
+
+const UTF8_TO_CP437: Record<string, number> = {
+  á: 0xa0,
+  é: 0x82,
+  í: 0xa1,
+  ó: 0xa2,
+  ú: 0xa3,
+  Á: 0xb5,
+  É: 0x90,
+  Í: 0xd6,
+  Ó: 0xe0,
+  Ú: 0xe9,
+  ñ: 0xa4,
+  Ñ: 0xa5,
+  "¿": 0xa8,
+  "¡": 0xad,
+};
+
+function toCP437(text: string): Buffer {
+  const bytes: number[] = [];
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    if (code < 128) {
+      bytes.push(code);
+    } else if (UTF8_TO_CP437[ch] !== undefined) {
+      bytes.push(UTF8_TO_CP437[ch]);
+    } else {
+      bytes.push(0x3f);
+    }
+  }
+  return Buffer.from(bytes);
+}
 
 const ESC = 0x1b;
 const GS = 0x1d;

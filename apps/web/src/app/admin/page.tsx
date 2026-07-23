@@ -7,8 +7,6 @@ import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
 import type { NightEvent, Order } from "@cocktrail/shared";
 
-export const dynamic = "force-dynamic";
-
 export default function AdminPage() {
   const router = useRouter();
   const [initialEvent, setInitialEvent] = useState<NightEvent | null>(null);

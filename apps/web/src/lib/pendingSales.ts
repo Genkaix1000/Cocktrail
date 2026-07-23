@@ -9,6 +9,8 @@
  * (localStorage, tolerante a storage roto, SSR-safe).
  */
 
+import { isBrowser } from "@/lib/utils";
+
 const STORAGE_KEY = "cocktrail:pendingSales";
 
 export type PendingSaleBlockedCode = "PAYMENT_REJECTED" | "PAYMENT_UNVERIFIED";
@@ -42,10 +44,6 @@ export type PendingSale = {
 /** Infiere el `kind` de la prueba de pago para constancias viejas sin `mpKind`. */
 export function pendingSaleProofKind(sale: PendingSale): "point_intent" | "qr_order" {
   return sale.mpKind ?? (sale.paymentMethod === "debito" ? "point_intent" : "qr_order");
-}
-
-function isBrowser() {
-  return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
 export function listPendingSales(): PendingSale[] {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 import MetricasSection from "./MetricasSection";
-import { computeTotals } from "@/lib/totals";
+import { computeTotals } from "@cocktrail/shared";
 
 import type { NightEvent, Order } from "@cocktrail/shared";
 

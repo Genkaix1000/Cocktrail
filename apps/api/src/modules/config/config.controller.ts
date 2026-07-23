@@ -5,12 +5,11 @@ import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, UpdateConfigSchema } from "../../shared/middleware/validate.js";
 import type { EventsService } from "../events/events.service.js";
 import { emit as realEmit, type EmitFn } from "../../shared/sse/sse-manager.js";
-import { AuditLogsService } from "../audit-logs/audit-logs.service.js";
+import { logAction } from "../audit-logs/audit-logs.service.js";
 
 export function createConfigController(
   repo: ConfigRepository,
   eventsService?: EventsService,
-  auditLogsService: Pick<typeof AuditLogsService, "log"> = AuditLogsService,
   emit: EmitFn = realEmit,
 ): Router {
   const router = Router();
@@ -59,7 +58,7 @@ export function createConfigController(
           clubName: safe.clubName,
         });
 
-        await auditLogsService.log(
+        await logAction(
           "config.updated",
           "Configuración del boliche actualizada",
           req.session?.username || "admin"

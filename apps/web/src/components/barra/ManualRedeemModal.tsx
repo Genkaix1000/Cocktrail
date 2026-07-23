@@ -2,8 +2,18 @@
 
 import { Hand } from "lucide-react";
 
-import { getPendingStatus } from "./orderStatus";
 import type { Order } from "@cocktrail/shared";
+
+function getPendingStatus(status: Order["status"]) {
+  switch (status) {
+    case "entregado":
+      return { label: "Entregado", className: "bg-green-soft text-green border-green-line" };
+    case "cancelado":
+      return { label: "Cancelado", className: "bg-danger-soft text-danger border-danger-line" };
+    default:
+      return { label: "Pendiente", className: "bg-amber-soft text-amber border-amber-line" };
+  }
+}
 
 type Props = {
   order: Order;

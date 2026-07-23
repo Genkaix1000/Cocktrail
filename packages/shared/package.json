@@ -2,8 +2,6 @@
   "name": "@cocktrail/shared",
   "version": "0.1.0",
   "private": true,
-  "main": "./src/domain.ts",
-  "types": "./src/domain.ts",
   "exports": {
     ".": "./src/domain.ts"
   }

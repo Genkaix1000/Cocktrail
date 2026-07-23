@@ -8,7 +8,8 @@ import type {
   Theme,
   CustomTheme,
 } from "@cocktrail/shared";
-import { API_URL } from "@/config/env";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /**
  * Mapa tipado de handlers de `DomainEvent` para el stream `/api/events`.
