@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { env } from "./config/env.js";
 import { generalLimiter } from "./shared/middleware/rate-limit.js";
@@ -232,6 +233,7 @@ app.use(cors({
 app.use(generalLimiter);
 
 app.use(express.json());
+app.use(cookieParser());
 
 // Health check
 app.get("/health", (_req, res) => {
