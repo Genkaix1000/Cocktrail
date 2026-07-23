@@ -24,52 +24,42 @@ export type BarSessionOptions = {
   currentSession: BarSession | null;
 };
 
-function randomUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
-
-function getDeviceId(): string {
-  if (typeof window === "undefined") return "server";
-  let id = sessionStorage.getItem("cocktrail-device-id");
-  if (!id) {
-    id = randomUUID();
-    sessionStorage.setItem("cocktrail-device-id", id);
-  }
-  return id;
-}
-
+// D6: la identidad de la sesión de caja la deriva el backend de la sesión
+// autenticada (cookie). Acá ya no viaja ningún deviceId por pestaña.
 export const barSessionsService = {
   listOptions(signal?: AbortSignal) {
-    return apiFetch<BarSessionOptions>("/api/bar-sessions/options", {
-      signal,
-      headers: { "X-Device-Id": getDeviceId() },
-    });
+    return apiFetch<BarSessionOptions>("/api/bar-sessions/options", { signal });
   },
 
   join(barId: string) {
     return apiFetch<{ joined: true; session: BarSession }>("/api/bar-sessions/join", {
       method: "POST",
-      body: { barId, deviceId: getDeviceId() },
+      body: { barId },
     });
   },
 
   leave() {
     return apiFetch<{ ok: true }>("/api/bar-sessions/leave", {
       method: "DELETE",
-      body: { deviceId: getDeviceId() },
     });
   },
 
   heartbeat() {
     return apiFetch<BarSession>("/api/bar-sessions/heartbeat", {
       method: "POST",
-      body: { deviceId: getDeviceId() },
+    });
+  },
+
+  /** Solo admin — sesiones de caja activas (tab PDV y Posnets). */
+  listAll(signal?: AbortSignal) {
+    return apiFetch<BarSession[]>("/api/bar-sessions", { signal });
+  },
+
+  /** Solo admin — echa al usuario conectado a una barra. */
+  forceLogout(barId: string) {
+    return apiFetch<{ ok: true }>("/api/bar-sessions/force-logout", {
+      method: "POST",
+      body: { barId },
     });
   },
 };

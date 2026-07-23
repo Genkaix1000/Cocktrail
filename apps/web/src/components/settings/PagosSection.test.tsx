@@ -13,7 +13,6 @@ vi.mock("@/services/mercadopago.service", () => ({
   mercadopagoService: {
     getOAuthUrl: vi.fn(),
     getSellerStatus: vi.fn(),
-    testDeviceChargeFor: vi.fn(),
     unlinkSeller: vi.fn(),
     pullSeller: vi.fn(),
   },
@@ -21,12 +20,8 @@ vi.mock("@/services/mercadopago.service", () => ({
 
 vi.mock("@/services/pdv.service", () => ({
   pdvService: {
-    listCajas: vi.fn(),
-    listDevices: vi.fn(),
-    createCaja: vi.fn(),
-    registerDevice: vi.fn(),
-    linkDevice: vi.fn(),
-    unlinkDevice: vi.fn(),
+    getSummary: vi.fn(),
+    renameStore: vi.fn(),
   },
 }));
 
@@ -57,17 +52,18 @@ const LINKED_STATUS = {
   linkedAt: new Date().toISOString(),
 };
 
+const SUMMARY = {
+  store: { linked: true, storeId: "85068168", name: "GARCIAMANUEL", storeName: null, sellerUserId: "1517393956" },
+  bars: 1,
+  posnets: 1,
+};
+
 beforeEach(() => {
   mockedUseTheme.mockReturnValue({ theme: "bosko", setTheme: vi.fn(), isDark: true } as any);
   mockedMpService.getSellerStatus.mockResolvedValue(UNLINKED_STATUS);
   mockedMpService.getOAuthUrl.mockResolvedValue({ url: "https://auth.mercadopago.com/authorization?..." });
   mockedMpService.unlinkSeller.mockResolvedValue({ ok: true, cloudCleaned: true });
-  mockedMpService.testDeviceChargeFor.mockResolvedValue({
-    reachedDevice: true,
-    message: "ok",
-  });
-  mockedPdvService.listCajas.mockResolvedValue([]);
-  mockedPdvService.listDevices.mockResolvedValue([]);
+  mockedPdvService.getSummary.mockResolvedValue(SUMMARY);
   mockedConfigService.get.mockResolvedValue({
     mercadoPago: { publicKey: "", accessTokenMasked: "", sandbox: false },
   } as any);
@@ -124,107 +120,70 @@ describe("PagosSection", () => {
     expect(screen.getByText("bosko@example.com")).toBeInTheDocument();
   });
 
-  // ── SKIP DELIBERADO (PR 1 de docs/specs/mercadopago/remediacion-integracion-mp.md) ──
-  // Estos 6 tests prueban la UI de PDVs/Posnets que D5 migra de PagosSection
-  // a PdvSection. NO se arreglan acá: se MIGRAN a PdvSection.test.tsx en el
-  // PR 6 (cableado de PdvSection), donde se des-skipean contra la UI real.
-  it.skip("muestra la sección Puntos de Venta", async () => { // → PR 6
+  // ── Sucursal (los PDVs/Posnets viven en la tab "PDV y Posnets" — ver PdvSection.test.tsx) ──
+
+  it("muestra la sucursal del summary con su store_id", async () => {
     render(<PagosSection />);
-    expect(await screen.findByRole("heading", { name: "Puntos de Venta" })).toBeInTheDocument();
+    expect(await screen.findByText("GARCIAMANUEL")).toBeInTheDocument();
+    expect(screen.getByText(/store_id: 85068168/)).toBeInTheDocument();
+    expect(screen.getByText("Vinculada")).toBeInTheDocument();
   });
 
-  it.skip("muestra el botón Crear Barra VIP cuando no hay PDVs", async () => { // → PR 6
-    render(<PagosSection />);
-    expect(await screen.findByRole("button", { name: /Crear Barra VIP/i })).toBeInTheDocument();
-  });
-
-  it.skip("crea el PDV al clickear Crear Barra VIP", async () => { // → PR 6
+  it("renombra la sucursal: el nombre viaja a MP (rama A)", async () => {
     const user = userEvent.setup();
-    mockedMpService.getSellerStatus.mockResolvedValue({
-      linked: true,
-      status: "active",
-      nickname: "BOSKO BAR",
-      displayName: "Bosko Bar",
-      email: null,
-      linkedAt: null,
-    });
-    mockedPdvService.createCaja.mockResolvedValue({
-      id: "caja-1",
-      barId: "bar-1",
-      storeId: "1",
-      externalPosId: "COCKTRAIL-BAR-01",
-      posIdMp: "1",
-      qrImage: "https://mp.example/qr.png",
-      qrTemplate: null,
-      sellerUserId: "s1",
-      createdAt: "2026-07-17T00:00:00Z",
-    });
+    mockedPdvService.renameStore.mockResolvedValue({ renamedInMp: true, name: "Boliche Nuevo" });
+    mockedPdvService.getSummary
+      .mockResolvedValueOnce(SUMMARY)
+      .mockResolvedValueOnce({ ...SUMMARY, store: { ...SUMMARY.store, name: "Boliche Nuevo" } });
 
     render(<PagosSection />);
-    const btn = await screen.findByRole("button", { name: /Crear Barra VIP/i });
-    await user.click(btn);
+    await user.click(await screen.findByRole("button", { name: /Renombrar/i }));
+
+    const input = screen.getByLabelText("Nombre de la sucursal");
+    await user.clear(input);
+    await user.type(input, "Boliche Nuevo");
+    await user.click(screen.getByRole("button", { name: /Guardar/i }));
 
     await waitFor(() =>
-      expect(mockedPdvService.createCaja).toHaveBeenCalledWith({
-        barId: "BARRA-01",
-        name: "Barra VIP",
-      }),
+      expect(mockedPdvService.renameStore).toHaveBeenCalledWith("Boliche Nuevo"),
     );
-    expect(await screen.findByText("Barra VIP")).toBeInTheDocument();
+    expect(await screen.findByText("Boliche Nuevo")).toBeInTheDocument();
   });
 
-  it.skip("muestra Barra VIP cuando hay un PDV provisionado", async () => { // → PR 6
-    mockedPdvService.listCajas.mockResolvedValue([
-      {
-        id: "caja-1",
-        barId: "bar-1",
-        storeId: "1",
-        externalPosId: "COCKTRAILBAR01",
-        posIdMp: "1",
-        qrImage: "https://mp.example/qr.png",
-        qrTemplate: null,
-        sellerUserId: "s1",
-        createdAt: "2026-07-17T00:00:00Z",
-        device: null,
-      },
-    ]);
-
-    render(<PagosSection />);
-    expect(await screen.findByText("Barra VIP")).toBeInTheDocument();
-  });
-
-  it.skip("muestra la sección Posnets con formulario de alta (sin 'Próximamente')", async () => { // → PR 6
-    render(<PagosSection />);
-    expect(await screen.findByRole("heading", { name: "Posnets" })).toBeInTheDocument();
-    expect(screen.queryByText("Próximamente")).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Device ID/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Agregar/i })).toBeInTheDocument();
-  });
-
-  it.skip("registra un Posnet al clickear Agregar", async () => { // → PR 6
+  it("si MP no acepta el rename, muestra el alias local + el nombre real de MP (rama B)", async () => {
     const user = userEvent.setup();
-    mockedPdvService.registerDevice.mockResolvedValue({
-      id: "dev-1",
-      cajaId: null,
-      deviceId: "PAX_A910__TEST",
-      deviceUsername: "Caja 1",
-      operatingMode: "PDV",
+    mockedPdvService.renameStore.mockResolvedValue({
+      renamedInMp: false,
+      name: "Alias Local",
+      mpName: "GARCIAMANUEL",
     });
 
     render(<PagosSection />);
-    await screen.findByText("Posnets");
+    await user.click(await screen.findByRole("button", { name: /Renombrar/i }));
 
-    await user.type(screen.getByPlaceholderText(/Device ID/i), "PAX_A910__TEST");
-    await user.type(screen.getByPlaceholderText(/Alias/i), "Caja 1");
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    const input = screen.getByLabelText("Nombre de la sucursal");
+    await user.clear(input);
+    await user.type(input, "Alias Local");
+    await user.click(screen.getByRole("button", { name: /Guardar/i }));
 
-    await waitFor(() =>
-      expect(mockedPdvService.registerDevice).toHaveBeenCalledWith({
-        deviceId: "PAX_A910__TEST",
-        deviceUsername: "Caja 1",
-      }),
-    );
-    expect(await screen.findByText(/PAX_A910__TEST/)).toBeInTheDocument();
+    expect(await screen.findByText(/Mercado Pago no aceptó el cambio de nombre/)).toBeInTheDocument();
+    expect(screen.getByText(/«Alias Local»/)).toBeInTheDocument();
+  });
+
+  it("ya no renderiza las secciones de Puntos de Venta ni Posnets (mudadas a PdvSection)", async () => {
+    render(<PagosSection />);
+    await screen.findByText("Pagos");
+    expect(screen.queryByRole("heading", { name: "Puntos de Venta" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Posnets" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Crear PDV/i })).not.toBeInTheDocument();
+  });
+
+  it("muestra un error visible si el summary no se pudo cargar (sin catch silencioso)", async () => {
+    mockedPdvService.getSummary.mockRejectedValue(new Error("network"));
+    render(<PagosSection />);
+    expect(
+      await screen.findByText(/No se pudo cargar el estado de la sucursal/i),
+    ).toBeInTheDocument();
   });
 
   it("no muestra la sección de Credenciales (public key / access token)", async () => {

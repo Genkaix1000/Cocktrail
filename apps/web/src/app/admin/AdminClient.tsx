@@ -12,6 +12,7 @@ import {
   FileText,
   KeyRound,
   CloudDownload,
+  Monitor,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
@@ -31,6 +32,7 @@ import { authService } from "@/services/auth.service";
 
 import CartaSection from "@/components/settings/CartaSection";
 import PagosSection from "@/components/settings/PagosSection";
+import PdvSection from "@/components/settings/PdvSection";
 import UsuariosSection from "@/components/settings/UsuariosSection";
 import SistemaSection from "@/components/settings/SistemaSection";
 
@@ -287,6 +289,8 @@ export default function AdminClient({
         return ["Administración", "Configuración", "Carta"];
       case "pagos":
         return ["Administración", "Configuración", "Pagos"];
+      case "pdv":
+        return ["Administración", "Configuración", "PDV y Posnets"];
       case "usuarios":
         return ["Administración", "Configuración", "Gestión de Staff"];
       case "sistema":
@@ -464,6 +468,17 @@ export default function AdminClient({
                     <CreditCard size={13} strokeWidth={1.8} />
                   </div>
                   <span className={`text-[13.5px] ${navLabelClass("pagos")}`}>Pagos</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("pdv")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-200 cursor-pointer ${navBtnClass("pdv")}`}
+                >
+                  <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 ${navIconClass("pdv")}`}>
+                    <Monitor size={13} strokeWidth={1.8} />
+                  </div>
+                  <span className={`text-[13.5px] ${navLabelClass("pdv")}`}>PDV y Posnets</span>
                 </button>
 
                 <button
@@ -665,6 +680,13 @@ export default function AdminClient({
           {activeTab === "pagos" && (
             <div key="pagos" className="animate-dashboard-in">
               <PagosSection />
+            </div>
+          )}
+
+          {/* TAB 7.5: SETTINGS PDV Y POSNETS */}
+          {activeTab === "pdv" && (
+            <div key="pdv" className="animate-dashboard-in">
+              <PdvSection />
             </div>
           )}
 

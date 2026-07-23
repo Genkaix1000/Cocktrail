@@ -64,9 +64,9 @@ export default function CajaClient({ drinks }: Props) {
   // (ticket de éxito) y el popup de detalle de HistorialSection (reimpresión).
   const { printerStatus, testPrint, printerTestMessage, reprintTicket, printError, reprinting } = usePrinterStatus();
 
-  // Estado del Posnet (Mercado Pago Point): mismo patrón que la impresora,
+  // Estado del Posnet de la caja (GET /health): mismo patrón que la impresora,
   // vive en el shell para poder mostrarse desde el sidebar en cualquier tab.
-  const { posnetStatus, testPosnet, posnetTestMessage, posnetModeWarning, testingPosnet } = usePosnetStatus();
+  const { posnetLevel, posnetMessage, testPosnet, posnetTestMessage, testingPosnet } = usePosnetStatus();
   const ventaPrinter = useMemo(
     () => ({ reprintTicket, printError, reprinting }),
     [reprintTicket, printError, reprinting],
@@ -177,10 +177,10 @@ export default function CajaClient({ drinks }: Props) {
         printerStatus={printerStatus}
         testPrint={testPrint}
         printerTestMessage={printerTestMessage}
-        posnetStatus={posnetStatus}
+        posnetLevel={posnetLevel}
+        posnetMessage={posnetMessage}
         testPosnet={testPosnet}
         posnetTestMessage={posnetTestMessage}
-        posnetModeWarning={posnetModeWarning}
         testingPosnet={testingPosnet}
         handleLogout={handleLogout}
         isCollapsed={isSidebarCollapsed}
@@ -204,10 +204,10 @@ export default function CajaClient({ drinks }: Props) {
               printerStatus={printerStatus}
               testPrint={testPrint}
               printerTestMessage={printerTestMessage}
-              posnetStatus={posnetStatus}
+              posnetLevel={posnetLevel}
+              posnetMessage={posnetMessage}
               testPosnet={testPosnet}
               posnetTestMessage={posnetTestMessage}
-              posnetModeWarning={posnetModeWarning}
               testingPosnet={testingPosnet}
               handleLogout={handleLogout}
             />

@@ -44,7 +44,18 @@ const COBRO_NO_CONFIRMADO_MSG =
 const POSNET_RECHAZO_POR_DETALLE: Record<string, string> = {
   cc_rejected_insufficient_amount:
     "Tarjeta rechazada: fondos insuficientes — pedile al cliente otro medio de pago",
+  // Descubierto en vivo (23-07): el dueño pagándose con su propia tarjeta da
+  // este código genérico — MP no permite pagarse a uno mismo.
+  cc_rejected_other_reason:
+    "Tarjeta rechazada por Mercado Pago. Si la tarjeta es del titular de la cuenta de " +
+    "Mercado Pago del local, MP la rechaza siempre (no se puede pagar a uno mismo) — " +
+    "cobrale por otro medio.",
 };
+
+/** La caja no tiene Posnet activo vinculado (409 POSNET_NOT_LINKED del resolver). */
+const POSNET_NOT_LINKED_MSG =
+  "Esta caja no tiene Posnet vinculado — vinculá un lector desde /admin → PDV y Posnets " +
+  "antes de cobrar con débito.";
 
 function posnetRechazoMessage(statusDetail?: string): string {
   if (statusDetail && POSNET_RECHAZO_POR_DETALLE[statusDetail]) {
@@ -583,7 +594,21 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
       activePaymentKindRef.current = null;
       setPaymentIntentState(null);
 
-      if (isAlreadyQueued && posnetRetryCountRef.current < MAX_POSNET_BUSY_RETRIES) {
+      if (dataCode === "POSNET_NOT_LINKED") {
+        // 409 de configuración (la caja no tiene lector activo): distinguible
+        // del rechazo de tarjeta — acá no hubo tarjeta ni cobro.
+        setPosnetStatus("error");
+        setPosnetErrorMessage(POSNET_NOT_LINKED_MSG);
+      } else if (dataCode === "POSNET_WRONG_ACCOUNT") {
+        // Caso grave (bloqueo server-side): el mensaje del backend explica que
+        // la plata entraría a OTRA cuenta — se muestra tal cual.
+        setPosnetStatus("error");
+        setPosnetErrorMessage(
+          dataError ??
+            message ??
+            "Cobro bloqueado: el Posnet pertenece a otra cuenta de Mercado Pago.",
+        );
+      } else if (isAlreadyQueued && posnetRetryCountRef.current < MAX_POSNET_BUSY_RETRIES) {
         // Reintento automático con backoff antes de darse por vencido: la intención en
         // cola en el device suele liberarse sola en unos segundos.
         const attemptNumber = posnetRetryCountRef.current + 1;

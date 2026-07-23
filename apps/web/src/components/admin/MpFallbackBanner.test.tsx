@@ -50,7 +50,11 @@ const POSNET = {
   cajaId: null,
   deviceId: "PAX_A910__SMARTPOS1494025317",
   deviceUsername: "Caja 1",
-  operatingMode: "PDV",
+  operatingMode: "PDV" as const,
+  operatingModeSyncedAt: "2026-07-20T00:00:00Z",
+  isActive: false,
+  linkedAt: null,
+  deactivatedAt: null,
 };
 
 beforeEach(() => {

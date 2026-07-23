@@ -5,7 +5,7 @@ import { History, LayoutDashboard, Power, Printer, CreditCard, TrendingUp, Chevr
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { OSProfileFooter } from "@/components/shared/OSProfileFooter";
 import { useThemeSafe } from "@/components/ThemeProvider";
-import type { PosnetDeviceStatus } from "@/services/mercadopago.service";
+import type { PosnetLevel } from "@/hooks/usePosnetStatus";
 import type { NightEvent, Theme } from "@cocktrail/shared";
 
 type CurrentUser = {
@@ -32,10 +32,12 @@ type Props = {
   printerStatus: { connected: boolean; message: string } | null;
   testPrint: () => void | Promise<void>;
   printerTestMessage: string | null;
-  posnetStatus: PosnetDeviceStatus | null;
+  /** Severidad del cartel del Posnet de la caja (advertencia ≠ bloqueo). */
+  posnetLevel: PosnetLevel;
+  /** Mensaje del cartel: habla del device de LA CAJA (qué pasa y qué hacer). */
+  posnetMessage: string | null;
   testPosnet: () => void | Promise<void>;
   posnetTestMessage: string | null;
-  posnetModeWarning?: boolean;
   testingPosnet?: boolean;
   handleLogout: () => void | Promise<void>;
   isCollapsed?: boolean;
@@ -60,10 +62,10 @@ export default function CajaSidebar({
   printerStatus,
   testPrint,
   printerTestMessage,
-  posnetStatus,
+  posnetLevel,
+  posnetMessage,
   testPosnet,
   posnetTestMessage,
-  posnetModeWarning = false,
   testingPosnet = false,
   handleLogout,
   isCollapsed = false,
@@ -279,7 +281,8 @@ export default function CajaSidebar({
           )}
         </div>
 
-        {/* Estado del Posnet (Mercado Pago Point) */}
+        {/* Estado del Posnet de la caja: advertencia (amber) ≠ bloqueo (rojo).
+            "unknown" queda neutro a propósito — un desconocido nunca es rojo. */}
         <div className={collapsed ? "px-0 text-center" : "px-1"}>
           <div className="flex items-center justify-between gap-2 mb-2 w-full">
             {collapsed ? (
@@ -287,38 +290,62 @@ export default function CajaSidebar({
                 type="button"
                 onClick={testPosnet}
                 className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative mx-auto ${
-                  !posnetStatus?.connected
+                  posnetLevel === "blocked"
                     ? "bg-danger-soft border-danger-line text-danger"
-                    : posnetModeWarning
+                    : posnetLevel === "warning"
                       ? "bg-amber-soft border-amber-line text-amber"
-                      : "bg-green-soft border-green-line text-green"
+                      : posnetLevel === "ok"
+                        ? "bg-green-soft border-green-line text-green"
+                        : "bg-ink-850 border-ink-750 text-ink-400"
                 }`}
-                title={
-                  !posnetStatus?.connected
-                    ? "Posnet no encontrado. Click para probar."
-                    : posnetModeWarning
-                      ? "Posnet en modo manual. Click para probar."
-                      : "Posnet conectado y automático. Click para probar."
-                }
+                title={posnetMessage ?? "Posnet de la caja. Click para probar."}
               >
                 <CreditCard size={16} />
                 <span
                   className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${
-                    !posnetStatus?.connected ? "bg-danger" : posnetModeWarning ? "bg-amber" : "bg-green"
+                    posnetLevel === "blocked"
+                      ? "bg-danger"
+                      : posnetLevel === "warning"
+                        ? "bg-amber"
+                        : posnetLevel === "ok"
+                          ? "bg-green"
+                          : "bg-ink-600"
                   }`}
                 />
               </button>
             ) : (
               <span
                 className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] ${
-                  !posnetStatus?.connected ? "text-danger" : posnetModeWarning ? "text-amber" : "text-green"
+                  posnetLevel === "blocked"
+                    ? "text-danger"
+                    : posnetLevel === "warning"
+                      ? "text-amber"
+                      : posnetLevel === "ok"
+                        ? "text-green"
+                        : "text-ink-400"
                 }`}
               >
                 <CreditCard size={13} />
-                {!posnetStatus?.connected ? "Posnet no encontrado" : posnetModeWarning ? "Posnet en modo manual" : "Posnet conectado"}
+                {posnetLevel === "blocked"
+                  ? "Cobro Posnet bloqueado"
+                  : posnetLevel === "warning"
+                    ? "Posnet con advertencia"
+                    : posnetLevel === "ok"
+                      ? "Posnet listo"
+                      : "Posnet sin verificar"}
               </span>
             )}
           </div>
+          {posnetLevel !== "ok" && posnetMessage && !collapsed && (
+            <p
+              role="status"
+              className={`text-[10px] mb-1.5 text-left leading-relaxed ${
+                posnetLevel === "blocked" ? "text-danger" : posnetLevel === "warning" ? "text-amber" : "text-ink-400"
+              }`}
+            >
+              {posnetMessage}
+            </p>
+          )}
           {!collapsed && (
             <button
               type="button"
@@ -330,7 +357,7 @@ export default function CajaSidebar({
             </button>
           )}
           {posnetTestMessage && !collapsed && (
-            <p className={`text-[10px] mt-1.5 text-center ${posnetModeWarning || !posnetStatus?.connected ? "text-amber" : "text-ink-400"}`}>
+            <p className={`text-[10px] mt-1.5 text-center ${posnetLevel === "warning" || posnetLevel === "blocked" ? "text-amber" : "text-ink-400"}`}>
               {posnetTestMessage}
             </p>
           )}

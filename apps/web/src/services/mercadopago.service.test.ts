@@ -110,4 +110,20 @@ describe("mercadopagoService", () => {
       method: "DELETE",
     });
   });
+
+  it("getMpHealth hace GET a /api/mercadopago/health sin refresh por defecto", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ checks: {}, blocking: false });
+
+    await mercadopagoService.getMpHealth();
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/health");
+  });
+
+  it("getMpHealth con refresh agrega ?refresh=1", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ checks: {}, blocking: false });
+
+    await mercadopagoService.getMpHealth(true);
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/health?refresh=1");
+  });
 });

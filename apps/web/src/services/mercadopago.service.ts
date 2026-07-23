@@ -60,6 +60,45 @@ export type MpSellerStatus = {
   displayName: string | null;
 };
 
+/**
+ * Un chequeo del panel de salud (gestion-posnets bloque G). `ok: null` =
+ * desconocido — NUNCA se pinta rojo ni bloquea (cero falsos positivos que
+ * paren la caja). `action` solo acompaña a los rojos.
+ */
+export type MpHealthCheck = { ok: boolean | null; detail: string; action?: string };
+
+/** Fila F1 del panel: estado del fallback de emergencia (MP_ACCESS_TOKEN + MP_POS_DEVICE_ID). */
+export type MpFallbackStatus = {
+  status: "usable" | "unusable" | "unknown";
+  tokenUserId?: string;
+  deviceSeen?: boolean;
+  operatingMode?: string;
+  reason?: string;
+  checkedAt: string | null;
+  /** F1.a — quedó marcado si un cobro real degradó al fallback de env. */
+  lastDegradedAt?: string;
+  lastDegradedReason?: string;
+};
+
+export type MpHealth = {
+  checks: {
+    /** R21: exactamente 1 seller activo. */
+    singleSeller: MpHealthCheck;
+    /** El listado de devices de las credenciales activas contiene el device de la caja. */
+    deviceOwnership: MpHealthCheck;
+    /** operating_mode REAL (el del listado de MP) === "PDV". */
+    deviceMode: MpHealthCheck;
+    /** R22: caja.sellerUserId === sellerActivo.userId (huérfana si no). */
+    cajaProvisioned: MpHealthCheck;
+  };
+  fallback: MpFallbackStatus;
+  /** D2: algún cobro de este proceso se resolvió por MP_POS_DEVICE_ID. */
+  usingEnvDevice: boolean;
+  /** true ⟺ deviceOwnership.ok === false — el ÚNICO caso que bloquea el cobro. */
+  blocking: boolean;
+  checkedAt: string;
+};
+
 export type CreateQrOrderResponse = {
   orderId: string;
   qrImage: string | null;
@@ -110,6 +149,14 @@ export const mercadopagoService = {
 
   getDeviceStatus() {
     return apiFetch<PosnetDeviceStatus>("/api/mercadopago/device/status");
+  },
+
+  /**
+   * Bloque G — salud de la vinculación con MP (admin + caja). El cache de 30s
+   * es server-side; `refresh` fuerza el re-chequeo contra MP.
+   */
+  getMpHealth(refresh = false) {
+    return apiFetch<MpHealth>(`/api/mercadopago/health${refresh ? "?refresh=1" : ""}`);
   },
 
   testDeviceCharge() {

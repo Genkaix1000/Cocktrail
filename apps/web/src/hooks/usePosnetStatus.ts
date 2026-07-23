@@ -2,26 +2,77 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { mercadopagoService, type PosnetDeviceStatus } from "@/services/mercadopago.service";
+import { mercadopagoService, type MpHealth } from "@/services/mercadopago.service";
 
 /**
- * Estado del Posnet (Mercado Pago Point): polling de conexión (cada 30s) y
- * test manual, análogo a usePrinterStatus. El modo "PDV" es el único que
- * permite cobrar por API — cualquier otro valor (ej. "STANDALONE") significa
- * que el dispositivo quedó en modo manual y hay que corregirlo desde la
- * cuenta de Mercado Pago antes de intentar cobrar.
+ * Severidad del cartel del Posnet en /caja:
+ * - "blocked": el cobro está bloqueado server-side (la plata iría a otra cuenta).
+ * - "warning": el cobro puede fallar o degradarse (STANDALONE, caja huérfana,
+ *   fallback de env) pero NO se frena — el valor está en el mensaje.
+ * - "unknown": no se pudo determinar (sin caja, sin Posnet, MP caído). Nunca rojo.
+ */
+export type PosnetLevel = "ok" | "warning" | "blocked" | "unknown";
+
+function withAction(check: { detail: string; action?: string }): string {
+  return check.action ? `${check.detail} ${check.action}` : check.detail;
+}
+
+/** Deriva el cartel a partir de la salud: habla del device de LA CAJA, no del de la env. */
+export function derivePosnetStatus(health: MpHealth | null): {
+  level: PosnetLevel;
+  message: string;
+} {
+  if (!health) {
+    return { level: "unknown", message: "No se pudo consultar el estado del Posnet." };
+  }
+  const { singleSeller, deviceOwnership, deviceMode, cajaProvisioned } = health.checks;
+
+  if (health.blocking) {
+    return { level: "blocked", message: withAction(deviceOwnership) };
+  }
+  // Advertencias, en orden de gravedad: modo manual > caja huérfana > cuenta > env.
+  if (deviceMode.ok === false) {
+    return { level: "warning", message: withAction(deviceMode) };
+  }
+  if (cajaProvisioned.ok === false) {
+    return { level: "warning", message: withAction(cajaProvisioned) };
+  }
+  if (singleSeller.ok === false) {
+    return { level: "warning", message: withAction(singleSeller) };
+  }
+  if (health.usingEnvDevice) {
+    return {
+      level: "warning",
+      message:
+        "Los cobros están saliendo por el Posnet de emergencia (variable de entorno), " +
+        "no por el vinculado a esta caja. Revisá la vinculación en /admin → PDV y Posnets.",
+    };
+  }
+  if (deviceOwnership.ok && deviceMode.ok && cajaProvisioned.ok) {
+    return { level: "ok", message: "Posnet de la caja listo para cobrar (modo PDV)." };
+  }
+  // Algún chequeo quedó en desconocido: el detalle de pertenencia es el que
+  // explica el contexto (sin caja / sin Posnet vinculado / MP no respondió).
+  return { level: "unknown", message: deviceOwnership.detail };
+}
+
+/**
+ * Estado del Posnet de LA CAJA (gestion-posnets T24): polling de
+ * GET /api/mercadopago/health cada 30s (mismo TTL que el cache server-side) y
+ * test funcional manual. Distingue advertencia (STANDALONE, huérfana,
+ * env-fallback) de bloqueo (el device pertenece a otra cuenta).
  */
 export function usePosnetStatus() {
-  const [posnetStatus, setPosnetStatus] = useState<PosnetDeviceStatus | null>(null);
+  const [posnetHealth, setPosnetHealth] = useState<MpHealth | null>(null);
   const [posnetTestMessage, setPosnetTestMessage] = useState<string | null>(null);
   const [testingPosnet, setTestingPosnet] = useState(false);
 
   const refreshPosnetStatus = useCallback(async () => {
     try {
-      const status = await mercadopagoService.getDeviceStatus();
-      setPosnetStatus(status);
+      setPosnetHealth(await mercadopagoService.getMpHealth());
     } catch {
-      setPosnetStatus({ connected: false, message: "No se pudo consultar el estado del Posnet." });
+      // Sin backend no hay salud que mostrar: el cartel queda en "unknown".
+      setPosnetHealth(null);
     }
   }, []);
 
@@ -33,28 +84,20 @@ export function usePosnetStatus() {
   }, [refreshPosnetStatus]);
 
   /**
-   * Test funcional real: manda $1 al Posnet físico y espera (hasta 15s) a que
-   * el dispositivo lo reciba, luego lo cancela solo. Distinto de
-   * refreshPosnetStatus (que solo consulta metadata de vinculación/modo
-   * contra MP) — este detecta el caso real del canal de push colgado, que
-   * puede pasar aunque el device figure "conectado y en modo PDV".
+   * Test funcional real: manda $1 al Posnet de la caja (el device lo resuelve
+   * el server) y espera a que lo reciba. Antes re-chequea la salud con
+   * `refresh=1`: un bloqueo o un modo manual se explican sin gastar el test.
    */
   const testPosnet = useCallback(async () => {
     setTestingPosnet(true);
     setPosnetTestMessage(null);
 
-    const status = await mercadopagoService.getDeviceStatus().catch(() => null);
-    if (status) setPosnetStatus(status);
+    const health = await mercadopagoService.getMpHealth(true).catch(() => null);
+    setPosnetHealth(health);
 
-    if (!status?.connected) {
-      setPosnetTestMessage(status?.message ?? "No se pudo consultar el estado del Posnet.");
-      setTestingPosnet(false);
-      return;
-    }
-    if (status.device && status.device.operatingMode !== "PDV") {
-      setPosnetTestMessage(
-        `El Posnet está en modo "${status.device.operatingMode}" (manual) — cambialo a modo automático (PDV) desde la cuenta de Mercado Pago para poder cobrar por la app.`
-      );
+    const derived = derivePosnetStatus(health);
+    if (derived.level === "blocked" || (health && health.checks.deviceMode.ok === false)) {
+      setPosnetTestMessage(derived.message);
       setTestingPosnet(false);
       return;
     }
@@ -69,15 +112,15 @@ export function usePosnetStatus() {
     }
   }, []);
 
-  const posnetModeWarning =
-    posnetStatus?.connected && posnetStatus.device && posnetStatus.device.operatingMode !== "PDV";
+  const { level: posnetLevel, message: posnetMessage } = derivePosnetStatus(posnetHealth);
 
   return {
-    posnetStatus,
+    posnetHealth,
+    posnetLevel,
+    posnetMessage,
     refreshPosnetStatus,
     testPosnet,
     posnetTestMessage,
     testingPosnet,
-    posnetModeWarning,
   };
 }

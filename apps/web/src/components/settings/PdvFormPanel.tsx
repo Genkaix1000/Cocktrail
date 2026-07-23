@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 
 export type PdvForm = {
@@ -17,7 +17,13 @@ type Props = {
   onSave: () => void;
 };
 
-export default function PdvFormModal({
+/**
+ * Panel lateral inline (NO es un diálogo modal): foco inicial en el primer
+ * campo, `Escape` cierra, y el foco vuelve al disparador (lo maneja el padre
+ * al cerrar). Sin focus trap a propósito — atrapar el foco en un panel
+ * no-modal va contra WAI-ARIA.
+ */
+export default function PdvFormPanel({
   form,
   saving,
   supportedBarCode,
@@ -29,13 +35,38 @@ export default function PdvFormModal({
   const nameOk = form.name.trim().length > 0;
   const multiBarWarning = form.barCode !== supportedBarCode;
 
+  const headingId = useId();
+  const nameId = useId();
+  const barCodeId = useId();
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Foco inicial al abrir el panel.
+  useEffect(() => {
+    nameInputRef.current?.focus();
+  }, []);
+
+  // Escape cierra, escuche donde escuche el teclado (sin trap).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
   return (
-    <div className="w-full lg:w-[420px] shrink-0 bg-ink-900 border border-ink-800 rounded-xl p-5 flex flex-col gap-4 animate-in slide-in-from-right duration-200">
+    <section
+      aria-labelledby={headingId}
+      className="w-full lg:w-[420px] shrink-0 bg-ink-900 border border-ink-800 rounded-xl p-5 flex flex-col gap-4 animate-in slide-in-from-right duration-200"
+    >
       <div className="flex justify-between items-center pb-2 border-b border-ink-800">
-        <h2 className="text-sm font-bold text-ink-50 uppercase tracking-wider">Crear PDV</h2>
+        <h2 id={headingId} className="text-sm font-bold text-ink-50 uppercase tracking-wider">
+          Crear PDV
+        </h2>
         <button
           type="button"
           onClick={onCancel}
+          aria-label="Cerrar panel"
           className="p-1.5 bg-ink-850 hover:bg-ink-800 rounded-lg text-ink-400 hover:text-ink-200 transition-colors cursor-pointer"
         >
           <X size={14} />
@@ -44,10 +75,15 @@ export default function PdvFormModal({
 
       <div className="space-y-4">
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-ink-400 block mb-1.5">
+          <label
+            htmlFor={nameId}
+            className="text-[10px] font-bold uppercase tracking-wider text-ink-400 block mb-1.5"
+          >
             Nombre de la barra *
           </label>
           <input
+            id={nameId}
+            ref={nameInputRef}
             type="text"
             value={form.name}
             onChange={(e) => {
@@ -63,10 +99,14 @@ export default function PdvFormModal({
         </div>
 
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-ink-400 block mb-1.5">
+          <label
+            htmlFor={barCodeId}
+            className="text-[10px] font-bold uppercase tracking-wider text-ink-400 block mb-1.5"
+          >
             Código de barra
           </label>
           <input
+            id={barCodeId}
             type="text"
             value={form.barCode}
             readOnly
@@ -101,6 +141,6 @@ export default function PdvFormModal({
           Crear PDV
         </button>
       </div>
-    </div>
+    </section>
   );
 }

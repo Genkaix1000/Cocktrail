@@ -57,7 +57,8 @@ const baseProps = {
   printerStatus: { connected: true, message: "ok" },
   testPrint: vi.fn(),
   printerTestMessage: null as string | null,
-  posnetStatus: { connected: true, message: "ok", device: { model: "Point Smart", serialNumber: "1", operatingMode: "PDV" } },
+  posnetLevel: "ok" as const,
+  posnetMessage: "Posnet de la caja listo para cobrar (modo PDV).",
   testPosnet: vi.fn(),
   posnetTestMessage: null as string | null,
   handleLogout: vi.fn(),
@@ -193,5 +194,46 @@ describe("CajaSidebar", () => {
     render(<CajaSidebar {...baseProps} />);
 
     expect(screen.getByText("admin")).toBeInTheDocument();
+  });
+
+  it("muestra el cartel del Posnet listo cuando el nivel es ok", () => {
+    render(<CajaSidebar {...baseProps} />);
+    expect(screen.getByText("Posnet listo")).toBeInTheDocument();
+  });
+
+  it("muestra una advertencia (no bloqueo) con su mensaje cuando el nivel es warning", () => {
+    render(
+      <CajaSidebar
+        {...baseProps}
+        posnetLevel="warning"
+        posnetMessage="El lector está en modo STANDALONE: rechaza los cobros por sistema."
+      />,
+    );
+
+    expect(screen.getByText("Posnet con advertencia")).toBeInTheDocument();
+    expect(screen.getByText(/modo STANDALONE/)).toBeInTheDocument();
+    expect(screen.queryByText("Cobro Posnet bloqueado")).not.toBeInTheDocument();
+  });
+
+  it("muestra el bloqueo cuando el nivel es blocked", () => {
+    render(
+      <CajaSidebar
+        {...baseProps}
+        posnetLevel="blocked"
+        posnetMessage="El lector NO aparece en el listado de la cuenta activa."
+      />,
+    );
+
+    expect(screen.getByText("Cobro Posnet bloqueado")).toBeInTheDocument();
+    expect(screen.getByText(/NO aparece en el listado/)).toBeInTheDocument();
+  });
+
+  it("un nivel unknown queda neutro (nunca rojo)", () => {
+    render(
+      <CajaSidebar {...baseProps} posnetLevel="unknown" posnetMessage="No se pudo consultar." />,
+    );
+
+    expect(screen.getByText("Posnet sin verificar")).toBeInTheDocument();
+    expect(screen.queryByText("Cobro Posnet bloqueado")).not.toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import {
   Link2,
   Loader2,
   QrCode,
+  RotateCw,
   Trash2,
   Unlink,
   X,
@@ -18,10 +19,15 @@ type Props = {
   cajas: CajaRow[];
   loadError: boolean;
   linkingCajaId: string | null;
+  /** Posnets ya registrados — opciones del selector de vinculación (el id nunca se tipea). */
+  availableDevices?: DeviceRow[];
   onRetry: () => void;
   onDeleteClick: (caja: CajaRow) => void;
   onLinkDevice: (cajaId: string, deviceId: string, username: string) => Promise<void>;
   onUnlinkDevice: (device: DeviceRow) => Promise<void>;
+  onRecoverQr?: (caja: CajaRow) => void;
+  /** Bloque H: abre la confirmación de re-provisioning (el QR va a cambiar). */
+  onReprovisionClick?: (caja: CajaRow) => void;
 };
 
 function shortDeviceId(id: string): string {
@@ -33,15 +39,21 @@ export default function PdvTable({
   cajas,
   loadError,
   linkingCajaId,
+  availableDevices = [],
   onRetry,
   onDeleteClick,
   onLinkDevice,
   onUnlinkDevice,
+  onRecoverQr,
+  onReprovisionClick,
 }: Props) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [linkFormCajaId, setLinkFormCajaId] = useState<string | null>(null);
   const [deviceIdDraft, setDeviceIdDraft] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
+
+  // Candidatos a vincular: los registrados que no están activos en ninguna caja.
+  const linkableDevices = availableDevices.filter((d) => !d.isActive);
 
   async function copyQr(caja: CajaRow) {
     if (!caja.qrImage) return;
@@ -55,8 +67,8 @@ export default function PdvTable({
   }
 
   async function submitLink(cajaId: string) {
-    if (!deviceIdDraft.trim()) return;
-    await onLinkDevice(cajaId, deviceIdDraft.trim(), usernameDraft.trim());
+    if (!deviceIdDraft) return;
+    await onLinkDevice(cajaId, deviceIdDraft, usernameDraft.trim());
     setLinkFormCajaId(null);
     setDeviceIdDraft("");
     setUsernameDraft("");
@@ -98,14 +110,34 @@ export default function PdvTable({
             >
               {/* Barra */}
               <div className="px-5 py-4 min-w-0">
-                <p className="text-sm font-semibold text-ink-50 truncate">
-                  {caja.externalPosId.includes("BAR01") || caja.externalPosId.includes("BAR-01") || caja.externalPosId.includes("BARRA-01")
-                    ? "Barra VIP"
-                    : caja.externalPosId}
+                <p className="text-sm font-semibold text-ink-50 truncate flex items-center gap-2">
+                  <span className="truncate">
+                    {caja.externalPosId.includes("BAR01") || caja.externalPosId.includes("BAR-01") || caja.externalPosId.includes("BARRA-01")
+                      ? "Barra VIP"
+                      : caja.externalPosId}
+                  </span>
+                  {caja.isOrphan && (
+                    <span
+                      className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-soft border border-amber-line text-amber"
+                      title="La caja fue provisionada con otra cuenta de Mercado Pago: los cobros QR no entran a la cuenta activa."
+                    >
+                      Huérfana
+                    </span>
+                  )}
                 </p>
                 <p className="text-[11px] font-mono text-ink-500 mt-0.5 truncate">
                   {caja.externalPosId}
                 </p>
+                {caja.isOrphan && onReprovisionClick && (
+                  <button
+                    type="button"
+                    onClick={() => onReprovisionClick(caja)}
+                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-amber hover:underline cursor-pointer"
+                  >
+                    <RotateCw size={11} />
+                    Re-provisionar
+                  </button>
+                )}
               </div>
 
               {/* QR */}
@@ -132,7 +164,18 @@ export default function PdvTable({
                     </a>
                   </>
                 ) : (
-                  <span className="text-[12px] text-ink-500">Sin QR</span>
+                  <div className="space-y-1">
+                    <span className="text-[12px] text-ink-500 block">Sin QR</span>
+                    {onRecoverQr && (
+                      <button
+                        type="button"
+                        onClick={() => onRecoverQr(caja)}
+                        className="text-[11px] text-accent hover:underline cursor-pointer"
+                      >
+                        Recuperar QR
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -160,25 +203,40 @@ export default function PdvTable({
                   </div>
                 ) : showLinkForm ? (
                   <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={deviceIdDraft}
-                      onChange={(e) => setDeviceIdDraft(e.target.value)}
-                      placeholder="PAX_A910__…"
-                      className="w-full h-8 px-2 bg-ink-850 border border-ink-700 rounded-md text-[12px] font-mono text-ink-50 focus:outline-none focus:border-blue"
-                    />
+                    {/* El id nunca se escribe a mano: se elige entre los registrados. */}
+                    {linkableDevices.length > 0 ? (
+                      <select
+                        value={deviceIdDraft}
+                        onChange={(e) => setDeviceIdDraft(e.target.value)}
+                        aria-label="Posnet a vincular"
+                        className="w-full h-8 px-2 bg-ink-850 border border-ink-700 rounded-md text-[12px] text-ink-50 focus:outline-none focus:border-blue"
+                      >
+                        <option value="">Elegí un Posnet…</option>
+                        {linkableDevices.map((d) => (
+                          <option key={d.id} value={d.deviceId}>
+                            {d.deviceUsername ? `${d.deviceUsername} — ${d.deviceId}` : d.deviceId}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-[11px] text-ink-500 leading-relaxed">
+                        No hay Posnets registrados disponibles. Agregá uno desde la lista de
+                        Mercado Pago (card Posnets).
+                      </p>
+                    )}
                     <input
                       type="text"
                       value={usernameDraft}
                       onChange={(e) => setUsernameDraft(e.target.value)}
                       placeholder="Apodo (opcional)"
+                      aria-label="Apodo del Posnet"
                       className="w-full h-8 px-2 bg-ink-850 border border-ink-700 rounded-md text-[12px] text-ink-50 focus:outline-none focus:border-blue"
                     />
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => submitLink(caja.id)}
-                        disabled={linking || !deviceIdDraft.trim()}
+                        disabled={linking || !deviceIdDraft}
                         className="h-7 px-2.5 rounded-md bg-accent/15 border border-accent/30 text-accent text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 disabled:opacity-40 cursor-pointer"
                       >
                         {linking ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
@@ -186,6 +244,7 @@ export default function PdvTable({
                       </button>
                       <button
                         type="button"
+                        aria-label="Cancelar vinculación"
                         onClick={() => {
                           setLinkFormCajaId(null);
                           setDeviceIdDraft("");

@@ -369,6 +369,61 @@ describe("useCheckout — cobro Posnet", () => {
     expect(result.current.posnetErrorMessage).toContain("Error al consultar el estado del cobro");
   });
 
+  it("409 POSNET_NOT_LINKED al crear el intent muestra el mensaje de caja sin Posnet (no rechazo de tarjeta)", async () => {
+    mockedMercadopagoService.createPosIntent.mockRejectedValue(
+      new ApiError(409, "Sin Posnet", { error: "Sin Posnet", code: "POSNET_NOT_LINKED" }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toContain("no tiene Posnet vinculado");
+    // Distinguible del rechazo de tarjeta: no menciona "Tarjeta rechazada".
+    expect(result.current.posnetErrorMessage).not.toContain("Tarjeta rechazada");
+  });
+
+  it("409 POSNET_WRONG_ACCOUNT muestra el mensaje del backend (caso grave)", async () => {
+    mockedMercadopagoService.createPosIntent.mockRejectedValue(
+      new ApiError(409, "bloqueado", {
+        error: "Cobro bloqueado: la plata entraría a OTRA cuenta.",
+        code: "POSNET_WRONG_ACCOUNT",
+      }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toContain("entraría a OTRA cuenta");
+  });
+
+  it("cc_rejected_other_reason suma la pista del titular de la cuenta (no se puede pagar a uno mismo)", async () => {
+    mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
+    mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(
+      makePosVerdict("REJECTED", { statusDetail: "cc_rejected_other_reason" }),
+    );
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(result.current.posnetStatus).toBe("error");
+    expect(result.current.posnetErrorMessage).toContain("no se puede pagar a uno mismo");
+  });
+
   it("desmontar el componente con un intent activo lo cancela en el device", async () => {
     mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
     mockedMercadopagoService.getPosIntentStatus.mockResolvedValue(makePosVerdict("PENDING", { rawState: "OPEN" }));
