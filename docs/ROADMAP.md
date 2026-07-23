@@ -16,18 +16,17 @@
 **En una línea**: el cobro con Posnet físico funciona de punta a punta, **la venta se concreta
 solo si Mercado Pago confirmó el cobro** (`cobro-verificado` `done`), **cobrar ya no depende de
 Supabase Cloud** (PR 4 cerrado, gate físico en sus dos modos) y **el Posnet ya se gestiona desde
-`/admin`** (`gestion-posnets` código completo — pendiente solo el gate físico). Lo que sigue:
-**cerrar el gate físico de gestión-posnets**, luego **PR 5** (conciliación) y **Fase 6**
-(empaquetado).
+`/admin`** (`gestion-posnets` `implementada`, gates físicos pasados). Lo que sigue:
+**PR 5** (conciliación / sync a la nube) y **Fase 6** (empaquetado).
 
 ### Bloques cerrados (punteros — el detalle vive en cada spec)
 
 - **`cobro-verificado`** ✅ `done` (2026-07-22) → [spec](./specs/mercadopago/cobro-verificado.md). Cerró R18/R19/R20/R27.
 - **PR 4** de la remediación MP ✅ done (2026-07-22, `db1e31d` + `00e6ac6`) → ver "Remediación". Cerró R21.
 - **Titularidad del Posnet** ✅ resuelta (2026-07-22): lector `PAX_A910__SMARTPOS1493600985` en la cuenta propia, colgado de "Barra VIP" (`COCKTRAILBAR01`), en modo PDV → ver "Remediación".
-- **`gestion-posnets`** 🟡 código completo (2026-07-23, backend + PR 6 UI + frontend, typecheck/tests verdes) → [spec](./specs/mercadopago/gestion-posnets.md). Cerró R23/R25, mitigó R24, cubrió R22 (detección + reprovision). **Pendiente**: gate físico (T29), E2E manual (T28), verificación real de listado/PATCH (T14) — las hace el dueño con el aparato.
+- **`gestion-posnets`** ✅ `implementada` (2026-07-23, backend + PR 6 UI + frontend, typecheck/tests verdes) → [spec](./specs/mercadopago/gestion-posnets.md). Cerró R23/R25, mitigó R24, cubrió R22 (detección + reprovision). Gates físicos con el Posnet real pasados (T11 cobro desde la caja sin env, T14 modo PDV desde la app, T28 E2E, T29 swap con QR intacto + caja sin Posnet + salud verde). Hallazgo: la API de MP y el aparato físico se desalinean con un lag de minutos → el cobro sigue el hardware, por eso STANDALONE solo advierte, nunca bloquea.
 
-> ⚠️ **Aún sin verificación en vivo**: el cobro por QR (código OK vía polling, `MP_WEBHOOK_SECRET` vacía → R26) y los gates físicos de gestión-posnets.
+> ⚠️ **Aún sin verificación en vivo**: el cobro por QR (código OK vía polling, `MP_WEBHOOK_SECRET` vacía → R26).
 
 ### Orden de trabajo
 
@@ -35,7 +34,7 @@ Supabase Cloud** (PR 4 cerrado, gate físico en sus dos modos) y **el Posnet ya 
 |---|---|---|
 | 1 | **Cobro verificado** | ✅ `done` (2026-07-22) |
 | 2 | **PR 4** de la remediación MP | ✅ done (2026-07-22) |
-| 3 | **Gestión de Posnets + PR 6** (misma pantalla) | 🟡 código completo (2026-07-23) — **pendiente gate físico** (T14/T28/T29) |
+| 3 | **Gestión de Posnets + PR 6** (misma pantalla) | ✅ `implementada` (2026-07-23) — gates físicos pasados |
 | 4 | **PR 5** — conciliación / sync | ⏳ pendiente (el intent del Posnet ya se persiste en `mp_orders`, R19 resuelto → hay datos reales para conciliar) |
 | 5 | **Fase 6** — empaquetado | ⏳ pendiente |
 
@@ -294,7 +293,7 @@ Log de deuda encontrada durante la implementación:
 
 ## Feature — Gestión de Posnets desde la app 📟 *(va ANTES de la Fase 6)*
 
-🟡 **Código completo (2026-07-23) — pendiente gate físico** →
+✅ **`implementada` (2026-07-23) — gates físicos pasados** →
 [`specs/mercadopago/gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (**fuente de verdad
 de la feature**, con criterios, plan y tareas T1-T29).
 
@@ -308,7 +307,7 @@ app, y panel de salud con 4 chequeos (solo el caso grave bloquea). Detalle y arq
 y en [`ARCHITECTURE.md`](./ARCHITECTURE.md) §11.
 
 - Riesgos: cierra **R23**/**R25**, mitiga **R24**, cubre **R22** (detección + reprovision). Detecta R21 (cerrado en PR 4).
-- **Pendiente** (lo hace el dueño con el aparato): gate físico **T29**, E2E manual **T28**, verificación real de listado/PATCH **T14**.
+- **Gates físicos pasados** (2026-07-23, con el Posnet real): T11 (cobro desde la caja sin env), T14 (modo PDV desde la app), T28 (E2E), T29 (swap con QR intacto + caja sin Posnet + salud verde). Hallazgo: la API de MP y el aparato físico se desalinean con un lag de minutos → el cobro sigue el hardware, por eso STANDALONE solo advierte, nunca bloquea.
 - **Va antes de la Fase 6**: entregar un producto donde cambiar un Posnet exige SSH no es entregable.
 
 ### Procedimiento — migrar el Posnet a la cuenta del boliche *(acordado el 2026-07-22, aún manual)*
@@ -464,12 +463,12 @@ correspondiente o en el historial de git:
   único parcial que hace imposible tener dos sellers activos, en local y en Cloud.
 - **R23** (sin chequeo de salud MP) y **R25** (`operating_mode` miente) → resueltos por
   [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloques G y C: panel de salud con
-  4 chequeos + re-sync del modo real contra MP y `PATCH` a PDV desde la app). Código completo el
-  2026-07-23; **gate físico T29 pendiente**.
+  4 chequeos + re-sync del modo real contra MP y `PATCH` a PDV desde la app). `implementada` el
+  2026-07-23, gates físicos pasados.
 
 > Los riesgos R17-R26 salieron de la auditoría, de la implementación de la remediación MP y de la
 > verificación contra la API real de Mercado Pago (21 y 22-07); de esos, **R21 se cerró (PR 4)** y
-> **R23/R25 se resolvieron** (gestión-posnets, código completo) con **R24 mitigado**.
+> **R23/R25 se resolvieron** (gestión-posnets, `implementada`) con **R24 mitigado**.
 > R28 salió del análisis de R27
 > (resuelto el 22-07) y está **diferido a la Fase 7**, no abierto. El
 > inventario **completo** de deuda encontrada (con file:line y contexto) vive en
@@ -483,7 +482,7 @@ correspondiente o en el historial de git:
 | R14 | QR real de Mercado Pago (mostrar un código escaneable, vía la Orders API con `type: "qr"` + `external_pos_id`) no está implementado — confirmado con la doc oficial de MP que el Posnet físico (Point Integration API) no puede mostrar QR en su pantalla; es un producto distinto atado a otra superficie. | Ninguno hoy (se sacó la opción de UI que prometía algo que no existía). Si se quiere QR real hace falta una pantalla nueva donde mostrarlo y probablemente credenciales/config adicionales. | Abierto — ver también Fase 7 ("Mercado Pago online"), que ya cubre esto como feature futura. |
 | R15 | `modules/mercadopago` sigue sobre la Payment Intents API (legacy) de Mercado Pago, no la Orders API moderna que MP recomienda para nuevas features. | Ninguno funcional hoy — el flujo probado en producción con el Posnet real sigue andando. Riesgo a futuro si MP deprecara la API legacy. | Abierto — migración deliberadamente no abordada; el flujo actual es el único probado en vivo y migrar el contrato completo no se justificaba en esa iteración. |
 | R17 | Los controllers nuevos de `modules/mercadopago` validan a mano con chequeos `typeof` (9 en `mercadopago-provisioning.controller.ts`) en vez de usar el `validate.ts` con zod que ya existe en el repo. | Inconsistencia de patrón y validación más débil/dispersa en los endpoints de cobro. | Abierto — refactor transversal, deliberadamente diferido en la remediación por tocar justo los endpoints de cobro sin cerrar ningún criterio. |
-| R22 | **Cambiar de cuenta de Mercado Pago deja huérfanas las cajas ya provisionadas.** `mercadopago_cajas` estampa `seller_user_id` y su `store_id`/`pos_id_mp` viven dentro de la cuenta de ese seller; al migrar, la caja y **el QR estático quedan apuntando a un punto de venta de la cuenta vieja**. | Hay que re-provisionar (y **el QR cambia** — si ya se imprimió, reimprimir). **Ya se materializó** (verificado 22-07, no hipotético): el POS "Barra VIP" `external_id=COCKTRAILBAR01` existe **en las dos cuentas a la vez** (Manuel `135641665` y Matías `135485560`), más un `external_id=BARRAVIP` (POS `135344264`) en el store "Bosko" de Matías. | **Parcialmente cubierto** — [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque H) implementó (código, T22) la **detección** `isOrphan`, la **re-provisión desde `/admin`** y el **aviso previo de cambio de QR**. **Queda**: el gate físico y el **procedimiento manual de migración de cuenta** (arriba, en la sección de gestión de Posnets) — MP no expone API para transferir hardware. |
+| R22 | **Cambiar de cuenta de Mercado Pago deja huérfanas las cajas ya provisionadas.** `mercadopago_cajas` estampa `seller_user_id` y su `store_id`/`pos_id_mp` viven dentro de la cuenta de ese seller; al migrar, la caja y **el QR estático quedan apuntando a un punto de venta de la cuenta vieja**. | Hay que re-provisionar (y **el QR cambia** — si ya se imprimió, reimprimir). **Ya se materializó** (verificado 22-07, no hipotético): el POS "Barra VIP" `external_id=COCKTRAILBAR01` existe **en las dos cuentas a la vez** (Manuel `135641665` y Matías `135485560`), más un `external_id=BARRAVIP` (POS `135344264`) en el store "Bosko" de Matías. | **Parcialmente cubierto** — [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque H) implementó (código, T22) la **detección** `isOrphan`, la **re-provisión desde `/admin`** y el **aviso previo de cambio de QR**. **Queda** (real, no bloquea): el **procedimiento manual de migración de cuenta** para producción (arriba, en la sección de gestión de Posnets) — MP no expone API para transferir hardware entre cuentas. |
 | R24 | **El fallback por `MP_ACCESS_TOKEN` puede no ver el lector, y el sistema no tenía forma de saberlo hasta que fallara un cobro.** Su utilidad depende de que el token sea de la **misma cuenta** que el lector y que efectivamente lo vea en `GET /point/integration-api/devices` — si es de otra cuenta, degradar mandaría la plata a otro (se cruza con R21/R22). *(La formulación vieja "la visibilidad de devices es por aplicación de MP" quedó refutada el 22-07: con el mismo token de la env, el listado pasó de `total:0` a `total:1` cuando el device pasó a PDV con store/POS — cambió el estado del device, no la app del token.)* | Si el token es de otra cuenta o no ve el lector, el fallo aparecía recién al cobrar. | **Mitigado** — el **preflight F1** del PR 4 (`db1e31d`) lo calcula al boot (`/users/me` + listado, estado `usable`/`unusable`/`unknown`, guarda de cuenta) y la **fila F1 del panel de salud** de [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) lo muestra antes del cobro (bloque G, código completo). Incógnita menor que queda: por qué el token OAuth listaba el lector en STANDALONE y el de la env no — solo se aclara con una prueba destructiva sobre el único aparato, no se va a hacer. |
 | R26 | **`MP_WEBHOOK_SECRET` está vacía** en `apps/api/.env`, así que `POST /api/mercadopago/webhooks` responde **401 fail-closed** (el fail-closed es correcto y deliberado; lo que falta es el secreto). Verificado el 2026-07-22. | Todo el trabajo de **webhooks durables del PR 3 está inerte en este entorno**. No bloquea el cobro por Posnet (que resuelve por polling del payment intent) pero sí el flujo de **QR**, que depende de la notificación de MP. | Abierto — cargar el secreto en el `.env` del entorno de pruebas y volver a verificar el camino de QR antes de darlo por validado. |
 | R28 | **`computeTotals` agrega por `paymentMethod` sin mirar ningún estado de cobro** (`apps/api/src/shared/utils/totals.ts:32-40`). En una venta de caja ese campo dice *cómo se cobró*; en un pedido de `/carta` dice *cómo el cliente piensa pagar* (`apps/web/src/app/carta/page.tsx:48,215`, default `"qr"`) — el cobro todavía no pasó. El mismo campo, dos significados, y los totales de la noche los suman igual. Hallazgo derivado del análisis de R27: es la misma familia de defecto (confundir intención con hecho) por otra vía. | Un pedido creado desde `/carta` **infla la facturación de la noche sin que haya entrado un peso**. **Hoy el impacto real es cero**: `/carta`, el ticket virtual y `/barra` están fuera de validación hasta la Fase 7 y nadie crea pedidos por ahí. Se vuelve daño real en el minuto uno del pedido online. | **Diferido a la Fase 7** (no abierto sin dueño): se resuelve al rediseñar el flujo digital del cliente — ver el bullet en "Fase 7 — Pedido online". Queda **explícitamente fuera del alcance** de [`specs/mercadopago/cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md), que cubre solo la venta de caja; el esquema que deja esa spec (`orders.payment_status`, con `pendiente_de_cobro` reservado) ya prevé el arreglo. ⚠️ Si se habilita `/carta` antes de la Fase 7, este riesgo pasa a abierto. |
