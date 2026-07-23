@@ -254,8 +254,7 @@ webhooks) + sesiones de caja, **sin revisión**. Una auditoría en profundidad e
 altos**: cobros duplicables, la caja dependiendo de Supabase Cloud para cobrar, cobros MP invisibles
 en la conciliación, y la caja bloqueándose sola. No era desplegable en el boliche.
 
-📁 Docs: [`specs/mercadopago/`](./specs/mercadopago/) + [`plans/mercadopago/`](./plans/mercadopago/)
-(y la doc de referencia de la API en [`docs/mp/`](./mp/) y [`docs/fases-mp/`](./fases-mp/)).
+📁 Docs: [`specs/mercadopago/`](./specs/mercadopago/) + [`plans/mercadopago/`](./plans/mercadopago/).
 
 **Spec** (fuente de verdad, con los 6 entregables y sus criterios):
 [`remediacion-integracion-mp.md`](./specs/mercadopago/remediacion-integracion-mp.md).
