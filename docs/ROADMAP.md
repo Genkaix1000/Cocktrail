@@ -7,48 +7,37 @@
 > [`docs/specs/`](./specs/README.md), organizada por fase (`01-tickets-impresora/`,
 > `02-auditoria-api/`, …). Los planes técnicos correspondientes viven en `docs/plans/` con
 > las mismas subcarpetas. Cada sección de abajo linkea su carpeta y sus documentos.
-> Última actualización: 2026-07-22.
+> Última actualización: 2026-07-23.
 
 ---
 
-## 🧭 Dónde estamos y qué sigue *(2026-07-22, fin del día)*
+## 🧭 Dónde estamos y qué sigue *(2026-07-23)*
 
 **En una línea**: el cobro con Posnet físico funciona de punta a punta, **la venta se concreta
-solo si Mercado Pago confirmó el cobro** (`cobro-verificado` `done`) y **cobrar ya no depende de
-Supabase Cloud** (PR 4 cerrado con gate físico en sus dos modos). Lo que sigue: **Gestión de
-Posnets + PR 6**.
+solo si Mercado Pago confirmó el cobro** (`cobro-verificado` `done`), **cobrar ya no depende de
+Supabase Cloud** (PR 4 cerrado, gate físico en sus dos modos) y **el Posnet ya se gestiona desde
+`/admin`** (`gestion-posnets` código completo — pendiente solo el gate físico). Lo que sigue:
+**cerrar el gate físico de gestión-posnets**, luego **PR 5** (conciliación) y **Fase 6**
+(empaquetado).
 
-### Lo que se cerró el 2026-07-22
+### Bloques cerrados (punteros — el detalle vive en cada spec)
 
-- **PR 4 de la remediación MP, completo** (`db1e31d` + `00e6ac6`) — token invertido y cifrado en
-  local, Cloud purgado de tokens (solo metadata), single-seller por índice único (cierra R21),
-  botón Desvincular, re-vinculación OAuth con el flujo nuevo exitosa, y **gate físico pasado en
-  sus dos modos** (Cloud cortado a mano + cobro solo con `MP_ACCESS_TOKEN`). Ver la sección de la
-  remediación.
+- **`cobro-verificado`** ✅ `done` (2026-07-22) → [spec](./specs/mercadopago/cobro-verificado.md). Cerró R18/R19/R20/R27.
+- **PR 4** de la remediación MP ✅ done (2026-07-22, `db1e31d` + `00e6ac6`) → ver "Remediación". Cerró R21.
+- **Titularidad del Posnet** ✅ resuelta (2026-07-22): lector `PAX_A910__SMARTPOS1493600985` en la cuenta propia, colgado de "Barra VIP" (`COCKTRAILBAR01`), en modo PDV → ver "Remediación".
+- **`gestion-posnets`** 🟡 código completo (2026-07-23, backend + PR 6 UI + frontend, typecheck/tests verdes) → [spec](./specs/mercadopago/gestion-posnets.md). Cerró R23/R25, mitigó R24, cubrió R22 (detección + reprovision). **Pendiente**: gate físico (T29), E2E manual (T28), verificación real de listado/PATCH (T14) — las hace el dueño con el aparato.
 
-- **Titularidad del Posnet destrabada** — el lector `PAX_A910__SMARTPOS1493600985` pasó a la
-  cuenta propia, colgado de la caja "Barra VIP" (`COCKTRAILBAR01`) y **en modo PDV**. Ver
-  "Remediación de la integración Mercado Pago".
-- **Gate físico del PR 3 pasado** — cobro real con el Posnet, aprobado, con ticket impreso.
-- **El cobro por QR quedó verificado a nivel código**: funciona por *polling* contra MP y **no**
-  depende del webhook (que hoy está caído por `MP_WEBHOOK_SECRET` vacía, R26). Falta probarlo con
-  plata real, aprobada y rechazada.
-- **`cobro-verificado` implementado completo y validado con el Posnet real** — el bug de ventas
-  no cobradas se encontró, reprodujo y cerró el mismo día. Ver la sección "Cobro verificado".
-- **R18/R19/R20/R27 quedaron resueltos** por esa implementación (ver la tabla de Riesgos).
-- Las **2 decisiones pendientes del dueño se tomaron** (chequeo de salud MP bloquea solo lo grave;
-  el Posnet queda fijo a su caja) — ver "Preguntas respondidas" en
-  [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md).
+> ⚠️ **Aún sin verificación en vivo**: el cobro por QR (código OK vía polling, `MP_WEBHOOK_SECRET` vacía → R26) y los gates físicos de gestión-posnets.
 
-### Orden de trabajo acordado
+### Orden de trabajo
 
-| # | Qué | Por qué va en ese lugar | Estado |
-|---|---|---|---|
-| 1 | **Cobro verificado** (`specs/mercadopago/cobro-verificado.md`) | Era el único que perdía plata **en cada uso**. | ✅ **`done` (2026-07-22)** — implementado, sync a Cloud verificado y **gate físico pasado** (rechazos reales sin ticket ni pedido; cobro aprobado ligado a su pago) |
-| 2 | **PR 4** de la remediación MP | Cimiento: había **dos sellers activos** y el sistema elegía el correcto por casualidad (R21). Construir la gestión de Posnets encima de eso era edificar sobre algo que se mueve. Además es el que habilita migrar a la cuenta del boliche. | ✅ **done (2026-07-22)** — `db1e31d` + `00e6ac6`, runbook operativo ejecutado y **gate físico pasado en sus dos modos** |
-| 3 | **Gestión de Posnets** (`specs/mercadopago/gestion-posnets.md`) **+ PR 6** | Son la misma pantalla: el PR 6 cablea la UI de PDVs y la spec le da la funcionalidad que hoy no existe. Separarlas es tocar los mismos archivos dos veces. | spec `draft` **← SIGUIENTE** |
-| 4 | **PR 5** — conciliación / sync | Se beneficia del #1: el intent del Posnet ahora **sí** se persiste en `mp_orders` (R19 resuelto), así que la conciliación tiene datos reales sobre los que trabajar. | pendiente |
-| 5 | **Fase 6** — empaquetado | Nada de lo anterior es opcional para poder entregar el producto. | pendiente |
+| # | Qué | Estado |
+|---|---|---|
+| 1 | **Cobro verificado** | ✅ `done` (2026-07-22) |
+| 2 | **PR 4** de la remediación MP | ✅ done (2026-07-22) |
+| 3 | **Gestión de Posnets + PR 6** (misma pantalla) | 🟡 código completo (2026-07-23) — **pendiente gate físico** (T14/T28/T29) |
+| 4 | **PR 5** — conciliación / sync | ⏳ pendiente (el intent del Posnet ya se persiste en `mp_orders`, R19 resuelto → hay datos reales para conciliar) |
+| 5 | **Fase 6** — empaquetado | ⏳ pendiente |
 
 ---
 
@@ -249,17 +238,12 @@ La deuda estructural de Fase 2 vive con su fase:
 
 ## Cobro verificado — la venta se concreta solo si MP confirmó el cobro 🚨 *(completa, 2026-07-22)*
 
-El bug (R27, reproducido en vivo): el `state` del payment intent describe el ciclo de vida del
-intent, no el resultado del pago — `FINISHED` convive con un pago **rechazado**, y el sistema
-imprimía el ticket y registraba la venta igual. Se cerró con **veredicto server-side** (`POST
-/api/orders` con método no-efectivo exige prueba de pago y la valida contra MP; el intent del Posnet
-se persiste en `mp_orders` con `type='point'`), la **invariante como CHECK en la base** (`cobrado ⇒
-efectivo ∨ mp_order_id`) y el **gate físico pasado el 2026-07-22** (rechazos reales sin ticket ni
-pedido; cobro aprobado ligado a su pago con el monto verificado).
+✅ **Hecho (2026-07-22)** → [`specs/mercadopago/cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md)
+(`done`, commit `6c48669`). El bug R27: `state=FINISHED` del intent convivía con un pago rechazado y
+el sistema registraba la venta igual. Cerrado con veredicto server-side + invariante como CHECK en
+la base (`cobrado ⇒ efectivo ∨ mp_order_id`) + **gate físico pasado**. Cerró **R18/R19/R20/R27**.
 
-📁 Spec: [`specs/mercadopago/cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md)
-(`done`, implementación commit `6c48669`). De paso cerró **R18/R19/R20**. El alcance es **solo la
-venta de caja**: el defecto gemelo de `/carta` quedó fuera y se difirió a la Fase 7 como **R28**.
+> Alcance = **solo venta de caja**. El defecto gemelo de `/carta` se difirió a la Fase 7 como **R28** (ver Riesgos).
 
 ---
 
@@ -288,99 +272,47 @@ Log de deuda encontrada durante la implementación:
 | 3 | Integridad del cobro: idempotencia real, timeouts, webhooks durables, constancia de ventas cobradas sin registrar | ✅ `e3f1a29` — **cerrado del todo**: gate físico pasado el 2026-07-22 (cobro real aprobado con el Posnet) |
 | 4 | **Invertir la dirección del token**: cobrar deja de depender de Supabase Cloud (D1). Cifrado de tokens, modelo single-seller (vincular reemplaza + Desvincular), validación server-side de barra/dispositivo | ✅ `db1e31d` + `00e6ac6` — **cerrado del todo el 2026-07-22**: gate físico pasado en sus dos modos (ver abajo) |
 | 5 | Conciliación: los cobros MP suben a la nube al cerrar la noche | ⏳ pendiente |
-| 6 | Sesiones de caja (que hoy se auto-bloquean) + cableado del CRUD de PDVs + docs | ⏳ pendiente |
+| 6 | Sesiones de caja (que hoy se auto-bloquean) + cableado del CRUD de PDVs + docs | 🟡 parcial — cableado de PDVs y docs hechos vía `gestion-posnets` (T19/T26); **queda solo** el fix de sesiones de caja que se auto-bloquean |
 
-> ✅ **PR 4 cerrado el 2026-07-22** — implementación (`db1e31d`: backend + Edge Function deployada +
-> UI + 3 migraciones), runbook operativo ejecutado (`pr4-cloud.sql` en el dashboard: tokens purgados
-> de Cloud, sellers viejos expirados, índice único de single-seller — verificado por REST) y
-> re-vinculación por OAuth con el flujo nuevo exitosa (token **cifrado** en local con prefijo `v1.`,
-> columnas en claro `NULL`, en Cloud solo metadata con un único seller activo). El **gate físico**
-> pasó en sus dos modos:
-> 1. **Cloud cortado por `/etc/hosts`** → cobro real con el Posnet con la nube inalcanzable: intent
->    creado, device despierto, veredicto resuelto contra MP y persistido. Probado con la tarjeta sin
->    fondos (el rechazo recorrió el circuito entero); el camino aprobado ya estaba probado el mismo
->    día ($101). **D1 funciona.**
-> 2. **Solo `MP_ACCESS_TOKEN`** (seller local expirado temporalmente) → intent `15d5650d…` de $15
->    creado a las 23:57 UTC con el token de emergencia (app `4126722482739227`, distinta de la del
->    OAuth): **el nivel 3 del resolver puede cobrar, no solo listar** — quedó cerrada la pregunta
->    del tipo de solución de la aplicación (R24).
->
-> Durante el gate se encontró y arregló en vivo un bug del propio PR: el middleware A12 comparaba
-> `x-bar-id` solo contra `BAR_CODE` y la web manda el UUID de la barra → 403 en todo cobro. Fix en
-> `00e6ac6` (acepta code o UUID con lookup cacheado). Detalle completo en el changelog de la
-> [spec de remediación](./specs/mercadopago/remediacion-integracion-mp.md).
->
-> 🎯 **Siguiente: Gestión de Posnets + PR 6** (misma pantalla — ver el orden de trabajo arriba).
-> Quedan el PR 5 (conciliación/sync) y el PR 6 (sesiones de caja + cableado de PDVs + docs).
+> ✅ **PR 4 cerrado el 2026-07-22** (`db1e31d` + `00e6ac6`) — token invertido y **cifrado** en local
+> (Cloud solo metadata), single-seller por índice único (cierra R21), botón Desvincular, y **gate
+> físico pasado en sus dos modos**: (1) Cloud cortado por `/etc/hosts` → cobro real con el Posnet y
+> la nube inalcanzable (D1 funciona); (2) solo `MP_ACCESS_TOKEN` → el nivel 3 del resolver **cobra,
+> no solo lista** (cierra la incógnita del tipo de solución de la app en R24). Bug del A12 encontrado
+> y arreglado en vivo (`x-bar-id` aceptaba solo `BAR_CODE`, la web manda UUID → 403; fix `00e6ac6`).
+> Detalle en el changelog de la [spec de remediación](./specs/mercadopago/remediacion-integracion-mp.md).
 
 > ✅ **Titularidad del Posnet — resuelto el 2026-07-22.** El lector `PAX_A910__SMARTPOS1493600985`
-> estaba registrado en la cuenta de MP del otro desarrollador, y operar como colaborador hacía que
-> los cobros entraran a esa cuenta. Se transfirió a la cuenta propia (`1517393956`) con la opción
-> "Eliminar el lector de mi cuenta" operando como colaborador, se pasó a **modo PDV** atado al store
-> `85068168` / POS `135641665` (`COCKTRAILBAR01`), y `MP_POS_DEVICE_ID` apunta a ese lector. El
-> paso a paso del diagnóstico quedó en el git log (commits del 22-07).
->
-> **Reglas que deja el episodio** (valen también para la puesta en producción):
-> 1. El **lector y el seller vinculado a Cocktrail tienen que ser de la misma cuenta de MP**.
-> 2. La **titularidad manda sobre el login**: entrar como colaborador con tu email no cambia a qué
->    cuenta entra la plata.
-> 3. El lector debe estar en **modo PDV**, no STANDALONE, para recibir cobros de un sistema externo.
-> 4. **OAuth da permiso sobre una cuenta, no posesión del hardware**: reclamar/transferir un lector
->    se hace sí o sí desde la app de MP — es el único paso manual irreductible del flujo objetivo
->    ("el dueño vincula su cuenta en `/admin` y configura su Posnet desde ahí").
+> estaba en la cuenta del otro desarrollador (los cobros entraban ahí); se transfirió a la cuenta
+> propia (`1517393956`) con "Eliminar el lector de mi cuenta" y se pasó a **PDV** atado al store
+> `85068168` / POS `135641665` (`COCKTRAILBAR01`). **Reglas que deja el episodio** (valen para
+> producción): (1) lector y seller vinculado deben ser de la **misma cuenta de MP**; (2) la
+> **titularidad manda sobre el login** — entrar como colaborador no cambia a qué cuenta entra la
+> plata; (3) el lector debe estar en **PDV**, no STANDALONE; (4) **OAuth da permiso, no posesión** —
+> reclamar/transferir un lector se hace sí o sí desde la app de MP (único paso manual irreductible).
 
 ---
 
-## Feature — Gestión de Posnets desde la app 📟 *(nueva, va ANTES de la Fase 6)*
+## Feature — Gestión de Posnets desde la app 📟 *(va ANTES de la Fase 6)*
 
-**Qué pasa**: se descubrió el 2026-07-21, al intentar usar un Posnet nuevo, que **la pantalla de
-Posnets del admin es decorativa a los fines de cobrar**. **Demostrado empíricamente el 2026-07-22**:
-se hizo un cobro real con el Posnet físico que funcionó perfectamente mientras `/admin → Pagos`
-mostraba **"0 Posnets"**, **"No hay Posnets registrados"** y **"Sin Posnet vinculado"**.
+🟡 **Código completo (2026-07-23) — pendiente gate físico** →
+[`specs/mercadopago/gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (**fuente de verdad
+de la feature**, con criterios, plan y tareas T1-T29).
 
-**Causa**: el cobro resuelve el dispositivo desde la variable de entorno `MP_POS_DEVICE_ID`
-(`mercadopago.service.ts:178`); dar de alta o vincular un Posnet desde `/admin` **solo escribe en
-`mercadopago_cajas_devices`, tabla que ningún camino de cobro lee** (verificado: está vacía mientras
-el cobro funciona). Consecuencia concreta: **cambiar de Posnet físico obliga a editar un `.env` y
-reiniciar el backend** — imposible para el dueño del boliche.
+**El defecto** (descubierto 21-07, demostrado en vivo 22-07): la pantalla de Posnets era decorativa a
+los fines de cobrar — el cobro resolvía el device desde `MP_POS_DEVICE_ID` y `/admin` escribía en
+`mercadopago_cajas_devices`, tabla que ningún cobro leía. Cambiar de Posnet obligaba a editar un
+`.env` por SSH. **El arreglo**: el device se resuelve **server-side desde la caja**
+(`posnet-resolver.service.ts`, env degradada a último recurso observable), modelo de devices
+activo/histórico (una caja estable con QR fijo, el Posnet reemplazable), PDV/listado/rename desde la
+app, y panel de salud con 4 chequeos (solo el caso grave bloquea). Detalle y arquitectura en la spec
+y en [`ARCHITECTURE.md`](./ARCHITECTURE.md) §11.
 
-**Restricción irreductible**: **OAuth da permiso sobre una cuenta, no posesión del hardware.** MP no
-expone API para reclamar ni transferir un lector entre cuentas. Pero una vez que el lector está en la
-cuenta, el token OAuth alcanza para listarlo, pasarlo a PDV, crear sucursal/caja y sacar el QR — o
-sea que el flujo objetivo tiene **un único paso manual**: que el dueño reclame el lector desde la app
-de MP. Todo lo demás va en `/admin`.
+- Riesgos: cierra **R23**/**R25**, mitiga **R24**, cubre **R22** (detección + reprovision). Detecta R21 (cerrado en PR 4).
+- **Pendiente** (lo hace el dueño con el aparato): gate físico **T29**, E2E manual **T28**, verificación real de listado/PATCH **T14**.
+- **Va antes de la Fase 6**: entregar un producto donde cambiar un Posnet exige SSH no es entregable.
 
-**Modelo objetivo** (decidido el 2026-07-21): la **caja es la unidad estable** (su `external_pos_id`
-y su **QR estático no cambian nunca**, el QR está atado al punto de venta en MP, no al hardware); el
-**Posnet es hardware reemplazable** colgado de una caja (un device pertenece a una sola caja para
-siempre, pero una caja sí puede cambiar de device — el viejo queda histórico, no se borra, y el QR ni
-se entera); pueden convivir varios Posnets dados de alta, **uno solo activo por caja**.
-
-- [ ] El cobro resuelve el `deviceId` desde el Posnet vinculado a la caja; `MP_POS_DEVICE_ID` queda
-  degradado a **último recurso** y su uso es visible, no silencioso.
-- [ ] Listar los Posnets de la cuenta desde la app, poner un lector en **modo PDV** desde la app, y
-  que `operating_mode` refleje el valor **real** de MP (R25).
-- [ ] Vincular / cambiar / desvincular un Posnet desde `/admin`, sin tocar el QR estático.
-- [ ] **Panel de salud de la vinculación** (R23): seller único y activo · lector en la misma cuenta ·
-  lector en PDV · caja provisionada en la cuenta activa. Más el estado del **fallback de emergencia**
-  (R24): si el `MP_ACCESS_TOKEN` de la env es de la misma **cuenta** que el lector y si efectivamente
-  lo ve en `GET /point/integration-api/devices` — el preflight lo calcula en el PR 4 (estrategia F1),
-  acá se muestra como una fila más.
-- [ ] Sin prefijo de modelo hardcodeado, nombre de sucursal real (hoy es el literal `"Bosko"`), y
-  "Test $15" contra el Posnet de la fila con su resultado visible.
-
-📁 **Spec**: [`specs/mercadopago/gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md)
-(`draft`, 2026-07-22) — **fuente de verdad de esta feature**. Riesgos asociados: **R23**, **R24**,
-**R25** (y detecta R21/R22). Plan y tareas pendientes.
-
-> **Relación con la remediación**: el PR 6 de
-> [`remediacion-integracion-mp.md`](./specs/mercadopago/remediacion-integracion-mp.md) cablea la
-> pantalla de PDVs; esta feature le da la funcionalidad que hoy no existe. Conviene hacerlas juntas o
-> esta inmediatamente después.
-> **Va antes de la Fase 6** porque entregar un producto empaquetado donde cambiar un Posnet exige
-> editar un archivo de configuración por SSH no es entregable.
-
-### Procedimiento — migrar el Posnet a la cuenta del boliche *(acordado el 2026-07-22)*
+### Procedimiento — migrar el Posnet a la cuenta del boliche *(acordado el 2026-07-22, aún manual)*
 
 Las pruebas se hacen con la cuenta de Manuel (`1517393956`). Cuando llegue el momento de producción,
 el procedimiento es:
@@ -524,14 +456,21 @@ online, y ese pedido aparezca en la barra local y se reconcilie al cerrar la caj
 ## Riesgos / deuda técnica conocida
 
 Solo quedan acá los riesgos **abiertos**. Los resueltos (R1-R7, R9, R10, R12, R13, R18, R19, R20,
-R21, R27) se sacaron de esta tabla — el detalle de cada resolución está en la spec correspondiente
-(R18/R19/R20/R27 en [`cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md); **R21 cerrado
-por el PR 4** de la [remediación](./specs/mercadopago/remediacion-integracion-mp.md): "vincular
-reemplaza" + índice único parcial que hace imposible tener dos sellers activos, en local y en Cloud)
-o en el historial de git.
+R21, R23, R25, R27) se sacaron de esta tabla — el detalle de cada resolución está en la spec
+correspondiente o en el historial de git:
+
+- **R18/R19/R20/R27** → [`cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md).
+- **R21** (dos sellers activos) → cerrado por el **PR 4** de la
+  [remediación](./specs/mercadopago/remediacion-integracion-mp.md): "vincular reemplaza" + índice
+  único parcial que hace imposible tener dos sellers activos, en local y en Cloud.
+- **R23** (sin chequeo de salud MP) y **R25** (`operating_mode` miente) → resueltos por
+  [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloques G y C: panel de salud con
+  4 chequeos + re-sync del modo real contra MP y `PATCH` a PDV desde la app). Código completo el
+  2026-07-23; **gate físico T29 pendiente**.
 
 > Los riesgos R17-R26 salieron de la auditoría, de la implementación de la remediación MP y de la
-> verificación contra la API real de Mercado Pago (21 y 22-07); de esos, R21 ya se cerró (PR 4).
+> verificación contra la API real de Mercado Pago (21 y 22-07); de esos, **R21 se cerró (PR 4)** y
+> **R23/R25 se resolvieron** (gestión-posnets, código completo) con **R24 mitigado**.
 > R28 salió del análisis de R27
 > (resuelto el 22-07) y está **diferido a la Fase 7**, no abierto. El
 > inventario **completo** de deuda encontrada (con file:line y contexto) vive en
@@ -545,10 +484,8 @@ o en el historial de git.
 | R14 | QR real de Mercado Pago (mostrar un código escaneable, vía la Orders API con `type: "qr"` + `external_pos_id`) no está implementado — confirmado con la doc oficial de MP que el Posnet físico (Point Integration API) no puede mostrar QR en su pantalla; es un producto distinto atado a otra superficie. | Ninguno hoy (se sacó la opción de UI que prometía algo que no existía). Si se quiere QR real hace falta una pantalla nueva donde mostrarlo y probablemente credenciales/config adicionales. | Abierto — ver también Fase 7 ("Mercado Pago online"), que ya cubre esto como feature futura. |
 | R15 | `modules/mercadopago` sigue sobre la Payment Intents API (legacy) de Mercado Pago, no la Orders API moderna que MP recomienda para nuevas features. | Ninguno funcional hoy — el flujo probado en producción con el Posnet real sigue andando. Riesgo a futuro si MP deprecara la API legacy. | Abierto — migración deliberadamente no abordada; el flujo actual es el único probado en vivo y migrar el contrato completo no se justificaba en esa iteración. |
 | R17 | Los controllers nuevos de `modules/mercadopago` validan a mano con chequeos `typeof` (9 en `mercadopago-provisioning.controller.ts`) en vez de usar el `validate.ts` con zod que ya existe en el repo. | Inconsistencia de patrón y validación más débil/dispersa en los endpoints de cobro. | Abierto — refactor transversal, deliberadamente diferido en la remediación por tocar justo los endpoints de cobro sin cerrar ningún criterio. |
-| R22 | **Cambiar de cuenta de Mercado Pago deja huérfanas las cajas ya provisionadas.** `mercadopago_cajas` estampa `seller_user_id` y su `store_id`/`pos_id_mp` viven **dentro de la cuenta de ese seller**, pero no existe ninguna lógica de re-provisión ni de limpieza cuando se vincula otra cuenta (verificado: nadie llama a `cajasRepo.deleteById` por cambio de seller). | Al migrar a la cuenta del dueño, la caja y **el QR estático quedan apuntando a un punto de venta de la cuenta vieja**. Hay que re-provisionar a mano, y **el QR cambia** — si ya se imprimió, hay que reimprimirlo. | **Ya se materializó** (verificado el 2026-07-22, no es hipotético): existe un POS "Barra VIP" con `external_id=COCKTRAILBAR01` **en las dos cuentas a la vez** (Manuel `135641665` y Matías `135485560`), más un tercero con `external_id=BARRAVIP` (POS `135344264`) dentro del store "Bosko" de Matías. El provisioning de Cocktrail corrió contra cuentas distintas en momentos distintos y nadie limpió nada. **El PR 4 dejó el mínimo acordado**: Desvincular avisa en la UI que las cajas quedan huérfanas y el QR cambia, + procedimiento de re-provisión documentado. La **detección** de cajas huérfanas y el **aviso previo de que el QR cambia** siguen siendo de [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque H). El procedimiento de migración está más arriba, en la sección de gestión de Posnets. |
-| R23 | **El sistema no detecta ni avisa cuando la vinculación de MP quedó incoherente**: seller de una cuenta y lector de otra, lector en modo STANDALONE en vez de PDV, o caja provisionada en una cuenta que ya no es la activa. El cobro simplemente falla con un error de MP. | Diagnosticar el problema del 2026-07-21 llevó horas de consultas manuales a la API. En producción, un sábado a la noche, eso es la caja parada sin saber por qué. | Abierto — lo cierra la spec [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque G): un panel de "salud de la vinculación MP" en `/admin` con los 4 chequeos (seller único activo · lector en la misma cuenta · lector en PDV · caja provisionada en la cuenta activa) lo hace evidente de un vistazo. |
-| R24 | **El fallback por `MP_ACCESS_TOKEN` puede no ver el lector, y el sistema no tiene forma de saberlo hasta que falla un cobro.** *(Reformulado el 2026-07-22, segunda pasada.)* La primera formulación decía que **la visibilidad de los devices Point es por aplicación de MP** — con el token del `.env` (app `4126722482739227`, cuenta `1517393956`) `GET /point/integration-api/devices` devolvía `total: 0`, y solo el token OAuth de `MP_APP_ID=2990738606457276` veía el lector. **Eso quedó refutado**: con el **mismo token del `.env`**, sin tocarlo, el listado ahora devuelve `total: 1` con `PAX_A910__SMARTPOS1493600985` en `operating_mode: PDV` (store `85068168`, POS `135641665`). Lo que cambió entre observaciones fue el **estado del device** (de `STANDALONE / pos_id: 0 / store_id: ""` a PDV con store y POS), no la aplicación del token. La [referencia oficial del endpoint](https://www.mercadopago.com.ar/developers/es/reference/integrations_api/_point_integration-api_devices/get) lo describe por **cuenta**, sin mencionar la aplicación. **Sigue abierto**: por qué el token OAuth sí listaba el lector en STANDALONE y el de la env no (aclararlo exige devolver el lector a STANDALONE — prueba destructiva sobre el único aparato), y si el tipo de solución de la aplicación (**"Pagos presenciales"**, requisito de la [doc de Point](https://www.mercadopago.com.br/developers/es/docs/mp-point/create-application)) afecta el `POST` de payment intent aunque el `GET` funcione. | El nivel 3 del `credentials-resolver.service.ts` (`env.MP_ACCESS_TOKEN`) **no está condenado**, pero su utilidad depende de condiciones del entorno que la app hoy no observa: que el token sea de la **misma cuenta** que el lector y que efectivamente lo vea. Peor: si no lo es, el fallo aparece recién al cobrar. Y si el token es de **otra cuenta**, degradar mandaría la plata a otro (se cruza con R21/R22). | **Mitigado por el PR 4 (2026-07-22)** — la **estrategia F1** está implementada (`db1e31d`): degradación distinguiendo "no hay seller" de "el seller falló", guarda de cuenta para no cobrar hacia otra, **preflight de solo lectura al boot** (`/users/me` + listado de devices) con estado `usable`/`unusable`/`unknown`, y exposición en `/api/system/health` + aviso en `/admin`. Y la **pregunta del `POST` quedó cerrada** por el modo 3 del gate: el token de la env creó un intent y cobró — el tipo de solución de la aplicación no bloquea el `POST`. Queda pendiente la fila del **panel de salud** en [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque G), y la incógnita menor de por qué el token OAuth listaba el lector en STANDALONE y el de la env no (solo se aclara con una prueba destructiva sobre el único aparato — no se va a hacer). |
-| R25 | **`mercadopago_cajas_devices.operating_mode` miente**: tiene `DEFAULT 'PDV'`, **ningún CHECK**, y **nadie lo sincroniza contra Mercado Pago**. Verificado el 2026-07-22: la tabla local afirma "PDV" mientras el aparato real está en `STANDALONE`. | Un admin mira la pantalla de Posnets, ve "PDV" y cree que el lector está operativo; el cobro falla igual. Es exactamente la clase de dato falso que hace que diagnosticar un problema de cobro lleve horas (ver R23). | Abierto — lo cierra la spec [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque C): sincronizar el modo real contra MP + poder setearlo por `PATCH .../devices/{id}` desde la app. |
+| R22 | **Cambiar de cuenta de Mercado Pago deja huérfanas las cajas ya provisionadas.** `mercadopago_cajas` estampa `seller_user_id` y su `store_id`/`pos_id_mp` viven dentro de la cuenta de ese seller; al migrar, la caja y **el QR estático quedan apuntando a un punto de venta de la cuenta vieja**. | Hay que re-provisionar (y **el QR cambia** — si ya se imprimió, reimprimir). **Ya se materializó** (verificado 22-07, no hipotético): el POS "Barra VIP" `external_id=COCKTRAILBAR01` existe **en las dos cuentas a la vez** (Manuel `135641665` y Matías `135485560`), más un `external_id=BARRAVIP` (POS `135344264`) en el store "Bosko" de Matías. | **Parcialmente cubierto** — [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) (bloque H) implementó (código, T22) la **detección** `isOrphan`, la **re-provisión desde `/admin`** y el **aviso previo de cambio de QR**. **Queda**: el gate físico y el **procedimiento manual de migración de cuenta** (arriba, en la sección de gestión de Posnets) — MP no expone API para transferir hardware. |
+| R24 | **El fallback por `MP_ACCESS_TOKEN` puede no ver el lector, y el sistema no tenía forma de saberlo hasta que fallara un cobro.** Su utilidad depende de que el token sea de la **misma cuenta** que el lector y que efectivamente lo vea en `GET /point/integration-api/devices` — si es de otra cuenta, degradar mandaría la plata a otro (se cruza con R21/R22). *(La formulación vieja "la visibilidad de devices es por aplicación de MP" quedó refutada el 22-07: con el mismo token de la env, el listado pasó de `total:0` a `total:1` cuando el device pasó a PDV con store/POS — cambió el estado del device, no la app del token.)* | Si el token es de otra cuenta o no ve el lector, el fallo aparecía recién al cobrar. | **Mitigado** — el **preflight F1** del PR 4 (`db1e31d`) lo calcula al boot (`/users/me` + listado, estado `usable`/`unusable`/`unknown`, guarda de cuenta) y la **fila F1 del panel de salud** de [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md) lo muestra antes del cobro (bloque G, código completo). Incógnita menor que queda: por qué el token OAuth listaba el lector en STANDALONE y el de la env no — solo se aclara con una prueba destructiva sobre el único aparato, no se va a hacer. |
 | R26 | **`MP_WEBHOOK_SECRET` está vacía** en `apps/api/.env`, así que `POST /api/mercadopago/webhooks` responde **401 fail-closed** (el fail-closed es correcto y deliberado; lo que falta es el secreto). Verificado el 2026-07-22. | Todo el trabajo de **webhooks durables del PR 3 está inerte en este entorno**. No bloquea el cobro por Posnet (que resuelve por polling del payment intent) pero sí el flujo de **QR**, que depende de la notificación de MP. | Abierto — cargar el secreto en el `.env` del entorno de pruebas y volver a verificar el camino de QR antes de darlo por validado. |
 | R28 | **`computeTotals` agrega por `paymentMethod` sin mirar ningún estado de cobro** (`apps/api/src/shared/utils/totals.ts:32-40`). En una venta de caja ese campo dice *cómo se cobró*; en un pedido de `/carta` dice *cómo el cliente piensa pagar* (`apps/web/src/app/carta/page.tsx:48,215`, default `"qr"`) — el cobro todavía no pasó. El mismo campo, dos significados, y los totales de la noche los suman igual. Hallazgo derivado del análisis de R27: es la misma familia de defecto (confundir intención con hecho) por otra vía. | Un pedido creado desde `/carta` **infla la facturación de la noche sin que haya entrado un peso**. **Hoy el impacto real es cero**: `/carta`, el ticket virtual y `/barra` están fuera de validación hasta la Fase 7 y nadie crea pedidos por ahí. Se vuelve daño real en el minuto uno del pedido online. | **Diferido a la Fase 7** (no abierto sin dueño): se resuelve al rediseñar el flujo digital del cliente — ver el bullet en "Fase 7 — Pedido online". Queda **explícitamente fuera del alcance** de [`specs/mercadopago/cobro-verificado.md`](./specs/mercadopago/cobro-verificado.md), que cubre solo la venta de caja; el esquema que deja esa spec (`orders.payment_status`, con `pendiente_de_cobro` reservado) ya prevé el arreglo. ⚠️ Si se habilita `/carta` antes de la Fase 7, este riesgo pasa a abierto. |
 | R16 | Los tests de integración (`apps/api/tests/integration/`) pegan contra el MISMO Supabase local que usa el dev server — no hay una DB de test aislada. `cleanNightEvents()`/`cleanOrders`/etc. en `db-helpers.ts` borran/crean sin acotar a un rango/prefijo de test, a diferencia de `cleanDrinks()`/`cleanUsers()` (ya arregladas con `TEST_DRINK_ID_FLOOR`/`TEST_USERNAME_PREFIX`). | Corriendo la suite de integración repetidas veces en una sesión de desarrollo larga, se acumulan decenas de `night_events`/`orders`/`tickets` de test reales en la base compartida. No hay riesgo de perder catálogo/usuarios reales (ya protegidos), pero sí de ensuciar el Historial de Noches con datos falsos si no se corre `cleanup-empty-nights.ts` después. **Volvió a morder el 2026-07-22**: correr la suite de integración borró la noche real de la base compartida. | Abierto — aplicar el mismo patrón de rango/prefijo de test a `night_events`/`orders`/`tickets`, o directamente provisionar una segunda instancia local de Supabase dedicada a tests. |

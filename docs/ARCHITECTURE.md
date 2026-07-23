@@ -1,7 +1,7 @@
 # Cocktrail / BarQR — Arquitectura (fuente de verdad)
 
 > **Este documento describe el sistema TAL COMO ESTÁ CONSTRUIDO HOY**, no un plan aspiracional.
-> Última actualización: 2026-07-01. Para lo que falta, ver [`ROADMAP.md`](./ROADMAP.md).
+> Última actualización: 2026-07-23. Para lo que falta, ver [`ROADMAP.md`](./ROADMAP.md).
 > Reemplaza y deja sin efecto a los docs viejos (`ARCHITECTURE_V2`, `cocktrail_architecture_guide`, `HYBRID_ARCHITECTURE_ES`), ya eliminados.
 
 Internamente el repo se llama **Cocktrail**. En el plan de negocio el producto se presenta como **BarQR**.
@@ -318,9 +318,41 @@ Transiciones válidas (en `orders.service.ts`): `pagado→{preparando,cancelado}
 - `GET /v1/payments/{id}` (Payments API estándar) — usado internamente cuando MP responde el
   estado final `CONFIRMATION_REQUIRED`, para resolver automáticamente si el cobro se concretó sin
   que la cajera tenga que mirar la pantalla del Posnet
-- `checkDeviceConnection` (usado por `/api/system/status`)
+- `GET /point/integration-api/devices` — listado de la cuenta (descubrir/alta y salud)
+- `PATCH /point/integration-api/devices/{id}` con `{operating_mode}` — dejar el lector en PDV desde `/admin`
 
-Requiere `MP_ACCESS_TOKEN` + `MP_POS_DEVICE_ID`. Si faltan, lanza `Conflict` (no hay fallback simulado). **Es cobro presencial con lectora física, no checkout web ni QR de MP** — `/caja` solo ofrece Efectivo y Tarjeta; el valor `"qr"` de `PaymentMethod` sigue existiendo en el dominio para la preferencia que declara el cliente en `/carta` y el reporte de `/admin`, sin relación con el Posnet.
+`/caja` solo ofrece Efectivo y Tarjeta; el valor `"qr"` de `PaymentMethod` sigue existiendo en el dominio para la preferencia que declara el cliente en `/carta` y el reporte de `/admin`, sin relación con el Posnet. **Es cobro presencial con lectora física, no checkout web ni QR de MP.**
+
+### Resolución del device de cobro — server-side, desde la caja *(spec [`gestion-posnets.md`](./specs/mercadopago/gestion-posnets.md))*
+
+El dispositivo con el que se cobra **ya no sale de una variable de entorno ni del header del cliente**: lo resuelve el backend en cada cobro. `posnet-resolver.service.ts` es la única autoridad:
+
+```
+barId (validado por A12) → mercadopago_cajas (findByBarId) → mercadopago_cajas_devices.findActiveByCajaId
+```
+
+- Caja provisionada **sin device activo** → `Conflict` 409 explícito (*"esta caja no tiene Posnet vinculado"*): la configuración explícita manda, **no** se cae a la env en silencio.
+- Sin `barId` / sin caja (instalación legacy) → `MP_POS_DEVICE_ID` como **último recurso observable** (`logger.warn` + flag `usingEnvDevice` que expone el panel de salud). Si tampoco hay env → el mismo 409.
+- El header **`x-device-id` del cliente ya no participa** del cobro (anti-spoof): quedó deprecado y su único emisor (`bar-sessions.service.ts`) se eliminó en el PR 6. El `deviceId`/`caja_id` resueltos se persisten en `mp_orders`.
+
+### Salud de la vinculación — `GET /api/mercadopago/health`
+
+`mp-health.service.ts` concentra **4 chequeos** (cache en memoria, TTL 30 s + `?refresh=1`), cada rojo con su `action`:
+
+1. **`singleSeller`** — exactamente un seller activo (R21).
+2. **`deviceOwnership`** — el listado con las credenciales activas contiene el device activo de la caja.
+3. **`deviceMode`** — el `operating_mode` real del lector es `PDV`.
+4. **`cajaProvisioned`** — la caja está provisionada en la cuenta actualmente activa (R22, derivado por `caja.sellerUserId === sellerActivo.userId`).
+
+Más la **fila F1** (estado del fallback `MP_ACCESS_TOKEN`, directo del preflight del PR 4) y el flag `usingEnvDevice`. **Solo el caso grave bloquea** (`blocking: true` ⟺ `deviceOwnership.ok === false`, o sea: el device de la caja está ausente de la cuenta activa → la plata iría a otra cuenta): el bloqueo lo aplica el resolver server-side en el mismo cobro. Todo lo demás (STANDALONE, caja desactualizada, etc.) **solo advierte** — esos casos fallan solos al cobrar y un bloqueo preventivo dejaría la caja parada por un falso positivo. Si el chequeo está en `unknown` (MP inalcanzable, sin listado fresco), **no bloquea**.
+
+### Modelo de devices — `mercadopago_cajas_devices`, activo/histórico
+
+- **La caja es la unidad estable** (su `external_pos_id` y su **QR estático no cambian nunca** — el QR está atado al punto de venta en MP, no al hardware). El **Posnet es hardware reemplazable** colgado de una caja.
+- Un device **pertenece a su caja para siempre** (`caja_id` inmutable por trigger); a lo sumo **un activo por caja** (índice único parcial `uq_device_caja_active`). Cambiar de Posnet **desactiva** el anterior (queda histórico, reactivable — no se borra) y activa el nuevo, sin tocar el QR.
+- `operating_mode` es **cache del valor real leído de MP** (con `operating_mode_synced_at`), no un default optimista: se dropeó el `DEFAULT 'PDV'` y se re-sincroniza en cada listado (R25).
+
+Requiere `MP_ACCESS_TOKEN` (+ opcionalmente `MP_POS_DEVICE_ID` como último recurso — ver §12). Si no hay ni token ni caja provisionada con device, el cobro no-efectivo lanza `Conflict` (no hay fallback simulado).
 
 ---
 
@@ -333,7 +365,8 @@ Ver `apps/api/.env.example` y `apps/web/.env.example`. Las críticas:
 | `AUTH_SECRET` / `COCKTRAIL_AUTH_SECRET` | api + web | HMAC de cookies (≥32 chars; **debe coincidir** entre api y web) |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | api | DB local (fuente de verdad) |
 | `SUPABASE_CLOUD_URL`, `SUPABASE_CLOUD_SERVICE_ROLE_KEY` | api | Nube (opcional; activa el sync) |
-| `MP_ACCESS_TOKEN`, `MP_POS_DEVICE_ID` | api | Mercado Pago Point (opcional) |
+| `MP_ACCESS_TOKEN` | api | Mercado Pago Point — token de fallback de emergencia (opcional). Para servir con Posnet tiene que ser de la **misma cuenta** que el lector y verlo en el listado de devices (R24) |
+| `MP_POS_DEVICE_ID` | api | **Último recurso**, ya **no es la fuente primaria** del device de cobro: el device se resuelve server-side desde la caja (§11). Solo se usa si no hay caja provisionada, y su uso queda logueado + visible en el panel de salud (`usingEnvDevice`) |
 | `NEXT_PUBLIC_API_URL` | web | URL del Express |
 | `NEXT_PUBLIC_LAN_HOST` | web | Base para generar los QR escaneables |
 

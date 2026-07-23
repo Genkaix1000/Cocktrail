@@ -1,6 +1,6 @@
 # Gestión de Posnets desde la app — la pantalla de Pagos es decorativa
 
-**Estado**: `draft`
+**Estado**: **`implementada`** (2026-07-23). Backend (T2-T18) + PR 6 (T19) + frontend (T20-T25) implementados; `pnpm typecheck` + `pnpm test` en verde (T27: 814 tests api, 466 web); docs actualizadas (T26). Gates físicos con el Posnet real pasados por el dueño: T11 (cobro resuelto desde la caja, sin env), T14 (modo PDV desde la app), T28 (E2E de las pantallas) y T29 (swap con QR intacto, caja sin Posnet, panel de salud en verde). Hallazgo del gate: la API de MP y el aparato físico se desalinean con un lag de propagación de minutos — el cobro sigue el hardware, y por eso STANDALONE solo advierte, nunca bloquea (validado en vivo).
 **Fecha**: 2026-07-22
 **Origen**: descubierto el 2026-07-21 al intentar usar un Posnet nuevo; **demostrado empíricamente el
 2026-07-22** — se hizo un cobro real con el Posnet físico que funcionó perfectamente mientras
@@ -437,19 +437,21 @@ complejidad por adelantado.
 
 ## Preguntas abiertas
 
-Ninguna bloquea escribir el plan técnico, pero hay que responderlas antes de implementar.
+Ninguna — las tres restantes se decidieron el **2026-07-23**:
 
-1. **¿Qué pasa con los cobros históricos de un Posnet que se desvincula?** El modelo dice que el
-   device queda histórico y no se borra, pero falta definir **cómo se muestra** (¿en la lista con un
-   estado "histórico"? ¿en un detalle aparte?), si se puede **reactivar** (por ejemplo, el aparato
-   volvió del service), y qué pasa con sus cobros en la conciliación.
-2. **¿Cómo se descubre un lector nuevo si el dueño todavía no lo reclamó en su cuenta?** No aparece
-   en `GET /devices` hasta que es suyo. Hay que decidir **qué le muestra la UI en ese estado** para
-   que no parezca un error del sistema, y cómo se distingue "todavía no lo reclamaste" de "el token
-   es de otra aplicación" (R24), que producen el mismo listado vacío.
-3. **¿Conviene renombrar la sucursal en Mercado Pago vía API, o solo mostrar un alias local?**
-   Afecta si el nombre **viaja o no** a MP, y por lo tanto qué ve el dueño en su panel de Mercado
-   Pago comparado con lo que ve en Cocktrail.
+1. **¿Qué pasa con los cobros históricos de un Posnet que se desvincula?** → **Lista única +
+   reactivable.** Los históricos aparecen en la misma lista con estado "histórico" y un botón para
+   **reactivarlos en SU misma caja** (por ejemplo, el aparato volvió del service). Sus cobros
+   quedan trazables en la conciliación.
+2. **¿Cómo se descubre un lector nuevo si el dueño todavía no lo reclamó?** → **Pantalla guía con
+   diagnóstico.** Explica las dos causas del listado vacío ("todavía no reclamaste el lector en tu
+   cuenta de MP" vs "el token es de otra aplicación", R24) y usa los datos del preflight F1
+   (`tokenUserId`, `deviceSeen`) y el seller activo para orientar cuál es la más probable, con el
+   paso a seguir en cada caso. Nunca parece un error del sistema.
+3. **¿Renombrar la sucursal en MP vía API o alias local?** → **El nombre viaja a Mercado Pago**
+   (PUT del store): una sola verdad entre Cocktrail y el panel de MP. Si la API no lo aceptara
+   (supuesto a validar en el paso 1 del plan), se degrada a alias local mostrando también el
+   nombre real de MP — la pantalla nunca miente.
 
 ---
 
@@ -502,12 +504,465 @@ Referencias verificadas sobre el código y contra la API real el 2026-07-22.
 
 ## Plan técnico
 
-> Pendiente — se escribe con `/plan gestion-posnets`, **después** de responder las preguntas
-> abiertas 2 y 3 (invariante device↔caja y política de bloqueo del chequeo de salud), que condicionan
-> el esquema y el camino de cobro.
+> Escrito el 2026-07-23 sobre las decisiones del dueño del 2026-07-22/23 (histórico con reactivar,
+> pantalla guía para el listado vacío, nombre de sucursal vía API con degradación a alias, bloqueo
+> solo del caso grave, posnet fijo a su caja para siempre) y el esquema diseñado con
+> `supabase-expert`, que este plan adopta tal cual. **Supuesto del paso 1 VALIDADO el 2026-07-23**
+> contra el store real: `PUT /users/{user_id}/stores/{store_id}` acepta `{ name }`, el rename se
+> aplica y no es replace (campos intactos) → **rama A confirmada** (el nombre viaja a MP; la
+> degradación a alias de T15 queda como resguardo). Va **encima de
+> `cobro-verificado`** (ya mergeado): los puntos de fricción con `mercadopago.service.ts` y
+> `PointPaymentsService` están señalados explícitamente.
+
+### Enfoque
+
+El defecto de fondo es que **el cobro y la pantalla no comparten ningún dato**: el device sale de
+`env.MP_POS_DEVICE_ID` y la tabla `mercadopago_cajas_devices` no la lee nadie. El arreglo invierte
+la autoridad en un único punto: un **resolver server-side** (`posnet-resolver.service.ts`) que, en
+cada cobro, hace `barId (A12) → caja → device activo` y deja la env como **último recurso
+observable** — el header `x-device-id` del cliente deja de participar (A5). Alrededor de eso, el
+esquema gana el concepto de **activo/histórico** (una caja, a lo sumo un posnet activo; el posnet
+pertenece a su caja para siempre), el provisioning gana lo que hoy va con `curl` (listar la cuenta,
+PATCH a PDV, re-sync del modo real, renombrar la sucursal, re-provisionar), y un
+`mp-health.service.ts` concentra los 4 chequeos del bloque G — de los cuales **solo el grave**
+(la plata iría a otra cuenta) bloquea el cobro, server-side, en el mismo resolver.
+
+### Archivos / módulos afectados
+
+**Backend — módulo `mercadopago` (nuevos):**
+
+- `apps/api/src/modules/mercadopago/posnet-resolver.service.ts` — la autoridad del bloque A:
+
+```ts
+export type ResolvedPosnet = {
+  deviceId: string;
+  source: "caja" | "env";       // "env" = último recurso, siempre logueado
+  cajaId: string | null;
+};
+export class PosnetResolverService {
+  constructor(
+    private readonly cajasRepo: MercadoPagoCajasRepository,
+    private readonly devicesRepo: MercadoPagoCajasDevicesRepository,
+    private readonly assertNotGrave: (deviceId: string, cajaId: string) => Promise<void>, // MpHealthService
+  ) {}
+  async resolveForCharge(barId: string | undefined): Promise<ResolvedPosnet>;
+}
+```
+
+  Cadena: `barId → cajasRepo.findByBarId → devicesRepo.findActiveByCajaId`. Reglas duras:
+  - **Caja existente sin device activo → `Conflict` 409** con el texto del criterio A: *"esta caja
+    no tiene Posnet vinculado"*. La configuración explícita manda; acá **no** se cae a la env.
+  - **Sin `barId` o sin caja provisionada** (instalación legacy) → `env.MP_POS_DEVICE_ID` con
+    `logger.warn` + flag `usingEnvDevice` que la salud expone (D2: visible, nunca silencioso).
+    Si tampoco hay env → el mismo 409.
+  - Antes de devolver, corre la **guarda grave** (ver Auth/permisos): si el último listado exitoso
+    de devices con las credenciales activas **no** incluye el device de la caja → 409 con mensaje
+    accionable. Si el chequeo está en `unknown` (MP caído, sin listado fresco), **no bloquea** —
+    la decisión del dueño es no parar la caja por un falso positivo; ese caso falla solo en MP.
+
+  **Por qué en un service y no en `mp-context.middleware.ts`**: (1) es política de cobro con
+  fail-closed (409), y el middleware es deliberadamente fail-open con cache — semánticas opuestas
+  en el mismo archivo son un bug esperando turno; (2) la guarda grave necesita al seller activo y
+  al estado de salud, dependencias de service, no de middleware; (3) el middleware corre en rutas
+  que no cobran (`GET /pos/intent/:id`, `/resolve`, `DELETE`) y no tiene sentido pagar un lookup a
+  DB ahí. El middleware solo cambia el comentario: `x-device-id` queda **deprecado** (el PR 6
+  elimina al único emisor, `bar-sessions.service.ts:51`).
+
+- `apps/api/src/modules/mercadopago/mp-health.service.ts` — bloque G:
+
+```ts
+export type MpHealthCheck = { ok: boolean | null; detail: string; action?: string }; // null = unknown
+export type MpHealth = {
+  checks: {
+    singleSeller: MpHealthCheck;      // R21 — sellersRepo: exactamente 1 activo
+    deviceOwnership: MpHealthCheck;   // el listado con credenciales activas contiene el device activo de la caja
+    deviceMode: MpHealthCheck;        // operating_mode real === "PDV"
+    cajaProvisioned: MpHealthCheck;   // R22 derivado: caja.sellerUserId === sellerActivo.userId (SIN columna)
+  };
+  fallback: MpFallbackStatus;         // fila F1, directo de getMpFallbackStatus()
+  usingEnvDevice: boolean;            // D2: se está cobrando por la env
+  blocking: boolean;                  // true ⟺ deviceOwnership.ok === false (el ÚNICO caso que bloquea)
+  checkedAt: string;
+};
+```
+
+  Cache en memoria con TTL 30 s + `?refresh=1` (mismo patrón que `resolveInstallationBarId` y el
+  preflight). Cada chequeo en rojo lleva `action` — el criterio G exige decir **qué hacer**, no
+  solo qué está mal. El listado de devices que alimenta `deviceOwnership`/`deviceMode` **es el
+  mismo fetch** que re-sincroniza `operating_mode` + `operating_mode_synced_at` (bloque C): un solo
+  camino, cero oportunidades de que la salud y la tabla digan cosas distintas.
+
+  **Endpoint propio `GET /api/mercadopago/health` — no se extiende `/api/system/health`.**
+  Justificación: `SystemService.getHealth()` es **sync y sin fetchs por contrato** (comentario en
+  `system.service.ts:63` — lo caro va en `getStatus()`, que está rate-limiteado); los 4 chequeos
+  necesitan hablar con MP. Y meterle a `SystemService` los repos de sellers/cajas/devices repetiría
+  el acople transitivo que el plan de `cobro-verificado` evitó a propósito. `/api/system/health`
+  no se toca: su `mpFallback` sigue siendo la fuente de la fila F1 para quien ya lo consume.
+
+**Backend — módulo `mercadopago` (modificados):**
+
+- `mercadopago.service.ts` — **se elimina `|| env.MP_POS_DEVICE_ID`** de los cuatro puntos
+  (`createPaymentIntent` L214/226, `testDeviceReachability` L428, `checkDeviceConnection`
+  L520/532): el gateway pasa a **exigir** `deviceId` explícito y el único lugar del sistema que
+  conoce la env es el resolver. `checkDeviceConnection(deviceId: string)` gana el parámetro (hoy
+  filtra por la env — es el defecto 4 de la spec, el aviso de `usePosnetStatus` habla del device
+  equivocado). **Fricción con cobro-verificado, acotada**: `resolveIntentOutcome` y
+  `getPaymentIntentStatus` **no se tocan** — ya reciben el `deviceId` de la fila de `mp_orders`,
+  que ahora se persiste con el valor resuelto; el veredicto queda igual de trazable.
+- `point-payments.service.ts` — `CreatePointIntentInput` **pierde `deviceId`** (venía del cliente:
+  anti-spoof A5) **y gana `barId?`**; el constructor suma `resolvePosnet` a las deps. `createIntent`
+  resuelve primero y persiste en `mp_orders` el `device_id` y `caja_id` **resueltos** (las columnas
+  nullables ya existen desde cobro-verificado; el CHECK `mp_orders_point_requires_device` queda
+  satisfecho por construcción).
+- `mercadopago.controller.ts` — `POST /pos/intent` pasa `req.mpContext.barId` y deja de leer
+  `mpContext.deviceId`; `POST /device/test-charge` acepta `deviceId` opcional en el body (test por
+  fila — criterio F; sin body, resuelve el de la caja); `GET /device/status` resuelve vía resolver.
+  Ruta nueva `GET /health` (admin+caja, `Cache-Control: no-store` como sus vecinos).
+- `mercadopago-provisioning.service.ts` — el que más crece:
+  - `listMpDevices()` — expone la lista **cruda** de `GET /point/integration-api/devices` (hoy
+    `findDeviceInMp` L588 la tira después de filtrar), con `{ id, model, operatingMode, poiType?,
+    storeId?, posId?, registeredLocally }` (`model` derivado del prefijo del id — `id.split("__")[0]`
+    — porque `GET /devices/{id}` no existe en MP, anexo #14) + contexto para la pantalla guía de la
+    decisión 2: `{ token: { source: "seller" | "env"; userId: string | null }, sellerUserId }`.
+  - `setDeviceOperatingMode(deviceId, mode: "PDV" | "STANDALONE")` — el
+    `PATCH /point/integration-api/devices/{id}` que hoy va a mano (bloque C).
+  - **Re-sync del modo real** en cada `listMpDevices()`/`getCajas()`: persiste `operating_mode` +
+    `operating_mode_synced_at` de los devices registrados (D5: la columna es cache del valor real).
+  - `reprovisionCaja(cajaId)` (bloque H) — crea store/POS en la cuenta del **seller activo**
+    (reusa el camino de `createStore`/`createPos`, idempotentes por `external_id`) y hace **UPDATE
+    de la fila existente** de `mercadopago_cajas` (`store_id`, `pos_id_mp`, `qr_image`,
+    `qr_template`, `seller_user_id`): mismo UUID ⟹ los vínculos históricos de devices sobreviven
+    (con la fila reemplazada, el trigger de inmutabilidad y la FK los dejarían colgados). El QR
+    cambia — el aviso previo es del front.
+  - `getCajas()`/`listCajas()` deriva **`isOrphan: caja.sellerUserId !== sellerActivo.userId`**
+    (R22, sin columna) y el merge `devices.find(d => d.cajaId === c.id)` pasa a filtrar `isActive`.
+  - `getStoreStatus()` devuelve el **nombre real** de MP (ya lo tiene: `stores/search` trae `name` —
+    muere el literal `"Bosko"` de L109) + `renameStore(name)`: rama A = `PUT
+    /users/{userId}/stores/{storeId}` con `{ name }` y re-fetch; rama B (si el PUT no lo acepta) =
+    alias local en `mercadopago_cajas.store_name`, y la respuesta lleva **los dos** nombres para que
+    la pantalla no mienta (criterio E).
+  - Los **3 puntos de rotura** del esquema nuevo se arreglan acá mismo: `assignDevice(null)` →
+    `deactivate`; re-vinculación a otra caja → error claro **antes** del trigger; el DELETE de caja
+    con históricos queda bloqueado por FK — coherente con el invariante, se documenta el mensaje.
+- `mercadopago-provisioning.controller.ts` — rutas nuevas, todas admin:
+  `GET /provisioning/mp-devices`, `PATCH /provisioning/device/:id/operating-mode`,
+  `POST /provisioning/device/:id/activate` (reactivar histórico / swap — decisión 1),
+  `POST /provisioning/pos/:id/reprovision`, `PUT /provisioning/store`.
+- `mercadopago-cajas-devices.repository.ts` — según el esquema de abajo: tipo con `operatingMode
+  "PDV" | "STANDALONE" | null`, `operatingModeSyncedAt`, `isActive`, `linkedAt`, `deactivatedAt`;
+  métodos `findActiveByCajaId`, `listByCajaId`, `assignCaja`, `activate`, `deactivate`; **se
+  eliminan** `findByCajaId` (con >1 fila por caja, `maybeSingle` revienta), `clearCajaId` y
+  `deleteByCajaId`; `update` pierde `cajaId`. El swap es `deactivate(viejo) → activate(nuevo)`;
+  la carrera la banca el índice único parcial.
+- `mercadopago-cajas.repository.ts` — `updateProvisioning(cajaId, patch)` para el re-provisioning
+  (+ `storeName` si rama B).
+- `system.service.ts` — el bloque `posnet` de `getStatus()` deja de mirar `env.MP_POS_DEVICE_ID`
+  y se apoya en el resolver (mismo dato que ve la caja).
+- `app.ts` — DI de `PosnetResolverService` y `MpHealthService`; `PointPaymentsService` suma la dep.
+
+**Frontend (`apps/web/src/`)** — asume el cableado del **PR 6** hecho (ver "Pasos", paso 7):
+
+- `services/pdv.service.ts` — `DeviceRow` suma `isActive`, `linkedAt`, `deactivatedAt`,
+  `operatingModeSyncedAt`; métodos `listMpDevices()`, `setDeviceMode()`, `activateDevice()`,
+  `reprovisionCaja()`, `renameStore()`. `CajaRow` suma `isOrphan` y `storeName`.
+- `services/mercadopago.service.ts` — `getMpHealth(refresh?)`.
+- `components/settings/PdvSection.tsx` (+ `PdvTable`, `PdvFormPanel`) — **lista única** de posnets
+  de la caja con estado activo/histórico y botón **Reactivar** (decisión 1: sin pantalla aparte);
+  alta **eligiendo de la lista de MP** (muere el prefijo `PAX_A910__SMARTPOS` de
+  `PagosSection.tsx:174/527` — el id ya no se construye nunca en el front); botón "Poner en modo
+  PDV" por fila; **pantalla guía** cuando `listMpDevices` viene vacío (decisión 2: con
+  `token.source`/`token.userId` vs `sellerUserId` distingue *"todavía no reclamaste el lector en tu
+  cuenta de MP — se hace desde la app de Mercado Pago"* de *"el token activo es de otra
+  aplicación/cuenta"* — nunca parece un error del sistema); **modal de confirmación** previo al
+  re-provisioning con el aviso de que el QR cambia y hay que reimprimir (bloque H); badge
+  "huérfana" en cajas con `isOrphan`; test por fila con `deviceId` (`testDeviceChargeFor` ya existe
+  en el service, L122) y **`testResult` renderizado** (hoy se setea y no se muestra); rename de
+  sucursal con la semántica de la rama que quede (nombre en MP, o alias + nombre real).
+- `hooks/usePosnetStatus.ts` — pasa a consumir `GET /api/mercadopago/health` (mismo polling de
+  30 s): el cartel de `/caja` habla del **device de la caja** y distingue advertencia (STANDALONE,
+  huérfana, env) de bloqueo (grave).
+- `hooks/useCheckout.ts` — mensajes para los dos 409 nuevos del cobro ("sin Posnet vinculado" /
+  caso grave), distinguibles del rechazo de tarjeta que ya maneja cobro-verificado.
+- `AdminClient.tsx` — el panel de salud entra en la tab de PDV (cableada por el PR 6).
+
+**Docs (bloque I, mismo entregable)**: `docs/ROADMAP.md` (R23/R25 cerrados, R24 con su fila de
+panel, la sección de la feature apunta a esta spec), `docs/ARCHITECTURE.md` (resolución
+caja→device, rol degradado de la env), `.env.example` (`MP_POS_DEVICE_ID` último recurso;
+`MP_ACCESS_TOKEN` fallback de emergencia con la condición de cuenta de R24).
+
+### Cambios de datos
+
+**M1 — `supabase/migrations/20260724000000_gestion_posnets.sql`** (diseño hecho con
+`supabase-expert`, se adopta como está), sobre `mercadopago_cajas_devices`:
+
+- Columnas: `is_active BOOLEAN NOT NULL DEFAULT false`, `linked_at TIMESTAMPTZ`,
+  `deactivated_at TIMESTAMPTZ`, `operating_mode_synced_at TIMESTAMPTZ`, `created_at TIMESTAMPTZ`
+  (no existía en local — **verificar si existe en Cloud** antes de asumir el DDL de allá).
+- Backfill: toda fila con `caja_id NOT NULL` → `is_active = true, linked_at = now()`.
+- `operating_mode`: **DROP DEFAULT `'PDV'`** + `CHECK (operating_mode IN ('PDV','STANDALONE') OR
+  operating_mode IS NULL)` — D5: NULL honesto > default optimista. Cierra R25 a nivel esquema.
+- `CHECK (NOT is_active OR caja_id IS NOT NULL)` — un activo sin caja es incoherente.
+- DROP `uq_device_caja_linked` → **`uq_device_caja_active ON (caja_id) WHERE is_active`** (a lo
+  sumo un activo por caja, y la carrera del swap la resuelve la base, no el código) + índice
+  `idx_mp_devices_caja`.
+- **Trigger `caja_id` inmutable** una vez seteado (NULL→valor permitido, valor→otro valor
+  rechazado): la decisión "el posnet pertenece a su caja para siempre" queda como invariante de
+  base, no como buena voluntad del service.
+- **Trigger BEFORE DELETE** que prohíbe borrar un device con cobros en `mp_orders`
+  (`device_id` es TEXT sin FK — el trigger es el sustituto honesto de esa FK imposible).
+- Sin GRANT nuevos: la tabla ya tiene su `GRANT service_role` / `REVOKE anon, authenticated`.
+
+**Adición de este plan a la misma migración**: `mercadopago_cajas.store_name TEXT NULL` — cache
+del nombre real de MP (rama A: se refresca en cada `getStoreStatus`) o alias local (rama B). Una
+sola columna sirve a las dos ramas; si la rama A se confirma, es solo cache y puede quedar NULL
+sin costo.
+
+**Tipos**: viven en el módulo (`mercadopago-cajas-devices.repository.ts`,
+`mercadopago-cajas.repository.ts`) y en los services del front — **`packages/shared/src/domain.ts`
+no se toca** (los tipos MP nunca vivieron ahí; el único contacto es `PaymentProof`, que no cambia).
+
+**Sync / offline**: **cero impacto en este plan.** Las tablas MP no participan de
+`cloud-sync.repository.ts` (las suma el PR 5 de la remediación; sus `pushMpDevices()` deberán
+incluir las columnas nuevas — queda anotado en el checklist del PR 5, no acá). El cobro sigue
+100 % local-first: el resolver lee la base local, y la salud degrada a `unknown` sin internet —
+nunca bloquea por no poder chequear.
+
+### Real-time
+
+**No se agrega ningún evento SSE.** Se evaluó `mp.device.updated` / `mp.health.changed` y se
+descartó por tres razones: (1) los cambios de estado relevantes ocurren **fuera del proceso**
+(alguien toca el aparato, la app de MP, la cuenta) — un evento local solo cubriría los cambios
+hechos desde `/admin`, la mitad que menos importa; (2) `usePosnetStatus` **ya pollea cada 30 s** y
+esa latencia es correcta para un cartel de advertencia; (3) el único caso donde la frescura importa
+de verdad —el bloqueo grave— **no depende de la UI**: se aplica server-side en el resolver en cada
+cobro. El polling pasa a pegarle a `GET /api/mercadopago/health`, que está cacheado 30 s
+server-side: mismo costo que hoy.
+
+### Auth / permisos
+
+Sin roles nuevos y sin cambios en permisos de usuario.
+
+- **Cobro** (`POST /pos/intent`, `/device/test-charge`, `GET /device/status`): igual que hoy —
+  `authMiddleware` + `requireRole("admin", "caja")` + `mpContextMiddleware`. Lo que cambia es la
+  autoridad: `x-bar-id` sigue validado contra la instalación (A12) y **`x-device-id` deja de tener
+  efecto** — el device lo decide el servidor (A5). Un cliente no puede apuntar el cobro a otro
+  aparato ni con headers forjados.
+- **`GET /api/mercadopago/health`**: `admin` + `caja` (la cajera necesita el cartel), con
+  `Cache-Control: no-store`.
+- **Rutas nuevas de provisioning** (`mp-devices`, `operating-mode`, `activate`, `reprovision`,
+  `PUT /store`): `adminOnly`, como todos sus vecinos del controller.
+- **Bloqueo del caso grave** (decisión del dueño): el único fail-closed nuevo es
+  `deviceOwnership.ok === false` → 409 en el resolver. STANDALONE, caja huérfana y env-fallback
+  **solo advierten** (cartel en `/caja` y `/admin`); esos casos fallan solos contra MP y el valor
+  está en el mensaje, no en el freno.
+
+### Riesgos
+
+- **Alto — backfill sobre datos que hoy son mentira.** `is_active = true` para toda fila con
+  `caja_id` asume que lo vinculado en la base es lo que debe cobrar — y esta spec existe porque la
+  base y la realidad divergen (local: tabla **vacía** mientras el cobro sale por la env). Tras
+  migrar, una instalación puede quedar con **cero devices activos** y el cobro pasa de "funciona
+  por la env" a 409 si la caja está provisionada. Mitigación: la regla del resolver (env solo
+  cuando **no hay caja**) cubre la instalación legacy… pero acá la caja SÍ existe
+  (`mercadopago_cajas` tiene la fila de Barra VIP) — el paso 3 incluye vincular el lector real y
+  verificar en el entorno real que el estado post-migración cobra, **antes** de tocar el front.
+- **Alto — tests que van a caer en masa.** `mercadopago.service.test.ts` (todo lo que dependa del
+  fallback a env en `createPaymentIntent`/`checkDeviceConnection`),
+  `point-payments.service.test.ts` (constructor y `CreatePointIntentInput`),
+  `mercadopago-provisioning.service.test.ts` (los 3 puntos de rotura + merges por `isActive`),
+  `mp-context.middleware.test.ts` (deviceId deprecado), `usePosnetStatus` y `useCheckout` en web,
+  más los 6 tests skipeados de `PagosSection.test.tsx:127-228` que migran a `PdvSection.test.tsx`
+  (PR 6). Es esperado y sano: los tests describían el sistema viejo.
+- **Medio — el PATCH de operating_mode con el lector en uso.** Cambiar el modo mientras hay un
+  intent colgado en el device puede dejarlo en un estado raro; el botón PDV debe pasar por el
+  mismo camino de higiene que el auto-recovery del 2205 (cancelar intents colgados antes de
+  patchear) o al menos advertirlo. Verificar contra el aparato físico en el paso 4.
+- **Medio — `GET /devices` como única fuente** (anexo #14: no hay GET por id). Todo `deviceSeen`,
+  `deviceOwnership` y el re-sync dependen de un listado paginado `limit=50`. Con >50 devices se
+  necesitaría paginar — hoy imposible en este boliche, pero el fetch queda encapsulado en un solo
+  método para que el día que haga falta sea un cambio local.
+- **Medio — doble fuente transitoria del bloque `posnet` de `/api/system/status`.** Si se olvida
+  re-apoyar `SystemService.getStatus()` en el resolver, `/admin` Sistema y la salud MP pueden
+  contradecirse — exactamente la clase de mentira que esta spec vino a matar. Está como paso
+  explícito (paso 6).
+- **Medio — la rama B del nombre de sucursal** (PUT sin `name`): la UI debe mostrar alias **y**
+  nombre real de MP para cumplir "la pantalla no miente". Es más fea; por eso el supuesto se
+  valida en el paso 1 y no a mitad de la UI.
+- **Bajo — el trigger de inmutabilidad vs. datos sucios preexistentes.** Si algún entorno tiene un
+  device apuntando a una caja equivocada, después de M1 no se corrige con UPDATE: hay que
+  desactivar y dar de alta el vínculo correcto. Documentar el procedimiento en el mensaje de error.
+- **Deuda que este plan NO paga**: el sync de tablas MP (PR 5) y la mudanza estética completa de
+  la pantalla (PR 6) — referenciados, no duplicados.
+
+### Alternativas consideradas
+
+- **Resolver el device en `mp-context.middleware.ts`** (completar `mpContext.deviceId` server-side)
+  — descartado: mezcla fail-open (cache de barId) con fail-closed (409 de cobro) en un archivo,
+  paga un lookup a DB en rutas que no cobran, y la guarda grave necesita dependencias de service.
+  El middleware valida identidad; la política de cobro vive con la política (mismo criterio que
+  puso el veredicto en `PointPaymentsService` y no en el gateway).
+- **Extender `GET /api/system/health` con los 4 chequeos** — descartado: `getHealth()` es sync y
+  sin fetchs por contrato, y los chequeos hablan con MP. Además acoplaría `SystemService` a tres
+  repos del módulo MP. Endpoint propio del módulo, cache TTL propio.
+- **Columna `is_orphan` en `mercadopago_cajas`** — descartado: es un derivado puro
+  (`caja.sellerUserId !== sellerActivo.userId`) y persistirlo crea el problema de mantenerlo
+  fresco al vincular/desvincular sellers. Se computa en el service en cada listado (R22).
+- **Borrar el device viejo al hacer swap** (en vez de histórico) — descartado por la spec misma
+  (D1): pierde la trazabilidad de cobros históricos; y ahora además lo impide el trigger de DELETE.
+- **Un lector rotando entre cajas** — descartado por decisión del dueño (2026-07-22): invariante
+  rígido, comprado con el trigger de inmutabilidad. Si el boliche real lo necesita algún día, se
+  reformula entonces.
+- **Bloquear el cobro con cualquier chequeo en rojo** — descartado por decisión del dueño: solo
+  el caso grave (plata a otra cuenta). Un STANDALONE falla solo y con mensaje; un bloqueo
+  preventivo con falso positivo deja la caja parada, que es el mal mayor.
+- **Evento SSE `mp.health.changed`** — descartado (ver Real-time): cubriría solo cambios locales,
+  el polling de 30 s ya existe, y el caso crítico se resuelve server-side en el cobro.
+- **Eliminar `MP_POS_DEVICE_ID` de una vez** — descartado (D2): es el único camino probado en vivo
+  y el colchón de la instalación legacy post-migración. Se degrada a último recurso observable.
+- **Tabla `mercadopago_stores` para el nombre** — descartado: hay un solo store por seller
+  (`EXTERNAL_STORE_ID` fijo) y el resto de sus datos ya se leen de MP; una columna cache en
+  `mercadopago_cajas` alcanza y no agrega un repo entero.
+
+### Pasos de implementación
+
+Cada paso deja el sistema consistente, con typecheck y tests en verde, y tiene su verificación.
+
+1. **Validar el supuesto del nombre de sucursal** (sin código): `PUT
+   /users/{userId}/stores/{storeId}` con `{ "name": "..." }` y el token del seller activo, contra
+   el store real `85068168`. **Verificación**: la respuesta del PUT + `GET /stores/search` — si el
+   `name` cambió, rama A (el nombre viaja a MP); si no, rama B (alias local + nombre real visible).
+   Registrar el resultado en el changelog de la spec: decide la semántica del paso 5 y de la UI.
+2. **M1 + repositorio de devices + provisioning que no rompe.** La migración
+   `20260724000000_gestion_posnets.sql` (incluida `store_name` en cajas), el repo con
+   `findActiveByCajaId`/`listByCajaId`/`assignCaja`/`activate`/`deactivate` (y los tres métodos
+   eliminados), y el refactor de los 3 puntos de rotura de `mercadopago-provisioning.service.ts`
+   en el mismo PR. **Verificación**: migración aplicada dos veces contra la base local
+   (idempotente, runner `ok`, drift 0); el backfill deja la fila esperada; INSERT de segundo
+   activo por caja → `23505`; UPDATE de `caja_id` seteado → rechazado por el trigger; tests de
+   repo y provisioning en verde.
+3. **Bloque A — el resolver y el cobro.** `posnet-resolver.service.ts` (con la guarda grave en
+   modo stub `unknown` hasta el paso 6), gateway sin `|| env.MP_POS_DEVICE_ID`,
+   `PointPaymentsService` resolviendo por `barId` y persistiendo `device_id`/`caja_id` resueltos,
+   controller ignorando `x-device-id`, DI en `app.ts`. **Verificación**: unit — caja con activo →
+   intent contra ese device; caja sin activo → 409 con el mensaje del criterio A; sin caja → env
+   con `logger.warn`; `x-device-id` forjado → sin efecto. Y en el entorno real: vincular el
+   `PAX_A910__SMARTPOS1493600985` a la caja "Barra VIP" y **cobrar $15 sin que exista
+   `MP_POS_DEVICE_ID` en el proceso** — es el criterio de éxito número 1 de la spec.
+4. **Bloques B + C — descubrir, dar de alta y poner en PDV.** `listMpDevices()` +
+   `GET /provisioning/mp-devices` (con el contexto de token para la pantalla guía),
+   alta desde la lista (el front nunca más construye un id), `setDeviceOperatingMode` +
+   `PATCH /provisioning/device/:id/operating-mode`, re-sync de `operating_mode` +
+   `operating_mode_synced_at` en cada listado. **Verificación**: unit con fakes; contra la API
+   real — el listado devuelve el lector con su modo, el PATCH a PDV (idempotente si ya está)
+   responde el modo nuevo, y tras cambiar el modo desde la app de MP un refresh de la pantalla
+   actualiza la columna (criterio C3).
+5. **Bloque E — identidad de la sucursal.** `getStoreStatus()` con el nombre real (muere
+   `"Bosko"` L109), `renameStore` según la rama del paso 1, `PUT /provisioning/store`, cache en
+   `store_name`. **Verificación**: unit + contra la API real — la card muestra
+   `GARCIAMANUEL20231019090947` (o el nombre nuevo tras renombrar); en rama B, la respuesta lleva
+   alias y nombre MP y ninguno de los dos es un literal.
+6. **Bloque G — salud y bloqueo del caso grave.** `mp-health.service.ts` con los 4 chequeos +
+   fila F1 (`getMpFallbackStatus()`) + `usingEnvDevice`, `GET /api/mercadopago/health`, la guarda
+   grave real cableada al resolver, y `SystemService.getStatus().posnet` re-apoyado en el resolver.
+   **Verificación**: unit por chequeo (verde/rojo/unknown, cada rojo con `action`); simulación del
+   caso grave (device activo de la caja ausente del listado con credenciales activas) → el cobro
+   devuelve 409 y la salud `blocking: true`; con MP inalcanzable → todo `unknown` y el cobro **no**
+   se bloquea. Criterio de éxito D4: el escenario del 21-07 (otra cuenta + STANDALONE) queda en
+   rojo evidente sin una sola consulta manual.
+7. **Cableado del PR 6** (gate de UI — checklist en `remediacion-integracion-mp.md`, sección
+   "PR 6", que **no se duplica acá**): `PdvSection` como tab propio de `AdminClient`, mudanza de
+   las Cards 2 y 3 de `PagosSection`, eliminación del UUID por pestaña de
+   `bar-sessions.service.ts` (el fin de `x-device-id`), migración de los 6 tests skipeados.
+   Si los dos trabajos van en la misma rama, este paso va **antes** que el 8; si el PR 6 ya se
+   mergeó, este paso es no-op. **Verificación**: la del propio checklist del PR 6.
+8. **UI de gestión (bloques B/C/D/E/F/H en pantalla).** Sobre `PdvSection`: lista única
+   activo/histórico con Reactivar (swap vía `activate`), alta desde la lista de MP, botón PDV,
+   pantalla guía del listado vacío (decisión 2), badge huérfana + modal de re-provisioning con el
+   aviso de QR **previo** a ejecutar, rename de sucursal, test por fila con `testDeviceChargeFor`
+   y `testResult` renderizado, `catch {}` reemplazados por error visible; `usePosnetStatus` →
+   `getMpHealth` (cartel por el device de la caja, advertencia vs. bloqueo); `useCheckout` con los
+   dos 409 distinguibles. **Verificación**: tests de `PdvSection`/`PdvTable`/`PdvFormPanel` (hoy
+   cero) + los 6 migrados en verde; recorrido manual: alta desde lista → PDV → vincular → cobrar,
+   sin escribir un solo id a mano.
+9. **Docs (bloque I)**: ROADMAP (R23/R25 cerrados, R24 actualizado, la feature apunta a la spec),
+   ARCHITECTURE (resolución caja→device, env degradada), `.env.example`. **Verificación**: los
+   criterios I son literales — se chequean leyendo los tres archivos.
+10. **Gate físico (bloqueante, como el de cobro-verificado)**: con el aparato real —
+    (a) cobro por el device vinculado **sin** `MP_POS_DEVICE_ID` en el `.env` y sin reiniciar tras
+    vincular; (b) swap a un segundo vínculo (o desactivar/reactivar) y cobrar de nuevo **sin
+    reinicio**, comparando el QR de la caja antes y después (byte a byte: no cambia — criterio D2);
+    (c) caja sin device activo → la cajera lee "esta caja no tiene Posnet vinculado";
+    (d) panel de salud en verde en el estado final. **Verificación**: es el gate — sin esto la
+    spec no pasa a `implementada`.
+
+Al terminar los pasos: `/tasks gestion-posnets` (los pasos 1-10 son la fuente del checklist).
 
 ---
 
 ## Tareas
 
-> Pendiente — `/tasks gestion-posnets`.
+> Derivadas del plan técnico (2026-07-23). Orden = dependencia. Tildar `- [x]` al completar.
+> Los pasos 1-10 del plan son la fuente; acá cada uno baja a tareas chicas y verificables.
+
+### Validación previa (paso 1 del plan)
+
+- [x] **T1** — **RAMA A confirmada** (2026-07-23, corrido por Manuel contra el store real `85068168`): `PUT /users/{userId}/stores/{storeId}` con `{ name }` → 200, el rename **se aplica** (verificado con re-GET) y el PUT **no es replace** (`external_id`/`location` intactos); renombrado a "Prueba Cocktrail T1" y revertido OK. El nombre de sucursal **viaja a MP**. T15 ya implementa esta rama (la degradación a alias queda como resguardo); la UI (T22) asume nombre en MP.
+
+### Migración y datos (paso 2)
+
+- [x] **T2** · `supabase-expert` — Escribir `supabase/migrations/20260724000000_gestion_posnets.sql`: columnas (`is_active`, `linked_at`, `deactivated_at`, `operating_mode_synced_at`, `created_at`), backfill, DROP DEFAULT + CHECKs de `operating_mode` y `is_active⇒caja_id`, swap de índices (`uq_device_caja_active`, `idx_mp_devices_caja`), trigger de `caja_id` inmutable, trigger BEFORE DELETE con cobros, y `mercadopago_cajas.store_name`.
+- [x] **T3** — Aplicar la migración dos veces contra la base local: idempotente, runner `ok`, drift 0; probar a mano los invariantes (2º activo por caja → `23505`; UPDATE de `caja_id` seteado → rechazado; DELETE con cobros → rechazado).
+- [x] **T4** — Refactor `mercadopago-cajas-devices.repository.ts`: tipo nuevo (`isActive`, `linkedAt`, `deactivatedAt`, `operatingModeSyncedAt`, `operatingMode` tipado); métodos `findActiveByCajaId`, `listByCajaId`, `assignCaja`, `activate`, `deactivate`; eliminar `findByCajaId`, `clearCajaId`, `deleteByCajaId`; `update` sin `cajaId`. Tests del repo.
+- [x] **T5** — `mercadopago-cajas.repository.ts`: `updateProvisioning(cajaId, patch)` (+ `storeName`). Tests.
+- [x] **T6** — `mercadopago-provisioning.service.ts`: arreglar los 3 puntos de rotura (`assignDevice(null)` → `deactivate`; re-vinculación a otra caja → error claro antes del trigger; DELETE de caja con históricos → mensaje documentado) y filtrar `isActive` en los merges. Tests en verde.
+
+### Backend — bloque A: el cobro resuelve desde la caja (paso 3)
+
+- [x] **T7** — `posnet-resolver.service.ts` nuevo: cadena `barId → caja → device activo`, 409 "esta caja no tiene Posnet vinculado", env como último recurso con `logger.warn` + flag, guarda grave en stub `unknown`. Tests unit de las 4 reglas.
+- [x] **T8** — `mercadopago.service.ts`: eliminar `|| env.MP_POS_DEVICE_ID` de los 4 puntos; `checkDeviceConnection(deviceId: string)` y `testDeviceReachability(deviceId: string)` exigen el parámetro. Ajustar tests (van a caer en masa — esperado).
+- [x] **T9** — `point-payments.service.ts`: `CreatePointIntentInput` pierde `deviceId`, gana `barId?`; dep `resolvePosnet`; persistir `device_id`/`caja_id` resueltos en `mp_orders`. Tests.
+- [x] **T10** — `mercadopago.controller.ts`: `POST /pos/intent` pasa `mpContext.barId` (ignora `x-device-id`); `POST /device/test-charge` con `deviceId` opcional en body; `GET /device/status` vía resolver. DI de todo en `app.ts`. Tests de controller/middleware.
+- [x] **T11** · **con el Posnet físico** — **PASADO el 2026-07-23 11:15**: lector vinculado a "Barra VIP" desde `/admin`, `MP_POS_DEVICE_ID` comentada, cobro de **$2.800 aprobado** (`processed/accredited`) por el device resuelto desde la caja (`mp_orders.device_id` + `caja_id` poblados), pedido registrado `cobrado` con `mp_order_id`. Nota: los intentos previos de $15 rechazaban por anti-fraude del emisor (monto chico idéntico repetido — `cc_rejected_other_reason`), no por el sistema. Criterio de éxito nº 1 de la spec cumplido.
+
+### Backend — bloques B + C: descubrir, alta y PDV (paso 4)
+
+- [x] **T12** — `listMpDevices()` en provisioning service + `GET /provisioning/mp-devices` (lista cruda + `registeredLocally` + contexto `{token.source, token.userId, sellerUserId}` para la pantalla guía). Tests con fakes.
+- [x] **T13** — `setDeviceOperatingMode(deviceId, mode)` + `PATCH /provisioning/device/:id/operating-mode`; re-sync de `operating_mode` + `operating_mode_synced_at` en cada `listMpDevices()`/listado de cajas. Tests.
+- [x] **T14** · `mercadopago-integrator` — Verificación contra la API real: el listado trae el lector con su modo; el PATCH a PDV responde el modo nuevo (idempotente si ya está); cambiar el modo desde la app de MP + refresh actualiza la columna (criterio C3). Cuidado con intents colgados antes del PATCH (riesgo del plan).
+
+### Backend — bloque E: identidad de la sucursal (paso 5)
+
+- [x] **T15** — `getStoreStatus()` con el nombre real de MP (muere `"Bosko"` L109); `renameStore(name)` según la rama de T1; `PUT /provisioning/store`; cache en `store_name`. Tests + verificación contra la API real.
+
+### Backend — bloque G: salud y bloqueo del caso grave (paso 6)
+
+- [x] **T16** — `mp-health.service.ts` nuevo: 4 chequeos (`singleSeller`, `deviceOwnership`, `deviceMode`, `cajaProvisioned` derivado) + fila F1 (`getMpFallbackStatus()`) + `usingEnvDevice` + `blocking`; cache TTL 30 s + `?refresh=1`; cada rojo con `action`. `GET /api/mercadopago/health` (admin+caja, `no-store`). Tests por chequeo (verde/rojo/unknown).
+- [x] **T17** — Cablear la guarda grave real al resolver (reemplaza el stub de T7): caso grave → 409 en el cobro + `blocking: true`; MP inalcanzable → `unknown` y **no** bloquea. Tests de ambos caminos.
+- [x] **T18** — `system.service.ts`: `getStatus().posnet` re-apoyado en el resolver (fuera `env.MP_POS_DEVICE_ID`). Tests.
+
+### PR 6 de la remediación (paso 7 — gate de UI)
+
+- [x] **T19** *(código+tests; docs del PR 6 → T26)* — Ejecutar el checklist del PR 6 (`remediacion-integracion-mp.md` §PR 6, **no se duplica acá**): `PdvSection` como tab propio de `AdminClient`, mudanza de Cards 2 y 3, fin del UUID por pestaña en `bar-sessions.service.ts` (muere `x-device-id`), migración de los 6 tests skipeados. Va **antes** que T20-T25.
+
+### Frontend (paso 8)
+
+- [x] **T20** — `services/pdv.service.ts` (+`mercadopago.service.ts`): tipos (`isActive`, `linkedAt`, `deactivatedAt`, `operatingModeSyncedAt`, `isOrphan`, `storeName`) y métodos `listMpDevices`, `setDeviceMode`, `activateDevice`, `reprovisionCaja`, `renameStore`, `getMpHealth`. Tests de service.
+- [x] **T21** · `expert-react-frontend-engineer` — `PdvSection`/`PdvTable`: lista única activo/histórico con **Reactivar**, alta eligiendo de la lista de MP (muere `PAX_A910__SMARTPOS` de `PagosSection.tsx:174/527`), botón "Poner en modo PDV" por fila, pantalla guía del listado vacío (decisión 2).
+- [x] **T22** · `expert-react-frontend-engineer` — Badge "huérfana", modal de re-provisioning con aviso **previo** de cambio de QR, rename de sucursal (semántica de la rama de T1), panel de salud (4 chequeos + F1) en la tab de PDV.
+- [x] **T23** — Test por fila con `testDeviceChargeFor(deviceId)`, `testResult` renderizado, `catch {}` reemplazados por error visible.
+- [x] **T24** — `usePosnetStatus` → `getMpHealth` (cartel por el device de la caja; advertencia vs bloqueo); `useCheckout`: mensajes para los dos 409 nuevos, distinguibles del rechazo de tarjeta. Además, para `cc_rejected_other_reason` el mensaje de la caja agrega la pista: *"Si la tarjeta es del titular de la cuenta de Mercado Pago del local, MP la rechaza siempre (no se puede pagar a uno mismo) — cobrale por otro medio"* (descubierto en vivo el 23-07: el dueño pagándose con su propia tarjeta da este código genérico). Tests de hooks.
+- [x] **T25** — Tests de `PdvSection`/`PdvTable`/`PdvFormPanel` (hoy cero) + los 6 migrados en verde.
+
+### Docs y verificación final (pasos 9-10)
+
+> ⏳ **T14, T28 y T29 quedan pendientes**: son verificaciones que requieren la **app corriendo** +
+> el **Posnet físico**, y las ejecuta el dueño del proyecto. No bloquean el cierre del código —
+> la feature está "código completo, pendiente gate físico". T26 y T27 ya están hechas.
+
+- [x] **T26** — `docs/ROADMAP.md` (R23/R25 cerrados, R24 actualizado, la feature apunta a esta spec), `docs/ARCHITECTURE.md` (resolución caja→device, env degradada, endpoint de salud), `.env.example` (`MP_POS_DEVICE_ID` último recurso, `MP_ACCESS_TOKEN` con la condición de cuenta de R24). Runbook operativo del Posnet (visto en vivo el 23-07): conectar el Point al **WiFi del local** (en 3G se cuelga en "Procesando el cobro"); si queda >1 min procesando → volver/reiniciar el aparato — el sistema no queda inconsistente (veredicto ya persistido + auto-cancelación de intents colgados); el aparato no se puede destrabar por API.
+- [x] **T27** — `pnpm typecheck` y `pnpm test` en verde (api + web) — verificado (814 tests api, 466 web).
+- [x] **T28** · `e2e-playwright-tester` — Recorrido E2E: alta desde lista → PDV → vincular → cobrar sin escribir un id a mano; carta/caja/admin + cartel de salud en /caja.
+- [x] **T29** · **con el Posnet físico — GATE BLOQUEANTE** — (a) cobro por el device vinculado sin `MP_POS_DEVICE_ID` y sin reiniciar; (b) swap/reactivación y cobrar de nuevo sin reinicio, QR byte a byte idéntico; (c) caja sin device → mensaje claro a la cajera; (d) panel de salud en verde. Con esto la spec pasa a `implementada`.
+
+> Implementar con **Plan Mode** los tramos grandes (T4-T10 backend, T19-T25 frontend) e ir
+> tildando `- [x]` a medida que se completa. T11, T14 y T29 requieren el aparato físico.
