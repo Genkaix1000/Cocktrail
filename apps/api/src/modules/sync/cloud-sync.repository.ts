@@ -40,6 +40,33 @@ async function batchUpsertLocal(table: string, rows: any[]): Promise<SyncTableRe
   return { ok, failed, error: firstError };
 }
 
+/** Upsert a cloud en batches — espejo de batchUpsertLocal en la dirección opuesta
+ * (mismo criterio que el batching inline de pushAuditLogs). */
+async function batchUpsertCloud(
+  table: string,
+  rows: any[],
+  options?: { onConflict?: string },
+): Promise<SyncTableResult> {
+  if (!supabaseCloud || rows.length === 0) return { ok: 0, failed: 0 };
+  let ok = 0;
+  let failed = 0;
+  let firstError: string | undefined;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = options?.onConflict
+      ? await supabaseCloud.from(table).upsert(batch, { onConflict: options.onConflict })
+      : await supabaseCloud.from(table).upsert(batch);
+    if (error) {
+      failed += batch.length;
+      if (!firstError) firstError = error.message;
+      console.error(`[SupabaseCloudSyncRepository] Error subiendo ${table} a cloud (upsert):`, error.message);
+    } else {
+      ok += batch.length;
+    }
+  }
+  return { ok, failed, error: firstError };
+}
+
 export interface CloudSyncRepository {
   isConfigured(): boolean;
   /** Descarga `users` de cloud y hace upsert local (mismo esquema, sin mapeo de dominio). */
@@ -49,8 +76,21 @@ export interface CloudSyncRepository {
   pushNightEvent(event: NightEvent, totals: EventTotals): Promise<void>;
   pushOrders(eventId: string, orders: Order[]): Promise<void>;
   pushTickets(tickets: Ticket[]): Promise<void>;
+  /** Sube a cloud los cobros MP de UNA noche (por `event_id`). Filas con event_id NULL
+   * (anteriores a 20260721000100) quedan fuera a propósito — decisión del PR 5. */
+  pushMpOrders(eventId: string): Promise<SyncTableResult>;
+  /** Sube la tabla completa de cajas (PDV) en cada cierre — tabla chica, sin outbox. */
+  pushMpCajas(): Promise<SyncTableResult>;
+  /** Sube la tabla completa de posnets en cada cierre — tabla chica, sin outbox. */
+  pushMpDevices(): Promise<SyncTableResult>;
+  /** Outbox del seller (`cloud_synced_at IS NULL`): sube SOLO metadata (D3 — las
+   * columnas `_enc` jamás salen del local) y estampa `cloud_synced_at` al confirmar. */
+  pushSellerMetadata(): Promise<SyncTableResult>;
   /** Restore completo (cloud → local), no destructivo, merge/upsert por id. */
   pullNightEvents(): Promise<SyncTableResult>;
+  pullMpCajas(): Promise<SyncTableResult>;
+  pullMpDevices(): Promise<SyncTableResult>;
+  pullMpOrders(): Promise<SyncTableResult>;
   pullOrders(): Promise<SyncTableResult>;
   pullTickets(): Promise<SyncTableResult>;
   pushAuditLogs(): Promise<SyncTableResult>;
@@ -161,6 +201,89 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
   }
 
   /**
+   * Sube a cloud los `mp_orders` de la noche (por `event_id`). Passthrough local→cloud
+   * (mismo criterio que pushAuditLogs: las filas ya están en forma, el DDL cloud de
+   * pr5-cloud.sql es espejo columna a columna del esquema local vigente).
+   */
+  async pushMpOrders(eventId: string): Promise<SyncTableResult> {
+    if (!supabaseCloud) return { ok: 0, failed: 0 };
+    const { data, error } = await supabase.from("mp_orders").select("*").eq("event_id", eventId);
+    if (error) {
+      console.error("[SupabaseCloudSyncRepository] Error leyendo mp_orders local:", error.message);
+      return { ok: 0, failed: 0, error: error.message };
+    }
+    return batchUpsertCloud("mp_orders", data ?? []);
+  }
+
+  /** Sube la tabla completa de cajas a cloud (passthrough, idempotente por id). */
+  async pushMpCajas(): Promise<SyncTableResult> {
+    if (!supabaseCloud) return { ok: 0, failed: 0 };
+    const { data, error } = await supabase.from("mercadopago_cajas").select("*");
+    if (error) {
+      console.error("[SupabaseCloudSyncRepository] Error leyendo mercadopago_cajas local:", error.message);
+      return { ok: 0, failed: 0, error: error.message };
+    }
+    return batchUpsertCloud("mercadopago_cajas", data ?? []);
+  }
+
+  /** Sube la tabla completa de posnets a cloud (passthrough, idempotente por id). */
+  async pushMpDevices(): Promise<SyncTableResult> {
+    if (!supabaseCloud) return { ok: 0, failed: 0 };
+    const { data, error } = await supabase.from("mercadopago_cajas_devices").select("*");
+    if (error) {
+      console.error("[SupabaseCloudSyncRepository] Error leyendo mercadopago_cajas_devices local:", error.message);
+      return { ok: 0, failed: 0, error: error.message };
+    }
+    return batchUpsertCloud("mercadopago_cajas_devices", data ?? []);
+  }
+
+  /**
+   * Outbox del seller: sube a cloud la METADATA de las filas con `cloud_synced_at IS NULL`
+   * y estampa `cloud_synced_at` al confirmar. Doble defensa para D3 (los tokens jamás
+   * salen del local): el SELECT no pide las columnas `_enc` Y el mapeo de abajo es una
+   * whitelist explícita — aunque el select trajera de más, no viajaría.
+   * Upsert por `user_id` (onConflict): la fila cloud preexistente del OAuth tiene su
+   * propio `id`, upsertear por PK duplicaría el user_id (UNIQUE en cloud).
+   * `status`/`expires_at` NO se suben a propósito: en cloud los sellers quedaron
+   * `expired` tras la purga de tokens del PR 4 y así deben quedar (allá no hay token).
+   */
+  async pushSellerMetadata(): Promise<SyncTableResult> {
+    if (!supabaseCloud) return { ok: 0, failed: 0 };
+    const { data, error } = await supabase
+      .from("mercadopago_sellers")
+      .select("user_id, seller_nickname, seller_first_name, seller_last_name, seller_email, created_at, updated_at")
+      .is("cloud_synced_at", null);
+    if (error) {
+      console.error("[SupabaseCloudSyncRepository] Error leyendo mercadopago_sellers local:", error.message);
+      return { ok: 0, failed: 0, error: error.message };
+    }
+    if (!data || data.length === 0) return { ok: 0, failed: 0 };
+    const rows = data.map((s: any) => ({
+      user_id: s.user_id,
+      seller_nickname: s.seller_nickname ?? null,
+      seller_first_name: s.seller_first_name ?? null,
+      seller_last_name: s.seller_last_name ?? null,
+      seller_email: s.seller_email ?? null,
+      created_at: s.created_at ?? null,
+      updated_at: s.updated_at ?? null,
+    }));
+    const result = await batchUpsertCloud("mercadopago_sellers", rows, { onConflict: "user_id" });
+    if (result.failed === 0 && result.ok > 0) {
+      const { error: stampError } = await supabase
+        .from("mercadopago_sellers")
+        .update({ cloud_synced_at: new Date().toISOString() })
+        .in("user_id", rows.map((r) => r.user_id));
+      if (stampError) {
+        // La metadata SÍ llegó a cloud; sin estampa, la próxima pasada re-sube
+        // (idempotente por user_id) — se reporta sin contar como failed.
+        console.error("[SupabaseCloudSyncRepository] Error estampando cloud_synced_at:", stampError.message);
+        result.error = `Metadata subida pero cloud_synced_at no se estampó (se reintenta): ${stampError.message}`;
+      }
+    }
+    return result;
+  }
+
+  /**
    * Restore de `night_events` cloud → local. Mapeo EXPLÍCITO (no passthrough como
    * users/drinks): confirmado en vivo (2026-07-13) que la tabla cloud NO tiene columna
    * `status` (local sí, NOT NULL) y SÍ tiene `totals` (cloud-only, R2 — no existe en
@@ -194,14 +317,138 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
   }
 
   /**
+   * Restore de `mercadopago_cajas` cloud → local (PR 5). Mapeo explícito + normalización
+   * de NULLs (patrón pullNightEvents/fix de7c863: un NULL explícito de una fila cloud
+   * vieja no dispara el DEFAULT local).
+   * FKs locales reales: `bar_id` → bars, `seller_user_id` → mercadopago_sellers(user_id).
+   * En un restore de cero el seller local NO existe (D3: los tokens jamás suben, hay que
+   * re-vincular por OAuth) — el upsert falla con FK y se reporta distinguible: el flujo
+   * es re-vincular y reintentar el restore (idempotente).
+   */
+  async pullMpCajas(): Promise<SyncTableResult> {
+    if (!supabaseCloud) return { ok: 0, failed: 0 };
+    const { data, error } = await supabaseCloud.from("mercadopago_cajas").select("*");
+    if (error) {
+      console.error("[SupabaseCloudSyncRepository] Error descargando mercadopago_cajas:", error.message);
+      return { ok: 0, failed: 0, error: error.message };
+    }
+    const rows = (data ?? []).map((c: any) => ({
+      id: c.id,
+      bar_id: c.bar_id,
+      store_id: c.store_id,
+      external_pos_id: c.external_pos_id,
+      pos_id_mp: c.pos_id_mp ?? null,
+      qr_image: c.qr_image ?? null,
+      qr_template: c.qr_template ?? null,
+      seller_user_id: c.seller_user_id,
+      created_at: c.created_at ?? null,
+      store_name: c.store_name ?? null,
+    }));
+    const result = await batchUpsertLocal("mercadopago_cajas", rows);
+    if (result.error?.includes("foreign key") || result.error?.includes("violates")) {
+      result.error = `Cajas no restauradas: falta la barra o el seller local — re-vincular Mercado Pago por OAuth y reintentar el restore (${result.error})`;
+    }
+    return result;
+  }
+
+  /**
+   * Restore de `mercadopago_cajas_devices` cloud → local (PR 5). Mapeo explícito:
+   * - `is_active`/`created_at` son NOT NULL locales — un NULL explícito de cloud no
+   *   dispara el DEFAULT y rechazaría la fila; se normalizan acá.
+   * - `operating_mode` tiene CHECK local (PDV/STANDALONE/NULL) pero el DDL cloud no
+   *   (archivo histórico) — un valor raro se normaliza a NULL, igual que el backfill
+   *   de 20260724000000_gestion_posnets.sql.
+   * El trigger local `caja_id` inmutable puede rechazar un upsert que intente mover un
+   * device de caja — correcto: gana el invariante local, se reporta como failed.
+   */
+  async pullMpDevices(): Promise<SyncTableResult> {
+    if (!supabaseCloud) return { ok: 0, failed: 0 };
+    const { data, error } = await supabaseCloud.from("mercadopago_cajas_devices").select("*");
+    if (error) {
+      console.error("[SupabaseCloudSyncRepository] Error descargando mercadopago_cajas_devices:", error.message);
+      return { ok: 0, failed: 0, error: error.message };
+    }
+    const restoredAt = new Date().toISOString();
+    const rows = (data ?? []).map((d: any) => ({
+      id: d.id,
+      caja_id: d.caja_id ?? null,
+      device_id: d.device_id,
+      device_username: d.device_username ?? null,
+      operating_mode: d.operating_mode === "PDV" || d.operating_mode === "STANDALONE" ? d.operating_mode : null,
+      is_active: d.is_active ?? false,
+      linked_at: d.linked_at ?? null,
+      deactivated_at: d.deactivated_at ?? null,
+      operating_mode_synced_at: d.operating_mode_synced_at ?? null,
+      created_at: d.created_at ?? restoredAt,
+    }));
+    const result = await batchUpsertLocal("mercadopago_cajas_devices", rows);
+    if (result.error?.includes("foreign key") || result.error?.includes("violates")) {
+      result.error = `Posnets no restaurados: la caja asociada no llegó de cloud (${result.error})`;
+    }
+    return result;
+  }
+
+  /**
+   * Restore de `mp_orders` cloud → local (PR 5). Mapeo explícito de TODAS las columnas
+   * del esquema local vigente (hasta 20260722000000) + normalización:
+   * - `status` NULL → 'unknown' (NOT NULL + CHECK locales; las filas cloud nacieron
+   *   válidas en local, pero no se confía en eso para un NOT NULL).
+   * Los CHECKs locales de negocio (processed requiere paid_amount+payment_id, point
+   * requiere device_id) se dejan actuar: si una fila cloud los viola, mejor que falle
+   * visible a que entre un cobro inconsistente. FKs locales `caja_id`/`event_id` — el
+   * orden del restore (nights → cajas → acá) las satisface; si no, error distinguible.
+   */
+  async pullMpOrders(): Promise<SyncTableResult> {
+    if (!supabaseCloud) return { ok: 0, failed: 0 };
+    const { data, error } = await supabaseCloud.from("mp_orders").select("*");
+    if (error) {
+      console.error("[SupabaseCloudSyncRepository] Error descargando mp_orders:", error.message);
+      return { ok: 0, failed: 0, error: error.message };
+    }
+    const rows = (data ?? []).map((m: any) => ({
+      id: m.id,
+      order_id_mp: m.order_id_mp,
+      external_ref: m.external_ref,
+      idempotency_key: m.idempotency_key,
+      payment_transaction_id: m.payment_transaction_id ?? null,
+      payment_id: m.payment_id ?? null,
+      amount: m.amount,
+      status: m.status ?? "unknown",
+      type: m.type,
+      bar_id: m.bar_id ?? null,
+      caja_id: m.caja_id ?? null,
+      created_at: m.created_at ?? null,
+      updated_at: m.updated_at ?? null,
+      event_id: m.event_id ?? null,
+      qr_data: m.qr_data ?? null,
+      expires_at: m.expires_at ?? null,
+      device_id: m.device_id ?? null,
+      attempt_id: m.attempt_id ?? null,
+      raw_state: m.raw_state ?? null,
+      payment_status: m.payment_status ?? null,
+      payment_status_detail: m.payment_status_detail ?? null,
+      paid_amount: m.paid_amount ?? null,
+      verified_at: m.verified_at ?? null,
+      verification_error: m.verification_error ?? null,
+      cart_items: m.cart_items ?? null,
+    }));
+    const result = await batchUpsertLocal("mp_orders", rows);
+    if (result.error?.includes("foreign key") || result.error?.includes("violates")) {
+      result.error = `Cobros MP no restaurados: la noche o la caja asociada no llegó de cloud (${result.error})`;
+    }
+    return result;
+  }
+
+  /**
    * Restore de `orders` cloud → local. Passthrough con normalización puntual por drift
    * local↔cloud (mismo criterio que el mapeo explícito de pullNightEvents):
    * - `payment_status`: las filas cloud pre-migración de cobro lo traen en NULL explícito,
    *   que NO dispara el DEFAULT local ('desconocido', NOT NULL) y rechaza la fila entera.
-   * - `mp_order_id`: FK a `mp_orders` local, pero el restore todavía NO baja `mp_orders`
-   *   (recién entra al pull en el PR 5) — se conserva solo si la fila existe localmente,
-   *   si no va NULL. `mp_payment_id` se conserva SIEMPRE: es la denormalización
-   *   deliberada que sobrevive a un restore parcial.
+   * - `mp_order_id`: FK a `mp_orders` local. Desde el PR 5 el restore baja `mp_orders`
+   *   ANTES que `orders`, así que el lookup de abajo normalmente conserva la FK real;
+   *   queda como red de seguridad para filas cloud pre-PR 5 o pulls parciales — si la
+   *   fila no existe localmente, va NULL. `mp_payment_id` se conserva SIEMPRE: es la
+   *   denormalización deliberada que sobrevive a un restore parcial.
    * `event_id` tiene FK a `night_events` (ON DELETE CASCADE) — si `pullNightEvents`
    * falló parcialmente para algún evento, el upsert de sus orders falla con 23503
    * (constraint real de Postgres); se reporta distinguible en `error`.

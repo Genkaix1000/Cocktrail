@@ -83,7 +83,14 @@ function makeCloudSyncRepo(overrides?: Partial<CloudSyncRepository>): CloudSyncR
     pushNightEvent: vi.fn().mockResolvedValue(undefined),
     pushOrders: vi.fn().mockResolvedValue(undefined),
     pushTickets: vi.fn().mockResolvedValue(undefined),
+    pushMpOrders: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pushMpCajas: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pushMpDevices: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pushSellerMetadata: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pullNightEvents: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pullMpCajas: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pullMpDevices: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+    pullMpOrders: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pullOrders: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pullTickets: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
     pushAuditLogs: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
@@ -212,6 +219,37 @@ describe("SyncService.pushEventData", () => {
     expect(ticketsRepo.listByOrderIds).toHaveBeenCalledWith(["order-1"]);
     expect(cloudSyncRepo.pushTickets).toHaveBeenCalledWith([{ id: "ticket-1" }]);
   });
+
+  it("PR 5: empuja MP en orden cajas → devices → mp_orders (por event_id) → seller metadata", async () => {
+    const callOrder: string[] = [];
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pushMpCajas: vi.fn().mockImplementation(async () => { callOrder.push("cajas"); return { ok: 1, failed: 0 }; }),
+      pushMpDevices: vi.fn().mockImplementation(async () => { callOrder.push("devices"); return { ok: 1, failed: 0 }; }),
+      pushMpOrders: vi.fn().mockImplementation(async () => { callOrder.push("mpOrders"); return { ok: 4, failed: 0 }; }),
+      pushSellerMetadata: vi.fn().mockImplementation(async () => { callOrder.push("seller"); return { ok: 1, failed: 0 }; }),
+    });
+    const service = makeService({ cloudSyncRepo });
+
+    const result = await service.pushEventData("event-1", CLOSED_EVENT, EMPTY_TOTALS);
+
+    expect(result).toBe(true);
+    expect(callOrder).toEqual(["cajas", "devices", "mpOrders", "seller"]);
+    expect(cloudSyncRepo.pushMpOrders).toHaveBeenCalledWith("event-1");
+  });
+
+  it("PR 5: si un push MP deja filas caídas (failed>0), marca la noche failed y devuelve false", async () => {
+    const eventsRepo = makeEventsRepo();
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pushMpOrders: vi.fn().mockResolvedValue({ ok: 0, failed: 3, error: "cloud caída" }),
+    });
+    const service = makeService({ eventsRepo, cloudSyncRepo });
+
+    const result = await service.pushEventData("event-1", CLOSED_EVENT, EMPTY_TOTALS);
+
+    expect(result).toBe(false);
+    expect(eventsRepo.updateSyncStatus).toHaveBeenCalledWith("event-1", "failed");
+    expect(eventsRepo.updateSyncStatus).not.toHaveBeenCalledWith("event-1", "synced", expect.any(Number));
+  });
 });
 
 describe("SyncService.syncAllPendingEvents", () => {
@@ -253,24 +291,58 @@ describe("SyncService.syncAllPendingEvents", () => {
 
     expect(result).toEqual({ successCount: 0, failedCount: 1 });
   });
+
+  it("PR 5: corre el outbox del seller en cada pasada, incluso sin noches pendientes", async () => {
+    const eventsRepo = makeEventsRepo({ getPendingSync: vi.fn().mockResolvedValue([]) });
+    const cloudSyncRepo = makeCloudSyncRepo();
+    const service = makeService({ eventsRepo, cloudSyncRepo });
+
+    const result = await service.syncAllPendingEvents();
+
+    expect(result).toEqual({ successCount: 0, failedCount: 0 });
+    expect(cloudSyncRepo.pushSellerMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  it("PR 5: si el outbox del seller tira, la pasada sigue igual (no aborta el sync de noches)", async () => {
+    const eventsRepo = makeEventsRepo({
+      getPendingSync: vi.fn().mockResolvedValue([{ ...CLOSED_EVENT, sync_status: "pending" }]),
+    });
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pushSellerMetadata: vi.fn()
+        .mockRejectedValueOnce(new Error("outbox roto"))
+        .mockResolvedValue({ ok: 0, failed: 0 }),
+    });
+    const service = makeService({ eventsRepo, cloudSyncRepo });
+
+    const result = await service.syncAllPendingEvents();
+
+    expect(result).toEqual({ successCount: 1, failedCount: 0 });
+  });
 });
 
 describe("SyncService.restoreFromCloud", () => {
-  it("sin Supabase Cloud configurada, devuelve error claro en las 4 tablas sin intentar nada", async () => {
+  it("sin Supabase Cloud configurada, devuelve error claro en las 7 tablas sin intentar nada", async () => {
     const cloudSyncRepo = makeCloudSyncRepo({ isConfigured: vi.fn().mockReturnValue(false) });
     const service = makeService({ cloudSyncRepo });
 
     const result = await service.restoreFromCloud();
 
     expect(result.nightEvents.error).toMatch(/no está configurada/);
+    expect(result.mpCajas.error).toMatch(/no está configurada/);
+    expect(result.mpDevices.error).toMatch(/no está configurada/);
+    expect(result.mpOrders.error).toMatch(/no está configurada/);
     expect(result.orders.error).toMatch(/no está configurada/);
     expect(cloudSyncRepo.pullNightEvents).not.toHaveBeenCalled();
+    expect(cloudSyncRepo.pullMpOrders).not.toHaveBeenCalled();
   });
 
-  it("éxito total: llama las 4 tablas en orden (night_events primero) y devuelve sus resultados", async () => {
+  it("éxito total: llama las 7 tablas en orden (nights → mp_cajas → mp_devices → mp_orders → orders → tickets → audit_logs) y devuelve sus resultados", async () => {
     const callOrder: string[] = [];
     const cloudSyncRepo = makeCloudSyncRepo({
       pullNightEvents: vi.fn().mockImplementation(async () => { callOrder.push("nightEvents"); return { ok: 3, failed: 0 }; }),
+      pullMpCajas: vi.fn().mockImplementation(async () => { callOrder.push("mpCajas"); return { ok: 1, failed: 0 }; }),
+      pullMpDevices: vi.fn().mockImplementation(async () => { callOrder.push("mpDevices"); return { ok: 1, failed: 0 }; }),
+      pullMpOrders: vi.fn().mockImplementation(async () => { callOrder.push("mpOrders"); return { ok: 4, failed: 0 }; }),
       pullOrders: vi.fn().mockImplementation(async () => { callOrder.push("orders"); return { ok: 10, failed: 0 }; }),
       pullTickets: vi.fn().mockImplementation(async () => { callOrder.push("tickets"); return { ok: 10, failed: 0 }; }),
       pullAuditLogs: vi.fn().mockImplementation(async () => { callOrder.push("auditLogs"); return { ok: 5, failed: 0 }; }),
@@ -279,13 +351,34 @@ describe("SyncService.restoreFromCloud", () => {
 
     const result = await service.restoreFromCloud();
 
-    expect(callOrder).toEqual(["nightEvents", "orders", "tickets", "auditLogs"]);
+    // mp_orders ANTES que orders: así el lookup defensivo de pullOrders conserva
+    // la FK mp_order_id real en vez de anularla (PR 5).
+    expect(callOrder).toEqual(["nightEvents", "mpCajas", "mpDevices", "mpOrders", "orders", "tickets", "auditLogs"]);
     expect(result).toEqual({
       nightEvents: { ok: 3, failed: 0 },
+      mpCajas: { ok: 1, failed: 0 },
+      mpDevices: { ok: 1, failed: 0 },
+      mpOrders: { ok: 4, failed: 0 },
       orders: { ok: 10, failed: 0 },
       tickets: { ok: 10, failed: 0 },
       auditLogs: { ok: 5, failed: 0 },
     });
+  });
+
+  it("falla parcial de MP: si pullMpCajas falla (seller sin re-vincular), igual intenta el resto", async () => {
+    const cloudSyncRepo = makeCloudSyncRepo({
+      pullMpCajas: vi.fn().mockResolvedValue({ ok: 0, failed: 1, error: "re-vincular" }),
+      pullMpOrders: vi.fn().mockResolvedValue({ ok: 4, failed: 0 }),
+      pullOrders: vi.fn().mockResolvedValue({ ok: 10, failed: 0 }),
+    });
+    const service = makeService({ cloudSyncRepo });
+
+    const result = await service.restoreFromCloud();
+
+    expect(result.mpCajas).toEqual({ ok: 0, failed: 1, error: "re-vincular" });
+    expect(cloudSyncRepo.pullMpDevices).toHaveBeenCalled();
+    expect(cloudSyncRepo.pullMpOrders).toHaveBeenCalled();
+    expect(result.orders).toEqual({ ok: 10, failed: 0 });
   });
 
   it("falla parcial: si night_events falla, igual intenta las demás tablas (sin abortar)", async () => {

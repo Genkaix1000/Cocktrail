@@ -15,6 +15,9 @@ function hashPassword(password: string): string {
 
 export type RestoreResult = {
   nightEvents: SyncTableResult;
+  mpCajas: SyncTableResult;
+  mpDevices: SyncTableResult;
+  mpOrders: SyncTableResult;
   orders: SyncTableResult;
   tickets: SyncTableResult;
   auditLogs: SyncTableResult;
@@ -143,7 +146,8 @@ export class SyncService {
 
   /**
    * Sube toda la información transaccional de una noche desde la caja local a la Nube.
-   * Incluye el evento en sí, todos los pedidos, tickets y cierres parciales de caja.
+   * Incluye el evento en sí, todos los pedidos, tickets, y (PR 5) los cobros de
+   * Mercado Pago de la noche + la config de cajas/posnets + la metadata del seller.
    */
   /** Devuelve `true` si el evento terminó `synced`, `false` si falló o no había cloud configurada. */
   async pushEventData(eventId: string, event: NightEvent, eventTotals: EventTotals): Promise<boolean> {
@@ -171,7 +175,24 @@ export class SyncService {
         await this.cloudSyncRepo.pushTickets(tickets);
       }
 
-      // 5. Marcar como sincronizado localmente
+      // 5. Mercado Pago (PR 5): cajas → devices → cobros de la noche → metadata del
+      // seller (outbox). Orden espejo del restore. Cualquier tabla con filas caídas
+      // tira → catch de abajo → sync_status=failed, y el reintento (boot / sync
+      // manual) re-empuja todo (upserts idempotentes).
+      const mpPushes: Array<[string, SyncTableResult]> = [
+        ["mercadopago_cajas", await this.cloudSyncRepo.pushMpCajas()],
+        ["mercadopago_cajas_devices", await this.cloudSyncRepo.pushMpDevices()],
+        ["mp_orders", await this.cloudSyncRepo.pushMpOrders(eventId)],
+        ["mercadopago_sellers", await this.cloudSyncRepo.pushSellerMetadata()],
+      ];
+      const mpFailed = mpPushes.filter(([, r]) => r.failed > 0);
+      if (mpFailed.length > 0) {
+        throw new Error(
+          `Push MP incompleto: ${mpFailed.map(([table, r]) => `${table} (${r.failed} filas: ${r.error ?? "sin detalle"})`).join("; ")}`,
+        );
+      }
+
+      // 6. Marcar como sincronizado localmente
       await this.eventsRepo.updateSyncStatus(eventId, "synced", Date.now());
 
       console.log(`[SyncService] ☁️✅ Evento ${eventId} subido a la nube correctamente.`);
@@ -188,6 +209,18 @@ export class SyncService {
   async syncAllPendingEvents(): Promise<{ successCount: number; failedCount: number }> {
     if (!this.cloudSyncRepo.isConfigured()) {
       throw new Error("No cloud DB configured");
+    }
+
+    // Outbox del seller: corre en CADA pasada (boot + sync manual), haya o no noches
+    // pendientes — es la única vía de subida cuando el seller se (re)vinculó sin que
+    // cerrara ninguna noche. Nunca aborta la pasada: si falla, la próxima reintenta.
+    try {
+      const sellerResult = await this.cloudSyncRepo.pushSellerMetadata();
+      if (sellerResult.failed > 0 || sellerResult.error) {
+        console.error(`[SyncService] Outbox del seller con errores: ${sellerResult.error}`);
+      }
+    } catch (err) {
+      console.error("[SyncService] Falló el outbox del seller:", err);
     }
 
     const pendingEvents = await this.eventsRepo.getPendingSync();
@@ -233,14 +266,20 @@ export class SyncService {
       const notConfigured: SyncTableResult = { ok: 0, failed: 0, error: "Supabase Cloud no está configurada." };
       return {
         nightEvents: notConfigured,
+        mpCajas: notConfigured,
+        mpDevices: notConfigured,
+        mpOrders: notConfigured,
         orders: notConfigured,
         tickets: notConfigured,
         auditLogs: notConfigured,
       };
     }
 
-    // Orden importa: night_events primero (gate real de integridad referencial para
-    // orders/tickets, ver docs/specs/deuda-pre-fase-6/restaurar-backup-desde-cloud.md).
+    // Orden importa (integridad referencial LOCAL): nights primero, después la cadena MP
+    // (cajas → devices → mp_orders: mp_orders tiene FK a cajas y a nights) y recién
+    // entonces orders — con mp_orders ya restaurados, el lookup defensivo de pullOrders
+    // conserva la FK mp_order_id real en vez de anularla (PR 5). Tokens del seller
+    // EXCLUIDOS (D3): tras un restore hay que re-vincular por OAuth.
     // Cada pull ya maneja sus propios errores internamente y no lanza — el try/catch acá
     // es defensa en profundidad ante un fallo inesperado, para que uno no tumbe al resto.
     const safePull = async (label: string, fn: () => Promise<SyncTableResult>): Promise<SyncTableResult> => {
@@ -253,11 +292,14 @@ export class SyncService {
     };
 
     const nightEvents = await safePull("night_events", () => this.cloudSyncRepo.pullNightEvents());
+    const mpCajas = await safePull("mercadopago_cajas", () => this.cloudSyncRepo.pullMpCajas());
+    const mpDevices = await safePull("mercadopago_cajas_devices", () => this.cloudSyncRepo.pullMpDevices());
+    const mpOrders = await safePull("mp_orders", () => this.cloudSyncRepo.pullMpOrders());
     const orders = await safePull("orders", () => this.cloudSyncRepo.pullOrders());
     const tickets = await safePull("tickets", () => this.cloudSyncRepo.pullTickets());
     const auditLogs = await safePull("audit_logs", () => this.cloudSyncRepo.pullAuditLogs());
 
-    return { nightEvents, orders, tickets, auditLogs };
+    return { nightEvents, mpCajas, mpDevices, mpOrders, orders, tickets, auditLogs };
   }
 
   /**

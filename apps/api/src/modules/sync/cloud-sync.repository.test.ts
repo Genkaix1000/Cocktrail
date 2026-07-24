@@ -4,7 +4,7 @@ type QueryResult = { data: any; error: any };
 
 function makeQueryBuilder(result: QueryResult) {
   const builder: any = {};
-  const chainable = ["select", "upsert", "in"];
+  const chainable = ["select", "upsert", "in", "eq", "is", "update"];
   for (const method of chainable) {
     builder[method] = vi.fn(() => builder);
   }
@@ -214,7 +214,7 @@ describe("SupabaseCloudSyncRepository.pullOrders", () => {
     expect(upserted[0].payment_status).toBe("desconocido");
   });
 
-  it("mp_order_id sin fila en la mp_orders local se anula; mp_payment_id se conserva SIEMPRE (restore parcial: mp_orders recién entra al pull en el PR 5)", async () => {
+  it("mp_order_id sin fila en la mp_orders local se anula; mp_payment_id se conserva SIEMPRE (red de seguridad para restores parciales — el restore ya baja mp_orders ANTES, PR 5)", async () => {
     cloudResults.set("orders", {
       data: [{ id: "o1", event_id: "e1", payment_status: "cobrado", mp_order_id: "mp-huerfano", mp_payment_id: "pay-99" }],
       error: null,
@@ -292,5 +292,287 @@ describe("SupabaseCloudSyncRepository.pushAuditLogs / pullAuditLogs", () => {
     localResults.set("audit_logs", { data: null, error: null });
     const repo = new SupabaseCloudSyncRepository();
     expect(await repo.pullAuditLogs()).toEqual({ ok: 1, failed: 0 });
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pushMpOrders", () => {
+  it("filtra por event_id y sube los cobros de ESA noche a cloud (passthrough)", async () => {
+    localResults.set("mp_orders", {
+      data: [{ id: "mp-1", event_id: "event-1", order_id_mp: "ORD01", amount: 1500, status: "processed", type: "point" }],
+      error: null,
+    });
+    cloudResults.set("mp_orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pushMpOrders("event-1");
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    expect(localBuilders.get("mp_orders").eq).toHaveBeenCalledWith("event_id", "event-1");
+    const upserted = cloudBuilders.get("mp_orders").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({ id: "mp-1", event_id: "event-1", status: "processed" });
+  });
+
+  it("sin cobros para la noche, no toca cloud", async () => {
+    localResults.set("mp_orders", { data: [], error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    expect(await repo.pushMpOrders("event-1")).toEqual({ ok: 0, failed: 0 });
+    expect(cloudBuilders.has("mp_orders")).toBe(false);
+  });
+
+  it("si el upsert a cloud falla, reporta failed con el error (nunca boolean suelto)", async () => {
+    localResults.set("mp_orders", { data: [{ id: "mp-1", event_id: "event-1" }], error: null });
+    cloudResults.set("mp_orders", { data: null, error: { message: "cloud caída" } });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pushMpOrders("event-1");
+
+    expect(result.ok).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.error).toMatch(/cloud caída/);
+  });
+
+  it("sin cloud configurada, no hace nada", async () => {
+    cloudConfigured = false;
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pushMpOrders("event-1")).toEqual({ ok: 0, failed: 0 });
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pushMpCajas / pushMpDevices", () => {
+  it("pushMpCajas sube la tabla local completa a cloud", async () => {
+    localResults.set("mercadopago_cajas", { data: [{ id: "c1", bar_id: "b1", store_id: "85068168", store_name: "Bosko" }], error: null });
+    cloudResults.set("mercadopago_cajas", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    expect(await repo.pushMpCajas()).toEqual({ ok: 1, failed: 0 });
+    const upserted = cloudBuilders.get("mercadopago_cajas").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({ id: "c1", store_name: "Bosko" });
+  });
+
+  it("pushMpDevices sube la tabla local completa a cloud (incluye columnas de gestion-posnets)", async () => {
+    localResults.set("mercadopago_cajas_devices", {
+      data: [{ id: "d1", caja_id: "c1", device_id: "PAX_A910__X", is_active: true, linked_at: "2026-07-23T00:00:00Z" }],
+      error: null,
+    });
+    cloudResults.set("mercadopago_cajas_devices", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    expect(await repo.pushMpDevices()).toEqual({ ok: 1, failed: 0 });
+    const upserted = cloudBuilders.get("mercadopago_cajas_devices").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({ id: "d1", device_id: "PAX_A910__X", is_active: true });
+  });
+
+  it("sin cloud configurada, ninguno hace nada", async () => {
+    cloudConfigured = false;
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pushMpCajas()).toEqual({ ok: 0, failed: 0 });
+    expect(await repo.pushMpDevices()).toEqual({ ok: 0, failed: 0 });
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pushSellerMetadata", () => {
+  const PENDING_SELLER = {
+    user_id: "1517393956",
+    seller_nickname: "BOSKO",
+    seller_first_name: "Manuel",
+    seller_last_name: "García",
+    seller_email: "bosko@example.com",
+    created_at: "2026-07-23T00:00:00Z",
+    updated_at: "2026-07-23T00:00:00Z",
+    // El mock devuelve la fila entera aunque el select real pida columnas: exactamente
+    // el escenario que la whitelist del mapeo tiene que sobrevivir (D3).
+    access_token_enc: "v1.SECRETO",
+    refresh_token_enc: "v1.SECRETO2",
+    key_version: 1,
+    cloud_synced_at: null,
+  };
+
+  it("sube SOLO metadata (las columnas _enc jamás viajan) con onConflict user_id, y estampa cloud_synced_at", async () => {
+    localResults.set("mercadopago_sellers", { data: [PENDING_SELLER], error: null });
+    cloudResults.set("mercadopago_sellers", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pushSellerMetadata();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    const [rows, options] = cloudBuilders.get("mercadopago_sellers").upsert.mock.calls[0];
+    expect(rows[0]).toEqual({
+      user_id: "1517393956",
+      seller_nickname: "BOSKO",
+      seller_first_name: "Manuel",
+      seller_last_name: "García",
+      seller_email: "bosko@example.com",
+      created_at: "2026-07-23T00:00:00Z",
+      updated_at: "2026-07-23T00:00:00Z",
+    });
+    expect(rows[0]).not.toHaveProperty("access_token_enc");
+    expect(rows[0]).not.toHaveProperty("refresh_token_enc");
+    expect(rows[0]).not.toHaveProperty("key_version");
+    expect(options).toEqual({ onConflict: "user_id" });
+
+    // Estampa del outbox: el último builder local de la tabla es el del UPDATE.
+    const stampBuilder = localBuilders.get("mercadopago_sellers");
+    expect(stampBuilder.update).toHaveBeenCalledWith({ cloud_synced_at: expect.any(String) });
+    expect(stampBuilder.in).toHaveBeenCalledWith("user_id", ["1517393956"]);
+  });
+
+  it("sin filas pendientes en el outbox, no toca cloud ni estampa nada", async () => {
+    localResults.set("mercadopago_sellers", { data: [], error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    expect(await repo.pushSellerMetadata()).toEqual({ ok: 0, failed: 0 });
+    expect(cloudBuilders.has("mercadopago_sellers")).toBe(false);
+  });
+
+  it("si el upsert a cloud falla, reporta failed y NO estampa cloud_synced_at (el outbox reintenta)", async () => {
+    localResults.set("mercadopago_sellers", { data: [PENDING_SELLER], error: null });
+    cloudResults.set("mercadopago_sellers", { data: null, error: { message: "cloud caída" } });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pushSellerMetadata();
+
+    expect(result.failed).toBe(1);
+    expect(result.error).toMatch(/cloud caída/);
+    // Si hubiera estampado, el último builder local sería el del UPDATE con una llamada.
+    expect(localBuilders.get("mercadopago_sellers").update).not.toHaveBeenCalled();
+  });
+
+  it("sin cloud configurada, no hace nada", async () => {
+    cloudConfigured = false;
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pushSellerMetadata()).toEqual({ ok: 0, failed: 0 });
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pullMpCajas", () => {
+  it("mapeo explícito con normalización de NULLs opcionales", async () => {
+    cloudResults.set("mercadopago_cajas", {
+      data: [{ id: "c1", bar_id: "b1", store_id: "85068168", external_pos_id: "COCKTRAIL-BAR-01", seller_user_id: "1517393956" }],
+      error: null,
+    });
+    localResults.set("mercadopago_cajas", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullMpCajas();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    const upserted = localBuilders.get("mercadopago_cajas").upsert.mock.calls[0][0];
+    expect(upserted[0]).toEqual({
+      id: "c1",
+      bar_id: "b1",
+      store_id: "85068168",
+      external_pos_id: "COCKTRAIL-BAR-01",
+      pos_id_mp: null,
+      qr_image: null,
+      qr_template: null,
+      seller_user_id: "1517393956",
+      created_at: null,
+      store_name: null,
+    });
+  });
+
+  it("si el upsert falla por FK (seller local ausente tras restore de cero), el error pide re-vincular", async () => {
+    cloudResults.set("mercadopago_cajas", {
+      data: [{ id: "c1", bar_id: "b1", store_id: "85068168", external_pos_id: "X", seller_user_id: "1517393956" }],
+      error: null,
+    });
+    localResults.set("mercadopago_cajas", { data: null, error: { message: 'violates foreign key constraint "mercadopago_cajas_seller_user_id_fkey"' } });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullMpCajas();
+
+    expect(result.failed).toBe(1);
+    expect(result.error).toMatch(/re-vincular/);
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pullMpDevices", () => {
+  it("normaliza NULLs de filas cloud viejas: is_active→false, created_at→relleno, operating_mode inválido→null", async () => {
+    cloudResults.set("mercadopago_cajas_devices", {
+      data: [{ id: "d1", device_id: "PAX_A910__X", is_active: null, created_at: null, operating_mode: "CUALQUIERA" }],
+      error: null,
+    });
+    localResults.set("mercadopago_cajas_devices", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullMpDevices();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    const upserted = localBuilders.get("mercadopago_cajas_devices").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({
+      id: "d1",
+      device_id: "PAX_A910__X",
+      caja_id: null,
+      is_active: false,
+      operating_mode: null,
+    });
+    expect(upserted[0].created_at).toEqual(expect.any(String));
+  });
+
+  it("operating_mode válido (PDV/STANDALONE) se conserva", async () => {
+    cloudResults.set("mercadopago_cajas_devices", {
+      data: [{ id: "d1", caja_id: "c1", device_id: "PAX_A910__X", operating_mode: "PDV", is_active: true, created_at: "2026-07-23T00:00:00Z" }],
+      error: null,
+    });
+    localResults.set("mercadopago_cajas_devices", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    await repo.pullMpDevices();
+
+    const upserted = localBuilders.get("mercadopago_cajas_devices").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({ caja_id: "c1", operating_mode: "PDV", is_active: true });
+  });
+});
+
+describe("SupabaseCloudSyncRepository.pullMpOrders", () => {
+  it("mapeo explícito: status NULL se normaliza a 'unknown', el resto pasa con ?? null", async () => {
+    cloudResults.set("mp_orders", {
+      data: [{
+        id: "mp-1", order_id_mp: "ORD01", external_ref: "COCKTRAIL-1", idempotency_key: "k1",
+        amount: 1500, status: null, type: "point", event_id: "e1", device_id: "PAX_A910__X",
+        payment_id: "pay-99", paid_amount: 1500, cart_items: [{ drinkId: 1 }],
+      }],
+      error: null,
+    });
+    localResults.set("mp_orders", { data: null, error: null });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullMpOrders();
+
+    expect(result).toEqual({ ok: 1, failed: 0 });
+    const upserted = localBuilders.get("mp_orders").upsert.mock.calls[0][0];
+    expect(upserted[0]).toMatchObject({
+      id: "mp-1",
+      order_id_mp: "ORD01",
+      status: "unknown",
+      type: "point",
+      event_id: "e1",
+      payment_id: "pay-99",
+      paid_amount: 1500,
+      payment_transaction_id: null,
+      qr_data: null,
+      verification_error: null,
+    });
+  });
+
+  it("si el upsert falla por FK (noche/caja no restaurada), el error queda distinguible", async () => {
+    cloudResults.set("mp_orders", {
+      data: [{ id: "mp-1", order_id_mp: "ORD01", external_ref: "X", idempotency_key: "k1", amount: 1, status: "created", type: "qr", event_id: "e-inexistente" }],
+      error: null,
+    });
+    localResults.set("mp_orders", { data: null, error: { message: 'violates foreign key constraint "mp_orders_event_id_fkey"' } });
+    const repo = new SupabaseCloudSyncRepository();
+
+    const result = await repo.pullMpOrders();
+
+    expect(result.failed).toBe(1);
+    expect(result.error).toMatch(/no llegó de cloud/);
+  });
+
+  it("sin cloud configurada, no hace nada", async () => {
+    cloudConfigured = false;
+    const repo = new SupabaseCloudSyncRepository();
+    expect(await repo.pullMpOrders()).toEqual({ ok: 0, failed: 0 });
   });
 });
