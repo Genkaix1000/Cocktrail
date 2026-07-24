@@ -345,8 +345,13 @@ red, sin que nadie instale Docker ni Node ni levante nada a mano (ver "Topologí
 Resuelto: `pnpm --filter cocktrail-api db:reset` (local/cloud, confirmación tipeada para cloud) y
 auto-seed de historial demo sacado del boot. Ver `apps/api/src/scripts/reset-data.ts`.
 
+- [ ] **Actualizar `reset-data.ts` para cubrir las tablas MP** (detectado 2026-07-24): `TABLES_TO_RESET`
+  no incluye `mp_orders`/`mercadopago_cajas`/`mercadopago_cajas_devices` (anteriores al PR 5). Correrlo
+  hoy contra Cloud dejaría cobros MP huérfanos apuntando a noches borradas → el próximo restore fallaría
+  por FK. Prerrequisito del item siguiente.
 - [ ] Correr `db:reset --target=cloud` recién el día de la entrega real (no antes, para no perder
-  datos de prueba útiles mientras se sigue developeando).
+  datos de prueba útiles mientras se sigue developeando — y además Cloud es el backup de emergencia
+  de la prueba en el boliche).
 
 ### Topología del deploy: PC servidor + tablet operativa *(corregido 2026-07-21)*
 
