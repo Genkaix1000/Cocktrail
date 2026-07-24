@@ -37,4 +37,25 @@ describe("LogoutNavRail", () => {
     await user.keyboard("{Escape}");
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it("colapsado en confirm: solo check; click afuera cancela", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(
+      <div>
+        <button type="button">afuera</button>
+        <LogoutNavRail
+          collapsed
+          confirm
+          onAsk={vi.fn()}
+          onCancel={onCancel}
+          onConfirm={vi.fn()}
+        />
+      </div>,
+    );
+    expect(screen.getByRole("button", { name: "Confirmar cierre de sesión" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancelar cierre de sesión" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "afuera" }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
 });

@@ -7,17 +7,20 @@ import {
   CreditCard,
   Link2,
   Loader2,
+  LogOut,
   Mail,
   Monitor,
   QrCode,
   ShieldCheck,
   Store,
   UserRound,
+  Wifi,
 } from "lucide-react";
 import { ApiError } from "@/services/api-client";
 import { mercadopagoService, type MpSellerStatus } from "@/services/mercadopago.service";
 import { configService } from "@/services/config.service";
 import { pdvService, type ProvisioningSummary, type RenameStoreResult } from "@/services/pdv.service";
+import { barSessionsService, type BarSession } from "@/services/bar-sessions.service";
 import Toast from "@/components/shared/Toast";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 
@@ -47,6 +50,7 @@ export default function PagosSection() {
   const [cloudCleanupPending, setCloudCleanupPending] = useState(false);
 
   const [summary, setSummary] = useState<ProvisioningSummary | null>(null);
+  const [sessions, setSessions] = useState<BarSession[]>([]);
 
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
@@ -61,7 +65,12 @@ export default function PagosSection() {
 
   const loadData = useCallback(async () => {
     try {
-      setSummary(await pdvService.getSummary());
+      const [summaryData, sessionsData] = await Promise.all([
+        pdvService.getSummary(),
+        barSessionsService.listAll().catch(() => [] as BarSession[]),
+      ]);
+      setSummary(summaryData);
+      setSessions(sessionsData);
     } catch (err) {
       console.error("Error loading MP summary:", err);
       setError("No se pudo cargar el estado de la sucursal. Reintentá en unos segundos.");
@@ -73,6 +82,17 @@ export default function PagosSection() {
     configService.get().then(c => setSandbox(c.mercadoPago.sandbox)).catch(() => {});
     loadData().finally(() => setLoading(false));
   }, [refreshSellerStatus, loadData]);
+
+  const handleForceLogout = useCallback(async (barId: string) => {
+    setError(null);
+    try {
+      await barSessionsService.forceLogout(barId);
+      setSessions(await barSessionsService.listAll());
+    } catch (err) {
+      console.error("Error forcing logout:", err);
+      setError("No se pudo cerrar la sesión de la caja.");
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -389,114 +409,160 @@ export default function PagosSection() {
         </div>
       )}
 
-      {/* 2. Sucursal — secundaria */}
-      <div className={`${cardShell} p-5 space-y-4`}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
-            <Store size={16} strokeWidth={1.8} />
+      {/* 2. Sucursal (featured) + Sesión de caja */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className="rounded-2xl p-5 space-y-4 shadow-card border border-transparent bg-[var(--accent-primary)] dark:bg-[var(--accent-featured)] text-[var(--text-on-accent)]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center border border-white/25 bg-white/10 shrink-0">
+              <Store size={16} strokeWidth={1.8} />
+            </div>
+            <div>
+              <h3 className="text-[15px] font-semibold">Sucursal</h3>
+              <p className="text-[12px] text-white/55">Datos que viajan a Mercado Pago en el comprobante</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Sucursal</h3>
-            <p className="text-[12px] text-[var(--text-tertiary)]">Datos que viajan a Mercado Pago en el comprobante</p>
-          </div>
-        </div>
 
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3.5 min-w-0">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <p className="text-[15px] font-semibold text-[var(--text-primary)] truncate">
+              <p className="text-[15px] font-semibold truncate">
                 {summary?.store.name ?? summary?.store.storeName ?? "Sucursal sin nombre"}
               </p>
-              <p className="text-[11px] text-[var(--text-tertiary)] font-mono">
+              <p className="text-[11px] text-white/55 font-mono">
                 {summary?.store.linked ? `store_id: ${summary.store.storeId}` : "No vinculada"}
               </p>
             </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {summary?.store.linked ? (
+                <span className="text-[11px] font-semibold text-white bg-white/15 px-2.5 py-1 rounded-full">
+                  Vinculada
+                </span>
+              ) : (
+                <span className="text-[11px] font-medium text-white/55">Sin vincular</span>
+              )}
+              {summary?.store.linked && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRenameDraft(summary?.store.name ?? summary?.store.storeName ?? "");
+                    setRenameOpen((v) => !v);
+                  }}
+                  className="h-8 px-3 rounded-full bg-white/10 border border-white/25 text-white/85 hover:text-white hover:bg-white/15 text-[12px] font-semibold transition-colors cursor-pointer"
+                >
+                  Renombrar
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {summary?.store.linked ? (
-              <span className="text-[11px] font-semibold text-[var(--success-base)] bg-[var(--success-soft)] px-2.5 py-1 rounded-full">
-                Vinculada
+
+          {renameOpen && (
+            <div className="space-y-2.5 rounded-2xl bg-black/20 border border-white/10 p-4">
+              <label htmlFor="store-rename" className="text-[13px] font-semibold block">
+                Nombre de la sucursal
+              </label>
+              <p className="text-[12px] text-white/70 leading-relaxed">
+                El nombre viaja a Mercado Pago: es el que ve el cliente en el comprobante del cobro.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  id="store-rename"
+                  type="text"
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  maxLength={60}
+                  placeholder="Nombre de la sucursal"
+                  className="flex-1 h-10 px-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleRenameStore}
+                  disabled={savingRename || !renameDraft.trim() || renameDraft.trim().length > 60}
+                  className="h-10 px-4 rounded-full bg-white text-[var(--accent-primary)] text-[13px] font-semibold flex items-center gap-1.5 hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  {savingRename ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Guardar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {renameResult && renameResult.renamedInMp === false && (
+            <div
+              role="status"
+              className="flex items-start gap-2.5 rounded-xl bg-black/20 border border-amber-300/30 px-3.5 py-2.5 text-[12px] text-amber-100 leading-relaxed"
+            >
+              <AlertTriangle size={15} className="shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                Mercado Pago no aceptó el cambio de nombre: se guardó el alias local{" "}
+                <strong className="font-semibold">«{renameResult.name}»</strong>, pero el nombre en
+                Mercado Pago sigue siendo{" "}
+                <strong className="font-semibold">«{renameResult.mpName ?? "el anterior"}»</strong>.
               </span>
-            ) : (
-              <span className="text-[11px] font-medium text-[var(--text-tertiary)]">Sin vincular</span>
-            )}
-            {summary?.store.linked && (
-              <button
-                type="button"
-                onClick={() => {
-                  setRenameDraft(summary?.store.name ?? summary?.store.storeName ?? "");
-                  setRenameOpen((v) => !v);
-                }}
-                className="h-8 px-3 rounded-full bg-[var(--bg-panel)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[12px] font-semibold transition-colors cursor-pointer"
-              >
-                Renombrar
-              </button>
-            )}
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-black/20 border border-white/10 grid grid-cols-2 divide-x divide-white/10 overflow-hidden">
+            <div className="px-4 py-3 flex items-center gap-2.5">
+              <QrCode size={14} strokeWidth={1.8} className="text-white/55 shrink-0" />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-white/55">Barras</p>
+                <p className="text-[18px] font-bold tabular leading-tight">{summary?.bars ?? 0}</p>
+              </div>
+            </div>
+            <div className="px-4 py-3 flex items-center gap-2.5">
+              <Monitor size={14} strokeWidth={1.8} className="text-white/55 shrink-0" />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-white/55">Posnets</p>
+                <p className="text-[18px] font-bold tabular leading-tight">{summary?.posnets ?? 0}</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {renameOpen && (
-          <div className="space-y-2.5 rounded-2xl bg-[var(--bg-panel)] p-4">
-            <label htmlFor="store-rename" className="text-[13px] font-semibold text-[var(--text-primary)] block">
-              Nombre de la sucursal
-            </label>
-            <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-              El nombre viaja a Mercado Pago: es el que ve el cliente en el comprobante del cobro.
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                id="store-rename"
-                type="text"
-                value={renameDraft}
-                onChange={(e) => setRenameDraft(e.target.value)}
-                maxLength={60}
-                placeholder="Nombre de la sucursal"
-                className="flex-1 h-10 px-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
-              />
-              <button
-                type="button"
-                onClick={handleRenameStore}
-                disabled={savingRename || !renameDraft.trim() || renameDraft.trim().length > 60}
-                className="h-10 px-4 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 hover:bg-[var(--accent-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
-              >
-                {savingRename ? <Loader2 size={14} className="animate-spin" /> : null}
-                Guardar
-              </button>
+        <div className={`${cardShell} p-5 space-y-4`}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
+              <UserRound size={16} strokeWidth={1.8} />
             </div>
-          </div>
-        )}
-
-        {renameResult && renameResult.renamedInMp === false && (
-          <div
-            role="status"
-            className="flex items-start gap-2.5 rounded-xl bg-[var(--amber-soft)] px-3.5 py-2.5 text-[12px] text-[var(--amber-base)] leading-relaxed"
-          >
-            <AlertTriangle size={15} className="shrink-0 mt-0.5" aria-hidden="true" />
-            <span>
-              Mercado Pago no aceptó el cambio de nombre: se guardó el alias local{" "}
-              <strong className="font-semibold">«{renameResult.name}»</strong>, pero el nombre en
-              Mercado Pago sigue siendo{" "}
-              <strong className="font-semibold">«{renameResult.mpName ?? "el anterior"}»</strong>.
-            </span>
-          </div>
-        )}
-
-        {/* Stats flat — panel anidado, sin mini-cards */}
-        <div className="rounded-2xl bg-[var(--bg-panel)] grid grid-cols-2 divide-x divide-[var(--border-subtle)] overflow-hidden">
-          <div className="px-4 py-3 flex items-center gap-2.5">
-            <QrCode size={14} strokeWidth={1.8} className="text-[var(--text-tertiary)] shrink-0" />
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Barras</p>
-              <p className="text-[18px] font-bold tabular text-[var(--text-primary)] leading-tight">{summary?.bars ?? 0}</p>
+              <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">Sesión de caja</h3>
+              <p className="text-[12px] text-[var(--text-tertiary)]">Quién está operando cada caja ahora</p>
             </div>
           </div>
-          <div className="px-4 py-3 flex items-center gap-2.5">
-            <Monitor size={14} strokeWidth={1.8} className="text-[var(--text-tertiary)] shrink-0" />
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Posnets</p>
-              <p className="text-[18px] font-bold tabular text-[var(--text-primary)] leading-tight">{summary?.posnets ?? 0}</p>
+
+          {sessions.length > 0 ? (
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
+              {sessions.map((s) => (
+                <div key={s.id} className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[var(--success-soft)] text-[var(--success-base)] shrink-0">
+                      <Wifi size={12} />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-medium text-[var(--text-primary)]">{s.username}</p>
+                      <p className="text-[11px] text-[var(--text-tertiary)]">
+                        Conectado {formatRelative(s.connectedAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleForceLogout(s.barId)}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-[var(--danger-soft)] text-[var(--danger-base)] hover:brightness-95 text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    <LogOut size={11} />
+                    Cerrar sesión
+                  </button>
+                </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl bg-[var(--bg-panel)] px-4 py-3">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-tertiary)] shrink-0">
+                <UserRound size={12} />
+              </div>
+              <span className="text-[12px] text-[var(--text-tertiary)]">Sin usuario conectado</span>
+            </div>
+          )}
         </div>
       </div>
 

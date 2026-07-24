@@ -25,6 +25,13 @@ vi.mock("@/services/pdv.service", () => ({
   },
 }));
 
+vi.mock("@/services/bar-sessions.service", () => ({
+  barSessionsService: {
+    listAll: vi.fn(),
+    forceLogout: vi.fn(),
+  },
+}));
+
 vi.mock("@/services/config.service", () => ({
   configService: {
     get: vi.fn(),
@@ -35,11 +42,13 @@ vi.mock("@/services/config.service", () => ({
 import { mercadopagoService } from "@/services/mercadopago.service";
 import { pdvService } from "@/services/pdv.service";
 import { configService } from "@/services/config.service";
+import { barSessionsService } from "@/services/bar-sessions.service";
 
 const mockedUseTheme = vi.mocked(useTheme);
 const mockedMpService = vi.mocked(mercadopagoService);
 const mockedPdvService = vi.mocked(pdvService);
 const mockedConfigService = vi.mocked(configService);
+const mockedBarSessions = vi.mocked(barSessionsService);
 
 const UNLINKED_STATUS = { linked: false, status: null, nickname: null, email: null, linkedAt: null, displayName: null };
 
@@ -64,6 +73,8 @@ beforeEach(() => {
   mockedMpService.getOAuthUrl.mockResolvedValue({ url: "https://auth.mercadopago.com/authorization?..." });
   mockedMpService.unlinkSeller.mockResolvedValue({ ok: true, cloudCleaned: true });
   mockedPdvService.getSummary.mockResolvedValue(SUMMARY);
+  mockedBarSessions.listAll.mockResolvedValue([]);
+  mockedBarSessions.forceLogout.mockResolvedValue({ ok: true });
   mockedConfigService.get.mockResolvedValue({
     mercadoPago: { publicKey: "", accessTokenMasked: "", sandbox: false },
   } as any);
@@ -292,5 +303,37 @@ describe("PagosSection", () => {
     await confirmUnlink(user);
 
     expect(await screen.findByText(/limpieza pendiente en la nube/i)).toBeInTheDocument();
+  });
+
+  // ── Sesión de caja (grid al lado de Sucursal) ──
+
+  it("muestra la sesión de caja activa y permite cerrarla", async () => {
+    const user = userEvent.setup();
+    mockedBarSessions.listAll
+      .mockResolvedValueOnce([
+        {
+          id: "session-1",
+          barId: "bar-1",
+          userId: "caja:ana",
+          username: "ana",
+          role: "caja" as const,
+          connectedAt: new Date().toISOString(),
+          lastSeenAt: new Date().toISOString(),
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    render(<PagosSection />);
+    expect(await screen.findByText("ana")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Cerrar sesión/i }));
+
+    await waitFor(() => expect(mockedBarSessions.forceLogout).toHaveBeenCalledWith("bar-1"));
+    expect(await screen.findByText("Sin usuario conectado")).toBeInTheDocument();
+  });
+
+  it("muestra 'Sin usuario conectado' cuando no hay sesiones", async () => {
+    render(<PagosSection />);
+    expect(await screen.findByText("Sin usuario conectado")).toBeInTheDocument();
   });
 });

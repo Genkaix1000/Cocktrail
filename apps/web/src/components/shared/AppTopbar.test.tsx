@@ -40,6 +40,13 @@ describe("AppTopbar", () => {
     expect(screen.getByText("admin")).toBeInTheDocument();
   });
 
+  it("sin username no inventa 'Admin'", () => {
+    render(<AppTopbar breadcrumbs={["Caja"]} role="caja" />);
+    expect(screen.queryByText("Admin")).not.toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("caja")).toBeInTheDocument();
+  });
+
   it("el toggle día/noche llama toggleDark", async () => {
     const user = userEvent.setup();
     render(<AppTopbar breadcrumbs={["Admin"]} username="manuel" role="admin" />);

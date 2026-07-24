@@ -428,11 +428,11 @@ body {
 .ct-checkout-btn {
   background: var(--accent-primary);
   color: var(--text-on-accent);
-  border: 1px solid color-mix(in oklab, var(--accent-primary) 70%, #fff);
-  transition: filter 0.15s ease, transform 0.1s ease;
+  border: none;
+  transition: background-color 0.15s ease, transform 0.1s ease;
 }
 .ct-checkout-btn:hover:not(:disabled) {
-  filter: brightness(1.12);
+  background: var(--accent-primary-hover);
 }
 .ct-checkout-btn:active:not(:disabled) {
   transform: scale(0.98);
@@ -440,5 +440,4 @@ body {
 .dark .ct-checkout-btn {
   background: var(--accent-primary);
   color: var(--text-on-accent);
-  border-color: color-mix(in oklab, var(--accent-primary) 70%, #fff);
 }

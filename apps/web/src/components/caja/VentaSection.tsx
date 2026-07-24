@@ -771,26 +771,29 @@ export default function VentaSection({ drinks, printer }: Props) {
             )}
           </div>
 
-          {/* Mobile/Tablet Sticky Bottom Bar */}
+          {/* Mobile sticky bottom bar */}
           {totalItems > 0 && (
-            <div className="md:hidden shrink-0 border-t border-ink-800 bg-ink-925/90 backdrop-blur-md px-5 py-3 flex items-center justify-between shadow-[0_-4px_24px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-300">
-              <div
+            <div className="md:hidden shrink-0 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3 flex items-center justify-between gap-3 shadow-card">
+              <button
+                type="button"
                 onClick={() => setIsCartOpen(true)}
-                className="flex flex-col text-left cursor-pointer group"
+                className="flex flex-col text-left cursor-pointer min-w-0 bg-transparent border-none p-0"
               >
-                <span className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400 group-hover:text-ink-200 transition-colors">
+                <span className="text-[11px] font-medium text-[var(--text-tertiary)]">
                   {totalItems} {totalItems === 1 ? "ítem" : "ítems"}
                 </span>
-                <span className="text-2xl font-black text-green group-hover:brightness-110 transition-all">
-                  ${totalPrice.toLocaleString("es-AR")}
+                <span className="text-[22px] font-bold tabular text-[var(--text-primary)] leading-none mt-0.5">
+                  <span className="text-[0.65em] text-[var(--text-tertiary)] mr-0.5">$</span>
+                  {totalPrice.toLocaleString("es-AR")}
                 </span>
-              </div>
+              </button>
 
               <button
+                type="button"
                 onClick={openCheckout}
-                className="ct-checkout-btn h-11 px-6 font-black rounded-xl text-xs uppercase tracking-[0.18em] flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all shadow-lg"
+                className="h-11 px-5 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-[13px] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all shrink-0"
               >
-                <Receipt size={14} />
+                <Receipt size={15} strokeWidth={2} />
                 Cobrar
               </button>
             </div>
@@ -798,40 +801,42 @@ export default function VentaSection({ drinks, printer }: Props) {
         </div>
 
         {/* Sidebar cart (md+ only) */}
-        <aside className="hidden md:flex w-[320px] xl:w-[350px] flex-col border-l border-ink-800 bg-ink-925 shrink-0 h-full relative">
-          <div ref={shoppingBagRef} className="px-4 py-3.5 border-b border-ink-800 flex items-center justify-between gap-1.5 shrink-0 bg-ink-950/20">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <ShoppingBag size={15} className="text-green shrink-0" />
-              <span className="text-[10px] font-black uppercase tracking-wider text-ink-50 truncate">
+        <aside className="hidden md:flex w-[320px] xl:w-[350px] flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shrink-0 h-full relative overflow-hidden rounded-r-[24px]">
+          <div
+            ref={shoppingBagRef}
+            className="px-4 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between gap-2 shrink-0"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <ShoppingBag size={15} className="text-[var(--accent-primary)] shrink-0" strokeWidth={1.8} />
+              <span className="text-[13px] font-semibold text-[var(--text-primary)] truncate">
                 Pedido actual
               </span>
-              <span className="font-mono text-[10px] text-ink-400 px-1.5 py-0.5 bg-ink-850 border border-ink-800 rounded tabular">
+              <span className="font-mono text-[11px] font-semibold text-[var(--accent-text)] px-1.5 py-0.5 bg-[var(--accent-surface)] rounded-md tabular">
                 {totalItems}
               </span>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {totalItems > 0 && (
-                <button
-                  onClick={clearCart}
-                  className="text-ink-400 hover:text-danger p-1.5 rounded-md hover:bg-danger/10 transition-all cursor-pointer"
-                  title="Vaciar carrito"
-                  aria-label="Vaciar carrito"
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </div>
+            {totalItems > 0 && (
+              <button
+                type="button"
+                onClick={clearCart}
+                className="text-[var(--text-tertiary)] hover:text-[var(--danger-base)] p-1.5 rounded-lg hover:bg-[var(--danger-soft)] transition-all cursor-pointer"
+                title="Vaciar carrito"
+                aria-label="Vaciar carrito"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 pt-3 pb-36 flex flex-col gap-2 min-h-0">
+          <div className="flex-1 overflow-y-auto px-3 pt-3 pb-4 flex flex-col gap-2 min-h-0 bosko-scroll">
             {cartEntries.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center gap-3 px-6 py-12">
-                <div className="w-14 h-14 rounded-2xl bg-ink-850 border border-ink-800 flex items-center justify-center">
-                  <ShoppingBag size={24} className="text-ink-500" />
+                <div className="w-14 h-14 rounded-2xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] flex items-center justify-center">
+                  <ShoppingBag size={22} className="text-[var(--text-tertiary)]" strokeWidth={1.8} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm font-bold text-ink-300">Sin items</span>
-                  <span className="text-xs text-ink-500">
+                  <span className="text-sm font-semibold text-[var(--text-secondary)]">Sin ítems</span>
+                  <span className="text-[12px] text-[var(--text-tertiary)]">
                     Agregá productos desde el grid
                   </span>
                 </div>
@@ -850,26 +855,30 @@ export default function VentaSection({ drinks, printer }: Props) {
             )}
           </div>
 
-          <div className="fixed bottom-0 right-0 w-[320px] xl:w-[350px] px-5 py-4 border-t border-l border-ink-800 bg-ink-925/90 backdrop-blur-md flex flex-col gap-3 z-20">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-1.5">
-                <Receipt size={14} className="text-ink-400" />
-                <span className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400">
-                  Total
+          <div className="shrink-0 px-4 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col gap-3">
+            <div className="flex justify-between items-end gap-3">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-[11px] font-medium text-[var(--text-tertiary)]">Total</span>
+                <span className="text-[11px] text-[var(--text-secondary)] tabular">
+                  {totalItems} {totalItems === 1 ? "ítem" : "ítems"}
                 </span>
               </div>
-              <span className="text-3xl font-black tabular text-green">
-                ${totalPrice.toLocaleString("es-AR")}
+              <span className="text-[28px] font-bold tabular text-[var(--text-primary)] leading-none tracking-tight">
+                <span className="text-[0.6em] text-[var(--text-tertiary)] mr-0.5 font-semibold">$</span>
+                {totalPrice.toLocaleString("es-AR")}
               </span>
             </div>
             <button
+              type="button"
               onClick={openCheckout}
               disabled={totalItems === 0}
-              className="ct-checkout-btn w-full h-12 font-black rounded-xl text-xs uppercase tracking-[0.18em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-[14px] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              <Receipt size={16} strokeWidth={2.5} />
+              <Receipt size={16} strokeWidth={2} />
               Cobrar
-              <span className="text-[9px] font-mono opacity-60 normal-case tracking-normal">(C)</span>
+              <kbd className="ml-0.5 text-[10px] font-mono font-medium opacity-70 normal-case tracking-normal px-1.5 py-0.5 rounded-md bg-black/15">
+                C
+              </kbd>
             </button>
           </div>
         </aside>
@@ -877,41 +886,54 @@ export default function VentaSection({ drinks, printer }: Props) {
 
       {/* ── Modal 1: Carrito de Caja (sólo mobile) ── */}
       {isCartOpen && (
-        <div onClick={() => setIsCartOpen(false)} className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-md p-4">
-          <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-10">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-black text-ink-50">Pedido Actual</h2>
-              <button onClick={() => setIsCartOpen(false)} className="p-3 bg-ink-850 border border-ink-750 rounded-full active:scale-90 transition-transform cursor-pointer text-ink-400 hover:text-ink-50">
-                <X size={20} />
+        <div onClick={() => setIsCartOpen(false)} className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div onClick={(e) => e.stopPropagation()} className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full max-w-md rounded-2xl p-6 shadow-card animate-in slide-in-from-bottom-10">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-[20px] font-bold text-[var(--text-primary)]">Pedido actual</h2>
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(false)}
+                className="p-2.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-full active:scale-90 transition-transform cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                <X size={18} />
               </button>
             </div>
-            <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-1">
+            <div className="flex flex-col gap-2.5 max-h-[50vh] overflow-y-auto bosko-scroll pr-0.5">
               {Object.entries(cart).map(([idStr, qty]) => {
                 const d = drinks.find((x) => x.id === Number(idStr));
                 if (!d) return null;
                 return (
-                  <div key={d.id} className="flex justify-between items-center bg-ink-850 border border-ink-800 p-4 rounded-2xl">
+                  <div key={d.id} className="flex justify-between items-center bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-3.5 rounded-xl">
                     <div className="flex flex-col min-w-0">
-                      <p className="font-bold truncate text-sm text-ink-50">{d.name}</p>
-                      <p className="font-black text-accent text-xs">${d.price.toLocaleString("es-AR")}</p>
+                      <p className="font-semibold truncate text-sm text-[var(--text-primary)]">{d.name}</p>
+                      <p className="font-semibold text-[var(--accent-text)] text-xs tabular mt-0.5">
+                        ${d.price.toLocaleString("es-AR")}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => removeFromCart(d.id)} className="w-10 h-10 rounded-lg bg-ink-800 border border-ink-750 flex items-center justify-center active:scale-90 transition-transform cursor-pointer text-ink-300"><Minus size={16} strokeWidth={3} /></button>
-                      <span className="font-bold w-4 text-center text-sm text-ink-50">{qty}</span>
-                      <button onClick={() => addToCart(d.id)} className="w-10 h-10 rounded-lg bg-accent/15 border border-accent/25 text-accent flex items-center justify-center active:scale-90 transition-transform cursor-pointer"><Plus size={16} strokeWidth={3} /></button>
+                      <button type="button" onClick={() => removeFromCart(d.id)} className="w-10 h-10 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center active:scale-90 transition-transform cursor-pointer text-[var(--text-secondary)]"><Minus size={16} strokeWidth={2.5} /></button>
+                      <span className="font-semibold w-4 text-center text-sm text-[var(--text-primary)] tabular">{qty}</span>
+                      <button type="button" onClick={() => addToCart(d.id)} className="w-10 h-10 rounded-lg bg-[var(--accent-surface)] border border-[var(--accent-line)] text-[var(--accent-text)] flex items-center justify-center active:scale-90 transition-transform cursor-pointer"><Plus size={16} strokeWidth={2.5} /></button>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="mt-6 pt-6 border-t border-ink-800">
-              <div className="flex justify-between items-center mb-6">
-                <span className="text-xs uppercase font-black text-ink-400">Total</span>
-                <span className="text-3xl font-black text-green">${totalPrice.toLocaleString("es-AR")}</span>
+            <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+              <div className="flex justify-between items-end mb-4">
+                <span className="text-[12px] font-medium text-[var(--text-tertiary)]">Total</span>
+                <span className="text-[28px] font-bold tabular text-[var(--text-primary)] leading-none">
+                  <span className="text-[0.6em] text-[var(--text-tertiary)] mr-0.5">$</span>
+                  {totalPrice.toLocaleString("es-AR")}
+                </span>
               </div>
-              <button onClick={openCheckout} className="ct-checkout-btn w-full h-14 font-black rounded-xl active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer">
-                Continuar al Pago
-                <ArrowRight size={16} strokeWidth={2.5} />
+              <button
+                type="button"
+                onClick={openCheckout}
+                className="w-full h-12 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-[14px] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all"
+              >
+                Continuar al pago
+                <ArrowRight size={16} strokeWidth={2.2} />
               </button>
             </div>
           </div>

@@ -17,6 +17,7 @@ const slide =
 /**
  * Ítem de nav "Cerrar sesión" con confirmación inline:
  * idle se desliza a la izquierda; entra el panel de confirmación.
+ * Colapsado: solo el check; click afuera o Esc cancela.
  */
 export function LogoutNavRail({
   collapsed = false,
@@ -25,21 +26,30 @@ export function LogoutNavRail({
   onCancel,
   onConfirm,
 }: Props) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!confirm) return;
-    cancelRef.current?.focus();
+    focusRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
     };
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) onCancel();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
   }, [confirm, onCancel]);
 
   if (collapsed) {
     return (
       <div
+        ref={rootRef}
         className={`relative mx-auto w-10 h-10 overflow-hidden rounded-xl transition-colors duration-[260ms] ${
           confirm ? "bg-[var(--danger-soft)]" : "bg-transparent"
         }`}
@@ -60,26 +70,14 @@ export function LogoutNavRail({
         </button>
 
         <div
-          className={`${slide} justify-center gap-0.5 px-0.5 ${
+          className={`${slide} justify-center ${
             confirm
               ? "translate-x-0 opacity-100"
               : "translate-x-full opacity-0 pointer-events-none"
           }`}
         >
           <button
-            ref={cancelRef}
-            type="button"
-            title="Cancelar"
-            aria-label="Cancelar cierre de sesión"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCancel();
-            }}
-            className="w-4 h-7 rounded-md flex items-center justify-center text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-          >
-            <X size={11} />
-          </button>
-          <button
+            ref={focusRef}
             type="button"
             title="Confirmar"
             aria-label="Confirmar cierre de sesión"
@@ -87,9 +85,9 @@ export function LogoutNavRail({
               e.stopPropagation();
               onConfirm();
             }}
-            className="w-4 h-7 rounded-md flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer"
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer"
           >
-            <Check size={11} />
+            <Check size={14} />
           </button>
         </div>
       </div>
@@ -98,6 +96,7 @@ export function LogoutNavRail({
 
   return (
     <div
+      ref={rootRef}
       className={`relative mx-2 h-9 overflow-hidden rounded-xl transition-colors duration-[260ms] ${
         confirm ? "bg-[var(--danger-soft)]" : "bg-transparent hover:bg-[var(--bg-surface)]/60"
       }`}
@@ -129,7 +128,7 @@ export function LogoutNavRail({
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button
-            ref={cancelRef}
+            ref={focusRef}
             type="button"
             title="Cancelar"
             aria-label="Cancelar cierre de sesión"

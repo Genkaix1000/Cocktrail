@@ -58,6 +58,7 @@ import type {
 type Props = {
   initialEvent: NightEvent | null;
   initialOrders: Order[];
+  currentUser: { role: Role; username: string };
 };
 
 const EMPTY_TOTALS: EventTotals = {
@@ -83,6 +84,7 @@ type NavItem = {
 export default function AdminClient({
   initialEvent,
   initialOrders,
+  currentUser,
 }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -108,8 +110,6 @@ export default function AdminClient({
     setConfirmLogout(false);
   }
 
-  const [currentUser, setCurrentUser] = useState<{ role: Role; username?: string } | null>(null);
-
   const [historyEvents, setHistoryEvents] = useState<EventSummary[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
@@ -132,12 +132,6 @@ export default function AdminClient({
       setHistoryLoaded(false);
     },
   });
-
-  useEffect(() => {
-    authService.getMe().then((u) => {
-      if (u) setCurrentUser(u);
-    });
-  }, []);
 
   const [isDemo, setIsDemo] = useState(false);
 
@@ -559,8 +553,8 @@ export default function AdminClient({
             <header className="h-14 md:h-16 px-4 md:px-5 shrink-0 print:hidden flex items-center bg-[var(--bg-panel)] md:rounded-[20px] shadow-card">
               <AppTopbar
                 breadcrumbs={breadcrumbs}
-                username={currentUser?.username}
-                role={currentUser?.role}
+                username={currentUser.username}
+                role={currentUser.role}
                 onMenuClick={() => setMobileMenuOpen(true)}
               />
             </header>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, LogOut, Monitor, Plus, RotateCw, Trash2, UserRound, Wifi } from "lucide-react";
+import { Loader2, Monitor, Plus, RotateCw, Trash2 } from "lucide-react";
 import { ApiError } from "@/services/api-client";
 import {
   pdvService,
@@ -10,7 +10,6 @@ import {
   type MpDevicesListing,
 } from "@/services/pdv.service";
 import { mercadopagoService } from "@/services/mercadopago.service";
-import { barSessionsService, type BarSession } from "@/services/bar-sessions.service";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import Toast from "@/components/shared/Toast";
 import MpHealthPanel from "./MpHealthPanel";
@@ -24,16 +23,6 @@ const emptyForm = (): PdvForm => ({
   barCode: SUPPORTED_BAR_CODE,
 });
 
-function formatRelative(iso: string | null): string | null {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return null;
-  const days = Math.floor((Date.now() - then) / (24 * 60 * 60 * 1000));
-  if (days <= 0) return "hoy";
-  if (days === 1) return "hace 1 día";
-  return `hace ${days} días`;
-}
-
 /** Estado de ciclo de vida de un Posnet registrado (D1). */
 function deviceEstado(device: DeviceRow): "activo" | "historico" | "sin-caja" {
   if (device.isActive) return "activo";
@@ -44,7 +33,6 @@ function deviceEstado(device: DeviceRow): "activo" | "historico" | "sin-caja" {
 export default function PdvSection() {
   const [cajas, setCajas] = useState<CajaRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
-  const [sessions, setSessions] = useState<BarSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -79,14 +67,12 @@ export default function PdvSection() {
   const loadData = useCallback(async () => {
     setLoadError(false);
     try {
-      const [cajasData, devicesData, sessionsData] = await Promise.all([
+      const [cajasData, devicesData] = await Promise.all([
         pdvService.listCajas(),
         pdvService.listDevices(),
-        barSessionsService.listAll(),
       ]);
       setCajas(cajasData);
       setDevices(devicesData);
-      setSessions(sessionsData);
 
       // Auto-recuperar el QR si la caja existe pero quedó sin imagen.
       const cajaSinQr = cajasData.find((c) => !c.qrImage);
@@ -403,17 +389,6 @@ export default function PdvSection() {
     }
   }, []);
 
-  const handleForceLogout = useCallback(async (barId: string) => {
-    setError(null);
-    try {
-      await barSessionsService.forceLogout(barId);
-      setSessions(await barSessionsService.listAll());
-    } catch (err) {
-      console.error("Error forcing logout:", err);
-      setError("No se pudo cerrar la sesión de la caja.");
-    }
-  }, []);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -423,7 +398,6 @@ export default function PdvSection() {
   }
 
   const canCreate = cajas.length < 1;
-  const cajaByBarId = new Map(cajas.map((c) => [c.barId, c]));
   const cajaNameById = new Map(cajas.map((c) => [c.id, "Barra VIP"]));
 
   // Candidatos del alta: lo que MP reporta y todavía no está registrado acá.
@@ -705,57 +679,8 @@ export default function PdvSection() {
         )}
       </div>
 
-      {/* Salud de la vinculación (bloque G) */}
+      {/* Salud — abajo del todo en la tab Pagos */}
       <MpHealthPanel />
-
-      {/* Sesiones de caja — contexto operativo del PDV (migrada de Pagos) */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-card">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
-            <UserRound size={16} strokeWidth={1.8} />
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">Sesión de caja</h3>
-            <p className="text-[12px] text-[var(--text-tertiary)]">Quién está operando cada caja ahora</p>
-          </div>
-        </div>
-
-        {sessions.length > 0 ? (
-          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
-            {sessions.map((s) => (
-              <div key={s.id} className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[var(--success-soft)] text-[var(--success-base)] shrink-0">
-                    <Wifi size={12} />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-medium text-[var(--text-primary)]">{s.username}</p>
-                    <p className="text-[11px] text-[var(--text-tertiary)]">
-                      Conectado {formatRelative(s.connectedAt)}
-                      {cajaByBarId.has(s.barId) ? " — Barra VIP" : ""}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleForceLogout(s.barId)}
-                  className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-[var(--danger-soft)] text-[var(--danger-base)] hover:brightness-95 text-[11px] font-semibold transition-colors cursor-pointer"
-                >
-                  <LogOut size={11} />
-                  Cerrar sesión
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 rounded-xl bg-[var(--bg-panel)] px-4 py-3">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-tertiary)] shrink-0">
-              <UserRound size={12} />
-            </div>
-            <span className="text-[12px] text-[var(--text-tertiary)]">Sin usuario conectado</span>
-          </div>
-        )}
-      </div>
 
       {saved && (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">

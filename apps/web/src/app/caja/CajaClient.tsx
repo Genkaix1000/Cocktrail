@@ -217,47 +217,38 @@ export default function CajaClient({ drinks, currentUser }: Props) {
                     iniciar una nueva jornada.
                   </p>
 
-                  {currentUser ? (
-                    <div className="w-full max-w-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-card flex flex-col gap-4 text-left animate-in zoom-in-95 duration-200">
-                      <h3 className="font-semibold text-sm text-[var(--text-primary)]">
-                        Abrir Caja / Noche
-                      </h3>
-                      {openNightError && (
-                        <div className="bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] rounded-xl px-3 py-2.5 text-xs">
-                          {openNightError}
-                        </div>
-                      )}
-                      <form onSubmit={handleOpenNightSubmit} className="flex flex-col gap-3">
-                        <label className="flex flex-col gap-1.5">
-                          <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
-                            Palabra Clave (Keyword)
-                          </span>
-                          <input
-                            type="text"
-                            required
-                            value={openNightKeyword}
-                            onChange={(e) => setOpenNightKeyword(e.target.value.toLowerCase())}
-                            placeholder="ej: gin, tonic, campari..."
-                            className="w-full h-11 bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] rounded-xl px-3 text-sm text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-tertiary)] font-mono"
-                          />
-                        </label>
-                        <button
-                          type="submit"
-                          disabled={openingNight}
-                          className="w-full h-11 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all mt-1 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)]"
-                        >
-                          {openingNight ? "Iniciando..." : "Abrir Noche / Evento"}
-                        </button>
-                      </form>
-                    </div>
-                  ) : (
-                    <div className="px-5 py-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl max-w-sm flex items-center gap-3 shadow-card">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[var(--danger-base)] animate-pulse shrink-0" />
-                      <p className="text-xs text-[var(--text-secondary)] text-left leading-relaxed">
-                        Cargando sesión…
-                      </p>
-                    </div>
-                  )}
+                  <div className="w-full max-w-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-card flex flex-col gap-4 text-left animate-in zoom-in-95 duration-200">
+                    <h3 className="font-semibold text-sm text-[var(--text-primary)]">
+                      Abrir Caja / Noche
+                    </h3>
+                    {openNightError && (
+                      <div className="bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] rounded-xl px-3 py-2.5 text-xs">
+                        {openNightError}
+                      </div>
+                    )}
+                    <form onSubmit={handleOpenNightSubmit} className="flex flex-col gap-3">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
+                          Palabra Clave (Keyword)
+                        </span>
+                        <input
+                          type="text"
+                          required
+                          value={openNightKeyword}
+                          onChange={(e) => setOpenNightKeyword(e.target.value.toLowerCase())}
+                          placeholder="ej: gin, tonic, campari..."
+                          className="w-full h-11 bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] rounded-xl px-3 text-sm text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-tertiary)] font-mono"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={openingNight}
+                        className="w-full h-11 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all mt-1 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)]"
+                      >
+                        {openingNight ? "Iniciando..." : "Abrir Noche / Evento"}
+                      </button>
+                    </form>
+                  </div>
                 </div>
               ) : (
                 <>

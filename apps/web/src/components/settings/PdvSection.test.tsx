@@ -26,13 +26,6 @@ vi.mock("@/services/pdv.service", () => ({
   },
 }));
 
-vi.mock("@/services/bar-sessions.service", () => ({
-  barSessionsService: {
-    listAll: vi.fn(),
-    forceLogout: vi.fn(),
-  },
-}));
-
 vi.mock("@/services/mercadopago.service", () => ({
   mercadopagoService: {
     testDeviceChargeFor: vi.fn(),
@@ -41,12 +34,10 @@ vi.mock("@/services/mercadopago.service", () => ({
 }));
 
 import { pdvService } from "@/services/pdv.service";
-import { barSessionsService } from "@/services/bar-sessions.service";
 import { mercadopagoService } from "@/services/mercadopago.service";
 
 const mockedUseTheme = vi.mocked(useTheme);
 const mockedPdvService = vi.mocked(pdvService);
-const mockedBarSessions = vi.mocked(barSessionsService);
 const mockedMpService = vi.mocked(mercadopagoService);
 
 const CAJA: CajaRow = {
@@ -105,23 +96,11 @@ const HEALTH = {
   checkedAt: "2026-07-23T16:00:00Z",
 };
 
-const SESSION = {
-  id: "session-1",
-  barId: "bar-1",
-  userId: "caja:ana",
-  username: "ana",
-  role: "caja" as const,
-  connectedAt: new Date().toISOString(),
-  lastSeenAt: new Date().toISOString(),
-};
-
 beforeEach(() => {
   mockedUseTheme.mockReturnValue({ theme: "bosko", setTheme: vi.fn(), isDark: true } as any);
   mockedPdvService.listCajas.mockResolvedValue([]);
   mockedPdvService.listDevices.mockResolvedValue([]);
   mockedPdvService.listMpDevices.mockResolvedValue(MP_LISTING);
-  mockedBarSessions.listAll.mockResolvedValue([]);
-  mockedBarSessions.forceLogout.mockResolvedValue({ ok: true });
   mockedMpService.testDeviceChargeFor.mockResolvedValue({
     reachedDevice: true,
     message: "ok",
@@ -361,27 +340,12 @@ describe("PdvSection", () => {
     expect(screen.queryByText("PAX_A910__SMARTPOS1493600985")).not.toBeInTheDocument();
   });
 
-  // ── Sesión de caja (bloque mudado de PagosSection: su contexto operativo es el PDV) ──
+  // ── Sesión de caja vive en PagosSection (grid con Sucursal) ──
 
-  it("muestra la sesión de caja activa y permite cerrarla", async () => {
-    const user = userEvent.setup();
-    mockedPdvService.listCajas.mockResolvedValue([{ ...CAJA }]);
-    mockedBarSessions.listAll
-      .mockResolvedValueOnce([{ ...SESSION }])
-      .mockResolvedValueOnce([]);
-
+  it("no renderiza Sesión de caja (vive en la tab Pagos)", async () => {
     render(<PdvSection />);
-    expect(await screen.findByText("ana")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /Cerrar sesión/i }));
-
-    await waitFor(() => expect(mockedBarSessions.forceLogout).toHaveBeenCalledWith("bar-1"));
-    expect(await screen.findByText("Sin usuario conectado")).toBeInTheDocument();
-  });
-
-  it("muestra 'Sin usuario conectado' cuando no hay sesiones", async () => {
-    render(<PdvSection />);
-    expect(await screen.findByText("Sin usuario conectado")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: /Puntos de Venta/ });
+    expect(screen.queryByText("Sesión de caja")).not.toBeInTheDocument();
   });
 
   // ── La tarjeta "Sucursal" duplicada se borró (queda solo en Pagos) ──
