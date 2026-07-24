@@ -194,7 +194,7 @@ export default function CloseNightModal({
         }
       `}</style>
 
-      <div className={`bg-ink-900 border border-ink-800 w-full max-w-md rounded-[22px] p-6 shadow-2xl animate-in zoom-in-95 duration-200 transition-all ${wiggle ? "animate-wiggle" : ""}`}>
+      <div className={`bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full max-w-md rounded-2xl p-6 shadow-card animate-in zoom-in-95 duration-200 transition-all ${wiggle ? "animate-wiggle" : ""}`}>
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
             <div
@@ -211,10 +211,10 @@ export default function CloseNightModal({
               )}
             </div>
             <div>
-              <h2 className="font-serif-italic text-[22px] text-ink-50 leading-none">
+              <h2 className="text-[20px] font-bold text-[var(--text-primary)] leading-none">
                 {isSummary ? "Noche cerrada" : "Cerrar noche"}
               </h2>
-              <p className="text-[10px] text-ink-400 uppercase tracking-[0.18em] font-medium mt-1.5">
+              <p className="text-[12px] text-[var(--text-secondary)] mt-1.5">
                 {isSummary ? "Resumen archivado" : "Acción irreversible"}
               </p>
             </div>
@@ -223,7 +223,7 @@ export default function CloseNightModal({
             type="button"
             onClick={() => !submitting && onClose()}
             disabled={submitting}
-            className="p-2 bg-ink-800 rounded-full text-ink-300 hover:text-ink-50 disabled:opacity-40 cursor-pointer"
+            className="p-2 bg-[var(--bg-panel)] rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer"
             aria-label="Cerrar"
           >
             <X size={18} />
@@ -282,27 +282,27 @@ function ConfirmView({
 
   return (
     <>
-      <p className="text-sm text-ink-300 mb-4 leading-relaxed">
+      <p className="text-sm text-[var(--text-secondary)] mb-4 leading-relaxed">
         Vas a archivar el evento iniciado a las{" "}
-        <span className="text-ink-50 font-mono tabular font-bold">
+        <span className="text-[var(--text-primary)] font-mono tabular font-bold">
           {formatHm(startedAt)}
         </span>
         {" "}hs. Esta acción es definitiva.
       </p>
 
       {/* Details Box */}
-      <div className="flex flex-col gap-2 mb-4 bg-ink-850/50 border border-ink-800/40 rounded-2xl p-3.5 text-xs text-ink-300">
+      <div className="flex flex-col gap-2 mb-4 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-3.5 text-xs text-[var(--text-secondary)]">
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider text-ink-500 font-mono"><Calendar size={12} className="text-ink-400" /> Fecha</span>
-          <span className="font-bold text-ink-100">{capitalizedToday}</span>
+          <span className="flex items-center gap-1.5 font-semibold text-[10px] uppercase tracking-wider text-[var(--text-tertiary)] font-mono"><Calendar size={12} className="text-[var(--text-secondary)]" /> Fecha</span>
+          <span className="font-semibold text-[var(--text-primary)]">{capitalizedToday}</span>
         </div>
-        <div className="flex items-center justify-between border-t border-ink-800/30 pt-2 mt-1">
-          <span className="flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider text-ink-500 font-mono"><Clock size={12} className="text-ink-400" /> Inicio de Servicio</span>
-          <span className="font-mono text-ink-50 tabular font-bold">{formatHm(startedAt)} hs</span>
+        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-2 mt-1">
+          <span className="flex items-center gap-1.5 font-semibold text-[10px] uppercase tracking-wider text-[var(--text-tertiary)] font-mono"><Clock size={12} className="text-[var(--text-secondary)]" /> Inicio de Servicio</span>
+          <span className="font-mono text-[var(--text-primary)] tabular font-bold">{formatHm(startedAt)} hs</span>
         </div>
-        <div className="flex items-center justify-between border-t border-ink-800/30 pt-2 mt-1">
-          <span className="flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider text-ink-500 font-mono"><Clock size={12} className="text-ink-400" /> Duración</span>
-          <span className="font-mono text-ink-50 tabular font-bold">{duration}</span>
+        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-2 mt-1">
+          <span className="flex items-center gap-1.5 font-semibold text-[10px] uppercase tracking-wider text-[var(--text-tertiary)] font-mono"><Clock size={12} className="text-[var(--text-secondary)]" /> Duración</span>
+          <span className="font-mono text-[var(--text-primary)] tabular font-bold">{duration}</span>
         </div>
       </div>
 
@@ -320,7 +320,7 @@ function ConfirmView({
       )}
 
       <label className="mt-4 flex flex-col gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-400 font-mono">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-secondary)] font-mono">
           Tu contraseña / PIN
         </span>
         <input
@@ -328,7 +328,7 @@ function ConfirmView({
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="bg-ink-850 border border-ink-750 focus:border-danger rounded-xl px-4 py-3 text-ink-50 outline-none transition-colors text-sm"
+          className="bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-[var(--danger-base)] rounded-xl px-4 py-3 text-[var(--text-primary)] outline-none transition-colors text-sm"
           placeholder="Ingresá tu contraseña para confirmar"
         />
       </label>
@@ -344,7 +344,7 @@ function ConfirmView({
           type="button"
           onClick={onCancel}
           disabled={submitting}
-          className="flex-1 h-12 rounded-xl bg-ink-800 text-ink-100 font-bold text-xs uppercase tracking-[0.14em] hover:bg-ink-750 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+          className="flex-1 h-12 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-strong)] text-[var(--text-primary)] font-semibold text-xs hover:bg-[var(--bg-app)] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
         >
           Cancelar
         </button>
@@ -352,7 +352,7 @@ function ConfirmView({
           type="button"
           onClick={() => onConfirm(password)}
           disabled={submitting || !password.trim()}
-          className="flex-1 h-12 rounded-xl bg-danger text-ink-50 font-bold text-xs uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="flex-1 h-12 rounded-xl bg-[var(--danger-base)] text-white font-semibold text-xs flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {submitting ? (
             <>
@@ -390,38 +390,38 @@ function SummaryView({
 
   return (
     <div className="flex flex-col">
-      <div className="flex flex-col items-center text-center mb-5 mt-1 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl py-4 px-2 select-none">
-        <CheckCircle2 size={36} className="text-emerald-400 mb-2 animate-pulse" />
-        <h3 className="text-sm font-black uppercase tracking-wider text-emerald-400">
+      <div className="flex flex-col items-center text-center mb-5 mt-1 bg-[var(--success-soft)] border border-[var(--success-line)] rounded-2xl py-4 px-2 select-none">
+        <CheckCircle2 size={36} className="text-[var(--success-base)] mb-2" />
+        <h3 className="text-sm font-semibold tracking-wide text-[var(--success-base)]">
           Cierre de Noche Exitoso
         </h3>
-        <p className="text-[9px] text-ink-400 uppercase tracking-widest font-mono mt-1">
+        <p className="text-[11px] text-[var(--text-secondary)] mt-1">
           Comprobante Electrónico de Arqueo
         </p>
       </div>
 
       {/* Perforated Receipt container */}
-      <div className="relative bg-ink-950/80 border border-ink-850 rounded-2xl p-5 shadow-lg overflow-hidden flex flex-col gap-4">
+      <div className="relative bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-card overflow-hidden flex flex-col gap-4">
         {/* Decorative perforated top notches */}
         <div className="absolute top-0 inset-x-0 h-1.5 flex justify-between px-5 select-none opacity-25" aria-hidden>
           {Array.from({ length: 11 }).map((_, i) => (
-            <span key={i} className="w-2 h-2 bg-ink-900 rounded-full -translate-y-1/2 border border-ink-800" />
+            <span key={i} className="w-2 h-2 bg-[var(--bg-surface)] rounded-full -translate-y-1/2 border border-[var(--border-subtle)]" />
           ))}
         </div>
 
         {/* Header receipt info */}
-        <div className="flex flex-col gap-1.5 border-b border-ink-800 pb-3 text-[11px] text-ink-300">
+        <div className="flex flex-col gap-1.5 border-b border-[var(--border-subtle)] pb-3 text-[11px] text-[var(--text-secondary)]">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-ink-500 uppercase font-semibold text-[8.5px] tracking-wider">Fecha</span>
-            <span className="font-bold text-ink-100">{capitalizedToday}</span>
+            <span className="font-mono text-[var(--text-tertiary)] uppercase font-semibold text-[10px] tracking-wider">Fecha</span>
+            <span className="font-semibold text-[var(--text-primary)]">{capitalizedToday}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="font-mono text-ink-500 uppercase font-semibold text-[8.5px] tracking-wider">Inicio</span>
-            <span className="font-mono text-ink-100 font-bold">{formatHm(summary.startedAt || startedAt)} hs</span>
+            <span className="font-mono text-[var(--text-tertiary)] uppercase font-semibold text-[10px] tracking-wider">Inicio</span>
+            <span className="font-mono text-[var(--text-primary)] font-semibold">{formatHm(summary.startedAt || startedAt)} hs</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="font-mono text-ink-500 uppercase font-semibold text-[8.5px] tracking-wider">Duración</span>
-            <span className="font-mono text-ink-100 font-bold">{duration}</span>
+            <span className="font-mono text-[var(--text-tertiary)] uppercase font-semibold text-[10px] tracking-wider">Duración</span>
+            <span className="font-mono text-[var(--text-primary)] font-semibold">{duration}</span>
           </div>
         </div>
 
@@ -430,7 +430,7 @@ function SummaryView({
         {/* Decorative perforated bottom notches */}
         <div className="absolute bottom-0 inset-x-0 h-1.5 flex justify-between px-5 select-none opacity-25" aria-hidden>
           {Array.from({ length: 11 }).map((_, i) => (
-            <span key={i} className="w-2 h-2 bg-ink-900 rounded-full translate-y-1/2 border border-ink-800" />
+            <span key={i} className="w-2 h-2 bg-[var(--bg-surface)] rounded-full translate-y-1/2 border border-[var(--border-subtle)]" />
           ))}
         </div>
       </div>
@@ -438,7 +438,7 @@ function SummaryView({
       <button
         type="button"
         onClick={onClose}
-        className="mt-6 w-full h-13 rounded-xl bg-gradient-to-r from-green-600 to-green-500 text-white font-black text-xs uppercase tracking-[0.16em] flex items-center justify-center gap-2 hover:from-green-550 hover:to-green-450 active:scale-95 transition-all shadow-[0_4px_15px_rgba(74,222,128,0.25)] cursor-pointer"
+        className="mt-6 w-full h-12 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
       >
         <CheckCircle2 size={15} strokeWidth={3} />
         Cerrar y continuar
@@ -462,7 +462,7 @@ function TotalsBlock({ totals }: { totals: EventTotals }) {
 
   return (
     <div className="flex flex-col gap-4 select-none">
-      <div className="bg-ink-850/60 border border-ink-800 rounded-xl divide-y divide-ink-800/60 overflow-hidden shadow-sm">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl divide-y divide-[var(--border-subtle)] overflow-hidden shadow-sm">
         <Row
           icon={<Banknote size={13} className="text-green-450 text-green-400" />}
           label="Efectivo"
@@ -481,11 +481,11 @@ function TotalsBlock({ totals }: { totals: EventTotals }) {
           count={totals.debitoCount}
           value={tarjeta}
         />
-        <div className="flex items-center justify-between px-4 py-3 bg-accent-soft/10 border-t border-ink-800">
-          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-accent font-mono">
+        <div className="flex items-center justify-between px-4 py-3 bg-[var(--accent-surface)] border-t border-[var(--border-subtle)]">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-text)]">
             Total noche
           </span>
-          <span className="font-mono text-xl text-ink-50 font-black tabular">
+          <span className="font-mono text-xl text-[var(--text-primary)] font-bold tabular">
             ${grandTotal.toLocaleString("es-AR")}
           </span>
         </div>
@@ -493,10 +493,10 @@ function TotalsBlock({ totals }: { totals: EventTotals }) {
 
       {/* Segmented Distribution Chart */}
       <div className="flex flex-col gap-1.5 px-1 pb-1">
-        <span className="text-[9px] font-black uppercase tracking-[0.18em] text-ink-500 font-mono">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)] font-mono">
           Distribución de Ventas
         </span>
-        <div className="flex h-3 w-full rounded-full overflow-hidden bg-ink-950 border border-ink-850 gap-[2px] p-[2px]">
+        <div className="flex h-3 w-full rounded-full overflow-hidden bg-[var(--bg-panel)] border border-[var(--border-subtle)] gap-[2px] p-[2px]">
           {pctEfectivo > 0 && (
             <div 
               className="bg-green-500" 
@@ -519,7 +519,7 @@ function TotalsBlock({ totals }: { totals: EventTotals }) {
             />
           )}
         </div>
-        <div className="flex gap-4 justify-center text-[8.5px] font-bold font-mono mt-1 text-ink-400">
+        <div className="flex gap-4 justify-center text-[8.5px] font-bold font-mono mt-1 text-[var(--text-secondary)]">
           <div className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
             <span>Efectivo ({pctEfectivo.toFixed(0)}%)</span>
@@ -550,15 +550,15 @@ function Row({
   value: number;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 hover:bg-ink-850/30 transition-colors">
-      <div className="flex items-center gap-2 text-ink-200">
+    <div className="flex items-center justify-between px-4 py-2.5 hover:bg-[var(--bg-panel)] transition-colors">
+      <div className="flex items-center gap-2 text-[var(--text-primary)]">
         {icon}
         <span className="text-[10px] font-bold uppercase tracking-[0.14em]">
           {label}
         </span>
-        <span className="text-[9px] text-ink-500 font-mono font-bold">({count})</span>
+        <span className="text-[10px] text-[var(--text-tertiary)] font-mono font-semibold">({count})</span>
       </div>
-      <span className="font-mono text-xs text-ink-100 font-bold tabular">
+      <span className="font-mono text-xs text-[var(--text-primary)] font-semibold tabular">
         ${value.toLocaleString("es-AR")}
       </span>
     </div>

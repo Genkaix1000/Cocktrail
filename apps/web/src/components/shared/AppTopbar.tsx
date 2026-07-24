@@ -20,9 +20,9 @@ function RoleIcon({ role }: { role?: string }) {
 /** Topbar Bosko autónoma: enrutado + toggle día/noche + usuario. */
 export function AppTopbar({ breadcrumbs, username, role, onMenuClick }: Props) {
   const { isDark, toggleDark } = useTheme();
-  const displayName = username || "Admin";
+  const displayName = username?.trim() || "—";
   const displayRole = role || "Personal";
-  const initials = displayName.slice(0, 2).toUpperCase();
+  const initials = username?.trim() ? username.trim().slice(0, 2).toUpperCase() : "?";
 
   return (
     <div className="flex items-center justify-between w-full gap-4 min-w-0">

@@ -30,6 +30,9 @@ type Props = {
   onReprovisionClick?: (caja: CajaRow) => void;
 };
 
+const inputCls =
+  "w-full h-8 px-2.5 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all";
+
 function shortDeviceId(id: string): string {
   if (id.length <= 22) return id;
   return `${id.slice(0, 12)}…${id.slice(-6)}`;
@@ -75,27 +78,27 @@ export default function PdvTable({
   }
 
   return (
-    <div className="bg-ink-900 border border-ink-800 rounded-xl overflow-hidden">
-      <div className="grid grid-cols-[1.1fr_1fr_1.3fr_72px] gap-0 border-b border-ink-800 bg-ink-950 text-[13px] font-bold select-none">
-        <div className="px-5 py-3 text-ink-200">Barra</div>
-        <div className="px-5 py-3 text-ink-200">QR</div>
-        <div className="px-5 py-3 text-ink-200">Posnet</div>
-        <div className="px-3 py-3 text-ink-500 text-center">Acciones</div>
+    <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden shadow-card">
+      <div className="grid grid-cols-[1.1fr_1fr_1.3fr_72px] gap-0 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[11px] font-bold uppercase tracking-[0.12em] select-none">
+        <div className="px-5 py-3 text-[var(--text-secondary)]">Barra</div>
+        <div className="px-5 py-3 text-[var(--text-secondary)]">QR</div>
+        <div className="px-5 py-3 text-[var(--text-secondary)]">Posnet</div>
+        <div className="px-3 py-3 text-[var(--text-tertiary)] text-center">Acciones</div>
       </div>
 
       {loadError ? (
         <div className="px-5 py-10 text-center space-y-3">
-          <p className="text-sm text-ink-400">No se pudieron cargar los PDVs.</p>
+          <p className="text-sm text-[var(--text-secondary)]">No se pudieron cargar los PDVs.</p>
           <button
             type="button"
             onClick={onRetry}
-            className="text-[12px] font-bold uppercase tracking-wider text-accent hover:underline cursor-pointer"
+            className="text-[13px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
           >
             Reintentar
           </button>
         </div>
       ) : cajas.length === 0 ? (
-        <div className="px-5 py-10 text-center text-sm text-ink-500">
+        <div className="px-5 py-10 text-center text-sm text-[var(--text-tertiary)]">
           Todavía no hay puntos de venta. Creá el PDV de Barra VIP para empezar.
         </div>
       ) : (
@@ -106,11 +109,11 @@ export default function PdvTable({
           return (
             <div
               key={caja.id}
-              className="grid grid-cols-[1.1fr_1fr_1.3fr_72px] gap-0 border-b border-ink-800/80 last:border-b-0 items-start"
+              className="grid grid-cols-[1.1fr_1fr_1.3fr_72px] gap-0 border-b border-[var(--border-subtle)] last:border-b-0 items-start hover:bg-[var(--bg-panel)]/60 transition-colors"
             >
               {/* Barra */}
               <div className="px-5 py-4 min-w-0">
-                <p className="text-sm font-semibold text-ink-50 truncate flex items-center gap-2">
+                <p className="text-sm font-semibold text-[var(--text-primary)] truncate flex items-center gap-2">
                   <span className="truncate">
                     {caja.externalPosId.includes("BAR01") || caja.externalPosId.includes("BAR-01") || caja.externalPosId.includes("BARRA-01")
                       ? "Barra VIP"
@@ -118,21 +121,21 @@ export default function PdvTable({
                   </span>
                   {caja.isOrphan && (
                     <span
-                      className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-soft border border-amber-line text-amber"
+                      className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--amber-soft)] text-[var(--amber-base)]"
                       title="La caja fue provisionada con otra cuenta de Mercado Pago: los cobros QR no entran a la cuenta activa."
                     >
                       Huérfana
                     </span>
                   )}
                 </p>
-                <p className="text-[11px] font-mono text-ink-500 mt-0.5 truncate">
+                <p className="text-[11px] font-mono text-[var(--text-tertiary)] mt-0.5 truncate">
                   {caja.externalPosId}
                 </p>
                 {caja.isOrphan && onReprovisionClick && (
                   <button
                     type="button"
                     onClick={() => onReprovisionClick(caja)}
-                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-amber hover:underline cursor-pointer"
+                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[var(--amber-base)] hover:underline cursor-pointer"
                   >
                     <RotateCw size={11} />
                     Re-provisionar
@@ -147,7 +150,7 @@ export default function PdvTable({
                     <button
                       type="button"
                       onClick={() => copyQr(caja)}
-                      className="inline-flex items-center gap-1.5 text-[12px] text-ink-200 hover:text-accent transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-primary)] hover:text-[var(--accent-text)] transition-colors cursor-pointer"
                     >
                       {copiedId === caja.id ? <Check size={13} /> : <Copy size={13} />}
                       {copiedId === caja.id ? "Copiado" : "Copiar URL"}
@@ -156,7 +159,7 @@ export default function PdvTable({
                       href={caja.qrImage}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1.5 text-[12px] text-ink-400 hover:text-ink-200 transition-colors"
+                      className="flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                     >
                       <QrCode size={13} />
                       Ver QR
@@ -165,12 +168,12 @@ export default function PdvTable({
                   </>
                 ) : (
                   <div className="space-y-1">
-                    <span className="text-[12px] text-ink-500 block">Sin QR</span>
+                    <span className="text-[12px] text-[var(--text-tertiary)] block">Sin QR</span>
                     {onRecoverQr && (
                       <button
                         type="button"
                         onClick={() => onRecoverQr(caja)}
-                        className="text-[11px] text-accent hover:underline cursor-pointer"
+                        className="text-[11px] font-medium text-[var(--accent-text)] hover:underline cursor-pointer"
                       >
                         Recuperar QR
                       </button>
@@ -183,11 +186,11 @@ export default function PdvTable({
               <div className="px-5 py-4 space-y-2 min-w-0">
                 {caja.device ? (
                   <div className="space-y-1">
-                    <p className="text-[12px] font-mono text-ink-100 truncate" title={caja.device.deviceId}>
+                    <p className="text-[12px] font-mono text-[var(--text-primary)] truncate" title={caja.device.deviceId}>
                       {shortDeviceId(caja.device.deviceId)}
                     </p>
                     {caja.device.deviceUsername && (
-                      <p className="text-[11px] text-ink-400">
+                      <p className="text-[11px] text-[var(--text-secondary)]">
                         Apodo: {caja.device.deviceUsername}
                       </p>
                     )}
@@ -195,7 +198,7 @@ export default function PdvTable({
                       type="button"
                       onClick={() => onUnlinkDevice(caja.device!)}
                       disabled={linking}
-                      className="inline-flex items-center gap-1 text-[11px] text-danger/80 hover:text-danger transition-colors cursor-pointer disabled:opacity-40"
+                      className="inline-flex items-center gap-1 text-[11px] text-[var(--danger-base)]/80 hover:text-[var(--danger-base)] transition-colors cursor-pointer disabled:opacity-40"
                     >
                       <Unlink size={12} />
                       Desvincular
@@ -209,7 +212,7 @@ export default function PdvTable({
                         value={deviceIdDraft}
                         onChange={(e) => setDeviceIdDraft(e.target.value)}
                         aria-label="Posnet a vincular"
-                        className="w-full h-8 px-2 bg-ink-850 border border-ink-700 rounded-md text-[12px] text-ink-50 focus:outline-none focus:border-blue"
+                        className={inputCls}
                       >
                         <option value="">Elegí un Posnet…</option>
                         {linkableDevices.map((d) => (
@@ -219,7 +222,7 @@ export default function PdvTable({
                         ))}
                       </select>
                     ) : (
-                      <p className="text-[11px] text-ink-500 leading-relaxed">
+                      <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">
                         No hay Posnets registrados disponibles. Agregá uno desde la lista de
                         Mercado Pago (card Posnets).
                       </p>
@@ -230,14 +233,14 @@ export default function PdvTable({
                       onChange={(e) => setUsernameDraft(e.target.value)}
                       placeholder="Apodo (opcional)"
                       aria-label="Apodo del Posnet"
-                      className="w-full h-8 px-2 bg-ink-850 border border-ink-700 rounded-md text-[12px] text-ink-50 focus:outline-none focus:border-blue"
+                      className={inputCls}
                     />
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => submitLink(caja.id)}
                         disabled={linking || !deviceIdDraft}
-                        className="h-7 px-2.5 rounded-md bg-accent/15 border border-accent/30 text-accent text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                        className="h-7 px-3 rounded-full bg-[var(--accent-surface)] text-[var(--accent-text)] text-[11px] font-semibold flex items-center gap-1 disabled:opacity-40 cursor-pointer hover:brightness-95 transition-all"
                       >
                         {linking ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
                         Vincular
@@ -250,7 +253,7 @@ export default function PdvTable({
                           setDeviceIdDraft("");
                           setUsernameDraft("");
                         }}
-                        className="h-7 w-7 rounded-md text-ink-500 hover:text-ink-200 hover:bg-ink-850 flex items-center justify-center cursor-pointer"
+                        className="h-7 w-7 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] flex items-center justify-center cursor-pointer"
                       >
                         <X size={13} />
                       </button>
@@ -260,7 +263,7 @@ export default function PdvTable({
                   <button
                     type="button"
                     onClick={() => setLinkFormCajaId(caja.id)}
-                    className="inline-flex items-center gap-1.5 text-[12px] text-ink-300 hover:text-accent transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--accent-text)] transition-colors cursor-pointer"
                   >
                     <Link2 size={13} />
                     + Vincular
@@ -273,7 +276,7 @@ export default function PdvTable({
                 <button
                   type="button"
                   onClick={() => onDeleteClick(caja)}
-                  className="p-2 rounded-lg text-ink-500 hover:text-danger hover:bg-danger-soft transition-colors cursor-pointer"
+                  className="w-7 h-7 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] flex items-center justify-center hover:text-[var(--danger-base)] hover:border-[var(--danger-base)]/40 transition-all cursor-pointer"
                   title="Eliminar PDV"
                 >
                   <Trash2 size={14} />

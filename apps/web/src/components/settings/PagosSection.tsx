@@ -159,7 +159,7 @@ export default function PagosSection() {
   }
 
   return (
-    <div className="max-w-3xl flex flex-col gap-8">
+    <div className="max-w-5xl flex flex-col gap-8">
       <div>
         <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
           Pagos
@@ -274,18 +274,9 @@ export default function PagosSection() {
               : "linear-gradient(135deg, #003B64 0%, #002340 50%, #001124 100%)",
           }}
         >
-          {/* Patrón de imagen e isométrico de Mercado Pago */}
-          <div
-            className="pointer-events-none absolute inset-0 opacity-30 mix-blend-screen bg-cover bg-center"
-            style={{
-              backgroundImage: "url('/mercadopago-pattern.jpg')",
-            }}
-            aria-hidden
-          />
-
           {/* Patrón de Rejilla / Grid SVG con azul Mercado Pago (#009EE3) */}
           <div
-            className="pointer-events-none absolute inset-0 opacity-20"
+            className="pointer-events-none absolute inset-0 opacity-25"
             style={{
               backgroundImage:
                 "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 40 0 L 0 0 0 40' fill='none' stroke='%23009EE3' stroke-width='1' /%3E%3Ccircle cx='40' cy='0' r='1.5' fill='%23009EE3' /%3E%3C/svg%3E\")",
@@ -410,21 +401,25 @@ export default function PagosSection() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4 space-y-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--accent-surface)] text-[var(--accent-text)] shrink-0">
-                <Store size={18} strokeWidth={1.8} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[15px] font-semibold text-[var(--text-primary)] truncate">
-                  {summary?.store.name ?? summary?.store.storeName ?? "Sucursal sin nombre"}
-                </p>
-                <p className="text-[11px] text-[var(--text-tertiary)] font-mono">
-                  {summary?.store.linked ? `store_id: ${summary.store.storeId}` : "No vinculada"}
-                </p>
-              </div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold text-[var(--text-primary)] truncate">
+                {summary?.store.name ?? summary?.store.storeName ?? "Sucursal sin nombre"}
+              </p>
+              <p className="text-[11px] text-[var(--text-tertiary)] font-mono">
+                {summary?.store.linked ? `store_id: ${summary.store.storeId}` : "No vinculada"}
+              </p>
             </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {summary?.store.linked ? (
+              <span className="text-[11px] font-semibold text-[var(--success-base)] bg-[var(--success-soft)] px-2.5 py-1 rounded-full">
+                Vinculada
+              </span>
+            ) : (
+              <span className="text-[11px] font-medium text-[var(--text-tertiary)]">Sin vincular</span>
+            )}
             {summary?.store.linked && (
               <button
                 type="button"
@@ -432,82 +427,74 @@ export default function PagosSection() {
                   setRenameDraft(summary?.store.name ?? summary?.store.storeName ?? "");
                   setRenameOpen((v) => !v);
                 }}
-                className="shrink-0 h-8 px-3 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[12px] font-semibold transition-colors cursor-pointer"
+                className="h-8 px-3 rounded-full bg-[var(--bg-panel)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[12px] font-semibold transition-colors cursor-pointer"
               >
                 Renombrar
               </button>
             )}
           </div>
+        </div>
 
-          {renameOpen && (
-            <div className="space-y-2.5 pt-1">
-              <label htmlFor="store-rename" className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] block">
-                Nombre de la sucursal
-              </label>
-              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-                El nombre viaja a Mercado Pago: es el que ve el cliente en el comprobante del cobro.
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  id="store-rename"
-                  type="text"
-                  value={renameDraft}
-                  onChange={(e) => setRenameDraft(e.target.value)}
-                  maxLength={60}
-                  placeholder="Nombre de la sucursal"
-                  className="flex-1 h-10 px-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={handleRenameStore}
-                  disabled={savingRename || !renameDraft.trim() || renameDraft.trim().length > 60}
-                  className="h-10 px-4 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 hover:bg-[var(--accent-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
-                >
-                  {savingRename ? <Loader2 size={14} className="animate-spin" /> : null}
-                  Guardar
-                </button>
-              </div>
+        {renameOpen && (
+          <div className="space-y-2.5 rounded-2xl bg-[var(--bg-panel)] p-4">
+            <label htmlFor="store-rename" className="text-[13px] font-semibold text-[var(--text-primary)] block">
+              Nombre de la sucursal
+            </label>
+            <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+              El nombre viaja a Mercado Pago: es el que ve el cliente en el comprobante del cobro.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                id="store-rename"
+                type="text"
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                maxLength={60}
+                placeholder="Nombre de la sucursal"
+                className="flex-1 h-10 px-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
+              />
+              <button
+                type="button"
+                onClick={handleRenameStore}
+                disabled={savingRename || !renameDraft.trim() || renameDraft.trim().length > 60}
+                className="h-10 px-4 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 hover:bg-[var(--accent-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                {savingRename ? <Loader2 size={14} className="animate-spin" /> : null}
+                Guardar
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {renameResult && renameResult.renamedInMp === false && (
-            <div
-              role="status"
-              className="flex items-start gap-2.5 rounded-xl bg-[var(--amber-soft)] px-3.5 py-2.5 text-[12px] text-[var(--amber-base)] leading-relaxed"
-            >
-              <AlertTriangle size={15} className="shrink-0 mt-0.5" aria-hidden="true" />
-              <span>
-                Mercado Pago no aceptó el cambio de nombre: se guardó el alias local{" "}
-                <strong className="font-semibold">«{renameResult.name}»</strong>, pero el nombre en
-                Mercado Pago sigue siendo{" "}
-                <strong className="font-semibold">«{renameResult.mpName ?? "el anterior"}»</strong>.
-              </span>
-            </div>
-          )}
+        {renameResult && renameResult.renamedInMp === false && (
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-xl bg-[var(--amber-soft)] px-3.5 py-2.5 text-[12px] text-[var(--amber-base)] leading-relaxed"
+          >
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" aria-hidden="true" />
+            <span>
+              Mercado Pago no aceptó el cambio de nombre: se guardó el alias local{" "}
+              <strong className="font-semibold">«{renameResult.name}»</strong>, pero el nombre en
+              Mercado Pago sigue siendo{" "}
+              <strong className="font-semibold">«{renameResult.mpName ?? "el anterior"}»</strong>.
+            </span>
+          </div>
+        )}
 
-          <div className="grid grid-cols-3 gap-3 pt-1">
-            <div className="rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-3 flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-                <QrCode size={12} strokeWidth={1.8} />
-                <span className="text-[10px] font-semibold uppercase tracking-wider">Barras</span>
-              </div>
-              <p className="text-[18px] font-bold tabular text-[var(--text-primary)]">{summary?.bars ?? 0}</p>
+        {/* Stats flat — panel anidado, sin mini-cards */}
+        <div className="rounded-2xl bg-[var(--bg-panel)] grid grid-cols-2 divide-x divide-[var(--border-subtle)] overflow-hidden">
+          <div className="px-4 py-3 flex items-center gap-2.5">
+            <QrCode size={14} strokeWidth={1.8} className="text-[var(--text-tertiary)] shrink-0" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Barras</p>
+              <p className="text-[18px] font-bold tabular text-[var(--text-primary)] leading-tight">{summary?.bars ?? 0}</p>
             </div>
-            <div className="rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-3 flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-                <Monitor size={12} strokeWidth={1.8} />
-                <span className="text-[10px] font-semibold uppercase tracking-wider">Posnets</span>
-              </div>
-              <p className="text-[18px] font-bold tabular text-[var(--text-primary)]">{summary?.posnets ?? 0}</p>
-            </div>
-            <div className="rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-3 flex flex-col gap-1 justify-center">
-              {summary?.store.linked ? (
-                <span className="text-[12px] font-semibold text-[var(--success-base)] bg-[var(--success-soft)] px-2.5 py-1 rounded-full self-start">
-                  Vinculada
-                </span>
-              ) : (
-                <span className="text-[12px] font-medium text-[var(--text-tertiary)]">Sin vincular</span>
-              )}
+          </div>
+          <div className="px-4 py-3 flex items-center gap-2.5">
+            <Monitor size={14} strokeWidth={1.8} className="text-[var(--text-tertiary)] shrink-0" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">Posnets</p>
+              <p className="text-[18px] font-bold tabular text-[var(--text-primary)] leading-tight">{summary?.posnets ?? 0}</p>
             </div>
           </div>
         </div>

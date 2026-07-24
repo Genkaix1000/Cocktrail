@@ -677,15 +677,15 @@ export default function VentaSection({ drinks, printer }: Props) {
 
           {/* Ordenar y Filtrar (Mobile y Desktop) */}
           <div className="flex items-center gap-3 px-5 pt-5 pb-1 select-none w-full shrink-0">
-            <span className="text-[10px] font-black uppercase tracking-wider text-ink-500 shrink-0">Ordenar:</span>
-            <div className="flex items-center gap-1 bg-ink-950 p-0.5 rounded-lg border border-ink-800 overflow-x-auto no-scrollbar shrink-0">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] shrink-0">Ordenar:</span>
+            <div className="flex items-center gap-1 bg-[var(--bg-surface)] p-0.5 rounded-xl border border-[var(--border-subtle)] overflow-x-auto no-scrollbar shrink-0">
               <button
                 type="button"
                 onClick={() => setSortBy("alfabeto")}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
                   sortBy === "alfabeto"
-                    ? "bg-accent/15 text-accent font-black"
-                    : "text-ink-400 hover:text-ink-100 hover:bg-white/5"
+                    ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 }`}
               >
                 Alfabeto
@@ -693,10 +693,10 @@ export default function VentaSection({ drinks, printer }: Props) {
               <button
                 type="button"
                 onClick={() => setSortBy("tendencia")}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
                   sortBy === "tendencia"
-                    ? "bg-accent/15 text-accent font-black"
-                    : "text-ink-400 hover:text-ink-100 hover:bg-white/5"
+                    ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 }`}
               >
                 Tendencia
@@ -704,10 +704,10 @@ export default function VentaSection({ drinks, printer }: Props) {
               <button
                 type="button"
                 onClick={() => setSortBy("precio")}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
                   sortBy === "precio"
-                    ? "bg-accent/15 text-accent font-black"
-                    : "text-ink-400 hover:text-ink-100 hover:bg-white/5"
+                    ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 }`}
               >
                 Precio
@@ -733,7 +733,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                 </div>
               </>
             ) : filteredDrinks.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-ink-500 font-serif-italic">
+              <div className="h-full flex items-center justify-center text-ink-500">
                 — No hay productos en esta categoría —
               </div>
             ) : (
@@ -781,7 +781,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                 <span className="text-[10px] font-black uppercase tracking-[0.22em] text-ink-400 group-hover:text-ink-200 transition-colors">
                   {totalItems} {totalItems === 1 ? "ítem" : "ítems"}
                 </span>
-                <span className="font-serif-italic text-2xl font-black text-green group-hover:brightness-110 transition-all">
+                <span className="text-2xl font-black text-green group-hover:brightness-110 transition-all">
                   ${totalPrice.toLocaleString("es-AR")}
                 </span>
               </div>
@@ -831,7 +831,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-bold text-ink-300">Sin items</span>
-                  <span className="text-xs text-ink-500 font-serif-italic">
+                  <span className="text-xs text-ink-500">
                     Agregá productos desde el grid
                   </span>
                 </div>
@@ -858,7 +858,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                   Total
                 </span>
               </div>
-              <span className="font-serif-italic text-3xl font-black tabular text-green">
+              <span className="text-3xl font-black tabular text-green">
                 ${totalPrice.toLocaleString("es-AR")}
               </span>
             </div>

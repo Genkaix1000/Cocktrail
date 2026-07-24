@@ -30,7 +30,11 @@ function StatusDot({ ok }: { ok: boolean | null }) {
     <span
       aria-hidden="true"
       className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${
-        ok === true ? "bg-green" : ok === false ? "bg-danger" : "bg-ink-600"
+        ok === true
+          ? "bg-[var(--success-base)]"
+          : ok === false
+            ? "bg-[var(--danger-base)]"
+            : "bg-[var(--text-tertiary)]"
       }`}
     />
   );
@@ -42,22 +46,26 @@ function estadoDe(ok: boolean | null): string {
 
 function HealthRow({ label, check }: { label: string; check: MpHealthCheck }) {
   return (
-    <div className="flex items-start gap-3 px-4 py-3 bg-ink-950/30">
+    <div className="flex items-start gap-3 px-4 py-3">
       <StatusDot ok={check.ok} />
       <div className="min-w-0 space-y-0.5">
-        <p className="text-[12px] font-medium text-ink-200">
+        <p className="text-[13px] font-medium text-[var(--text-primary)]">
           {label}
           <span
-            className={`ml-2 text-[10px] font-bold uppercase tracking-wider ${
-              check.ok === true ? "text-green" : check.ok === false ? "text-danger" : "text-ink-500"
+            className={`ml-2 text-[10px] font-semibold uppercase tracking-wider ${
+              check.ok === true
+                ? "text-[var(--success-base)]"
+                : check.ok === false
+                  ? "text-[var(--danger-base)]"
+                  : "text-[var(--text-tertiary)]"
             }`}
           >
             {estadoDe(check.ok)}
           </span>
         </p>
-        <p className="text-[11px] text-ink-500 leading-relaxed">{check.detail}</p>
+        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">{check.detail}</p>
         {check.ok === false && check.action && (
-          <p className="text-[11px] text-amber leading-relaxed">→ {check.action}</p>
+          <p className="text-[12px] text-[var(--amber-base)] leading-relaxed">→ {check.action}</p>
         )}
       </div>
     </div>
@@ -100,16 +108,18 @@ export default function MpHealthPanel() {
   return (
     <section
       aria-label="Salud de la vinculación con Mercado Pago"
-      className="bg-ink-900 border border-ink-800 rounded-xl p-6 space-y-4"
+      className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-card"
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-ink-800 text-ink-400 shrink-0">
-            <Activity size={16} />
+          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
+            <Activity size={16} strokeWidth={1.8} />
           </div>
           <div>
-            <h3 className="text-[16px] font-bold tracking-tight text-ink-100">Salud de la vinculación</h3>
-            <p className="text-[12px] text-ink-400/80">
+            <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">
+              Salud de la vinculación
+            </h3>
+            <p className="text-[12px] text-[var(--text-tertiary)]">
               Chequeos contra Mercado Pago
               {health ? ` — última lectura ${formatCheckedAt(health.checkedAt)}` : ""}
             </p>
@@ -119,7 +129,7 @@ export default function MpHealthPanel() {
           type="button"
           onClick={handleRefresh}
           disabled={refreshing || loading}
-          className="h-9 px-3.5 rounded-lg bg-ink-850 border border-ink-700 text-ink-300 hover:text-ink-50 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-wait"
+          className="h-9 px-4 rounded-full bg-[var(--bg-panel)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[12px] font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-wait cursor-pointer"
         >
           {refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
           Refrescar
@@ -128,15 +138,15 @@ export default function MpHealthPanel() {
 
       {loading ? (
         <div className="flex items-center justify-center h-24">
-          <Loader2 size={20} className="animate-spin text-ink-400" />
+          <Loader2 size={20} className="animate-spin text-[var(--text-tertiary)]" />
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-ink-800 bg-ink-950/20 px-4 py-4 text-center space-y-2">
-          <p className="text-[12px] text-ink-400">{error}</p>
+        <div className="rounded-xl bg-[var(--bg-panel)] px-4 py-4 text-center space-y-2">
+          <p className="text-[12px] text-[var(--text-secondary)]">{error}</p>
           <button
             type="button"
             onClick={handleRefresh}
-            className="text-[12px] font-bold uppercase tracking-wider text-accent hover:underline cursor-pointer"
+            className="text-[13px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
           >
             Reintentar
           </button>
@@ -146,20 +156,20 @@ export default function MpHealthPanel() {
           {health.blocking && (
             <div
               role="alert"
-              className="flex items-center gap-2.5 rounded-lg border border-danger-line bg-danger-soft px-3.5 py-2.5 text-[12px] font-medium text-danger"
+              className="flex items-center gap-2.5 rounded-xl bg-[var(--danger-soft)] px-3.5 py-2.5 text-[12px] font-medium text-[var(--danger-base)]"
             >
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
               <span>El cobro con Posnet está bloqueado: la plata entraría a otra cuenta.</span>
             </div>
           )}
 
-          <div className="rounded-lg border border-ink-800 divide-y divide-ink-800/50 overflow-hidden">
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
             {CHECK_ORDER.map((key) => (
               <HealthRow key={key} label={CHECK_LABELS[key]} check={health.checks[key]} />
             ))}
 
             {/* Fila F1 — fallback de emergencia (MP_ACCESS_TOKEN + MP_POS_DEVICE_ID) */}
-            <div className="flex items-start gap-3 px-4 py-3 bg-ink-950/30">
+            <div className="flex items-start gap-3 px-4 py-3">
               <StatusDot
                 ok={
                   health.fallback.status === "usable"
@@ -170,9 +180,9 @@ export default function MpHealthPanel() {
                 }
               />
               <div className="min-w-0 space-y-0.5">
-                <p className="text-[12px] font-medium text-ink-200">
+                <p className="text-[13px] font-medium text-[var(--text-primary)]">
                   Fallback de emergencia (F1)
-                  <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-ink-500">
+                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                     {health.fallback.status === "usable"
                       ? "Usable"
                       : health.fallback.status === "unusable"
@@ -181,10 +191,12 @@ export default function MpHealthPanel() {
                   </span>
                 </p>
                 {health.fallback.reason && (
-                  <p className="text-[11px] text-ink-500 leading-relaxed">{health.fallback.reason}</p>
+                  <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                    {health.fallback.reason}
+                  </p>
                 )}
                 {health.fallback.lastDegradedAt && (
-                  <p className="text-[11px] text-amber leading-relaxed">
+                  <p className="text-[12px] text-[var(--amber-base)] leading-relaxed">
                     Un cobro degradó al fallback de emergencia
                     {health.fallback.lastDegradedReason ? `: ${health.fallback.lastDegradedReason}` : "."}
                   </p>
@@ -193,16 +205,18 @@ export default function MpHealthPanel() {
             </div>
 
             {/* Cobros saliendo por el device de la env (D2) — advertencia, nunca rojo */}
-            <div className="flex items-start gap-3 px-4 py-3 bg-ink-950/30">
+            <div className="flex items-start gap-3 px-4 py-3">
               <span
                 aria-hidden="true"
                 className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${
-                  health.usingEnvDevice ? "bg-amber" : "bg-green"
+                  health.usingEnvDevice ? "bg-[var(--amber-base)]" : "bg-[var(--success-base)]"
                 }`}
               />
               <div className="min-w-0 space-y-0.5">
-                <p className="text-[12px] font-medium text-ink-200">Posnet de emergencia en uso</p>
-                <p className="text-[11px] text-ink-500 leading-relaxed">
+                <p className="text-[13px] font-medium text-[var(--text-primary)]">
+                  Posnet de emergencia en uso
+                </p>
+                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
                   {health.usingEnvDevice
                     ? "Algún cobro de esta sesión salió por el Posnet de la variable de entorno, no por el vinculado a la caja."
                     : "Los cobros salen por el Posnet vinculado a la caja."}

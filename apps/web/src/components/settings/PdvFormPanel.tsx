@@ -17,6 +17,10 @@ type Props = {
   onSave: () => void;
 };
 
+const labelCls = "text-[13px] font-semibold text-[var(--text-primary)] block mb-1.5";
+const inputCls =
+  "w-full h-10 px-3.5 bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-xl text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all";
+
 /**
  * Panel lateral inline (NO es un diálogo modal): foco inicial en el primer
  * campo, `Escape` cierra, y el foco vuelve al disparador (lo maneja el padre
@@ -57,28 +61,25 @@ export default function PdvFormPanel({
   return (
     <section
       aria-labelledby={headingId}
-      className="w-full lg:w-[420px] shrink-0 bg-ink-900 border border-ink-800 rounded-xl p-5 flex flex-col gap-4 animate-in slide-in-from-right duration-200"
+      className="w-full lg:w-[480px] shrink-0 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 flex flex-col gap-5 shadow-card animate-in slide-in-from-right duration-200"
     >
-      <div className="flex justify-between items-center pb-2 border-b border-ink-800">
-        <h2 id={headingId} className="text-sm font-bold text-ink-50 uppercase tracking-wider">
+      <div className="flex justify-between items-center pb-3 border-b border-[var(--border-subtle)]">
+        <h2 id={headingId} className="text-[18px] font-semibold text-[var(--text-primary)] tracking-tight">
           Crear PDV
         </h2>
         <button
           type="button"
           onClick={onCancel}
           aria-label="Cerrar panel"
-          className="p-1.5 bg-ink-850 hover:bg-ink-800 rounded-lg text-ink-400 hover:text-ink-200 transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-panel)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
         >
-          <X size={14} />
+          <X size={16} />
         </button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div>
-          <label
-            htmlFor={nameId}
-            className="text-[10px] font-bold uppercase tracking-wider text-ink-400 block mb-1.5"
-          >
+          <label htmlFor={nameId} className={labelCls}>
             Nombre de la barra *
           </label>
           <input
@@ -90,19 +91,16 @@ export default function PdvFormPanel({
               setTouched(true);
               onChange({ name: e.target.value });
             }}
-            className="w-full h-9 px-3 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 focus:outline-none focus:border-blue transition-all"
+            className={inputCls}
             placeholder="Barra VIP"
           />
           {touched && !nameOk && (
-            <p className="text-[11px] text-danger mt-1">El nombre es obligatorio.</p>
+            <p className="text-[11px] text-[var(--danger-base)] mt-1">El nombre es obligatorio.</p>
           )}
         </div>
 
         <div>
-          <label
-            htmlFor={barCodeId}
-            className="text-[10px] font-bold uppercase tracking-wider text-ink-400 block mb-1.5"
-          >
+          <label htmlFor={barCodeId} className={labelCls}>
             Código de barra
           </label>
           <input
@@ -110,24 +108,24 @@ export default function PdvFormPanel({
             type="text"
             value={form.barCode}
             readOnly
-            className="w-full h-9 px-3 bg-ink-950 border border-ink-800 rounded-lg text-sm text-ink-400 font-mono cursor-not-allowed"
+            className={`${inputCls} bg-[var(--bg-panel)] text-[var(--text-tertiary)] font-mono cursor-not-allowed`}
           />
         </div>
 
         {multiBarWarning && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200/90 leading-relaxed">
+          <div className="rounded-xl bg-[var(--amber-soft)] px-3.5 py-2.5 text-[12px] text-[var(--amber-base)] leading-relaxed">
             Esta funcionalidad solo está disponible para Barra VIP ({supportedBarCode}). Multi-barra
             no está implementado todavía.
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-2 pt-2 border-t border-ink-800 mt-auto">
+      <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border-subtle)] mt-auto">
         <button
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="h-9 px-3 rounded-lg text-[12px] font-bold uppercase tracking-[0.06em] text-ink-400 hover:text-ink-200 hover:bg-ink-850 transition-all cursor-pointer"
+          className="h-10 px-4 rounded-full text-[13px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] transition-all cursor-pointer"
         >
           Cancelar
         </button>
@@ -135,7 +133,7 @@ export default function PdvFormPanel({
           type="button"
           onClick={onSave}
           disabled={saving || !nameOk || multiBarWarning}
-          className="h-9 px-4 rounded-lg bg-accent/15 border border-accent/30 text-accent text-[12px] font-bold uppercase tracking-[0.06em] flex items-center gap-1.5 hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+          className="h-10 px-5 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 hover:bg-[var(--accent-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-[0.98]"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : null}
           Crear PDV

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, LogOut, Monitor, Plus, RotateCw, Store, Trash2, UserRound, Wifi } from "lucide-react";
+import { Loader2, LogOut, Monitor, Plus, RotateCw, Trash2, UserRound, Wifi } from "lucide-react";
 import { ApiError } from "@/services/api-client";
 import {
   pdvService,
@@ -417,7 +417,7 @@ export default function PdvSection() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 size={24} className="animate-spin text-ink-400" />
+        <Loader2 size={24} className="animate-spin text-[var(--text-tertiary)]" />
       </div>
     );
   }
@@ -436,11 +436,11 @@ export default function PdvSection() {
     mpListing.token.userId !== mpListing.sellerUserId;
 
   return (
-    <div className="space-y-6 max-w-5xl pt-2 border-t border-[var(--border-subtle)]">
-      <div className="flex items-center justify-between gap-4 flex-wrap pt-6">
+    <div className="flex flex-col gap-8 max-w-5xl">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-[18px] font-semibold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+            <h2 className="text-[20px] font-semibold tracking-tight text-[var(--text-primary)] leading-tight select-none">
               Puntos de Venta
             </h2>
             <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--accent-surface)] text-[var(--accent-text)]">
@@ -498,14 +498,14 @@ export default function PdvSection() {
       </div>
 
       {/* Posnets — lista única (activo / histórico / sin caja) + alta desde MP */}
-      <div className="bg-ink-900 border border-ink-800 rounded-xl p-6 space-y-5">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-card">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-ink-800 text-ink-400 shrink-0">
-            <Monitor size={16} />
+          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
+            <Monitor size={16} strokeWidth={1.8} />
           </div>
           <div>
-            <h3 className="text-[16px] font-bold tracking-tight text-ink-100">Posnets</h3>
-            <p className="text-[12px] text-ink-400/80">
+            <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">Posnets</h3>
+            <p className="text-[12px] text-[var(--text-tertiary)]">
               Terminales Point de tu cuenta de Mercado Pago — agregar, testear, vincular
             </p>
           </div>
@@ -513,37 +513,37 @@ export default function PdvSection() {
 
         {/* Alta: se elige de la lista real de MP — el id no se escribe nunca */}
         {mpListingError ? (
-          <div className="rounded-lg border border-ink-800 bg-ink-950/20 px-4 py-4 text-center space-y-2">
-            <p className="text-[12px] text-ink-400">
+          <div className="rounded-xl bg-[var(--bg-panel)] px-4 py-4 text-center space-y-2">
+            <p className="text-[12px] text-[var(--text-secondary)]">
               No se pudo consultar el listado de lectores de Mercado Pago.
             </p>
             <button
               type="button"
               onClick={loadMpListing}
-              className="text-[12px] font-bold uppercase tracking-wider text-accent hover:underline cursor-pointer"
+              className="text-[13px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
             >
               Reintentar
             </button>
           </div>
         ) : mpListing === null ? (
           <div className="flex items-center justify-center h-16">
-            <Loader2 size={18} className="animate-spin text-ink-400" />
+            <Loader2 size={18} className="animate-spin text-[var(--text-tertiary)]" />
           </div>
         ) : mpListing.devices.length === 0 ? (
           /* Pantalla guía (decisión 2): nunca se presenta como error del sistema. */
-          <div className="rounded-lg border border-ink-800 bg-ink-950/20 p-5 space-y-3">
-            <p className="text-[13px] font-bold text-ink-200">
+          <div className="rounded-xl bg-[var(--bg-panel)] p-5 space-y-3">
+            <p className="text-[13px] font-semibold text-[var(--text-primary)]">
               Tu cuenta de Mercado Pago no reporta ningún lector Point
             </p>
             {tokenAjeno ? (
-              <p className="text-[12px] text-ink-400 leading-relaxed">
+              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
                 El token activo pertenece a otra aplicación o cuenta de Mercado Pago
                 {mpListing.token.userId ? ` (cuenta ${mpListing.token.userId})` : ""} y la cuenta
                 vinculada es {mpListing.sellerUserId} — con ese token no se pueden ver sus
                 lectores. Revisá la vinculación en la tab Pagos.
               </p>
             ) : (
-              <p className="text-[12px] text-ink-400 leading-relaxed">
+              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
                 Todavía no reclamaste el lector en tu cuenta de Mercado Pago. Se hace desde la
                 app de Mercado Pago (con la cuenta del boliche): cuando lo reclames, va a
                 aparecer acá solo.
@@ -552,18 +552,18 @@ export default function PdvSection() {
             <button
               type="button"
               onClick={loadMpListing}
-              className="text-[12px] font-bold uppercase tracking-wider text-accent hover:underline cursor-pointer"
+              className="text-[13px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
             >
               Actualizar
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <select
               value={newDeviceId}
               onChange={(e) => setNewDeviceId(e.target.value)}
               aria-label="Posnet reportado por Mercado Pago"
-              className="flex-1 h-10 px-3 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 focus:outline-none focus:border-accent transition-all"
+              className="flex-1 min-w-[200px] h-10 px-3 bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-xl text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
             >
               <option value="">
                 {mpCandidates.length > 0
@@ -583,33 +583,33 @@ export default function PdvSection() {
               onChange={(e) => setNewAlias(e.target.value)}
               placeholder="Alias (ej. Caja 1)"
               aria-label="Alias del Posnet"
-              className="w-36 h-10 px-3.5 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 placeholder:text-ink-500 focus:outline-none focus:border-accent transition-all"
+              className="w-36 h-10 px-3.5 bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
             />
             <button
               type="button"
               onClick={handleAddPosnet}
               disabled={addingPosnet || !newDeviceId || !newAlias.trim()}
-              className="h-10 px-4 rounded-lg bg-ink-800 border border-ink-700 text-ink-200 hover:text-ink-50 hover:bg-ink-750 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-10 px-4 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold transition-all flex items-center gap-1.5 shrink-0 hover:bg-[var(--accent-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-[0.98]"
             >
-              <Plus size={14} />
+              <Plus size={14} strokeWidth={2.5} />
               Agregar
             </button>
           </div>
         )}
 
         {devices.length > 0 ? (
-          <div className="rounded-lg border border-ink-800 divide-y divide-ink-800/50 overflow-hidden">
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
             {devices.map((p) => {
               const estado = deviceEstado(p);
               return (
-                <div key={p.id} className="flex items-center justify-between px-4 py-3 bg-ink-950/30 gap-3 flex-wrap">
+                <div key={p.id} className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-md flex items-center justify-center bg-ink-800 text-ink-400 shrink-0">
-                      <Monitor size={14} />
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-tertiary)] shrink-0">
+                      <Monitor size={14} strokeWidth={1.8} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[12px] text-ink-300 font-mono truncate">{p.deviceId}</p>
-                      <p className="text-[11px] text-ink-500">
+                      <p className="text-[12px] text-[var(--text-primary)] font-mono truncate">{p.deviceId}</p>
+                      <p className="text-[11px] text-[var(--text-tertiary)]">
                         Alias: {p.deviceUsername ?? "—"}
                         {" · Modo: "}
                         {p.operatingMode ?? "desconocido"}
@@ -621,12 +621,12 @@ export default function PdvSection() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <span
-                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                         estado === "activo"
-                          ? "bg-green/10 text-green"
+                          ? "bg-[var(--success-soft)] text-[var(--success-base)]"
                           : estado === "historico"
-                            ? "bg-ink-800 text-ink-400"
-                            : "bg-amber-soft text-amber"
+                            ? "bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]"
+                            : "bg-[var(--amber-soft)] text-[var(--amber-base)]"
                       }`}
                     >
                       {estado === "activo" ? "Activo" : estado === "historico" ? "Histórico" : "Sin caja"}
@@ -635,8 +635,8 @@ export default function PdvSection() {
                       <span
                         className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
                           testResult.label === "Recibido"
-                            ? "bg-green/10 text-green"
-                            : "bg-red-500/10 text-red-400"
+                            ? "bg-[var(--success-soft)] text-[var(--success-base)]"
+                            : "bg-[var(--danger-soft)] text-[var(--danger-base)]"
                         }`}
                       >
                         {testResult.label}
@@ -647,7 +647,7 @@ export default function PdvSection() {
                         type="button"
                         onClick={() => handleSetPdvMode(p)}
                         disabled={modePendingId === p.deviceId}
-                        className="h-8 px-3 rounded-lg bg-amber-soft border border-amber-line text-amber hover:brightness-110 text-[11px] font-medium transition-colors disabled:opacity-50"
+                        className="h-8 px-3 rounded-full bg-[var(--amber-soft)] text-[var(--amber-base)] hover:brightness-95 text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         {modePendingId === p.deviceId ? (
                           <Loader2 size={12} className="animate-spin" />
@@ -661,7 +661,7 @@ export default function PdvSection() {
                         type="button"
                         onClick={() => handleReactivate(p)}
                         disabled={reactivatingId === p.deviceId}
-                        className="h-8 px-3 rounded-lg bg-accent/15 border border-accent/30 text-accent hover:bg-accent/25 text-[11px] font-medium transition-colors flex items-center gap-1 disabled:opacity-50"
+                        className="h-8 px-3 rounded-full bg-[var(--accent-surface)] text-[var(--accent-text)] hover:brightness-95 text-[11px] font-semibold transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                       >
                         {reactivatingId === p.deviceId ? (
                           <Loader2 size={12} className="animate-spin" />
@@ -677,7 +677,7 @@ export default function PdvSection() {
                       type="button"
                       onClick={() => handleTestCharge(p.deviceId)}
                       disabled={testingId === p.deviceId}
-                      className="h-8 px-3 rounded-lg bg-ink-850 border border-ink-700 text-ink-400 hover:text-ink-200 text-[11px] font-medium transition-colors disabled:opacity-50"
+                      className="h-8 px-3 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       {testingId === p.deviceId ? (
                         <Loader2 size={12} className="animate-spin" />
@@ -689,7 +689,7 @@ export default function PdvSection() {
                       type="button"
                       onClick={() => handleDeletePosnet(p)}
                       aria-label={`Eliminar Posnet ${p.deviceUsername ?? p.deviceId}`}
-                      className="h-8 w-8 rounded-lg bg-ink-850 border border-ink-700 text-ink-500 hover:text-red-400 hover:border-red-500/30 flex items-center justify-center transition-colors"
+                      className="h-8 w-8 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-tertiary)] hover:text-[var(--danger-base)] hover:border-[var(--danger-base)]/40 flex items-center justify-center transition-colors cursor-pointer"
                     >
                       <Trash2 size={13} />
                     </button>
@@ -699,8 +699,8 @@ export default function PdvSection() {
             })}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-ink-800 bg-ink-950/20 p-6 text-center">
-            <p className="text-[12px] text-ink-600">No hay Posnets registrados.</p>
+          <div className="rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-panel)] p-6 text-center">
+            <p className="text-[12px] text-[var(--text-tertiary)]">No hay Posnets registrados.</p>
           </div>
         )}
       </div>
@@ -709,28 +709,28 @@ export default function PdvSection() {
       <MpHealthPanel />
 
       {/* Sesiones de caja — contexto operativo del PDV (migrada de Pagos) */}
-      <div className="bg-ink-900 border border-ink-800 rounded-xl p-6 space-y-4">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-card">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-ink-800 text-ink-400 shrink-0">
-            <UserRound size={16} />
+          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
+            <UserRound size={16} strokeWidth={1.8} />
           </div>
           <div>
-            <h3 className="text-[16px] font-bold tracking-tight text-ink-100">Sesión de caja</h3>
-            <p className="text-[12px] text-ink-400/80">Quién está operando cada caja ahora</p>
+            <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">Sesión de caja</h3>
+            <p className="text-[12px] text-[var(--text-tertiary)]">Quién está operando cada caja ahora</p>
           </div>
         </div>
 
         {sessions.length > 0 ? (
-          <div className="rounded-lg border border-ink-800 divide-y divide-ink-800/50 overflow-hidden">
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
             {sessions.map((s) => (
-              <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-ink-950/30">
+              <div key={s.id} className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-green/10 text-green shrink-0">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[var(--success-soft)] text-[var(--success-base)] shrink-0">
                     <Wifi size={12} />
                   </div>
                   <div>
-                    <p className="text-[12px] font-medium text-ink-200">{s.username}</p>
-                    <p className="text-[10px] text-ink-500">
+                    <p className="text-[13px] font-medium text-[var(--text-primary)]">{s.username}</p>
+                    <p className="text-[11px] text-[var(--text-tertiary)]">
                       Conectado {formatRelative(s.connectedAt)}
                       {cajaByBarId.has(s.barId) ? " — Barra VIP" : ""}
                     </p>
@@ -739,7 +739,7 @@ export default function PdvSection() {
                 <button
                   type="button"
                   onClick={() => handleForceLogout(s.barId)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 text-[11px] font-medium transition-colors"
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-[var(--danger-soft)] text-[var(--danger-base)] hover:brightness-95 text-[11px] font-semibold transition-colors cursor-pointer"
                 >
                   <LogOut size={11} />
                   Cerrar sesión
@@ -748,11 +748,11 @@ export default function PdvSection() {
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-3 rounded-lg border border-ink-800 bg-ink-950/20 px-4 py-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-ink-800 text-ink-500 shrink-0">
+          <div className="flex items-center gap-3 rounded-xl bg-[var(--bg-panel)] px-4 py-3">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-tertiary)] shrink-0">
               <UserRound size={12} />
             </div>
-            <span className="text-[12px] text-ink-600">Sin usuario conectado</span>
+            <span className="text-[12px] text-[var(--text-tertiary)]">Sin usuario conectado</span>
           </div>
         )}
       </div>
@@ -795,7 +795,7 @@ export default function PdvSection() {
           warning={
             <>
               Vas a re-provisionar la caja en la cuenta activa de Mercado Pago.{" "}
-              <strong className="text-danger font-semibold">El QR estático va a cambiar</strong>:
+              <strong className="text-[var(--danger-base)] font-semibold">El QR estático va a cambiar</strong>:
               si ya está impreso en las mesas, vas a tener que reimprimirlo. Los Posnets
               históricos de la caja se conservan.
             </>

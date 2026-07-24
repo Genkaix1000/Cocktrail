@@ -3,18 +3,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import CajaSidebar from "./Sidebar";
-import { useTheme } from "@/components/ThemeProvider";
 
 import type { NightEvent } from "@cocktrail/shared";
-
-// CajaSidebar renderiza BrandLogo y OSProfileFooter, que dependen de
-// ThemeProvider — se mockea igual que en OSHeadbar.test.tsx.
-vi.mock("@/components/ThemeProvider", () => ({
-  useTheme: vi.fn(),
-  useThemeSafe: vi.fn(),
-}));
-
-const mockedUseTheme = vi.mocked(useTheme);
 
 const adminUser = {
   role: "admin",
@@ -46,7 +36,6 @@ function makeHasPermission(user: typeof adminUser | null) {
 
 const baseProps = {
   isDrawer: false as const,
-  theme: "bosko" as const,
   activeTab: "venta" as const,
   setActiveTab: vi.fn(),
   setMobileMenuOpen: vi.fn(),
@@ -66,16 +55,6 @@ const baseProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedUseTheme.mockReturnValue({
-    theme: "bosko",
-    useLogoUrl: false,
-    logoUrl: "",
-    logoSize: 40,
-    textLogoValue: "Cocktrail",
-    textLogoSize: 26,
-    isDark: true,
-    toggleDark: vi.fn(),
-  });
 });
 
 describe("CajaSidebar", () => {
@@ -133,7 +112,11 @@ describe("CajaSidebar", () => {
   });
 
   it("oculta el botón Cerrar noche sin permiso closeNight", () => {
-    const sinPermiso = { ...adminUser, role: "caja", permissions: { ...adminUser.permissions, closeNight: false } };
+    const sinPermiso = {
+      ...adminUser,
+      role: "caja",
+      permissions: { ...adminUser.permissions, closeNight: false },
+    };
 
     render(<CajaSidebar {...baseProps} currentUser={sinPermiso} />);
 
@@ -190,10 +173,10 @@ describe("CajaSidebar", () => {
     expect(screen.getByText("Error al imprimir la prueba.")).toBeInTheDocument();
   });
 
-  it("muestra el footer con OSProfileFooter (usuario y rol)", () => {
+  it("muestra Cerrar sesión en el rail GENERAL", () => {
     render(<CajaSidebar {...baseProps} />);
 
-    expect(screen.getByText("admin")).toBeInTheDocument();
+    expect(screen.getByText("Cerrar sesión")).toBeInTheDocument();
   });
 
   it("muestra el cartel del Posnet listo cuando el nivel es ok", () => {

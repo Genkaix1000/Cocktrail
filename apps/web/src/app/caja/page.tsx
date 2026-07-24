@@ -20,6 +20,12 @@ import type { Drink } from "@cocktrail/shared";
 type CurrentUser = {
   username: string;
   role: "admin" | "caja";
+  permissions: {
+    closeNight: boolean;
+    cancelarTickets: boolean;
+    historial: boolean;
+    metricas: boolean;
+  };
 };
 
 export default function CajaPage() {
@@ -235,5 +241,5 @@ export default function CajaPage() {
     );
   }
 
-  return <CajaClient drinks={drinks} />;
+  return <CajaClient drinks={drinks} currentUser={currentUser} />;
 }

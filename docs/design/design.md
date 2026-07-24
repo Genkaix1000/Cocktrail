@@ -248,7 +248,7 @@ Overlay semitransparente; panel `--bg-surface`, radius 16–20px; primary + seco
 **Referencia de layout** (estructura, no colores): [`reference/crud-table-ref.png`](./reference/crud-table-ref.png).  
 **Skin**: solo tokens Bosko (§2). El azul del mock → `--accent-primary` / `--accent-bright`.  
 **Plantilla de producto**: Carta — spec [`crud-carta.md`](../specs/features/refactor-ui-bosko/crud-carta.md).  
-Staff / PDV / etc. reutilizan este patrón; no inventan otra tabla.
+Staff reutiliza el mismo patrón (`UsuariosSection` / `UsersTable`). PDV y resto → misma plantilla.
 
 #### Anatomía (arriba → abajo)
 

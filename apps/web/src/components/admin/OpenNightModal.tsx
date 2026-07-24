@@ -29,7 +29,9 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
         throw new Error("Ingresá una palabra clave para la noche.");
       }
       const event =
-        mode === "open" ? await eventsService.openEvent(trimmed) : await eventsService.setKeyword(trimmed);
+        mode === "open"
+          ? await eventsService.openEvent(trimmed)
+          : await eventsService.setKeyword(trimmed);
       setKeyword("");
       onSubmit(event);
       onClose?.();
@@ -53,18 +55,20 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-ink-900 border border-ink-800 w-full max-w-md rounded-[22px] p-6 shadow-2xl animate-in slide-in-from-bottom-10">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full max-w-md rounded-2xl p-6 shadow-card animate-in slide-in-from-bottom-10">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-soft border border-blue-line rounded-xl flex items-center justify-center">
-              <KeyRound size={20} className="text-blue" />
+            <div className="w-10 h-10 bg-[var(--accent-surface)] border border-[var(--accent-line)] rounded-xl flex items-center justify-center">
+              <KeyRound size={20} className="text-[var(--accent-text)]" />
             </div>
             <div>
-              <h2 className="font-serif-italic text-[22px] text-ink-50 leading-none">
+              <h2 className="text-[20px] font-bold text-[var(--text-primary)] leading-none">
                 {isEdit ? "Editar palabra clave" : "Abrir Noche"}
               </h2>
-              <p className="text-[10px] text-ink-400 uppercase tracking-[0.18em] font-medium mt-1.5">
-                {isEdit ? "Corregir la clave de la noche activa" : "Definí la palabra clave de esta noche"}
+              <p className="text-[12px] text-[var(--text-secondary)] mt-1.5">
+                {isEdit
+                  ? "Corregir la clave de la noche activa"
+                  : "Definí la palabra clave de esta noche"}
               </p>
             </div>
           </div>
@@ -73,7 +77,7 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
               type="button"
               onClick={() => !submitting && onClose()}
               disabled={submitting}
-              className="p-2 bg-ink-800 rounded-full text-ink-300 hover:text-ink-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="p-2 bg-[var(--bg-panel)] rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Cerrar"
             >
               <X size={18} />
@@ -86,7 +90,7 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
             <div className="flex items-center justify-between">
               <label
                 htmlFor="night-keyword"
-                className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-400"
+                className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-secondary)]"
               >
                 Palabra clave de la noche
               </label>
@@ -94,7 +98,7 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
                 <button
                   type="button"
                   onClick={() => setKeyword(getRandomKeyword(keyword))}
-                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue hover:brightness-125 transition-all cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] font-semibold text-[var(--accent-text)] hover:brightness-110 transition-all cursor-pointer"
                 >
                   <Dices size={12} />
                   Generar palabra
@@ -108,20 +112,20 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
               autoFocus
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              className="bg-ink-850 border border-ink-750 rounded-xl px-4 py-3 text-ink-50 outline-none focus:border-blue-line transition-colors"
+              className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-colors"
               placeholder="ej. TEQUILA"
             />
           </div>
 
           {!isEdit && (
-            <p className="text-xs text-ink-400 leading-relaxed">
-              Se imprime en cada ticket físico vendido en caja durante esta noche. Comunicásela al staff
-              de palabra para que sepan distinguir tickets de la noche vigente.
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              Se imprime en cada ticket físico vendido en caja durante esta noche. Comunicásela al
+              staff de palabra para que sepan distinguir tickets de la noche vigente.
             </p>
           )}
 
           {error && (
-            <div className="text-sm text-danger bg-danger-soft border border-danger-line rounded-xl px-3 py-2.5">
+            <div className="text-sm text-[var(--danger-base)] bg-[var(--danger-soft)] border border-[var(--danger-line)] rounded-xl px-3 py-2.5">
               {error}
             </div>
           )}
@@ -129,7 +133,7 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
           <button
             type="submit"
             disabled={submitting || !keyword.trim()}
-            className="mt-2 h-12 bg-blue text-ink-950 font-semibold rounded-xl text-sm uppercase tracking-[0.14em] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="mt-2 h-12 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold rounded-xl text-sm flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <>

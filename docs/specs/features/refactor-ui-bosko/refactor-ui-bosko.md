@@ -65,7 +65,7 @@ el design system.
 | **2 — Dashboard KPIs** | `done` | `MetricCard` featured (Ventas) + estándar; misma data | [`dashboard-kpis.md`](./dashboard-kpis.md) |
 | **2b — Dashboard charts** | `done` | Barras/donut con stripes Bosko | [`dashboard-charts.md`](./dashboard-charts.md) |
 | **3 — Resto admin** | pendiente | Historial, Logs, settings CRUD/modales | empieza en [`crud-carta.md`](./crud-carta.md) |
-| **4 — Caja** | pendiente | `/caja` alineada al sistema | (spec futura) |
+| **4 — Caja** | en curso | `/caja` shell + sidebar + métricas/historial/modales alineados a Bosko; Venta POS sigue con tokens `ink-*` (compat) | (spec futura) |
 | **5 — Login y restos** | pendiente | Login + menores; `/carta`/`/barra` pueden diferirse | (spec futura) |
 
 ### Detalle Fase 0
