@@ -3,13 +3,12 @@
 import { Shield, X } from "lucide-react";
 import type { CreateUserInput } from "@/services/users.service";
 import type { Role } from "@cocktrail/shared";
+import { isSystemUser } from "./staffCrud";
 
 const ROLE_META: Record<Role, { label: string }> = {
   admin: { label: "Administrador" },
   caja: { label: "Cajero" },
 };
-
-const SYSTEM_USERNAMES = ["admin", "caja"];
 
 type EditUser = Partial<CreateUserInput> & { id?: string };
 
@@ -17,7 +16,6 @@ type Props = {
   editUser: EditUser;
   error: string;
   saving: boolean;
-  isBosko: boolean;
   onUsernameChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onRoleChange: (role: Role) => void;
@@ -25,102 +23,98 @@ type Props = {
   onSave: () => void;
 };
 
+const labelCls = "text-[13px] font-semibold text-[var(--text-primary)] block mb-1.5";
+const inputCls =
+  "w-full h-10 px-3.5 bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-xl text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all";
+const inputDisabledCls =
+  "w-full h-10 px-3.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl text-sm text-[var(--text-tertiary)] cursor-not-allowed opacity-70";
+
 export default function UserFormDrawer({
   editUser,
   error,
   saving,
-  isBosko,
   onUsernameChange,
   onPasswordChange,
   onRoleChange,
   onCancel,
   onSave,
 }: Props) {
-  const isEditSystemUser = !!(editUser.username && SYSTEM_USERNAMES.includes(editUser.username.toLowerCase()));
+  const isEditSystemUser = !!(editUser.username && isSystemUser(editUser.username));
 
   return (
-    <div className="w-full lg:w-[480px] shrink-0 bg-ink-900 border border-ink-800 rounded-xl p-6 flex flex-col gap-5 animate-in slide-in-from-right duration-200">
-      <div className="flex justify-between items-center pb-3 border-b border-ink-800">
-        <h2 className="text-[18px] font-bold text-ink-50 uppercase tracking-wider">
-          {isEditSystemUser ? "Ver Usuario" : editUser.id ? "Editar Usuario" : "Nuevo Usuario"}
+    <div className="w-full lg:w-[480px] shrink-0 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 flex flex-col gap-5 shadow-card animate-in slide-in-from-right duration-200">
+      <div className="flex justify-between items-center pb-3 border-b border-[var(--border-subtle)]">
+        <h2 className="text-[18px] font-semibold text-[var(--text-primary)] tracking-tight">
+          {isEditSystemUser ? "Ver usuario" : editUser.id ? "Editar usuario" : "Nuevo usuario"}
         </h2>
         <button
           type="button"
           onClick={onCancel}
-          className="p-1.5 bg-ink-850 hover:bg-ink-800 rounded-lg text-ink-400 hover:text-ink-200 transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-panel)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+          aria-label="Cerrar"
         >
           <X size={16} />
         </button>
       </div>
 
       {error && (
-        <div className="p-3.5 rounded-lg bg-danger-soft border border-danger-line text-danger text-[12px]">
+        <div className="p-3.5 rounded-xl bg-[var(--danger-soft)] text-[var(--danger-base)] text-[12px] font-medium">
           {error}
         </div>
       )}
 
       <div className="space-y-5">
-        {/* Username */}
-        <div className="space-y-1.5">
-          <label className="text-[14px] font-semibold text-ink-100 block">Usuario *</label>
+        <div>
+          <label className={labelCls}>Usuario *</label>
           <input
             type="text"
             disabled={isEditSystemUser}
             value={editUser.username || ""}
             onChange={(e) => onUsernameChange(e.target.value)}
-            className={`w-full h-10 px-3.5 border rounded-lg text-sm transition-all duration-200 outline-none ${
-              isEditSystemUser
-                ? "bg-ink-850/40 border-ink-800 text-ink-400 cursor-not-allowed"
-                : "bg-ink-850 border-ink-700 text-ink-50 focus:border-accent"
-            }`}
+            className={isEditSystemUser ? inputDisabledCls : inputCls}
             placeholder="nombre_operador"
           />
         </div>
 
-        {/* Password */}
-        <div className="space-y-1.5">
-          <label className="text-[14px] font-semibold text-ink-100 block font-sans">
-            {isEditSystemUser ? "Contraseña" : editUser.id ? "Nueva Contraseña (dejar vacío para mantener)" : "Contraseña *"}
+        <div>
+          <label className={labelCls}>
+            {isEditSystemUser
+              ? "Contraseña"
+              : editUser.id
+                ? "Nueva contraseña (opcional)"
+                : "Contraseña *"}
           </label>
           <input
             type="password"
             disabled={isEditSystemUser}
-            value={isEditSystemUser ? "••••••••" : (editUser.password || "")}
+            value={isEditSystemUser ? "••••••••" : editUser.password || ""}
             onChange={(e) => onPasswordChange(e.target.value)}
-            className={`w-full h-10 px-3.5 border rounded-lg text-sm transition-all duration-200 outline-none ${
-              isEditSystemUser
-                ? "bg-ink-850/40 border-ink-800 text-ink-400 cursor-not-allowed"
-                : "bg-ink-850 border-ink-700 text-ink-50 focus:border-accent"
-            }`}
+            className={isEditSystemUser ? inputDisabledCls : inputCls}
             placeholder={isEditSystemUser ? "" : editUser.id ? "Opcional" : "Mínimo 4 caracteres"}
           />
         </div>
 
-        {/* Role */}
-        <div className="space-y-1.5">
-          <label className="text-[14px] font-semibold text-ink-100 block">Rol</label>
-          <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className={labelCls}>Rol</label>
+          <div className="grid grid-cols-2 gap-2 p-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]">
             {(["admin", "caja"] as Role[]).map((r) => {
               const meta = ROLE_META[r] || { label: r };
               const isSelected = editUser.role === r;
-              const activeStyle = isBosko
-                ? "bg-accent/15 text-accent border border-accent/35 font-bold shadow-sm"
-                : "bg-blue/15 text-blue border border-blue/35 font-bold shadow-sm";
-
               return (
                 <button
                   key={r}
                   type="button"
                   disabled={isEditSystemUser}
                   onClick={() => !isEditSystemUser && onRoleChange(r)}
-                  className={`
-                    h-10 rounded-xl text-[13px] font-semibold transition-all duration-200 active:scale-95
-                    ${isEditSystemUser ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
-                    ${isSelected
-                      ? activeStyle
-                      : "bg-ink-850 border border-ink-750 text-ink-400 hover:text-ink-200 hover:bg-ink-800"
-                    }
-                  `}
+                  className={`h-9 rounded-full text-[12px] font-semibold transition-all ${
+                    isEditSystemUser ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                  } ${
+                    isSelected
+                      ? r === "caja"
+                        ? "bg-[var(--amber-soft)] text-[var(--amber-base)]"
+                        : "bg-[var(--accent-surface)] text-[var(--accent-text)]"
+                      : "bg-transparent text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                  }`}
                 >
                   {meta.label}
                 </button>
@@ -130,20 +124,19 @@ export default function UserFormDrawer({
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-ink-800 shrink-0">
+      <div className="flex justify-end gap-2 mt-1 pt-4 border-t border-[var(--border-subtle)] shrink-0">
         {isEditSystemUser ? (
           <div className="flex flex-col gap-3 w-full">
-            <div className="w-full py-3 px-4 rounded-xl border border-amber-500/25 bg-amber-500/5 text-amber-500 text-xs font-bold text-center flex items-center justify-center gap-2">
+            <div className="w-full py-3 px-4 rounded-xl border border-[var(--amber-line)] bg-[var(--amber-soft)] text-[var(--amber-base)] text-xs font-semibold text-center flex items-center justify-center gap-2">
               <Shield size={14} />
               <span>Este usuario es de sistema y es inmutable</span>
             </div>
             <button
               type="button"
               onClick={onCancel}
-              className="w-full h-10 rounded-xl bg-ink-850 border border-ink-750 text-xs font-bold uppercase tracking-[0.08em] text-ink-300 hover:text-ink-100 transition-all cursor-pointer active:scale-[0.97]"
+              className="w-full h-10 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-app)] transition-all cursor-pointer"
             >
-              Cerrar Vista
+              Cerrar
             </button>
           </div>
         ) : (
@@ -151,7 +144,7 @@ export default function UserFormDrawer({
             <button
               type="button"
               onClick={onCancel}
-              className="h-9 px-4 rounded-xl bg-ink-850 border border-ink-750 text-xs font-semibold text-ink-300 hover:text-ink-100 transition-all cursor-pointer active:scale-[0.97]"
+              className="h-10 px-4 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-app)] transition-all cursor-pointer"
             >
               Cancelar
             </button>
@@ -159,13 +152,7 @@ export default function UserFormDrawer({
               type="button"
               onClick={onSave}
               disabled={saving || !editUser.username || (!editUser.id && !editUser.password)}
-              className={`h-9 px-5 rounded-xl text-xs font-bold uppercase tracking-[0.08em] transition-all duration-200 select-none active:scale-[0.97] ${
-                (saving || !editUser.username || (!editUser.id && !editUser.password))
-                  ? "bg-ink-850/50 border border-ink-800 text-ink-500 cursor-not-allowed opacity-50"
-                  : isBosko
-                  ? "ct-action-btn text-[#050d07] shadow-md cursor-pointer hover:brightness-110"
-                  : "bg-blue hover:bg-blue-bright text-ink-950 shadow-[0_4px_15px_rgba(109,179,242,0.15)] cursor-pointer"
-              }`}
+              className="h-10 px-4 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold transition-all disabled:opacity-45 cursor-pointer"
             >
               {saving ? "Guardando..." : editUser.id ? "Guardar" : "Crear"}
             </button>

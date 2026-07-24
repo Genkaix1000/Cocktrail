@@ -1,12 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Calendar, CreditCard, Link2, Loader2, Mail, Monitor, QrCode, ShieldCheck, Store, UserRound } from "lucide-react";
+import {
+  AlertTriangle,
+  Calendar,
+  CreditCard,
+  Link2,
+  Loader2,
+  LogOut,
+  Mail,
+  Monitor,
+  QrCode,
+  ShieldCheck,
+  Store,
+  UserRound,
+  Wifi,
+} from "lucide-react";
 import { ApiError } from "@/services/api-client";
 import { mercadopagoService, type MpSellerStatus } from "@/services/mercadopago.service";
 import { configService } from "@/services/config.service";
 import { pdvService, type ProvisioningSummary, type RenameStoreResult } from "@/services/pdv.service";
-import { useTheme } from "@/components/ThemeProvider";
+import { barSessionsService, type BarSession } from "@/services/bar-sessions.service";
 import Toast from "@/components/shared/Toast";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 
@@ -20,8 +34,10 @@ function formatRelative(iso: string | null): string | null {
   return `hace ${days} días`;
 }
 
+const cardShell =
+  "bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-card";
+
 export default function PagosSection() {
-  const { theme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
@@ -29,21 +45,17 @@ export default function PagosSection() {
   const [sellerStatus, setSellerStatus] = useState<MpSellerStatus | null>(null);
   const [sandbox, setSandbox] = useState(false);
 
-  // Desvincular (D9) — confirmación en dos pasos + aviso de limpieza Cloud pendiente
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [cloudCleanupPending, setCloudCleanupPending] = useState(false);
 
-  // Summary de sucursal (los PDVs y Posnets viven en su propia tab: "PDV y Posnets")
   const [summary, setSummary] = useState<ProvisioningSummary | null>(null);
+  const [sessions, setSessions] = useState<BarSession[]>([]);
 
-  // Rename de sucursal (criterio E): el nombre viaja a MP (rama A de T1).
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [savingRename, setSavingRename] = useState(false);
   const [renameResult, setRenameResult] = useState<RenameStoreResult | null>(null);
-
-  const isBosko = theme === "bosko";
 
   const refreshSellerStatus = useCallback(() => {
     mercadopagoService.getSellerStatus()
@@ -53,7 +65,12 @@ export default function PagosSection() {
 
   const loadData = useCallback(async () => {
     try {
-      setSummary(await pdvService.getSummary());
+      const [summaryData, sessionsData] = await Promise.all([
+        pdvService.getSummary(),
+        barSessionsService.listAll().catch(() => [] as BarSession[]),
+      ]);
+      setSummary(summaryData);
+      setSessions(sessionsData);
     } catch (err) {
       console.error("Error loading MP summary:", err);
       setError("No se pudo cargar el estado de la sucursal. Reintentá en unos segundos.");
@@ -65,6 +82,17 @@ export default function PagosSection() {
     configService.get().then(c => setSandbox(c.mercadoPago.sandbox)).catch(() => {});
     loadData().finally(() => setLoading(false));
   }, [refreshSellerStatus, loadData]);
+
+  const handleForceLogout = useCallback(async (barId: string) => {
+    setError(null);
+    try {
+      await barSessionsService.forceLogout(barId);
+      setSessions(await barSessionsService.listAll());
+    } catch (err) {
+      console.error("Error forcing logout:", err);
+      setError("No se pudo cerrar la sesión de la caja.");
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -106,7 +134,6 @@ export default function PagosSection() {
     setError(null);
     try {
       const res = await mercadopagoService.unlinkSeller();
-      // cloudCleaned:false = el seller local se limpió pero Cloud no (sin conexión).
       setCloudCleanupPending(res.cloudCleaned === false);
       refreshSellerStatus();
       loadData();
@@ -141,267 +168,404 @@ export default function PagosSection() {
   };
 
   const isLinked = sellerStatus?.linked && sellerStatus.status === "active";
+  const isExpired = sellerStatus?.linked && sellerStatus.status === "expired";
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 size={24} className="animate-spin text-ink-400" />
+        <Loader2 size={24} className="animate-spin text-[var(--text-tertiary)]" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
-      {/* Header */}
+    <div className="max-w-5xl flex flex-col gap-8">
       <div>
-        <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-            <CreditCard size={16} />
-          </div>
-          <span>Pagos</span>
+        <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+          Pagos
         </h1>
-        <p className="text-[13px] text-ink-400/80 mt-1">
-          Integración con Mercado Pago — vinculación de cuenta y sucursal. Los PDVs y Posnets se
-          administran en la tab "PDV y Posnets".
+        <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+          Mercado Pago, sucursal y puntos de venta en un solo lugar
         </p>
       </div>
 
-      {/* Card 1 — Sucursal */}
-      <div className="bg-ink-900 border border-ink-800 rounded-xl p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-ink-800 text-ink-400 shrink-0">
-            <Store size={16} />
-          </div>
-          <div>
-            <h3 className="text-[16px] font-bold tracking-tight text-ink-100">Sucursal</h3>
-            <p className="text-[12px] text-ink-400/80">Datos de la sucursal vinculada a Mercado Pago</p>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-ink-800 bg-ink-950/40 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-accent/15 text-accent shrink-0">
-                <Store size={20} />
+      {/* 1. Mercado Pago — acción primaria (hero tipo NightActionCard) */}
+      {isLinked ? (
+        <div className={`${cardShell} p-5 space-y-4`}>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 bg-[var(--success-soft)] text-[var(--success-base)]">
+                <ShieldCheck size={20} strokeWidth={1.8} />
               </div>
-              <div>
-                <p className="text-[15px] font-bold text-ink-50">
-                  {summary?.store.name ?? summary?.store.storeName ?? "Sucursal sin nombre"}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-[15px] font-semibold text-[var(--text-primary)]">Mercado Pago</p>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--success-soft)] text-[var(--success-base)]">
+                    Vinculado
+                  </span>
+                </div>
+                <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+                  {sandbox ? "Sandbox" : "Producción"} · cobros habilitados
                 </p>
-                <p className="text-[11px] text-ink-500 font-mono">
-                  {summary?.store.linked ? `store_id: ${summary.store.storeId}` : "No vinculada"}
-                </p>
+              </div>
             </div>
-          </div>
-          {summary?.store.linked && (
-            <button
-              type="button"
-              onClick={() => {
-                setRenameDraft(summary?.store.name ?? summary?.store.storeName ?? "");
-                setRenameOpen((v) => !v);
-              }}
-              className="shrink-0 h-8 px-3 rounded-lg bg-ink-850 border border-ink-700 text-ink-300 hover:text-ink-50 text-[11px] font-bold uppercase tracking-wider transition-colors"
-            >
-              Renombrar
-            </button>
-          )}
-        </div>
 
-        {renameOpen && (
-          <div className="rounded-lg border border-ink-800 bg-ink-950/40 p-4 space-y-3">
-            <label htmlFor="store-rename" className="text-[11px] font-bold uppercase tracking-wider text-ink-400 block">
-              Nombre de la sucursal
-            </label>
-            <p className="text-[11px] text-ink-500 leading-relaxed">
-              El nombre viaja a Mercado Pago: es el que ve el cliente en el comprobante del cobro.
-            </p>
             <div className="flex items-center gap-2">
-              <input
-                id="store-rename"
-                type="text"
-                value={renameDraft}
-                onChange={(e) => setRenameDraft(e.target.value)}
-                maxLength={60}
-                placeholder="Nombre de la sucursal"
-                className="flex-1 h-9 px-3 bg-ink-850 border border-ink-700 rounded-lg text-sm text-ink-50 placeholder:text-ink-500 focus:outline-none focus:border-accent transition-all"
-              />
+              <span id="sandbox-toggle-label" className="text-[11px] text-[var(--text-tertiary)] font-medium uppercase tracking-wider">
+                Sandbox
+              </span>
               <button
                 type="button"
-                onClick={handleRenameStore}
-                disabled={savingRename || !renameDraft.trim() || renameDraft.trim().length > 60}
-                className="h-9 px-4 rounded-lg bg-accent/15 border border-accent/30 text-accent text-[12px] font-bold uppercase tracking-wider flex items-center gap-1.5 hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                aria-labelledby="sandbox-toggle-label"
+                aria-pressed={sandbox}
+                onClick={async () => {
+                  const next = !sandbox;
+                  setSandbox(next);
+                  configService.update({ mercadoPago: { sandbox: next } }).catch(() => {});
+                }}
+                className={`relative w-10 h-5 rounded-full transition-all duration-300 cursor-pointer ${
+                  sandbox ? "bg-[var(--accent-primary)]" : "bg-[var(--border-strong)]"
+                }`}
               >
-                {savingRename ? <Loader2 size={14} className="animate-spin" /> : null}
-                Guardar
+                <div
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-all duration-300 ${
+                    sandbox ? "left-[22px]" : "left-0.5"
+                  }`}
+                />
               </button>
             </div>
           </div>
-        )}
 
-        {renameResult && renameResult.renamedInMp === false && (
-          <div
-            role="status"
-            className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-[12px] text-amber-200/90 leading-relaxed"
-          >
-            <AlertTriangle size={15} className="shrink-0 mt-0.5" aria-hidden="true" />
-            <span>
-              Mercado Pago no aceptó el cambio de nombre: se guardó el alias local{" "}
-              <strong className="font-semibold">«{renameResult.name}»</strong>, pero el nombre en
-              Mercado Pago sigue siendo{" "}
-              <strong className="font-semibold">«{renameResult.mpName ?? "el anterior"}»</strong>.
-            </span>
-          </div>
-        )}
+          {sellerStatus && (
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
+              {sellerStatus.displayName && (
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                  <UserRound size={15} className="text-[var(--text-tertiary)] shrink-0" strokeWidth={1.8} />
+                  <span className="text-[13px] text-[var(--text-primary)]">{sellerStatus.displayName}</span>
+                </div>
+              )}
+              {sellerStatus.email && (
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                  <Mail size={15} className="text-[var(--text-tertiary)] shrink-0" strokeWidth={1.8} />
+                  <span className="text-[13px] text-[var(--text-primary)]">{sellerStatus.email}</span>
+                </div>
+              )}
+              {formatRelative(sellerStatus.linkedAt) && (
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                  <Calendar size={15} className="text-[var(--text-tertiary)] shrink-0" strokeWidth={1.8} />
+                  <span className="text-[13px] text-[var(--text-primary)]">
+                    Vinculado {formatRelative(sellerStatus.linkedAt)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Stats */}
-          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-ink-800/50">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-ink-800 text-ink-400">
-                <QrCode size={13} />
-              </div>
-              <div>
-                <p className="text-[13px] font-bold text-ink-100">{summary?.bars ?? 0}</p>
-                <p className="text-[10px] text-ink-500">{summary?.bars === 1 ? "barra" : "barras"}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-ink-800 text-ink-400">
-                <Monitor size={13} />
-              </div>
-              <div>
-                <p className="text-[13px] font-bold text-ink-100">{summary?.posnets ?? 0}</p>
-                <p className="text-[10px] text-ink-500">{summary?.posnets === 1 ? "Posnet" : "Posnets"}</p>
-            </div>
-            {summary?.store.linked && (
-              <span className="text-[11px] text-green font-medium bg-green/10 px-3 py-1 rounded-full">Vinculada</span>
-            )}
-          </div>
-        </div>
-        </div>
-      </div>
-
-      {/* Card 2 — Vinculación OAuth */}
-      <div className={`rounded-xl border p-5 space-y-4 transition-all duration-200 ${
-        isLinked ? "bg-green-soft border-green-line/30" : "bg-ink-900 border-ink-800"
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-              isLinked ? "bg-green/15 text-green" : "bg-ink-800 text-ink-500"
-            }`}>
-              {isLinked ? <ShieldCheck size={22} /> : <CreditCard size={22} />}
-            </div>
-            <div>
-              <p className={`text-[14px] font-bold ${isLinked ? "text-green" : "text-ink-300"}`}>
-                Mercado Pago
-              </p>
-              <p className="text-[12px] text-ink-400/80 mt-0.5">
-                {isLinked
-                  ? `Vinculado — ${sandbox ? "Sandbox" : "Producción"}`
-                  : "Vinculá tu cuenta para habilitar cobros"}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span id="sandbox-toggle-label" className="text-[11px] text-ink-500 font-medium uppercase tracking-wider">Sandbox</span>
-            <button
-              type="button"
-              aria-labelledby="sandbox-toggle-label"
-              aria-pressed={sandbox}
-              onClick={async () => {
-                const next = !sandbox;
-                setSandbox(next);
-                configService.update({ mercadoPago: { sandbox: next } }).catch(() => {});
-              }}
-              className={`relative w-10 h-5 rounded-full transition-all duration-300 cursor-pointer ${
-                sandbox ? (isBosko ? "bg-accent" : "bg-blue") : "bg-ink-700"
-              }`}
+          {cloudCleanupPending && (
+            <div
+              role="alert"
+              className="flex items-center gap-2.5 rounded-xl bg-[var(--amber-soft)] px-3.5 py-2.5 text-[12px] text-[var(--amber-base)]"
             >
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-all duration-300 ${
-                sandbox ? "left-[22px]" : "left-0.5"
-              }`} />
-            </button>
-          </div>
-        </div>
+              <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
+              <span>
+                La cuenta se desvinculó de esta PC, pero quedó limpieza pendiente en la nube — reintentá la desvinculación con conexión.
+              </span>
+            </div>
+          )}
 
-        {sellerStatus?.linked && (
-          <div className={`rounded-lg border divide-y overflow-hidden ${
-            sellerStatus.status === "expired"
-              ? "bg-orange-500/10 border-orange-500/30 divide-orange-500/20"
-              : "bg-ink-950/25 border-green-line/20 divide-green-line/10"
-          }`}>
-            {sellerStatus.status === "expired" && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-                <AlertTriangle size={15} className="text-orange-400 shrink-0" />
-                <span className="text-[12px] font-bold text-orange-300">Sesión expirada — volvé a vincular</span>
-              </div>
-            )}
-            {sellerStatus.displayName && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-                <UserRound size={15} className="text-ink-500 shrink-0" />
-                <span className="text-[12px] text-ink-200">{sellerStatus.displayName}</span>
-              </div>
-            )}
-            {sellerStatus.email && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-                <Mail size={15} className="text-ink-500 shrink-0" />
-                <span className="text-[12px] text-ink-200">{sellerStatus.email}</span>
-              </div>
-            )}
-            {formatRelative(sellerStatus.linkedAt) && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-                <Calendar size={15} className="text-ink-500 shrink-0" />
-                <span className="text-[12px] text-ink-200">Vinculado {formatRelative(sellerStatus.linkedAt)}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {cloudCleanupPending && (
-          <div
-            role="alert"
-            className="flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-[12px] text-amber-300"
-          >
-            <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
-            <span>
-              La cuenta se desvinculó de esta PC, pero quedó limpieza pendiente en la nube — reintentá la desvinculación con conexión.
-            </span>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleLink}
-            disabled={linking}
-            className={`flex-1 h-11 px-6 rounded-xl text-xs font-bold uppercase tracking-[0.12em] transition-all duration-300 flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 ${
-              sellerStatus?.linked && sellerStatus.status === "expired"
-                ? "bg-orange-500 text-white hover:brightness-110"
-                : isBosko
-                  ? "bg-accent text-ink-950 hover:brightness-110"
-                  : "bg-blue text-white hover:brightness-110"
-            }`}
-          >
-            {linking ? <Loader2 size={14} strokeWidth={2.5} className="animate-spin" /> : <Link2 size={14} strokeWidth={2.5} />}
-            {linking ? "Redirigiendo..." : sellerStatus?.linked && sellerStatus.status === "expired" ? "Re-vincular" : "Vincular"}
-          </button>
-
-          {sellerStatus?.linked && (
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setUnlinkConfirmOpen(true)}
               disabled={unlinking}
-              className="h-11 px-5 rounded-xl text-xs font-bold uppercase tracking-[0.12em] transition-all duration-300 flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20"
+              className="h-10 px-5 rounded-full text-[13px] font-semibold transition-all flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 cursor-pointer bg-[var(--danger-soft)] text-[var(--danger-base)] hover:brightness-95"
             >
               {unlinking && <Loader2 size={14} strokeWidth={2.5} className="animate-spin" />}
-              {unlinking ? "Desvinculando..." : "Desvincular"}
+              {unlinking ? "Desvinculando…" : "Desvincular"}
             </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="relative overflow-hidden rounded-2xl p-6 text-white shadow-card border border-[#009EE3]/20"
+          style={{
+            background: isExpired
+              ? "linear-gradient(135deg, #7C2D12 0%, #451A03 50%, #001A33 100%)"
+              : "linear-gradient(135deg, #003B64 0%, #002340 50%, #001124 100%)",
+          }}
+        >
+          {/* Patrón de Rejilla / Grid SVG con azul Mercado Pago (#009EE3) */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-25"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 40 0 L 0 0 0 40' fill='none' stroke='%23009EE3' stroke-width='1' /%3E%3Ccircle cx='40' cy='0' r='1.5' fill='%23009EE3' /%3E%3C/svg%3E\")",
+              backgroundSize: "32px 32px",
+            }}
+            aria-hidden
+          />
+
+          <div className="relative flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 bg-[#009EE3]/20 border border-[#009EE3]/40">
+                <CreditCard size={20} strokeWidth={1.8} className="text-[#00A9E0]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[16px] font-semibold leading-snug">Mercado Pago</p>
+                <p className="text-[13px] text-white/70 mt-1 leading-snug max-w-md">
+                  {isExpired
+                    ? "Sesión expirada — volvé a vincular para seguir cobrando con Point y QR."
+                    : "Vinculá tu cuenta para habilitar cobros con Posnet, QR y conciliación automática."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 relative">
+              <span id="sandbox-toggle-label" className="text-[11px] text-white/50 font-medium uppercase tracking-wider">
+                Sandbox
+              </span>
+              <button
+                type="button"
+                aria-labelledby="sandbox-toggle-label"
+                aria-pressed={sandbox}
+                onClick={async () => {
+                  const next = !sandbox;
+                  setSandbox(next);
+                  configService.update({ mercadoPago: { sandbox: next } }).catch(() => {});
+                }}
+                className={`relative w-10 h-5 rounded-full transition-all duration-300 cursor-pointer ${
+                  sandbox ? "bg-[#009EE3]" : "bg-white/20"
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-all duration-300 ${
+                    sandbox ? "left-[22px]" : "left-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {isExpired && sellerStatus && (
+            <div className="relative mt-4 rounded-2xl border border-white/10 bg-black/20 divide-y divide-white/10 overflow-hidden">
+              {sellerStatus.displayName && (
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                  <UserRound size={15} className="text-white/45 shrink-0" />
+                  <span className="text-[13px] text-white/85">{sellerStatus.displayName}</span>
+                </div>
+              )}
+              {sellerStatus.email && (
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                  <Mail size={15} className="text-white/45 shrink-0" />
+                  <span className="text-[13px] text-white/85">{sellerStatus.email}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {cloudCleanupPending && (
+            <div
+              role="alert"
+              className="relative mt-4 flex items-center gap-2.5 rounded-xl border border-amber-400/30 bg-amber-500/15 px-3.5 py-2.5 text-[12px] text-amber-100"
+            >
+              <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
+              <span>
+                La cuenta se desvinculó de esta PC, pero quedó limpieza pendiente en la nube — reintentá la desvinculación con conexión.
+              </span>
+            </div>
+          )}
+
+          <div className="relative mt-5 flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={handleLink}
+              disabled={linking}
+              className={`h-11 px-6 rounded-full text-[13px] font-semibold transition-all flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-md ${
+                isExpired
+                  ? "bg-orange-500 text-white hover:brightness-110"
+                  : "bg-[#009EE3] hover:bg-[#008BCC] text-white"
+              }`}
+            >
+              {linking ? (
+                <Loader2 size={15} strokeWidth={2.5} className="animate-spin" />
+              ) : (
+                <Link2 size={15} strokeWidth={2.5} />
+              )}
+              {linking ? "Redirigiendo…" : isExpired ? "Re-vincular" : "Vincular Mercado Pago"}
+            </button>
+
+            {sellerStatus?.linked && (
+              <button
+                type="button"
+                onClick={() => setUnlinkConfirmOpen(true)}
+                disabled={unlinking}
+                className="h-11 px-5 rounded-full text-[13px] font-semibold transition-all flex items-center justify-center gap-2 select-none active:scale-[0.98] disabled:opacity-50 cursor-pointer bg-white/10 border border-white/15 text-white/80 hover:text-white hover:bg-white/15"
+              >
+                {unlinking && <Loader2 size={14} strokeWidth={2.5} className="animate-spin" />}
+                {unlinking ? "Desvinculando…" : "Desvincular"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Sucursal (featured) + Sesión de caja */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className="rounded-2xl p-5 space-y-4 shadow-card border border-transparent bg-[var(--accent-primary)] dark:bg-[var(--accent-featured)] text-[var(--text-on-accent)]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center border border-white/25 bg-white/10 shrink-0">
+              <Store size={16} strokeWidth={1.8} />
+            </div>
+            <div>
+              <h3 className="text-[15px] font-semibold">Sucursal</h3>
+              <p className="text-[12px] text-white/55">Datos que viajan a Mercado Pago en el comprobante</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold truncate">
+                {summary?.store.name ?? summary?.store.storeName ?? "Sucursal sin nombre"}
+              </p>
+              <p className="text-[11px] text-white/55 font-mono">
+                {summary?.store.linked ? `store_id: ${summary.store.storeId}` : "No vinculada"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {summary?.store.linked ? (
+                <span className="text-[11px] font-semibold text-white bg-white/15 px-2.5 py-1 rounded-full">
+                  Vinculada
+                </span>
+              ) : (
+                <span className="text-[11px] font-medium text-white/55">Sin vincular</span>
+              )}
+              {summary?.store.linked && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRenameDraft(summary?.store.name ?? summary?.store.storeName ?? "");
+                    setRenameOpen((v) => !v);
+                  }}
+                  className="h-8 px-3 rounded-full bg-white/10 border border-white/25 text-white/85 hover:text-white hover:bg-white/15 text-[12px] font-semibold transition-colors cursor-pointer"
+                >
+                  Renombrar
+                </button>
+              )}
+            </div>
+          </div>
+
+          {renameOpen && (
+            <div className="space-y-2.5 rounded-2xl bg-black/20 border border-white/10 p-4">
+              <label htmlFor="store-rename" className="text-[13px] font-semibold block">
+                Nombre de la sucursal
+              </label>
+              <p className="text-[12px] text-white/70 leading-relaxed">
+                El nombre viaja a Mercado Pago: es el que ve el cliente en el comprobante del cobro.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  id="store-rename"
+                  type="text"
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  maxLength={60}
+                  placeholder="Nombre de la sucursal"
+                  className="flex-1 h-10 px-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleRenameStore}
+                  disabled={savingRename || !renameDraft.trim() || renameDraft.trim().length > 60}
+                  className="h-10 px-4 rounded-full bg-white text-[var(--accent-primary)] text-[13px] font-semibold flex items-center gap-1.5 hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  {savingRename ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Guardar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {renameResult && renameResult.renamedInMp === false && (
+            <div
+              role="status"
+              className="flex items-start gap-2.5 rounded-xl bg-black/20 border border-amber-300/30 px-3.5 py-2.5 text-[12px] text-amber-100 leading-relaxed"
+            >
+              <AlertTriangle size={15} className="shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                Mercado Pago no aceptó el cambio de nombre: se guardó el alias local{" "}
+                <strong className="font-semibold">«{renameResult.name}»</strong>, pero el nombre en
+                Mercado Pago sigue siendo{" "}
+                <strong className="font-semibold">«{renameResult.mpName ?? "el anterior"}»</strong>.
+              </span>
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-black/20 border border-white/10 grid grid-cols-2 divide-x divide-white/10 overflow-hidden">
+            <div className="px-4 py-3 flex items-center gap-2.5">
+              <QrCode size={14} strokeWidth={1.8} className="text-white/55 shrink-0" />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-white/55">Barras</p>
+                <p className="text-[18px] font-bold tabular leading-tight">{summary?.bars ?? 0}</p>
+              </div>
+            </div>
+            <div className="px-4 py-3 flex items-center gap-2.5">
+              <Monitor size={14} strokeWidth={1.8} className="text-white/55 shrink-0" />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-white/55">Posnets</p>
+                <p className="text-[18px] font-bold tabular leading-tight">{summary?.posnets ?? 0}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={`${cardShell} p-5 space-y-4`}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
+              <UserRound size={16} strokeWidth={1.8} />
+            </div>
+            <div>
+              <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">Sesión de caja</h3>
+              <p className="text-[12px] text-[var(--text-tertiary)]">Quién está operando cada caja ahora</p>
+            </div>
+          </div>
+
+          {sessions.length > 0 ? (
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
+              {sessions.map((s) => (
+                <div key={s.id} className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[var(--success-soft)] text-[var(--success-base)] shrink-0">
+                      <Wifi size={12} />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-medium text-[var(--text-primary)]">{s.username}</p>
+                      <p className="text-[11px] text-[var(--text-tertiary)]">
+                        Conectado {formatRelative(s.connectedAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleForceLogout(s.barId)}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-[var(--danger-soft)] text-[var(--danger-base)] hover:brightness-95 text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    <LogOut size={11} />
+                    Cerrar sesión
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl bg-[var(--bg-panel)] px-4 py-3">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-tertiary)] shrink-0">
+                <UserRound size={12} />
+              </div>
+              <span className="text-[12px] text-[var(--text-tertiary)]">Sin usuario conectado</span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Confirmación de desvinculación (D9 + aviso R22) */}
       {unlinkConfirmOpen && (
         <SafeDeleteModal
           onClose={() => setUnlinkConfirmOpen(false)}
@@ -413,16 +577,20 @@ export default function PagosSection() {
           warning={
             <>
               Vas a desvincular la cuenta de Mercado Pago
-              {sellerStatus?.displayName ? <> <strong className="text-danger font-semibold">{sellerStatus.displayName}</strong></> : null}.
-              Las cajas provisionadas con esa cuenta van a quedar huérfanas, y al re-provisionar con otra
-              cuenta <strong className="text-danger font-semibold">el QR estático cambia</strong>: si el QR
+              {sellerStatus?.displayName ? (
+                <>
+                  {" "}
+                  <strong className="text-[var(--danger-base)] font-semibold">{sellerStatus.displayName}</strong>
+                </>
+              ) : null}
+              . Las cajas provisionadas con esa cuenta van a quedar huérfanas, y al re-provisionar con otra
+              cuenta <strong className="text-[var(--danger-base)] font-semibold">el QR estático cambia</strong>: si el QR
               ya está impreso, vas a tener que reimprimirlo.
             </>
           }
         />
       )}
 
-      {/* Toasts */}
       {linkedNotice && (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast variant="success" message="Cuenta de Mercado Pago vinculada" duration={3000} onClose={() => setLinkedNotice(false)} />

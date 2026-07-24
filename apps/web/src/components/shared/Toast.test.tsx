@@ -54,4 +54,21 @@ describe("Toast", () => {
       vi.useRealTimers();
     }
   });
+
+  it("renderiza action y al click ejecuta onClick + onClose", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onAction = vi.fn();
+    render(
+      <Toast
+        message="Eliminado: Fernet"
+        action={{ label: "Deshacer", onClick: onAction }}
+        onClose={onClose}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Deshacer" }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

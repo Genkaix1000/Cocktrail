@@ -138,7 +138,7 @@ describe("VentaSection", () => {
     await user.click(removeButton);
 
     // Al quitar el único item, el carrito vuelve a estar vacío.
-    expect(await screen.findByText("Sin items")).toBeInTheDocument();
+    expect(await screen.findByText("Sin ítems")).toBeInTheDocument();
   });
 
   it("abre el checkout con el total del pedido actual", async () => {

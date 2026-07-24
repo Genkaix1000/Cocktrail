@@ -11,7 +11,6 @@ describe("UserFormDrawer", () => {
         editUser={{ id: "sys-1", username: "admin", role: "admin" }}
         error=""
         saving={false}
-        isBosko={false}
         onUsernameChange={vi.fn()}
         onPasswordChange={vi.fn()}
         onRoleChange={vi.fn()}
@@ -20,7 +19,7 @@ describe("UserFormDrawer", () => {
       />,
     );
 
-    expect(screen.getByText("Ver Usuario")).toBeInTheDocument();
+    expect(screen.getByText("Ver usuario")).toBeInTheDocument();
     expect(screen.getByText("Este usuario es de sistema y es inmutable")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("nombre_operador")).toBeDisabled();
   });
@@ -34,7 +33,6 @@ describe("UserFormDrawer", () => {
         editUser={{ username: "cajera_juan", role: "admin" }}
         error=""
         saving={false}
-        isBosko={false}
         onUsernameChange={vi.fn()}
         onPasswordChange={vi.fn()}
         onRoleChange={onRoleChange}
@@ -53,7 +51,6 @@ describe("UserFormDrawer", () => {
         editUser={{ username: "cajera_juan", password: "1234", role: "caja" }}
         error="Network error"
         saving
-        isBosko={false}
         onUsernameChange={vi.fn()}
         onPasswordChange={vi.fn()}
         onRoleChange={vi.fn()}

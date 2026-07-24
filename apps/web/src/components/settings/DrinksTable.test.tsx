@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import DrinksTable from "./DrinksTable";
+import DrinksTable, { type ColumnFilters } from "./DrinksTable";
+import { CARTA_COLS_DEFAULT } from "./cartaCrud";
 import type { Drink } from "@cocktrail/shared";
 
 function makeDrink(overrides: Partial<Drink> = {}): Drink {
@@ -21,19 +22,37 @@ function makeDrink(overrides: Partial<Drink> = {}): Drink {
   };
 }
 
+const emptyFilters: ColumnFilters = {
+  name: "",
+  priceMin: "",
+  priceMax: "",
+  status: "all",
+  tags: "all",
+  promo: "all",
+  trending: "all",
+  id: "",
+};
+
 function baseProps(overrides: Partial<React.ComponentProps<typeof DrinksTable>> = {}) {
   return {
     drinks: [makeDrink()],
     loadError: false,
-    search: "",
+    hasActiveSearch: false,
     sortField: "name" as const,
     sortDirection: "asc" as const,
-    isBosko: false,
+    confirmingDeleteId: null,
+    visibleCols: [...CARTA_COLS_DEFAULT],
+    filtersOpen: false,
+    columnFilters: emptyFilters,
     onSort: vi.fn(),
     onRetry: vi.fn(),
     onSelectDrink: vi.fn(),
     onToggleAvailable: vi.fn(),
-    onDeleteClick: vi.fn(),
+    onAskDelete: vi.fn(),
+    onCancelDelete: vi.fn(),
+    onConfirmDelete: vi.fn(),
+    onToggleCol: vi.fn(),
+    onColumnFiltersChange: vi.fn(),
     ...overrides,
   };
 }
@@ -56,29 +75,57 @@ describe("DrinksTable", () => {
     expect(screen.getByText("No hay tragos registrados")).toBeInTheDocument();
   });
 
-  it("dispara onSelectDrink, onToggleAvailable y onDeleteClick sin propagar entre sí", async () => {
+  it("dispara onSelectDrink, onToggleAvailable y onAskDelete sin propagar entre sí", async () => {
     const user = userEvent.setup();
     const onSelectDrink = vi.fn();
     const onToggleAvailable = vi.fn();
-    const onDeleteClick = vi.fn();
+    const onAskDelete = vi.fn();
     const drink = makeDrink();
 
     render(
       <DrinksTable
-        {...baseProps({ drinks: [drink], onSelectDrink, onToggleAvailable, onDeleteClick })}
+        {...baseProps({ drinks: [drink], onSelectDrink, onToggleAvailable, onAskDelete })}
       />,
     );
+
+    expect(screen.getByText("En carta")).toBeInTheDocument();
 
     await user.click(screen.getByTitle("Ocultar de la carta"));
     expect(onToggleAvailable).toHaveBeenCalled();
     expect(onSelectDrink).not.toHaveBeenCalled();
 
     await user.click(screen.getByTitle("Eliminar"));
-    expect(onDeleteClick).toHaveBeenCalledWith(drink);
+    expect(onAskDelete).toHaveBeenCalledWith(drink);
     expect(onSelectDrink).not.toHaveBeenCalled();
 
     await user.click(screen.getByText("Fernet con Coca"));
     expect(onSelectDrink).toHaveBeenCalledWith(drink);
+  });
+
+  it("en confirm muestra rail y dispara onConfirmDelete / onCancelDelete", async () => {
+    const user = userEvent.setup();
+    const drink = makeDrink();
+    const onConfirmDelete = vi.fn();
+    const onCancelDelete = vi.fn();
+
+    render(
+      <DrinksTable
+        {...baseProps({
+          drinks: [drink],
+          confirmingDeleteId: drink.id,
+          onConfirmDelete,
+          onCancelDelete,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("¿Eliminar?")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(onConfirmDelete).toHaveBeenCalledWith(drink);
+
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(onCancelDelete).toHaveBeenCalledTimes(1);
   });
 
   it("dispara onSort al tocar los headers de Nombre/Precio", async () => {
@@ -86,7 +133,24 @@ describe("DrinksTable", () => {
     const onSort = vi.fn();
     render(<DrinksTable {...baseProps({ onSort })} />);
 
-    await user.click(screen.getByText("Precio"));
+    await user.click(screen.getByRole("button", { name: /Precio/i }));
     expect(onSort).toHaveBeenCalledWith("price");
+  });
+
+  it("muestra fila de filtros cuando filtersOpen y el ⚙ de columnas", async () => {
+    const user = userEvent.setup();
+    const onToggleCol = vi.fn();
+    render(
+      <DrinksTable {...baseProps({ filtersOpen: true, onToggleCol })} />,
+    );
+
+    expect(screen.getByPlaceholderText("Filtrar…")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Min")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Configurar columnas" }));
+    const idToggle = screen.getByRole("checkbox", { name: /ID/i });
+    expect(idToggle).toBeChecked();
+    await user.click(idToggle);
+    expect(onToggleCol).toHaveBeenCalledWith("id");
   });
 });

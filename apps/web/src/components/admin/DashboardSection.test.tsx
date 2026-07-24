@@ -53,8 +53,6 @@ function makeProps(overrides: {
   isFirstLoad?: boolean;
   isTabTransitioning?: boolean;
   activeTab?: string;
-  isBosko?: boolean;
-  barColorClass?: string;
   isNightOpen?: boolean;
 } = {}) {
   const event = overrides.event !== undefined ? overrides.event : baseEvent;
@@ -73,8 +71,6 @@ function makeProps(overrides: {
     isFirstLoad: false,
     isTabTransitioning: false,
     activeTab: "monitoreo",
-    isBosko: false,
-    barColorClass: "from-blue/15 to-blue",
     ...componentProps,
     isNightOpen,
   };

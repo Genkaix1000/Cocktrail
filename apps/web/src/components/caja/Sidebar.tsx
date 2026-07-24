@@ -1,12 +1,21 @@
 "use client";
 
-import { History, LayoutDashboard, Power, Printer, CreditCard, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  History,
+  LayoutDashboard,
+  Power,
+  Printer,
+  CreditCard,
+  TrendingUp,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { useState } from "react";
 
 import { BrandLogo } from "@/components/shared/BrandLogo";
-import { OSProfileFooter } from "@/components/shared/OSProfileFooter";
-import { useThemeSafe } from "@/components/ThemeProvider";
+import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
 import type { PosnetLevel } from "@/hooks/usePosnetStatus";
-import type { NightEvent, Theme } from "@cocktrail/shared";
+import type { NightEvent } from "@cocktrail/shared";
 
 type CurrentUser = {
   role: string;
@@ -21,7 +30,6 @@ type CurrentUser = {
 
 type Props = {
   isDrawer?: boolean;
-  theme: Theme;
   activeTab: "venta" | "historial" | "metricas";
   setActiveTab: (tab: "venta" | "historial" | "metricas") => void;
   setMobileMenuOpen: (open: boolean) => void;
@@ -32,9 +40,7 @@ type Props = {
   printerStatus: { connected: boolean; message: string } | null;
   testPrint: () => void | Promise<void>;
   printerTestMessage: string | null;
-  /** Severidad del cartel del Posnet de la caja (advertencia ≠ bloqueo). */
   posnetLevel: PosnetLevel;
-  /** Mensaje del cartel: habla del device de LA CAJA (qué pasa y qué hacer). */
   posnetMessage: string | null;
   testPosnet: () => void | Promise<void>;
   posnetTestMessage: string | null;
@@ -44,14 +50,38 @@ type Props = {
   onToggleCollapse?: () => void;
 };
 
+const sectionLabelClass =
+  "px-4 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--text-tertiary)] mb-0.5";
+
+function navBtnClass(active: boolean, collapsed: boolean) {
+  const tone = active
+    ? "relative text-[var(--accent-text)] font-semibold before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-6 before:w-[5px] before:rounded-r-[6px] before:bg-[var(--accent-primary)]"
+    : "text-[var(--text-tertiary)] font-normal hover:text-[var(--text-secondary)]";
+  const layout = collapsed
+    ? "w-full flex items-center justify-center px-0 py-2.5"
+    : "w-full flex items-center gap-2.5 pl-4 pr-3 py-1.5";
+  return `${layout} text-left transition-colors duration-150 cursor-pointer bg-transparent ${tone}`;
+}
+
+function deviceTone(level: "ok" | "warn" | "bad" | "neutral") {
+  if (level === "ok") return "text-[var(--success-base)]";
+  if (level === "warn") return "text-[var(--amber-base)]";
+  if (level === "bad") return "text-[var(--danger-base)]";
+  return "text-[var(--text-tertiary)]";
+}
+
+function deviceChip(level: "ok" | "warn" | "bad" | "neutral") {
+  if (level === "ok") return "bg-[var(--success-soft)] border-[var(--success-line)] text-[var(--success-base)]";
+  if (level === "warn") return "bg-[var(--amber-soft)] border-[var(--amber-line)] text-[var(--amber-base)]";
+  if (level === "bad") return "bg-[var(--danger-soft)] border-[var(--danger-line)] text-[var(--danger-base)]";
+  return "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-tertiary)]";
+}
+
 /**
- * Sidebar de Caja — extraído de CajaClient.tsx (antes `renderSidebar`)
- * Adaptado con soporte para estado colapsado (plegable) para tablets,
- * mostrando la clave de la noche cuando está abierta.
+ * Sidebar de Caja — mismo lenguaje Bosko que admin (rail activo, panel card, logout rail).
  */
 export default function CajaSidebar({
   isDrawer = false,
-  theme,
   activeTab,
   setActiveTab,
   setMobileMenuOpen,
@@ -71,71 +101,63 @@ export default function CajaSidebar({
   isCollapsed = false,
   onToggleCollapse = () => {},
 }: Props) {
-  const isBosko = theme === "bosko";
-  const themeProps = useThemeSafe();
-
-  // Collapsed status only applies if it's not the mobile drawer
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const collapsed = isCollapsed && !isDrawer;
+  const canCloseNight = !!currentUser?.permissions?.closeNight && event?.status === "activo";
 
-  // Custom classes for theme consistency
-  const sidebarClass = isBosko
-    ? "bg-[#013e37] dark:bg-[#012b26] border-r border-[#014d44] dark:border-accent/10 text-[#fffeb3]"
-    : "bg-ink-950 border-r border-ink-800 text-ink-50";
+  const printerLevel: "ok" | "bad" = printerStatus?.connected ? "ok" : "bad";
+  const posnetTone: "ok" | "warn" | "bad" | "neutral" =
+    posnetLevel === "blocked"
+      ? "bad"
+      : posnetLevel === "warning"
+        ? "warn"
+        : posnetLevel === "ok"
+          ? "ok"
+          : "neutral";
 
-  const getNavBtnClass = (tab: "venta" | "historial" | "metricas") => {
-    const isActive = activeTab === tab;
-    const base = isBosko
-      ? (isActive ? "bg-white/10 border-white/20 text-[#fffeb3]" : "bg-transparent border-transparent text-white/70 hover:text-white hover:bg-white/5")
-      : (isActive ? "bg-ink-900 border-ink-800 text-ink-50" : "bg-transparent border-transparent text-ink-400 hover:text-ink-50 hover:bg-ink-900/40");
-    
-    const layout = collapsed
-      ? "w-full flex items-center justify-center p-2.5 rounded-xl border transition-all duration-200 cursor-pointer"
-      : "w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-left border transition-all duration-200 cursor-pointer";
+  function go(tab: "venta" | "historial" | "metricas") {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+    setConfirmLogout(false);
+  }
 
-    const font = isActive ? "font-bold shadow-sm" : "";
-    return `${layout} ${base} ${font}`;
-  };
-
-  const navIconActive = isBosko
-    ? "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[#fffeb3]/15 text-[#fffeb3] transition-all duration-200"
-    : "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-accent/15 text-accent transition-all duration-200";
-
-  const navIconIdle = isBosko
-    ? "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white/5 text-white/40 transition-all duration-200"
-    : "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-ink-800/50 text-ink-500 transition-all duration-200";
-
-  const borderClass = isBosko ? "border-white/10" : "border-ink-800";
-  const sublabelClass = isBosko ? "text-white/40" : "text-ink-500";
-  const secondaryBtnClass = isBosko
-    ? "bg-white/10 border-white/20 text-white/80 hover:text-white hover:bg-white/15"
-    : "bg-ink-850 border-ink-750 text-ink-300 hover:text-ink-50";
+  const secondaryBtn =
+    "w-full h-9 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-semibold border border-[var(--border-strong)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-app)] active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait";
 
   return (
-    <aside className={`
-      shrink-0 flex flex-col print:hidden transition-all duration-300 ease-in-out relative
-      ${sidebarClass}
-      ${collapsed ? "w-[76px] p-4 gap-4" : "w-[280px] p-6 gap-6"}
-      ${isDrawer ? "h-full" : "h-full hidden md:flex"}
-    `}>
-      {/* Brand logo top */}
-      <div className={`h-[60px] flex items-center border-b shrink-0 w-full ${borderClass} ${collapsed ? "justify-center" : "justify-between"}`}>
+    <aside
+      className={`
+        shrink-0 flex flex-col print:hidden relative overflow-hidden
+        bg-[var(--bg-panel)] text-[var(--text-primary)]
+        rounded-[24px] shadow-card transition-[width] duration-300 ease-in-out
+        ${collapsed ? "w-[76px]" : "w-[260px]"}
+        ${isDrawer ? "h-full" : "h-full hidden md:flex"}
+      `}
+    >
+      <div
+        className={`flex items-center shrink-0 w-full pt-4 pb-2 ${
+          collapsed ? "justify-center px-2" : "justify-between px-4"
+        }`}
+      >
         {collapsed ? (
           <button
             type="button"
             onClick={onToggleCollapse}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center bg-transparent border ${isBosko ? "border-white/20 text-[#fffeb3]" : "border-ink-800 text-ink-50"} hover:text-accent transition-all cursor-pointer font-serif-italic font-black text-xl`}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--accent-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
             title="Expandir menú"
+            aria-label="Expandir menú"
           >
-            {themeProps?.textLogoValue ? themeProps.textLogoValue[0] : "C"}
+            <ChevronRight size={18} strokeWidth={2} />
           </button>
         ) : (
           <>
-            <BrandLogo size="lg" />
+            <BrandLogo size="md" />
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="p-1.5 hover:bg-white/5 rounded-lg text-ink-400 hover:text-ink-50 transition-all cursor-pointer"
+              className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
               title="Colapsar menú"
+              aria-label="Colapsar menú"
             >
               <ChevronLeft size={16} />
             </button>
@@ -143,240 +165,201 @@ export default function CajaSidebar({
         )}
       </div>
 
-      {/* Navigation menu */}
-      <div className={`flex-1 overflow-y-auto flex flex-col gap-6 no-scrollbar ${collapsed ? "pb-[180px]" : "pb-[280px]"}`}>
-        <div className="flex flex-col gap-1.5">
-          {/* Nueva Venta Button */}
+      <div
+        className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-2 ${
+          collapsed ? "gap-2 px-1 pb-[200px]" : "gap-4 pb-[260px]"
+        }`}
+      >
+        <div className="flex flex-col">
+          {!collapsed && <p className={sectionLabelClass}>Menu</p>}
+
           <button
             type="button"
-            onClick={() => {
-              setActiveTab("venta");
-              setMobileMenuOpen(false);
-            }}
-            className={getNavBtnClass("venta")}
             title={collapsed ? "Nueva Venta" : undefined}
+            onClick={() => go("venta")}
+            className={navBtnClass(activeTab === "venta", collapsed)}
           >
-            <div className={activeTab === "venta" ? navIconActive : navIconIdle}>
-              <LayoutDashboard size={16} strokeWidth={1.8} />
-            </div>
-            {!collapsed && (
-              <div className="flex flex-col animate-in fade-in duration-200">
-                <span className="text-[13px] font-semibold">
-                  Nueva Venta
-                </span>
-                <span className={`text-[10px] ${sublabelClass}`}>Terminal de Cobro</span>
-              </div>
-            )}
+            <LayoutDashboard
+              size={17}
+              strokeWidth={activeTab === "venta" ? 2.1 : 1.75}
+              className={
+                activeTab === "venta"
+                  ? "text-[var(--accent-primary)] shrink-0"
+                  : "text-[var(--text-tertiary)] shrink-0"
+              }
+            />
+            {!collapsed && <span className="text-[13.5px] truncate">Nueva Venta</span>}
           </button>
 
-          {/* Historial de Ventas Button */}
           {hasPermission("historial") && (
             <button
               type="button"
-              onClick={() => {
-                setActiveTab("historial");
-                setMobileMenuOpen(false);
-              }}
-              className={getNavBtnClass("historial")}
               title={collapsed ? "Historial de Ventas" : undefined}
+              onClick={() => go("historial")}
+              className={navBtnClass(activeTab === "historial", collapsed)}
             >
-              <div className={activeTab === "historial" ? navIconActive : navIconIdle}>
-                <History size={16} strokeWidth={1.8} />
-              </div>
-              {!collapsed && (
-                <div className="flex flex-col animate-in fade-in duration-200">
-                  <span className="text-[13px] font-semibold">
-                    Historial de Ventas
-                  </span>
-                  <span className={`text-[10px] ${sublabelClass}`}>Ventas del Turno</span>
-                </div>
-              )}
+              <History
+                size={17}
+                strokeWidth={activeTab === "historial" ? 2.1 : 1.75}
+                className={
+                  activeTab === "historial"
+                    ? "text-[var(--accent-primary)] shrink-0"
+                    : "text-[var(--text-tertiary)] shrink-0"
+                }
+              />
+              {!collapsed && <span className="text-[13.5px] truncate">Historial de Ventas</span>}
             </button>
           )}
 
-          {/* Métricas Button */}
           {hasPermission("metricas") && (
             <button
               type="button"
-              onClick={() => {
-                setActiveTab("metricas");
-                setMobileMenuOpen(false);
-              }}
-              className={getNavBtnClass("metricas")}
               title={collapsed ? "Métricas" : undefined}
+              onClick={() => go("metricas")}
+              className={navBtnClass(activeTab === "metricas", collapsed)}
             >
-              <div className={activeTab === "metricas" ? navIconActive : navIconIdle}>
-                <TrendingUp size={16} strokeWidth={1.8} />
-              </div>
-              {!collapsed && (
-                <div className="flex flex-col animate-in fade-in duration-200">
-                  <span className="text-[13px] font-semibold">
-                    Métricas
-                  </span>
-                  <span className={`text-[10px] ${sublabelClass}`}>Estadísticas del Turno</span>
-                </div>
-              )}
+              <TrendingUp
+                size={17}
+                strokeWidth={activeTab === "metricas" ? 2.1 : 1.75}
+                className={
+                  activeTab === "metricas"
+                    ? "text-[var(--accent-primary)] shrink-0"
+                    : "text-[var(--text-tertiary)] shrink-0"
+                }
+              />
+              {!collapsed && <span className="text-[13.5px] truncate">Métricas</span>}
             </button>
           )}
         </div>
 
-
-
+        <div className="flex flex-col">
+          {!collapsed && <p className={sectionLabelClass}>General</p>}
+          <LogoutNavRail
+            collapsed={collapsed}
+            confirm={confirmLogout}
+            onAsk={() => setConfirmLogout(true)}
+            onCancel={() => setConfirmLogout(false)}
+            onConfirm={handleLogout}
+          />
+        </div>
       </div>
 
-      {/* Footer Fijo en la parte inferior */}
-      <div className={`absolute bottom-0 left-0 right-0 border-t z-20 backdrop-blur-md flex flex-col gap-4.5 ${
-        isBosko
-          ? "bg-[#013e37]/95 dark:bg-[#012b26]/95 border-[#014d44] dark:border-accent/10"
-          : "bg-ink-950/95 border-ink-800"
-      } ${collapsed ? "p-3" : "p-6"}`}>
-        {/* Closing capability directly from Caja if user has permissions */}
-        {currentUser?.permissions?.closeNight && event?.status === "activo" && (
-          <div>
+      <div
+        className={`absolute bottom-0 left-0 right-0 z-20 pointer-events-none ${
+          collapsed ? "p-2 pb-4" : "px-3 pt-3 pb-5"
+        }`}
+      >
+        <div className="pointer-events-auto flex flex-col gap-3">
+          {/* Devices */}
+          <div
+            className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] ${
+              collapsed ? "p-2" : "p-3"
+            }`}
+          >
+            {collapsed ? (
+              <div className="flex flex-col gap-2 items-center">
+                <button
+                  type="button"
+                  onClick={testPrint}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative ${deviceChip(printerLevel)}`}
+                  title={
+                    printerStatus?.connected
+                      ? "Impresora conectada. Click para test."
+                      : "Impresora no encontrada. Click para test."
+                  }
+                >
+                  <Printer size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={testPosnet}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative ${deviceChip(posnetTone)}`}
+                  title={posnetMessage ?? "Posnet de la caja. Click para probar."}
+                >
+                  <CreditCard size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span
+                    className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(printerLevel)}`}
+                  >
+                    <Printer size={13} />
+                    {printerStatus?.connected ? "Impresora conectada" : "Impresora no encontrada"}
+                  </span>
+                  <button type="button" onClick={testPrint} className={`${secondaryBtn} mt-2`}>
+                    Imprimir ticket de prueba
+                  </button>
+                  {printerTestMessage && (
+                    <p className="text-[10px] text-[var(--text-tertiary)] mt-1.5 text-center">
+                      {printerTestMessage}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <span
+                    className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(posnetTone)}`}
+                  >
+                    <CreditCard size={13} />
+                    {posnetLevel === "blocked"
+                      ? "Cobro Posnet bloqueado"
+                      : posnetLevel === "warning"
+                        ? "Posnet con advertencia"
+                        : posnetLevel === "ok"
+                          ? "Posnet listo"
+                          : "Posnet sin verificar"}
+                  </span>
+                  {posnetLevel !== "ok" && posnetMessage && (
+                    <p
+                      role="status"
+                      className={`text-[10px] mt-1.5 text-left leading-relaxed ${deviceTone(posnetTone)}`}
+                    >
+                      {posnetMessage}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={testPosnet}
+                    disabled={testingPosnet}
+                    className={`${secondaryBtn} mt-2`}
+                  >
+                    {testingPosnet ? "Probando Posnet…" : "Probar Posnet"}
+                  </button>
+                  {posnetTestMessage && (
+                    <p
+                      className={`text-[10px] mt-1.5 text-center ${
+                        posnetTone === "warn" || posnetTone === "bad"
+                          ? deviceTone(posnetTone)
+                          : "text-[var(--text-tertiary)]"
+                      }`}
+                    >
+                      {posnetTestMessage}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {canCloseNight && (
             <button
               type="button"
               onClick={() => {
                 setCloseModalOpen(true);
                 setMobileMenuOpen(false);
               }}
-              className={`w-full h-10 rounded-xl bg-danger-soft border border-danger-line text-danger flex items-center justify-center hover:brightness-110 active:scale-95 transition-all cursor-pointer ${
-                collapsed ? "" : "gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em]"
+              className={`w-full rounded-xl bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] flex items-center justify-center hover:brightness-110 active:scale-95 transition-all cursor-pointer ${
+                collapsed ? "h-11" : "h-10 gap-1.5 text-[12px] font-semibold"
               }`}
               title="Cerrar noche"
             >
-              <Power size={13} />
+              <Power size={14} strokeWidth={2} />
               {!collapsed && <span>Cerrar noche</span>}
             </button>
-          </div>
-        )}
-
-        {/* Estado de la impresora térmica */}
-        <div className={collapsed ? "px-0 text-center" : "px-1"}>
-          <div className="flex items-center justify-between gap-2 mb-2 w-full">
-            {collapsed ? (
-              <button
-                type="button"
-                onClick={testPrint}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative mx-auto ${
-                  printerStatus?.connected 
-                    ? "bg-green-soft border-green-line text-green" 
-                    : "bg-danger-soft border-danger-line text-danger"
-                }`}
-                title={printerStatus?.connected ? "Impresora conectada. Click para test." : "Impresora no encontrada. Click para test."}
-              >
-                <Printer size={16} />
-                <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${printerStatus?.connected ? "bg-green" : "bg-danger"}`} />
-              </button>
-            ) : (
-              <span className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] ${printerStatus?.connected ? "text-green" : "text-danger"}`}>
-                <Printer size={13} />
-                {printerStatus?.connected ? "Impresora conectada" : "Impresora no encontrada"}
-              </span>
-            )}
-          </div>
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={testPrint}
-              className={`w-full h-9 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer border ${secondaryBtnClass}`}
-            >
-              Imprimir ticket de prueba
-            </button>
-          )}
-          {printerTestMessage && !collapsed && (
-            <p className="text-[10px] text-ink-400 mt-1.5 text-center">{printerTestMessage}</p>
           )}
         </div>
-
-        {/* Estado del Posnet de la caja: advertencia (amber) ≠ bloqueo (rojo).
-            "unknown" queda neutro a propósito — un desconocido nunca es rojo. */}
-        <div className={collapsed ? "px-0 text-center" : "px-1"}>
-          <div className="flex items-center justify-between gap-2 mb-2 w-full">
-            {collapsed ? (
-              <button
-                type="button"
-                onClick={testPosnet}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative mx-auto ${
-                  posnetLevel === "blocked"
-                    ? "bg-danger-soft border-danger-line text-danger"
-                    : posnetLevel === "warning"
-                      ? "bg-amber-soft border-amber-line text-amber"
-                      : posnetLevel === "ok"
-                        ? "bg-green-soft border-green-line text-green"
-                        : "bg-ink-850 border-ink-750 text-ink-400"
-                }`}
-                title={posnetMessage ?? "Posnet de la caja. Click para probar."}
-              >
-                <CreditCard size={16} />
-                <span
-                  className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${
-                    posnetLevel === "blocked"
-                      ? "bg-danger"
-                      : posnetLevel === "warning"
-                        ? "bg-amber"
-                        : posnetLevel === "ok"
-                          ? "bg-green"
-                          : "bg-ink-600"
-                  }`}
-                />
-              </button>
-            ) : (
-              <span
-                className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] ${
-                  posnetLevel === "blocked"
-                    ? "text-danger"
-                    : posnetLevel === "warning"
-                      ? "text-amber"
-                      : posnetLevel === "ok"
-                        ? "text-green"
-                        : "text-ink-400"
-                }`}
-              >
-                <CreditCard size={13} />
-                {posnetLevel === "blocked"
-                  ? "Cobro Posnet bloqueado"
-                  : posnetLevel === "warning"
-                    ? "Posnet con advertencia"
-                    : posnetLevel === "ok"
-                      ? "Posnet listo"
-                      : "Posnet sin verificar"}
-              </span>
-            )}
-          </div>
-          {posnetLevel !== "ok" && posnetMessage && !collapsed && (
-            <p
-              role="status"
-              className={`text-[10px] mb-1.5 text-left leading-relaxed ${
-                posnetLevel === "blocked" ? "text-danger" : posnetLevel === "warning" ? "text-amber" : "text-ink-400"
-              }`}
-            >
-              {posnetMessage}
-            </p>
-          )}
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={testPosnet}
-              disabled={testingPosnet}
-              className={`w-full h-9 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait border ${secondaryBtnClass}`}
-            >
-              {testingPosnet ? "Probando Posnet…" : "Probar Posnet"}
-            </button>
-          )}
-          {posnetTestMessage && !collapsed && (
-            <p className={`text-[10px] mt-1.5 text-center ${posnetLevel === "warning" || posnetLevel === "blocked" ? "text-amber" : "text-ink-400"}`}>
-              {posnetTestMessage}
-            </p>
-          )}
-        </div>
-
-        {/* User profile footer */}
-        <OSProfileFooter 
-          onLogout={handleLogout} 
-          username={currentUser?.username} 
-          role={currentUser?.role} 
-          isCollapsed={collapsed} 
-        />
       </div>
     </aside>
   );

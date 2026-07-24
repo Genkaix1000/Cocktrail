@@ -1,7 +1,17 @@
 "use client";
 
 import { useId, useState, useMemo } from "react";
-import { GitCompareArrows, ChevronDown, FileText, User } from "lucide-react";
+import {
+  GitCompareArrows,
+  ChevronDown,
+  FileText,
+  User,
+  Banknote,
+  Globe,
+  Ticket,
+  Clock,
+  Wine,
+} from "lucide-react";
 import type { UnifiedNightDay } from "@/lib/analytics";
 import { formatNightDateLong, formatEventDuration } from "@/lib/analytics";
 import { formatHm, formatMoney, MONTHS_SHORT } from "@/lib/utils";
@@ -44,19 +54,14 @@ type ComparisonRow = {
 function buildRows(a: UnifiedNightDay, b: UnifiedNightDay): ComparisonRow[] {
   const totalA = a.totals.total;
   const totalB = b.totals.total;
-
   const ticketsA = a.orderCounter;
   const ticketsB = b.orderCounter;
-
   const webSalesA = a.totals.webTotal;
   const webSalesB = b.totals.webTotal;
-
   const efA = a.totals.efectivoTotal;
   const efB = b.totals.efectivoTotal;
-
   const topA = a.totals.drinksSold[0];
   const topB = b.totals.drinksSold[0];
-
   const durA = getDurationMs(a);
   const durB = getDurationMs(b);
 
@@ -122,6 +127,9 @@ function buildRows(a: UnifiedNightDay, b: UnifiedNightDay): ComparisonRow[] {
 /** Sentinel de "sin segunda noche seleccionada" — ver Noche B en el selector. */
 const NONE = -1;
 
+const cardShell =
+  "bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-card";
+
 /**
  * Selector único de Historial de Noches: elegir 1 noche muestra su detalle
  * (totales + sesiones individuales, lo que antes vivía en un popup aparte),
@@ -130,10 +138,6 @@ const NONE = -1;
  * docs/specs/features/simplificar-historial-noches.md).
  */
 export default function NightComparator({ nights, isBosko, onRedirectToLogs }: Props) {
-  const accentColor = isBosko ? "text-[#4ade80]" : "text-blue";
-  const accentBg = isBosko ? "bg-[#4ade80]/10" : "bg-blue/10";
-  const accentBorder = isBosko ? "border-[#4ade80]/20" : "border-blue-line";
-
   const sortedNights = useMemo(
     () =>
       [...nights]
@@ -156,10 +160,10 @@ export default function NightComparator({ nights, isBosko, onRedirectToLogs }: P
 
   if (sortedNights.length === 0) {
     return (
-      <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5">
-        <SectionHeader accentColor={accentColor} accentBg={accentBg} accentBorder={accentBorder} isComparing={false} />
+      <div className={`${cardShell} p-5`}>
+        <SectionHeader isComparing={false} />
         <div className="flex items-center justify-center py-8">
-          <p className="text-ink-500 text-[12px] text-center">
+          <p className="text-[var(--text-tertiary)] text-[13px] text-center">
             Todavía no hay noches archivadas.
           </p>
         </div>
@@ -168,43 +172,38 @@ export default function NightComparator({ nights, isBosko, onRedirectToLogs }: P
   }
 
   return (
-    <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5">
-      <SectionHeader accentColor={accentColor} accentBg={accentBg} accentBorder={accentBorder} isComparing={isComparing} />
+    <div className={`${cardShell} p-5`}>
+      <SectionHeader isComparing={isComparing} />
 
-      {/* Selectors */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <NightSelector
           label="Noche A"
           nights={sortedNights}
           value={idxA}
           onChange={setIdxA}
-          accentColor={accentColor}
         />
         <NightSelector
           label="Noche B"
           nights={sortedNights}
           value={idxB}
           onChange={setIdxB}
-          accentColor={accentColor}
           allowNone
         />
       </div>
 
       {isComparing && nightA && nightB ? (
         <div className="flex flex-col gap-0">
-          {/* Column headers */}
           <div className="grid grid-cols-[1fr_1fr_auto_1fr] gap-2 mb-2 px-1">
             <div />
-            <div className={`text-[10px] font-bold uppercase tracking-[0.18em] text-center ${accentColor}`}>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-center text-[var(--accent-text)]">
               {formatNightDate(nightA.closedAt ?? nightA.startedAt)}
             </div>
             <div className="w-14" />
-            <div className={`text-[10px] font-bold uppercase tracking-[0.18em] text-center ${accentColor}`}>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-center text-[var(--accent-text)]">
               {formatNightDate(nightB.closedAt ?? nightB.startedAt)}
             </div>
           </div>
 
-          {/* Rows */}
           {rows.map((row, idx) => {
             const aWins =
               row.winMode === "higher"
@@ -221,16 +220,16 @@ export default function NightComparator({ nights, isBosko, onRedirectToLogs }: P
               <div
                 key={row.label}
                 className={`grid grid-cols-[1fr_1fr_auto_1fr] gap-2 items-center px-3 py-2.5 rounded-xl ${
-                  idx % 2 === 0 ? "bg-ink-800/30" : ""
+                  idx % 2 === 0 ? "bg-[var(--bg-panel)]" : ""
                 }`}
               >
-                <span className="text-ink-400 text-[11px] font-medium">
+                <span className="text-[var(--text-secondary)] text-[12px] font-medium">
                   {row.label}
                 </span>
 
                 <span
-                  className={`font-mono text-[12px] font-bold text-center ${
-                    aWins ? accentColor : "text-ink-300"
+                  className={`font-mono text-[13px] font-bold text-center tabular ${
+                    aWins ? "text-[var(--accent-text)]" : "text-[var(--text-primary)]"
                   }`}
                 >
                   {row.valueA}
@@ -239,22 +238,22 @@ export default function NightComparator({ nights, isBosko, onRedirectToLogs }: P
                 <div className="w-14 flex items-center justify-center">
                   {isDelta ? (
                     <span
-                      className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                      className={`font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                         isPositiveDelta
-                          ? "bg-green-soft text-green border border-green-line"
-                          : "bg-danger-soft text-danger border border-danger-line"
+                          ? "bg-[var(--success-soft)] text-[var(--success-base)]"
+                          : "bg-[var(--danger-soft)] text-[var(--danger-base)]"
                       }`}
                     >
                       {row.delta}
                     </span>
                   ) : (
-                    <span className="text-ink-600 text-[10px]">—</span>
+                    <span className="text-[var(--text-tertiary)] text-[10px]">—</span>
                   )}
                 </div>
 
                 <span
-                  className={`font-mono text-[12px] font-bold text-center ${
-                    bWins ? accentColor : "text-ink-300"
+                  className={`font-mono text-[13px] font-bold text-center tabular ${
+                    bWins ? "text-[var(--accent-text)]" : "text-[var(--text-primary)]"
                   }`}
                 >
                   {row.valueB}
@@ -276,31 +275,17 @@ export default function NightComparator({ nights, isBosko, onRedirectToLogs }: P
   );
 }
 
-/* ──────────────── Section Header ──────────────── */
-
-function SectionHeader({
-  accentColor,
-  accentBg,
-  accentBorder,
-  isComparing,
-}: {
-  accentColor: string;
-  accentBg: string;
-  accentBorder: string;
-  isComparing: boolean;
-}) {
+function SectionHeader({ isComparing }: { isComparing: boolean }) {
   return (
-    <div className="flex items-center gap-2.5 mb-5">
-      <div
-        className={`w-8 h-8 rounded-xl ${accentBg} border ${accentBorder} flex items-center justify-center`}
-      >
-        <GitCompareArrows size={15} className={accentColor} />
+    <div className="flex items-center gap-3 mb-5">
+      <div className="w-9 h-9 rounded-full border border-[var(--border-subtle)] flex items-center justify-center text-[var(--accent-primary)]">
+        <GitCompareArrows size={15} strokeWidth={1.8} />
       </div>
       <div>
-        <h3 className="text-ink-50 text-[13px] font-semibold">
+        <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">
           Detalle de Noches
         </h3>
-        <p className="text-ink-500 text-[10px] uppercase tracking-[0.18em] font-bold mt-0.5">
+        <p className="text-[12px] text-[var(--text-tertiary)] mt-0.5">
           {isComparing ? "Comparando dos noches" : "Elegí una segunda noche para comparar"}
         </p>
       </div>
@@ -308,11 +293,9 @@ function SectionHeader({
   );
 }
 
-/* ──────────────── Night Detail View (ex-popup de HistorialSection) ──────────────── */
-
 function NightDetailView({
   night,
-  isBosko,
+  isBosko: _isBosko,
   onRedirectToLogs,
 }: {
   night: UnifiedNightDay;
@@ -323,16 +306,53 @@ function NightDetailView({
   const hasSingleSession = night.sessions.length === 1;
   const singleSession = hasSingleSession ? night.sessions[0] : undefined;
 
+  const metrics = [
+    {
+      icon: Banknote,
+      label: "Recaudado",
+      value: `$${night.totals.total.toLocaleString("es-AR")}`,
+      accent: true,
+    },
+    {
+      icon: Globe,
+      label: "Web",
+      value: `$${night.totals.webTotal.toLocaleString("es-AR")}`,
+      sub: `${night.totals.webCount}`,
+    },
+    {
+      icon: Banknote,
+      label: "Efectivo",
+      value: `$${night.totals.efectivoTotal.toLocaleString("es-AR")}`,
+      sub: `${night.totals.efectivoCount}`,
+    },
+    {
+      icon: Ticket,
+      label: "Tickets Emitidos",
+      value: String(night.orderCounter),
+    },
+    {
+      icon: Wine,
+      label: "Top Trago",
+      value: topDrink ? `${topDrink.name} (×${topDrink.qty})` : "—",
+    },
+    {
+      icon: Clock,
+      label: "Duración",
+      value: formatEventDuration(night.startedAt, night.closedAt),
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h4 className="font-serif-italic text-[16px] text-ink-50">
+        <h4 className="text-[16px] font-semibold text-[var(--text-primary)]">
           Noche del {formatNightDateLong(night.closedAt ?? night.startedAt)}
         </h4>
-        <p className="text-[11px] text-ink-400 font-mono mt-0.5">
+        <p className="text-[12px] text-[var(--text-secondary)] font-mono mt-0.5">
           {hasSingleSession && singleSession ? (
             <>
-              {formatHm(singleSession.startedAt)} hs → {singleSession.closedAt ? `${formatHm(singleSession.closedAt)} hs` : "Abierto"}
+              {formatHm(singleSession.startedAt)} hs →{" "}
+              {singleSession.closedAt ? `${formatHm(singleSession.closedAt)} hs` : "Abierto"}
               {" · "}Cerrado por: {singleSession.closedBy || "desconocido"}
             </>
           ) : (
@@ -341,106 +361,126 @@ function NightDetailView({
         </p>
       </div>
 
-      {/* Unified Totals */}
-      <div className="bg-ink-950 border border-ink-800 rounded-2xl p-5 flex flex-col gap-4">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400 border-b border-ink-850 pb-2">
-          Totales Consolidados del Día
-        </span>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Recaudado</span>
-            <span className="font-mono font-bold text-[20px] text-ink-50">
-              ${night.totals.total.toLocaleString("es-AR")}
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-blue font-mono">Web Total</span>
-            <span className="font-mono text-[14px] text-ink-200">
-              ${night.totals.webTotal.toLocaleString("es-AR")} <span className="text-ink-500 text-xs">({night.totals.webCount})</span>
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-green font-mono">Efectivo</span>
-            <span className="font-mono text-[14px] text-ink-200">
-              ${night.totals.efectivoTotal.toLocaleString("es-AR")} <span className="text-ink-500 text-xs">({night.totals.efectivoCount})</span>
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Tickets Emitidos</span>
-            <span className="font-mono text-[14px] text-ink-200">
-              {night.orderCounter}
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Top Trago</span>
-            <span className="font-mono text-[14px] text-ink-200 truncate">
-              {topDrink ? `${topDrink.name} (×${topDrink.qty})` : "—"}
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-400 font-mono">Duración</span>
-            <span className="font-mono text-[14px] text-ink-200">
-              {formatEventDuration(night.startedAt, night.closedAt)}
-            </span>
-          </div>
-        </div>
-
-        {night.totals.drinksSold.length > 0 && (
-          <div className="border-t border-ink-850 pt-3 flex flex-col gap-2">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Tragos Vendidos en el Día</span>
-            <div className="flex gap-2.5 flex-wrap">
-              {night.totals.drinksSold.map((d) => (
-                <span key={d.drinkId} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-ink-900 border border-ink-800 text-[12px] text-ink-200">
-                  <span className="font-mono font-bold text-accent">×{d.qty}</span>
-                  <span>{d.name}</span>
+      {/* Grid estilo CloseNightModal / Dashboard KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {metrics.map((m) => {
+          const Icon = m.icon;
+          return (
+            <div
+              key={m.label}
+              className={`rounded-2xl p-4 border flex flex-col gap-2 min-w-0 ${
+                m.accent
+                  ? "bg-[var(--accent-primary)] dark:bg-[var(--accent-featured)] border-transparent text-[var(--text-on-accent)]"
+                  : "bg-[var(--bg-panel)] border-[var(--border-subtle)] text-[var(--text-primary)]"
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Icon
+                  size={13}
+                  strokeWidth={1.8}
+                  className={m.accent ? "text-white/70" : "text-[var(--accent-primary)]"}
+                />
+                <span
+                  className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    m.accent ? "text-white/70" : "text-[var(--text-tertiary)]"
+                  }`}
+                >
+                  {m.label}
                 </span>
-              ))}
+              </div>
+              <span className="font-mono text-[18px] font-bold tabular leading-tight truncate">
+                {m.value}
+              </span>
+              {m.sub && (
+                <span
+                  className={`text-[11px] font-mono tabular ${
+                    m.accent ? "text-white/55" : "text-[var(--text-tertiary)]"
+                  }`}
+                >
+                  {m.sub}
+                </span>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })}
       </div>
 
-      {/* Sessions — solo si hubo reapertura el mismo día; con 1 sola sesión ya se
-          muestra el horario/cerrado-por arriba, repetirlo acá sería ruido. */}
+      {night.totals.drinksSold.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-[0.12em]">
+            Tragos vendidos
+          </span>
+          <div className="flex gap-2 flex-wrap">
+            {night.totals.drinksSold.map((d) => (
+              <span
+                key={d.drinkId}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[12px] text-[var(--text-secondary)]"
+              >
+                <span className="font-mono font-bold text-[var(--accent-text)]">×{d.qty}</span>
+                <span>{d.name}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {!hasSingleSession && (
-        <div className="space-y-4">
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-400 block mb-1">
+        <div className="space-y-3">
+          <span className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-[0.12em] block">
             Detalle de Sesiones Individuales
           </span>
 
           {night.sessions.map((session, sIdx) => (
-            <div key={session.id} className="bg-ink-950/45 border border-ink-850 rounded-2xl p-4 flex flex-col gap-3">
-              <div className="flex justify-between items-center border-b border-ink-850 pb-2.5 flex-wrap gap-2">
+            <div
+              key={session.id}
+              className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 flex flex-col gap-3"
+            >
+              <div className="flex justify-between items-center flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${isBosko ? "bg-[#4ade80]/10 text-[#4ade80]" : "bg-blue/10 text-blue"}`}>
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs bg-[var(--accent-surface)] text-[var(--accent-text)]">
                     {sIdx + 1}
                   </span>
-                  <span className="text-xs font-mono text-ink-300">
-                    {formatHm(session.startedAt)} hs → {session.closedAt ? `${formatHm(session.closedAt)} hs` : "Abierto"}
+                  <span className="text-xs font-mono text-[var(--text-secondary)]">
+                    {formatHm(session.startedAt)} hs →{" "}
+                    {session.closedAt ? `${formatHm(session.closedAt)} hs` : "Abierto"}
                   </span>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-ink-850 text-ink-300 border border-ink-750">
-                  <User size={11} className="text-ink-400" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                  <User size={11} />
                   <span>Cerrado por: {session.closedBy || "desconocido"}</span>
                 </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Recaudado</span>
-                  <span className="text-ink-100 font-bold">${session.totals.total.toLocaleString("es-AR")}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                    Recaudado
+                  </span>
+                  <span className="text-[var(--text-primary)] font-bold tabular">
+                    ${session.totals.total.toLocaleString("es-AR")}
+                  </span>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Web</span>
-                  <span className="text-ink-300">${session.totals.webTotal.toLocaleString("es-AR")} ({session.totals.webCount})</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                    Web
+                  </span>
+                  <span className="text-[var(--text-secondary)] tabular">
+                    ${session.totals.webTotal.toLocaleString("es-AR")} ({session.totals.webCount})
+                  </span>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Efectivo</span>
-                  <span className="text-ink-300">${session.totals.efectivoTotal.toLocaleString("es-AR")} ({session.totals.efectivoCount})</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                    Efectivo
+                  </span>
+                  <span className="text-[var(--text-secondary)] tabular">
+                    ${session.totals.efectivoTotal.toLocaleString("es-AR")} ({session.totals.efectivoCount})
+                  </span>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-ink-500">Tickets Emitidos</span>
-                  <span className="text-ink-300">{session.orderCounter}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                    Tickets
+                  </span>
+                  <span className="text-[var(--text-secondary)] tabular">{session.orderCounter}</span>
                 </div>
               </div>
             </div>
@@ -452,11 +492,9 @@ function NightDetailView({
         <button
           type="button"
           onClick={() => onRedirectToLogs(night.closedAt || night.startedAt)}
-          className={`h-10 px-4.5 rounded-xl text-ink-950 text-xs font-black uppercase tracking-[0.08em] flex items-center gap-2 transition-all cursor-pointer select-none active:scale-[0.95] ${
-            isBosko ? "bg-[#4ade80]" : "bg-blue"
-          }`}
+          className="h-10 px-5 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-2 transition-all cursor-pointer select-none active:scale-[0.98]"
         >
-          <FileText size={14} />
+          <FileText size={14} strokeWidth={1.8} />
           <span>Ver Auditoría de Tickets</span>
         </button>
       </div>
@@ -464,21 +502,17 @@ function NightDetailView({
   );
 }
 
-/* ──────────────── Night Selector ──────────────── */
-
 function NightSelector({
   label,
   nights,
   value,
   onChange,
-  accentColor,
   allowNone,
 }: {
   label: string;
   nights: UnifiedNightDay[];
   value: number;
   onChange: (idx: number) => void;
-  accentColor: string;
   allowNone?: boolean;
 }) {
   const selectId = useId();
@@ -487,7 +521,7 @@ function NightSelector({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={selectId}
-        className={`text-[9px] font-bold uppercase tracking-[0.2em] ${accentColor}`}
+        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--accent-text)]"
       >
         {label}
       </label>
@@ -496,7 +530,7 @@ function NightSelector({
           id={selectId}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full appearance-none bg-ink-850 border border-ink-700 rounded-xl px-3 py-2 pr-8 text-ink-50 text-[12px] font-medium cursor-pointer focus:outline-none focus:border-ink-600 transition-colors"
+          className="w-full appearance-none bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl px-3 py-2.5 pr-8 text-[var(--text-primary)] text-[13px] font-medium cursor-pointer focus:outline-none focus:border-[var(--accent-primary)] transition-colors"
         >
           {allowNone && (
             <option value={NONE}>— Ver solo Noche A —</option>
@@ -510,7 +544,7 @@ function NightSelector({
         </select>
         <ChevronDown
           size={14}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-500 pointer-events-none"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none"
         />
       </div>
     </div>

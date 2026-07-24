@@ -4,9 +4,8 @@ import userEvent from "@testing-library/user-event";
 
 import UsuariosSection from "./UsuariosSection";
 import { usersService, type SafeUser } from "@/services/users.service";
+import { STAFF_COLS_STORAGE_KEY } from "./staffCrud";
 
-// UsuariosSection habla directo con usersService (list/create/update/delete),
-// así que mockeamos el servicio completo, mismo patrón que LogsSection.test.tsx.
 vi.mock("@/services/users.service", async () => {
   const actual = await vi.importActual<typeof import("@/services/users.service")>(
     "@/services/users.service",
@@ -22,12 +21,6 @@ vi.mock("@/services/users.service", async () => {
   };
 });
 
-// useTheme requiere su Provider; el componente solo lee `theme` para variar
-// clases visuales, así que alcanza con un mock mínimo.
-vi.mock("@/components/ThemeProvider", () => ({
-  useTheme: () => ({ theme: "dark" }),
-}));
-
 const mockedUsersService = vi.mocked(usersService);
 
 function makeUser(overrides: Partial<SafeUser> = {}): SafeUser {
@@ -42,6 +35,7 @@ function makeUser(overrides: Partial<SafeUser> = {}): SafeUser {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.removeItem(STAFF_COLS_STORAGE_KEY);
 });
 
 describe("UsuariosSection", () => {
@@ -63,7 +57,7 @@ describe("UsuariosSection", () => {
     render(<UsuariosSection />);
     await waitFor(() => expect(mockedUsersService.list).toHaveBeenCalled());
 
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo usuario/i }));
 
     await user.type(screen.getByPlaceholderText("nombre_operador"), "  nueva_cajera  ");
     await user.type(screen.getByPlaceholderText("Mínimo 4 caracteres"), "  clave123  ");
@@ -93,7 +87,7 @@ describe("UsuariosSection", () => {
 
     await user.click(await screen.findByText("cajera_ana"));
 
-    expect(screen.getByText("Editar Usuario")).toBeInTheDocument();
+    expect(screen.getByText("Editar usuario")).toBeInTheDocument();
 
     await user.click(screen.getByText("Administrador"));
     await user.click(screen.getByRole("button", { name: /^Guardar$/i }));
@@ -106,28 +100,38 @@ describe("UsuariosSection", () => {
     );
   });
 
-  it("borra un usuario de staff vía SafeDeleteModal tras confirmar el username exacto", async () => {
-    const user = userEvent.setup();
+  it("borra un usuario de staff con ConfirmRail y Deshacer cancela el DELETE", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const existing = makeUser({ id: "user-del", username: "cajera_del" });
     mockedUsersService.list.mockResolvedValue([existing]);
     mockedUsersService.delete.mockResolvedValue({ ok: true });
 
-    render(<UsuariosSection />);
+    try {
+      render(<UsuariosSection />);
+      await screen.findByText("cajera_del");
 
-    await screen.findByText("cajera_del");
+      await user.click(screen.getByTitle("Eliminar"));
+      expect(await screen.findByText("¿Eliminar?")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
-    await user.click(screen.getByTitle("Eliminar usuario"));
+      await waitFor(() => expect(screen.queryByText("cajera_del")).not.toBeInTheDocument());
+      expect(await screen.findByText("Eliminado: cajera_del")).toBeInTheDocument();
+      expect(mockedUsersService.delete).not.toHaveBeenCalled();
 
-    const dialogInput = screen.getByPlaceholderText("cajera_del");
-    await user.type(dialogInput, "cajera_del");
-    await user.click(screen.getByRole("button", { name: /^Eliminar$/i }));
-
-    await waitFor(() => expect(mockedUsersService.delete).toHaveBeenCalledWith("user-del"));
-    await waitFor(() => expect(screen.queryByText("cajera_del")).not.toBeInTheDocument());
+      await user.click(screen.getByRole("button", { name: "Deshacer" }));
+      expect(await screen.findByText("cajera_del")).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(mockedUsersService.delete).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("no permite eliminar cuentas del sistema (botón deshabilitado)", async () => {
-    mockedUsersService.list.mockResolvedValue([makeUser({ id: "sys-1", username: "admin", role: "admin" })]);
+    mockedUsersService.list.mockResolvedValue([
+      makeUser({ id: "sys-1", username: "admin", role: "admin" }),
+    ]);
 
     render(<UsuariosSection />);
 
@@ -144,7 +148,7 @@ describe("UsuariosSection", () => {
     render(<UsuariosSection />);
     await waitFor(() => expect(mockedUsersService.list).toHaveBeenCalled());
 
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo usuario/i }));
     await user.type(screen.getByPlaceholderText("nombre_operador"), "falla_user");
     await user.type(screen.getByPlaceholderText("Mínimo 4 caracteres"), "clave123");
     await user.click(screen.getByRole("button", { name: /^Crear$/i }));
@@ -159,9 +163,8 @@ describe("UsuariosSection", () => {
     render(<UsuariosSection />);
     await waitFor(() => expect(mockedUsersService.list).toHaveBeenCalled());
 
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo usuario/i }));
 
-    // Sin username ni password el botón "Crear" queda deshabilitado.
     const submitButton = screen.getByRole("button", { name: /^Crear$/i });
     expect(submitButton).toBeDisabled();
     expect(mockedUsersService.create).not.toHaveBeenCalled();

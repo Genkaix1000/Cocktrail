@@ -20,10 +20,10 @@ describe("NightRecords", () => {
     expect(screen.getByText("Aún no hay récords registrados")).toBeInTheDocument();
   });
 
-  it("renderiza la card de Trago Estrella con su emoji", () => {
+  it("renderiza la card de Trago Estrella", () => {
     render(<NightRecords records={[makeRecord()]} isBosko={false} />);
     expect(screen.getByText("Trago Estrella")).toBeInTheDocument();
     expect(screen.getByText("Fernet con Coca")).toBeInTheDocument();
-    expect(screen.getByText("🍹")).toBeInTheDocument();
+    expect(screen.getByText("23 unidades vendidas (últimos 30 días)")).toBeInTheDocument();
   });
 });

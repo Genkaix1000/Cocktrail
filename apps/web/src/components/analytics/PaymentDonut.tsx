@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CreditCard } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { PaymentBreakdown } from "@/lib/analytics";
 
 type Props = {
   breakdown: PaymentBreakdown[];
   total: number;
-  isBosko: boolean;
 };
 
-export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
+const SOLID_STROKES = ["var(--accent-primary)", "var(--accent-bright)"] as const;
+
+export default function PaymentDonut({ breakdown, total }: Props) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    // Delay to trigger CSS transition on mount
     const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
   }, []);
@@ -24,35 +23,49 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
   const circumference = 2 * Math.PI * radius;
   const center = size / 2;
 
-  // Build segments (offset acumulado sin mutar variables externas)
+  const ranked = useMemo(
+    () => [...breakdown].sort((a, b) => b.total - a.total),
+    [breakdown],
+  );
+  const solidMethods = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of ranked) {
+      if (set.size >= 2) break;
+      if (b.total > 0) set.add(b.method);
+    }
+    return set;
+  }, [ranked]);
+
+  const dominant = ranked.find((b) => b.total > 0) ?? null;
+
   const segments = breakdown.reduce<
-    Array<PaymentBreakdown & { segmentLength: number; dashOffset: number }>
+    Array<PaymentBreakdown & { segmentLength: number; dashOffset: number; solidIndex: number }>
   >((acc, b) => {
     const cumulativeOffset = acc.reduce((sum, s) => sum + s.segmentLength, 0);
     const segmentLength = (b.pct / 100) * circumference;
     const dashOffset = circumference - cumulativeOffset;
-    acc.push({ ...b, segmentLength, dashOffset });
+    const solidIndex = [...solidMethods].indexOf(b.method);
+    acc.push({ ...b, segmentLength, dashOffset, solidIndex });
     return acc;
   }, []);
 
-  const accentColor = isBosko ? "#4ade80" : "#6db3f2";
+  function strokeFor(seg: (typeof segments)[number]) {
+    if (total === 0 || seg.total <= 0) return "transparent";
+    if (seg.solidIndex >= 0) return SOLID_STROKES[seg.solidIndex]!;
+    return "url(#bosko-donut-stripe)";
+  }
 
   return (
-    <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 flex flex-col justify-between h-[380px] shadow-lg">
-      {/* Title */}
+    <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 flex flex-col justify-between h-[380px] shadow-card">
       <div className="flex items-center justify-between shrink-0">
-        <h3 className="text-[12px] font-bold text-ink-100 uppercase tracking-widest flex items-center gap-2.5 select-none">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-            <CreditCard size={13} />
-          </div>
-          <span>Distribución por Canal</span>
+        <h3 className="text-[15px] font-semibold text-[var(--text-primary)] select-none">
+          Distribución por Canal
         </h3>
-        <span className="text-[10px] font-mono text-ink-400 px-1.5 py-0.5 bg-ink-800 rounded tabular">
+        <span className="text-[11px] font-medium text-[var(--text-tertiary)] tabular px-2 py-0.5 rounded-full bg-[var(--bg-panel)]">
           {breakdown.length}
         </span>
       </div>
 
-      {/* Donut SVG */}
       <div className="flex justify-center shrink-0 my-1">
         <div className="relative" style={{ width: size, height: size }}>
           <svg
@@ -61,18 +74,39 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
             viewBox={`0 0 ${size} ${size}`}
             className="-rotate-90"
             role="img"
-            aria-label={`Distribución de pagos por canal, total $${total.toLocaleString("es-AR")}`}
+            aria-label={
+              dominant
+                ? `${dominant.label} ${dominant.pct}%, total $${total.toLocaleString("es-AR")}`
+                : `Sin ventas, total $0`
+            }
           >
-            {/* Background ring */}
+            <defs>
+              <pattern
+                id="bosko-donut-stripe"
+                patternUnits="userSpaceOnUse"
+                width="6"
+                height="6"
+                patternTransform="rotate(45)"
+              >
+                <rect width="6" height="6" fill="var(--bg-panel)" />
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="6"
+                  stroke="var(--border-strong)"
+                  strokeWidth="2.5"
+                />
+              </pattern>
+            </defs>
             <circle
               cx={center}
               cy={center}
               r={radius}
               fill="none"
-              stroke="var(--ink-800, #1e293b)"
+              stroke="var(--border-subtle)"
               strokeWidth={strokeWidth}
             />
-            {/* Data segments */}
             {segments.map((seg) => (
               <circle
                 key={seg.method}
@@ -80,7 +114,7 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
                 cy={center}
                 r={radius}
                 fill="none"
-                stroke={seg.color}
+                stroke={strokeFor(seg)}
                 strokeWidth={strokeWidth}
                 strokeDasharray={`${mounted ? seg.segmentLength : 0} ${circumference}`}
                 strokeDashoffset={-seg.dashOffset + circumference}
@@ -89,55 +123,50 @@ export default function PaymentDonut({ breakdown, total, isBosko }: Props) {
               />
             ))}
           </svg>
-          {/* Center label */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-400">
-              Total
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+            <span className="font-mono text-[28px] font-bold leading-none tabular text-[var(--text-primary)]">
+              {dominant ? `${dominant.pct}%` : "0%"}
             </span>
-            <span
-              className="font-mono text-[20px] font-bold leading-none"
-              style={{ color: accentColor }}
-            >
-              ${total.toLocaleString("es-AR")}
+            <span className="text-[11px] font-medium text-[var(--text-secondary)] mt-1.5 truncate max-w-full">
+              {dominant ? dominant.label : "Sin ventas"}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Legend */}
       {breakdown.length > 0 ? (
-        <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[95px] no-scrollbar shrink-0">
-          {breakdown.map((b) => (
-            <div
-              key={b.method}
-              className="flex items-center gap-3 py-1 border-t border-ink-850 first:border-t-0"
-            >
-              {/* Colored dot — gris cuando no hubo ninguna venta real (total === 0) */}
+        <div className="flex flex-wrap items-center justify-center gap-2 shrink-0 pt-1">
+          {breakdown.map((b) => {
+            const solidIndex = [...solidMethods].indexOf(b.method);
+            const isSolid = solidIndex >= 0 && total > 0 && b.total > 0;
+            return (
               <span
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: total === 0 ? "var(--ink-600, #475569)" : b.color }}
-              />
-              {/* Label */}
-              <span className="text-[13px] text-ink-200 flex-1 min-w-0 truncate">
-                {b.label}
+                key={b.method}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--bg-panel)] text-[12px] text-[var(--text-secondary)]"
+              >
+                {isSolid ? (
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: SOLID_STROKES[solidIndex] }}
+                  />
+                ) : total === 0 || b.total <= 0 ? (
+                  <span className="w-2 h-2 rounded-full shrink-0 bg-[var(--border-strong)]" />
+                ) : (
+                  <span
+                    className="w-2.5 h-2.5 rounded-sm shrink-0 bosko-stripe border border-[var(--border-subtle)]"
+                    aria-hidden
+                  />
+                )}
+                <span className="truncate max-w-[9rem]">{b.label}</span>
+                <span className="font-mono text-[11px] tabular text-[var(--text-tertiary)]">
+                  {b.pct}%
+                </span>
               </span>
-              {/* Count */}
-              <span className="text-[10px] text-ink-500 font-mono tabular">
-                {b.count} ops
-              </span>
-              {/* Amount */}
-              <span className="font-mono text-[13px] text-ink-100 tabular text-right min-w-[80px]">
-                ${b.total.toLocaleString("es-AR")}
-              </span>
-              {/* Pct */}
-              <span className="font-mono text-[11px] text-ink-400 tabular text-right w-[38px]">
-                {b.pct}%
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
-        <div className="text-center py-8 text-[13px] text-ink-500 flex-1 flex items-center justify-center">
+        <div className="text-center py-8 text-[13px] text-[var(--text-tertiary)] flex-1 flex items-center justify-center">
           Sin datos de pago disponibles
         </div>
       )}

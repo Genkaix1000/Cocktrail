@@ -17,7 +17,16 @@ vi.mock("@/lib/useSSE", () => ({
 }));
 
 vi.mock("@/components/ThemeProvider", () => ({
-  useTheme: () => ({ theme: "bosko" }),
+  useTheme: () => ({
+    theme: "bosko",
+    isDark: true,
+    toggleDark: vi.fn(),
+    useLogoUrl: true,
+    logoUrl: "/bosko.webp",
+    logoSize: 56,
+    textLogoValue: "Bosko",
+    textLogoSize: 26,
+  }),
   useThemeSafe: () => null,
 }));
 
@@ -53,6 +62,20 @@ vi.mock("@/components/admin/LogsSection", () => ({ default: () => <div>LogsSecti
 const mockedEventsService = vi.mocked(eventsService);
 const mockedAuthService = vi.mocked(authService);
 
+const adminUser = { role: "admin" as const, username: "manuel" };
+
+function renderAdmin(
+  props: Partial<{ initialEvent: NightEvent | null; initialOrders: never[] }> = {},
+) {
+  return render(
+    <AdminClient
+      initialEvent={props.initialEvent ?? null}
+      initialOrders={props.initialOrders ?? []}
+      currentUser={adminUser}
+    />,
+  );
+}
+
 function makeNightEvent(overrides: Partial<NightEvent> = {}): NightEvent {
   return {
     id: "event-1",
@@ -66,21 +89,21 @@ function makeNightEvent(overrides: Partial<NightEvent> = {}): NightEvent {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedAuthService.getMe.mockResolvedValue(null);
+  mockedAuthService.logout.mockResolvedValue({ ok: true });
   mockedEventsService.getHistory.mockResolvedValue([]);
   mockedEventsService.getPublicConfig.mockResolvedValue({} as never);
 });
 
 describe("AdminClient", () => {
   it("renderiza el panel completo (sidebar + Dashboard) cuando no hay noche activa", async () => {
-    render(<AdminClient initialEvent={null} initialOrders={[]} />);
+    renderAdmin();
 
     expect(await screen.findByText("DashboardSection")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Abrir noche/i })).toBeInTheDocument();
   });
 
   it("muestra el botón Abrir noche (no Clave de la noche/Cerrar noche) cuando no hay noche activa", async () => {
-    render(<AdminClient initialEvent={null} initialOrders={[]} />);
+    renderAdmin();
 
     await screen.findByText("DashboardSection");
     expect(screen.getByRole("button", { name: /Abrir noche/i })).toBeInTheDocument();
@@ -89,12 +112,7 @@ describe("AdminClient", () => {
   });
 
   it("muestra Clave de la noche/Cerrar noche (no Abrir noche) cuando hay noche activa", async () => {
-    render(
-      <AdminClient
-        initialEvent={makeNightEvent()}
-        initialOrders={[]}
-      />,
-    );
+    renderAdmin({ initialEvent: makeNightEvent() });
 
     await screen.findByText("DashboardSection");
     expect(screen.getByRole("button", { name: /Clave de la noche/i })).toBeInTheDocument();
@@ -107,7 +125,7 @@ describe("AdminClient", () => {
     const opened = makeNightEvent({ keyword: "MEDIANOCHE" });
     mockedEventsService.openEvent.mockResolvedValue(opened);
 
-    render(<AdminClient initialEvent={null} initialOrders={[]} />);
+    renderAdmin();
     await screen.findByText("DashboardSection");
 
     await user.click(screen.getByRole("button", { name: /Abrir noche/i }));
