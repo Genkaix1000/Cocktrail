@@ -106,6 +106,9 @@ export default function CajaSidebar({
 
   const borderClass = isBosko ? "border-white/10" : "border-ink-800";
   const sublabelClass = isBosko ? "text-white/40" : "text-ink-500";
+  const secondaryBtnClass = isBosko
+    ? "bg-white/10 border-white/20 text-white/80 hover:text-white hover:bg-white/15"
+    : "bg-ink-850 border-ink-750 text-ink-300 hover:text-ink-50";
 
   return (
     <aside className={`
@@ -222,7 +225,11 @@ export default function CajaSidebar({
       </div>
 
       {/* Footer Fijo en la parte inferior */}
-      <div className={`absolute bottom-0 left-0 right-0 border-t ${borderClass} bg-ink-950 flex flex-col gap-4.5 z-20 ${collapsed ? "p-3 bg-ink-950/95 backdrop-blur-sm" : "p-6 bg-ink-950/90 backdrop-blur-md"}`}>
+      <div className={`absolute bottom-0 left-0 right-0 border-t z-20 backdrop-blur-md flex flex-col gap-4.5 ${
+        isBosko
+          ? "bg-[#013e37]/95 dark:bg-[#012b26]/95 border-[#014d44] dark:border-accent/10"
+          : "bg-ink-950/95 border-ink-800"
+      } ${collapsed ? "p-3" : "p-6"}`}>
         {/* Closing capability directly from Caja if user has permissions */}
         {currentUser?.permissions?.closeNight && event?.status === "activo" && (
           <div>
@@ -271,7 +278,7 @@ export default function CajaSidebar({
             <button
               type="button"
               onClick={testPrint}
-              className="w-full h-9 rounded-xl bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer"
+              className={`w-full h-9 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer border ${secondaryBtnClass}`}
             >
               Imprimir ticket de prueba
             </button>
@@ -351,7 +358,7 @@ export default function CajaSidebar({
               type="button"
               onClick={testPosnet}
               disabled={testingPosnet}
-              className="w-full h-9 rounded-xl bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              className={`w-full h-9 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait border ${secondaryBtnClass}`}
             >
               {testingPosnet ? "Probando Posnet…" : "Probar Posnet"}
             </button>

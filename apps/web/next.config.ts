@@ -1,6 +1,11 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Fijar la raíz del monorepo para Turbopack y silenciar advertencias por otros lockfiles en $HOME
+  turbopack: {
+    root: path.resolve(__dirname, "../../"),
+  },
   // Permite que el celular del cliente acceda al dev server por LAN durante la demo.
   // Si tu IP local cambia, agregala acá.
   allowedDevOrigins: [
@@ -32,6 +37,9 @@ const nextConfig: NextConfig = {
         destination: `${apiTarget}/api/:path*`,
       },
     ];
+  },
+  experimental: {
+    optimizePackageImports: ["lucide-react", "@base-ui/react", "gsap"],
   },
 };
 
