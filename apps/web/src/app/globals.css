@@ -65,6 +65,11 @@
   --accent-line:   color-mix(in oklab, var(--text-accent) 20%, transparent);
   --accent-border: color-mix(in oklab, var(--text-accent) 35%, transparent);
 
+  --amber-base:   #d97706;
+  --amber-soft:   color-mix(in oklab, #d97706 12%, transparent);
+  --amber-line:   color-mix(in oklab, #d97706 25%, transparent);
+  --amber-border: color-mix(in oklab, #d97706 35%, transparent);
+
   --success-base: var(--success);
   --success-soft: color-mix(in oklab, var(--success) 12%, transparent);
   --success-line: color-mix(in oklab, var(--success) 25%, transparent);
@@ -113,6 +118,11 @@
   --accent-soft:   color-mix(in oklab, var(--text-accent) 15%, transparent);
   --accent-line:   color-mix(in oklab, var(--text-accent) 28%, transparent);
   --accent-border: color-mix(in oklab, var(--text-accent) 45%, transparent);
+
+  --amber-base:   #fbbf24;
+  --amber-soft:   color-mix(in oklab, #fbbf24 15%, transparent);
+  --amber-line:   color-mix(in oklab, #fbbf24 28%, transparent);
+  --amber-border: color-mix(in oklab, #fbbf24 45%, transparent);
 
   --shadow-card: 0 1px 3px rgba(0,0,0,0.35), 0 4px 16px rgba(0,0,0,0.22);
   --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.45), 0 8px 28px rgba(0,0,0,0.28);
@@ -169,10 +179,10 @@
   --color-blue-soft: var(--primary-soft);
   --color-blue-line: var(--primary-line);
 
-  --color-amber: var(--accent-base);
-  --color-amber-soft: var(--accent-soft);
-  --color-amber-line: var(--accent-line);
-  --color-amber-border: var(--accent-border);
+  --color-amber: var(--amber-base);
+  --color-amber-soft: var(--amber-soft);
+  --color-amber-line: var(--amber-line);
+  --color-amber-border: var(--amber-border);
 
   --color-purple: var(--purple-base, #9b72cf);
   --color-purple-soft: var(--purple-soft, rgba(155,114,207,0.12));

@@ -27,6 +27,14 @@ export function OSProfileFooter({ onLogout, username, role, isCollapsed = false 
   const textClass = isBosko ? "text-white" : "text-ink-50";
   const subtextClass = isBosko ? "text-white/50" : "text-ink-500";
 
+  const btnBgClass = isBosko
+    ? "bg-white/10 border-white/20 text-white/80 hover:text-white hover:bg-white/15"
+    : "bg-ink-900 border-ink-800 text-ink-300 hover:text-ink-100 hover:bg-ink-850";
+
+  const logoutBtnClass = isBosko
+    ? "bg-white/10 border-white/20 text-white/70 hover:bg-red-500/20 hover:border-red-400/40 hover:text-red-300"
+    : "bg-ink-900 border-ink-800 text-ink-400 hover:bg-red-950/30 hover:border-red-500/35 hover:text-red-400";
+
   if (isCollapsed) {
     return (
       <div
@@ -43,7 +51,7 @@ export function OSProfileFooter({ onLogout, username, role, isCollapsed = false 
               onLogout();
             }
           }}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#18181b] border border-[#27272a] hover:bg-red-950/20 hover:border-red-500/35 text-[#a1a1aa] hover:text-red-400 transition-all cursor-pointer active:scale-90"
+          className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all cursor-pointer active:scale-90 ${logoutBtnClass}`}
           title="Cerrar Sesión"
         >
           <LogOut size={14} />
@@ -64,7 +72,7 @@ export function OSProfileFooter({ onLogout, username, role, isCollapsed = false 
             <button
               type="button"
               onClick={() => setShowConfirmLogout(false)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#18181b] border border-[#27272a] hover:bg-[#27272a] text-[#a1a1aa] transition-all cursor-pointer"
+              className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-all cursor-pointer ${btnBgClass}`}
               title="Cancelar"
             >
               <X size={12} />
@@ -100,17 +108,17 @@ export function OSProfileFooter({ onLogout, username, role, isCollapsed = false 
             <button
               type="button"
               onClick={toggleDark}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-ink-900 border border-ink-800 hover:bg-ink-850 text-ink-300 hover:text-ink-100 transition-all cursor-pointer active:scale-90"
+              className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all cursor-pointer active:scale-90 ${btnBgClass}`}
               title={isDark ? "Cambiar a modo día" : "Cambiar a modo noche"}
             >
               {isDark ? <Sun size={14} /> : <Moon size={14} />}
             </button>
 
-            {/* Logout button (Static colors, doesn't change on day mode) */}
+            {/* Logout button */}
             <button
               type="button"
               onClick={() => setShowConfirmLogout(true)}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-[#18181b] border border-[#27272a] hover:bg-red-950/20 hover:border-red-500/35 text-[#a1a1aa] hover:text-red-400 transition-all cursor-pointer active:scale-90"
+              className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all cursor-pointer active:scale-90 ${logoutBtnClass}`}
               title="Cerrar Sesión"
             >
               <LogOut size={14} />

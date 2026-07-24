@@ -497,7 +497,11 @@ export default function AdminClient({
         </div>
 
         {/* Footer Fijo en la parte inferior */}
-        <div className="absolute bottom-0 left-0 right-0 p-5 border-t border-current/15 bg-ink-950 flex flex-col gap-3.5 z-20 bg-ink-950/95 backdrop-blur-sm">
+        <div className={`absolute bottom-0 left-0 right-0 p-5 flex flex-col gap-3.5 z-20 backdrop-blur-sm ${
+          isBosko
+            ? "bg-[#013e37]/95 dark:bg-[#012b26]/95 border-t border-[#014d44] dark:border-accent/10"
+            : "bg-ink-950/95 border-t border-ink-800"
+        }`}>
 
           {event?.status === "activo" && (
             <div className="flex flex-col gap-2">
