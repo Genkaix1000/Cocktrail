@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Settings2, Trash2, UserPlus } from "lucide-react";
+import { Trash2, UserPlus } from "lucide-react";
 import type { Role } from "@cocktrail/shared";
 import type { SafeUser } from "@/services/users.service";
 import { ConfirmRail } from "@/components/shared/ConfirmRail";
+import ColumnPicker from "@/components/shared/ColumnPicker";
+import { gridMinWidth } from "@/lib/crudCols";
 import {
   STAFF_COL_LABELS,
   STAFF_COLS_TOGGLEABLE,
@@ -84,63 +85,21 @@ export default function UsersTable({
   onColumnFiltersChange,
 }: Props) {
   const grid = staffGridTemplate(visibleCols);
-  const [colsOpen, setColsOpen] = useState(false);
-  const colsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!colsOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!colsRef.current?.contains(e.target as Node)) setColsOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [colsOpen]);
+  const minWidth = gridMinWidth(grid);
 
   function renderHeaderCell(col: StaffColId) {
     if (col === "actions") {
       return (
-        <div key={col} className="relative flex items-center justify-start gap-1.5 px-3" ref={colsRef}>
+        <div key={col} className="flex items-center justify-start gap-1.5 px-3">
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
             Acciones
           </span>
-          <button
-            type="button"
-            title="Columnas visibles"
-            aria-label="Configurar columnas"
-            aria-expanded={colsOpen}
-            onClick={() => setColsOpen((o) => !o)}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
-              colsOpen
-                ? "bg-[var(--accent-surface)] text-[var(--accent-text)]"
-                : "text-[var(--text-tertiary)] hover:bg-[var(--bg-panel)] hover:text-[var(--text-secondary)]"
-            }`}
-          >
-            <Settings2 size={14} />
-          </button>
-          {colsOpen && (
-            <div className="absolute left-3 top-full mt-1 z-20 w-44 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-card p-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)] px-1.5 pb-1.5">
-                Columnas
-              </p>
-              {STAFF_COLS_TOGGLEABLE.map((c) => {
-                const on = visibleCols.includes(c);
-                return (
-                  <label
-                    key={c}
-                    className="flex items-center gap-2 px-1.5 py-1.5 rounded-lg hover:bg-[var(--bg-panel)] cursor-pointer text-[12px] text-[var(--text-primary)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => onToggleCol(c)}
-                      className="accent-[var(--accent-primary)]"
-                    />
-                    {STAFF_COL_LABELS[c]}
-                  </label>
-                );
-              })}
-            </div>
-          )}
+          <ColumnPicker
+            cols={STAFF_COLS_TOGGLEABLE}
+            labels={STAFF_COL_LABELS}
+            visible={visibleCols}
+            onToggle={onToggleCol}
+          />
         </div>
       );
     }
@@ -307,81 +266,85 @@ export default function UsersTable({
 
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden shadow-card">
-      <div
-        className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]"
-        style={{ gridTemplateColumns: grid }}
-      >
-        {visibleCols.map(renderHeaderCell)}
-      </div>
+      <div className="overflow-x-auto">
+        <div style={{ minWidth }}>
+          <div
+            className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]"
+            style={{ gridTemplateColumns: grid }}
+          >
+            {visibleCols.map(renderHeaderCell)}
+          </div>
 
-      {filtersOpen && (
-        <div
-          className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]"
-          style={{ gridTemplateColumns: grid }}
-        >
-          {visibleCols.map(renderFilterCell)}
-        </div>
-      )}
+          {filtersOpen && (
+            <div
+              className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+              style={{ gridTemplateColumns: grid }}
+            >
+              {visibleCols.map(renderFilterCell)}
+            </div>
+          )}
 
-      {users.length === 0 ? (
-        <div className="px-5 py-10 text-center">
-          <UserPlus size={28} className="mx-auto text-[var(--text-tertiary)] mb-2" />
-          <p className="text-[13px] font-semibold text-[var(--text-secondary)]">
-            {hasActiveSearch || filtersOpen
-              ? "Sin resultados para tu búsqueda"
-              : "No hay usuarios creados"}
-          </p>
-          {!hasActiveSearch && !filtersOpen && (
-            <p className="text-[12px] text-[var(--text-tertiary)] mt-1">
-              Agregá personal de staff para darles acceso al sistema
-            </p>
+          {users.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <UserPlus size={28} className="mx-auto text-[var(--text-tertiary)] mb-2" />
+              <p className="text-[13px] font-semibold text-[var(--text-secondary)]">
+                {hasActiveSearch || filtersOpen
+                  ? "Sin resultados para tu búsqueda"
+                  : "No hay usuarios creados"}
+              </p>
+              {!hasActiveSearch && !filtersOpen && (
+                <p className="text-[12px] text-[var(--text-tertiary)] mt-1">
+                  Agregá personal de staff para darles acceso al sistema
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--border-subtle)]">
+              {users.map((u, idx) => {
+                const isSelected = selectedUserId === u.id;
+                const isConfirming = confirmingDeleteId === u.id;
+                return (
+                  <div
+                    key={u.id}
+                    onClick={() => !isConfirming && onSelectUser(u)}
+                    className={`relative grid gap-x-3 items-stretch transition-colors duration-[260ms] ${
+                      isConfirming
+                        ? "bg-[var(--danger-soft)] cursor-default"
+                        : `cursor-pointer hover:bg-[var(--bg-panel)] ${
+                            isSelected
+                              ? "bg-[var(--accent-surface)]/50 border-l-2 border-l-[var(--accent-primary)]"
+                              : idx % 2 === 1
+                                ? "bg-[var(--bg-panel)]/45 border-l-2 border-transparent"
+                                : "bg-[var(--bg-surface)] border-l-2 border-transparent"
+                          }`
+                    }`}
+                    style={{ gridTemplateColumns: grid }}
+                  >
+                    {visibleCols.map((col) => renderDataCell(col, u, isConfirming))}
+                    {isConfirming && (
+                      <div
+                        className="absolute inset-y-0 right-0 z-10 flex items-center min-w-[220px] w-[min(280px,55%)] pl-4 pr-3 bg-[var(--danger-soft)]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ConfirmRail
+                          confirm
+                          message="¿Eliminar?"
+                          className="w-full h-full"
+                          onAsk={() => {}}
+                          onCancel={onCancelDelete}
+                          onConfirm={() => onConfirmDelete(u)}
+                        >
+                          <span />
+                        </ConfirmRail>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-      ) : (
-        <div className="divide-y divide-[var(--border-subtle)]">
-          {users.map((u, idx) => {
-            const isSelected = selectedUserId === u.id;
-            const isConfirming = confirmingDeleteId === u.id;
-            return (
-              <div
-                key={u.id}
-                onClick={() => !isConfirming && onSelectUser(u)}
-                className={`relative grid gap-x-3 items-stretch transition-colors duration-[260ms] ${
-                  isConfirming
-                    ? "bg-[var(--danger-soft)] cursor-default"
-                    : `cursor-pointer hover:bg-[var(--bg-panel)] ${
-                        isSelected
-                          ? "bg-[var(--accent-surface)]/50 border-l-2 border-l-[var(--accent-primary)]"
-                          : idx % 2 === 1
-                            ? "bg-[var(--bg-panel)]/45 border-l-2 border-transparent"
-                            : "bg-[var(--bg-surface)] border-l-2 border-transparent"
-                      }`
-                }`}
-                style={{ gridTemplateColumns: grid }}
-              >
-                {visibleCols.map((col) => renderDataCell(col, u, isConfirming))}
-                {isConfirming && (
-                  <div
-                    className="absolute inset-y-0 right-0 z-10 flex items-center min-w-[220px] w-[min(280px,55%)] pl-4 pr-3 bg-[var(--danger-soft)]"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <ConfirmRail
-                      confirm
-                      message="¿Eliminar?"
-                      className="w-full h-full"
-                      onAsk={() => {}}
-                      onCancel={onCancelDelete}
-                      onConfirm={() => onConfirmDelete(u)}
-                    >
-                      <span />
-                    </ConfirmRail>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

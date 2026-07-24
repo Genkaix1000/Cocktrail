@@ -83,6 +83,8 @@ type UseCheckoutArgs = {
   totalPrice: number;
   totalItems: number;
   clearCart: () => void;
+  /** Imprime ESC/POS (base64) en la tablet vía WebUSB. Opcional en tests. */
+  printTicketData?: (base64: string) => Promise<void>;
 };
 
 /**
@@ -91,7 +93,14 @@ type UseCheckoutArgs = {
  * intención de cobro, cobro QR estático (Fase 4), y el pedido recién
  * concretado para la pantalla de éxito.
  */
-export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCart }: UseCheckoutArgs) {
+export function useCheckout({
+  cart,
+  cartEntries,
+  totalPrice,
+  totalItems,
+  clearCart,
+  printTicketData,
+}: UseCheckoutArgs) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [receivedAmount, setReceivedAmount] = useState<string>("");
@@ -233,6 +242,13 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
 
       setLatestOrder(order);
       clearCart();
+      if (order.ticketData && printTicketData) {
+        try {
+          await printTicketData(order.ticketData);
+        } catch {
+          // La venta ya quedó; reprint desde la UI de éxito.
+        }
+      }
       return order;
     } catch (err) {
       setSaleError(err instanceof Error ? err.message : "No se pudo registrar la venta.");
@@ -240,7 +256,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
-  }, [cart, canConfirmCash, clearCart, paymentMethod, submitting, totalItems]);
+  }, [cart, canConfirmCash, clearCart, paymentMethod, printTicketData, submitting, totalItems]);
 
   const buildPendingSale = useCallback(
     (method: "qr" | "debito", mpRef: string, idempotencyKey?: string): PendingSale => ({
@@ -284,6 +300,13 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
           setPosnetErrorMessage(null);
           setQrImage(null);
         }
+        if (order.ticketData && printTicketData) {
+          try {
+            await printTicketData(order.ticketData);
+          } catch {
+            // reprint desde la UI
+          }
+        }
         return true;
       } catch (err) {
         console.error("Cobro OK pero falló el registro de la venta:", err);
@@ -322,7 +345,7 @@ export function useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCa
         return false;
       }
     },
-    [clearCart],
+    [clearCart, printTicketData],
   );
 
   /** Reintenta desde el banner el registro de una venta cobrada sin registrar. */

@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/print-lan-url.mjs && next dev --turbo",
+    "dev": "node scripts/print-lan-url.mjs && next dev --turbo -H 0.0.0.0",
+    "dev:https": "node scripts/ensure-lan-https.mjs && node scripts/print-lan-url.mjs --https && next dev --turbo -H 0.0.0.0 --experimental-https --experimental-https-key ./certs/key.pem --experimental-https-cert ./certs/cert.pem",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

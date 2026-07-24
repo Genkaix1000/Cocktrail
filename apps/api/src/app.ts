@@ -190,14 +190,8 @@ const ordersService = new OrdersService({
   emit,
   generateTicketCodeString: (orderId: string): string => ticketsService.generateCodeString(orderId),
   saveTicket: async (orderId: string, code: string): Promise<void> => ticketsService.saveTicketForOrder(orderId, code),
-  printTicket: async (order, nightEvent): Promise<void> => {
-    // printerService.printTicket ya atrapa toda excepción interna y devuelve
-    // { success, message } en vez de tirar — si success es false, hay que propagar
-    // el fallo (throw) para que OrdersService.createOrder marque printed=false.
-    const result = await printerService.printTicket(order, nightEvent);
-    if (!result.success) {
-      throw new Error(result.message);
-    }
+  renderTicket: async (order, nightEvent): Promise<string> => {
+    return printerService.renderTicket(order, nightEvent);
   },
   verifyPayment,
   isPaymentSchemaReady,

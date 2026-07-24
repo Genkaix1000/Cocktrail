@@ -1,9 +1,11 @@
 import { apiFetch } from "./api-client";
 import type { NewOrderInput, Order, OrderStatus } from "@cocktrail/shared";
 
+export type CreateOrderResult = Order & { printed: boolean; ticketData?: string };
+
 export const ordersService = {
   create(input: NewOrderInput) {
-    return apiFetch<Order & { printed: boolean }>("/api/orders", { method: "POST", body: input });
+    return apiFetch<CreateOrderResult>("/api/orders", { method: "POST", body: input });
   },
 
   updateStatus(id: string, status: OrderStatus) {

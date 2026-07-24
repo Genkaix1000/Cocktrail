@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Monitor, Plus, RotateCw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Monitor, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { ApiError } from "@/services/api-client";
 import {
   pdvService,
@@ -31,6 +31,15 @@ function deviceEstado(device: DeviceRow): "activo" | "historico" | "sin-caja" {
   return "sin-caja";
 }
 
+type PosnetEstadoFilter = "all" | ReturnType<typeof deviceEstado>;
+
+const POSNET_VIEWS: { id: PosnetEstadoFilter; label: string }[] = [
+  { id: "all", label: "Todos" },
+  { id: "activo", label: "Activos" },
+  { id: "historico", label: "Históricos" },
+  { id: "sin-caja", label: "Sin caja" },
+];
+
 export default function PdvSection() {
   const [cajas, setCajas] = useState<CajaRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
@@ -54,6 +63,10 @@ export default function PdvSection() {
   const [addingPosnet, setAddingPosnet] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ deviceId: string; label: string } | null>(null);
+
+  // Búsqueda + filtro de estado de la lista de Posnets
+  const [posnetSearch, setPosnetSearch] = useState("");
+  const [posnetEstado, setPosnetEstado] = useState<PosnetEstadoFilter>("all");
 
   // Acciones por fila de la lista única
   const [modePendingId, setModePendingId] = useState<string | null>(null);

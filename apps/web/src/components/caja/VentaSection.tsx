@@ -37,6 +37,7 @@ type Props = {
   drinks: Drink[];
   printer: {
     reprintTicket: (orderId: string) => Promise<void>;
+    printTicketData: (base64: string) => Promise<void>;
     printError: string | null;
     reprinting: boolean;
   };
@@ -410,7 +411,14 @@ export default function VentaSection({ drinks, printer }: Props) {
     startPosnetPayment,
     startQrPayment,
     stopPosnetRetry,
-  } = useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCart });
+  } = useCheckout({
+    cart,
+    cartEntries,
+    totalPrice,
+    totalItems,
+    clearCart,
+    printTicketData: printer.printTicketData,
+  });
 
   const { reprintTicket, printError, reprinting } = printer;
 

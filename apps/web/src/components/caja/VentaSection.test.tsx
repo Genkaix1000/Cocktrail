@@ -74,6 +74,7 @@ function makePosCreated(overrides: Partial<{ id: string; expiresAt: string }> = 
 
 const printer = {
   reprintTicket: vi.fn(),
+  printTicketData: vi.fn(),
   printError: null as string | null,
   reprinting: false,
 };

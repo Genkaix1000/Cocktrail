@@ -35,6 +35,17 @@ next-env.d.ts
 # datos de runtime / código muerto (ver docs/ROADMAP.md R4) — no versionar
 apps/api/src/data/*.json
 
+# certs locales mkcert (HTTPS LAN para WebUSB / impresora en tablet)
+apps/web/certs/
+
+# Android shell
+apps/caja-android/local.properties
+apps/caja-android/.gradle/
+apps/caja-android/**/build/
+apps/caja-android/*.iml
+apps/caja-android/.idea/
+
+
 # reporte de cobertura de tests (generado por vitest --coverage)
 coverage/
 

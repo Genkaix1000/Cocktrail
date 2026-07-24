@@ -21,7 +21,7 @@ async function openNightEvent() {
 }
 
 // Se crea sin cookie de sesión (createdBy = "Cliente") a propósito: el ticket se genera
-// igual, pero evita que OrdersService dispare printerService.printTicket (solo imprime
+// igual, pero evita que OrdersService dispare renderTicket (solo arma
 // para ventas de staff) — con la impresora física ya desconectada, ese write síncrono a
 // /dev/usb/lp* puede quedar colgado y trabar el test.
 async function createOrderWithTicket(drinkId: number) {

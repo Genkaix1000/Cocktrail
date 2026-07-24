@@ -27,9 +27,14 @@ function getLanIp() {
   );
 }
 
+const https = process.argv.includes("--https");
+const scheme = https ? "https" : "http";
 const lanIp = getLanIp();
 if (lanIp) {
-  console.log(`   LAN (para tablets/otros dispositivos): http://${lanIp}:3000`);
+  console.log(`   LAN (para tablets/otros dispositivos): ${scheme}://${lanIp}:3000`);
+  if (https) {
+    console.log("   (WebUSB/impresora: usá esta URL HTTPS + Chrome en la tablet de caja)");
+  }
 } else {
-  console.log("   No se detectó una IP LAN — solo va a andar http://localhost:3000 en esta máquina.");
+  console.log(`   No se detectó una IP LAN — solo va a andar ${scheme}://localhost:3000 en esta máquina.`);
 }

@@ -13,18 +13,8 @@ afterEach(() => {
 });
 
 describe("printerService", () => {
-  it("getStatus hace GET a /api/printer/status", async () => {
-    const expected = { connected: true, configured: true, message: "ok" };
-    mockedApiFetch.mockResolvedValueOnce(expected);
-
-    const result = await printerService.getStatus();
-
-    expect(mockedApiFetch).toHaveBeenCalledWith("/api/printer/status");
-    expect(result).toBe(expected);
-  });
-
   it("test hace POST a /api/printer/test", async () => {
-    mockedApiFetch.mockResolvedValueOnce({ success: true, message: "ok" });
+    mockedApiFetch.mockResolvedValueOnce({ success: true, message: "ok", data: "YQ==" });
 
     await printerService.test();
 
@@ -32,7 +22,7 @@ describe("printerService", () => {
   });
 
   it("reprint hace POST a /api/printer/reprint/:orderId", async () => {
-    mockedApiFetch.mockResolvedValueOnce({ success: true, message: "ok" });
+    mockedApiFetch.mockResolvedValueOnce({ success: true, message: "ok", data: "YQ==" });
 
     await printerService.reprint("order-1");
 

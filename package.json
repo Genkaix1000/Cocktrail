@@ -6,6 +6,8 @@
     "postinstall": "node supabase/generate-keys.mjs --demo --if-missing",
     "dev:api": "pnpm --filter cocktrail-api dev",
     "dev:web": "pnpm --filter cocktrail-app dev",
+    "dev:web:https": "pnpm --filter cocktrail-app dev:https",
+    "build:caja-apk": "bash apps/caja-android/build-apk.sh",
     "dev": "pnpm -r --parallel dev",
     "build:api": "pnpm --filter cocktrail-api build",
     "build:web": "pnpm --filter cocktrail-app build",

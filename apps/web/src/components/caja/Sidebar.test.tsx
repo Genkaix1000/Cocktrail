@@ -45,6 +45,7 @@ const baseProps = {
   setCloseModalOpen: vi.fn(),
   printerStatus: { connected: true, message: "ok" },
   testPrint: vi.fn(),
+  pairPrinterDevice: vi.fn(),
   printerTestMessage: null as string | null,
   posnetLevel: "ok" as const,
   posnetMessage: "Posnet de la caja listo para cobrar (modo PDV).",
@@ -148,29 +149,34 @@ describe("CajaSidebar", () => {
     expect(setMobileMenuOpen).toHaveBeenCalledWith(false);
   });
 
-  it("muestra el estado de impresora conectada y permite testear la impresión", async () => {
+  it("muestra el estado de impresora vinculada y permite testear la impresión", async () => {
     const user = userEvent.setup();
     const testPrint = vi.fn();
 
     render(<CajaSidebar {...baseProps} testPrint={testPrint} />);
 
-    expect(screen.getByText("Impresora conectada")).toBeInTheDocument();
+    expect(screen.getByText("Impresora vinculada")).toBeInTheDocument();
 
     await user.click(screen.getByText("Imprimir ticket de prueba"));
     expect(testPrint).toHaveBeenCalled();
   });
 
-  it("muestra el estado de impresora no encontrada y el mensaje de test", () => {
+  it("muestra Vincular impresora cuando no hay vínculo y el mensaje de test", async () => {
+    const user = userEvent.setup();
+    const pairPrinterDevice = vi.fn();
     render(
       <CajaSidebar
         {...baseProps}
         printerStatus={{ connected: false, message: "sin conexión" }}
+        pairPrinterDevice={pairPrinterDevice}
         printerTestMessage="Error al imprimir la prueba."
       />,
     );
 
-    expect(screen.getByText("Impresora no encontrada")).toBeInTheDocument();
+    expect(screen.getByText("Impresora no vinculada")).toBeInTheDocument();
     expect(screen.getByText("Error al imprimir la prueba.")).toBeInTheDocument();
+    await user.click(screen.getByText("Vincular impresora"));
+    expect(pairPrinterDevice).toHaveBeenCalled();
   });
 
   it("muestra Cerrar sesión en el rail GENERAL", () => {

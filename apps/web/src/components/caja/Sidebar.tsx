@@ -39,6 +39,7 @@ type Props = {
   setCloseModalOpen: (open: boolean) => void;
   printerStatus: { connected: boolean; message: string } | null;
   testPrint: () => void | Promise<void>;
+  pairPrinterDevice: () => void | Promise<void>;
   printerTestMessage: string | null;
   posnetLevel: PosnetLevel;
   posnetMessage: string | null;
@@ -91,6 +92,7 @@ export default function CajaSidebar({
   setCloseModalOpen,
   printerStatus,
   testPrint,
+  pairPrinterDevice,
   printerTestMessage,
   posnetLevel,
   posnetMessage,
@@ -260,12 +262,12 @@ export default function CajaSidebar({
               <div className="flex flex-col gap-2 items-center">
                 <button
                   type="button"
-                  onClick={testPrint}
+                  onClick={printerStatus?.connected ? testPrint : pairPrinterDevice}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative ${deviceChip(printerLevel)}`}
                   title={
                     printerStatus?.connected
-                      ? "Impresora conectada. Click para test."
-                      : "Impresora no encontrada. Click para test."
+                      ? "Impresora vinculada. Click para test."
+                      : "Sin impresora. Click para vincular."
                   }
                 >
                   <Printer size={16} />
@@ -286,11 +288,17 @@ export default function CajaSidebar({
                     className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(printerLevel)}`}
                   >
                     <Printer size={13} />
-                    {printerStatus?.connected ? "Impresora conectada" : "Impresora no encontrada"}
+                    {printerStatus?.connected ? "Impresora vinculada" : "Impresora no vinculada"}
                   </span>
-                  <button type="button" onClick={testPrint} className={`${secondaryBtn} mt-2`}>
-                    Imprimir ticket de prueba
-                  </button>
+                  {printerStatus?.connected ? (
+                    <button type="button" onClick={testPrint} className={`${secondaryBtn} mt-2`}>
+                      Imprimir ticket de prueba
+                    </button>
+                  ) : (
+                    <button type="button" onClick={pairPrinterDevice} className={`${secondaryBtn} mt-2`}>
+                      Vincular impresora
+                    </button>
+                  )}
                   {printerTestMessage && (
                     <p className="text-[10px] text-[var(--text-tertiary)] mt-1.5 text-center">
                       {printerTestMessage}

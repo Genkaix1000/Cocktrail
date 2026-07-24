@@ -2,25 +2,33 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays,
-  RefreshCw,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  Tag,
-  Wine,
-  User,
-  CreditCard,
-  DollarSign,
   ArrowLeft,
   ArrowRight,
-  X,
+  CalendarDays,
+  Filter,
+  RefreshCw,
+  Search,
 } from "lucide-react";
 
 import { ordersService } from "@/services/orders.service";
-import { formatHm } from "@/lib/utils";
+import Toast from "@/components/shared/Toast";
+import LogsTable, {
+  type LogsColumnFilters,
+  type LogsSortField,
+  type SortDirection,
+} from "./LogsTable";
+import {
+  type LogsColId,
+  LOGS_COLS_DEFAULT,
+  LOGS_COLS_REQUIRED,
+  itemsLabel,
+  loadLogsCols,
+  orderLogsCols,
+  paymentLabel,
+  saveLogsCols,
+} from "./logsCrud";
 
-import type { Order } from "@cocktrail/shared";
+import type { Order, OrderStatus } from "@cocktrail/shared";
 
 type Props = {
   // Puente Historial → Logs: cuando el usuario entra acá desde el botón "Ver
@@ -41,9 +49,7 @@ const MONTH_NAMES = [
 
 const formatMonthYear = (ts: number) => {
   const d = new Date(ts);
-  const month = MONTH_NAMES[d.getMonth()];
-  const year = d.getFullYear();
-  return `${month} ${year}`;
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
 };
 
 const formatDayMonth = (ts: number) => {
@@ -51,16 +57,6 @@ const formatDayMonth = (ts: number) => {
   const day = String(d.getDate()).padStart(2, "0");
   const month = String(d.getMonth() + 1).padStart(2, "0");
   return `${day}/${month}`;
-};
-
-const formatDateHourDetailed = (ts: number) => {
-  const d = new Date(ts);
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear();
-  const hr = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${day}/${month}/${year} - ${hr}:${min} hs`;
 };
 
 function getPaginationRange(currentPage: number, totalPages: number): (number | string)[] {
@@ -97,27 +93,49 @@ function getPaginationRange(currentPage: number, totalPages: number): (number | 
 
 const logItemsPerPage = 10;
 
+type ViewFilter = "all" | OrderStatus;
+
+const VIEWS: { id: ViewFilter; label: string }[] = [
+  { id: "all", label: "Todos" },
+  { id: "pendiente", label: "Pendientes" },
+  { id: "entregado", label: "Entregados" },
+  { id: "cancelado", label: "Cancelados" },
+];
+
+const EMPTY_COL_FILTERS: LogsColumnFilters = {
+  ticket: "",
+  items: "",
+  creator: "",
+  method: "all",
+  totalMin: "",
+  totalMax: "",
+  status: "all",
+  delivery: "",
+  token: "",
+};
+
 /**
- * Vista "Auditoría de Tickets" del panel admin — extraída de AdminClient.tsx
- * sin cambios de comportamiento. A diferencia de Historial (que depende de
- * datos que también usan Monitoreo/Estadísticas), acá el fetch de
- * `ordersService.getAuditLogs` es exclusivo de esta vista, así que se movió
- * completo (estado + fetch + filtros/orden/paginación + cancelación de
- * tickets).
+ * Vista "Auditoría de Tickets" del panel admin. Todo el detalle del ticket
+ * (token, estado, entrega, cancelación) vive en columnas de la tabla — no hay
+ * popup — y cancelar es una acción de fila como el borrado en Carta/Staff.
  */
 export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko }: Props) {
   const [auditLogs, setAuditLogs] = useState<Order[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [logsLoaded, setLogsLoaded] = useState(false);
   const [viewAllNights, setViewAllNights] = useState(initialFilterTimestamp != null);
-  const [selectedLogOrder, setSelectedLogOrder] = useState<Order | null>(null);
-  const [cancelConfirmText, setCancelConfirmText] = useState("");
-  const [showCancelInput, setShowCancelInput] = useState(false);
+  const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<LogsColumnFilters>(EMPTY_COL_FILTERS);
+  const [visibleCols, setVisibleCols] = useState<LogsColId[]>(LOGS_COLS_DEFAULT);
 
   useEffect(() => {
-    setShowCancelInput(false);
-    setCancelConfirmText("");
-  }, [selectedLogOrder]);
+    setVisibleCols(loadLogsCols());
+  }, []);
 
   // Filtering & sorting state — si venimos de un redirect de Historial, el
   // mes/día arrancan precargados con la noche elegida.
@@ -129,8 +147,8 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
   );
   const [currentLogPage, setCurrentLogPage] = useState(1);
 
-  const [logSortField, setLogSortField] = useState<"time" | "ticket" | "creator" | "method" | "total">("time");
-  const [logSortDirection, setLogSortDirection] = useState<"desc" | "asc">("desc");
+  const [logSortField, setLogSortField] = useState<LogsSortField>("time");
+  const [logSortDirection, setLogSortDirection] = useState<SortDirection>("desc");
 
   const fetchLogs = useCallback(async (all: boolean = false) => {
     setLoadingLogs(true);
@@ -223,10 +241,10 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
     }
   }, [logDays, selectedLogMonth, selectedLogDay]);
 
-  // Reset page when day or month changes
+  // Reset page when day, month or any filter changes
   useEffect(() => {
     setCurrentLogPage(1);
-  }, [selectedLogDay, selectedLogMonth]);
+  }, [selectedLogDay, selectedLogMonth, search, viewFilter, columnFilters]);
 
   // Raw logs for current selected month and day
   const currentDayLogs = useMemo(() => {
@@ -234,36 +252,88 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
     return groupedLogData[selectedLogMonth][selectedLogDay] || [];
   }, [groupedLogData, selectedLogMonth, selectedLogDay]);
 
-  // Sorted logs
-  const sortedLogs = useMemo(() => {
-    const sorted = [...currentDayLogs];
-    sorted.sort((a, b) => {
-      let valA: string | number = "";
-      let valB: string | number = "";
+  const setFiltersOpenSafe = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
+    setFiltersOpen((prev) => {
+      const next = typeof open === "function" ? open(prev) : open;
+      if (!next) setColumnFilters(EMPTY_COL_FILTERS);
+      return next;
+    });
+  }, []);
 
-      if (logSortField === "time") {
-        valA = a.createdAt;
-        valB = b.createdAt;
-      } else if (logSortField === "ticket") {
-        valA = a.displayNumber;
-        valB = b.displayNumber;
-      } else if (logSortField === "creator") {
-        valA = (a.createdBy || "Cliente").toLowerCase();
-        valB = (b.createdBy || "Cliente").toLowerCase();
-      } else if (logSortField === "method") {
-        valA = (a.paymentMethod === "efectivo" ? "Efectivo" : "Posnet").toLowerCase();
-        valB = (b.paymentMethod === "efectivo" ? "Efectivo" : "Posnet").toLowerCase();
-      } else if (logSortField === "total") {
-        valA = a.total;
-        valB = b.total;
+  const filteredLogs = useMemo(() => {
+    let list = currentDayLogs;
+
+    if (viewFilter !== "all") list = list.filter((o) => o.status === viewFilter);
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((o) =>
+        [
+          `#${o.displayNumber}`,
+          String(o.displayNumber),
+          o.token,
+          itemsLabel(o),
+          o.createdBy || "Cliente",
+          o.deliveredBy ?? "",
+          o.deliveredByBar ?? "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+
+    if (filtersOpen) {
+      const cf = columnFilters;
+      if (cf.ticket.trim()) {
+        const q = cf.ticket.replace("#", "").trim();
+        list = list.filter((o) => String(o.displayNumber).includes(q));
       }
+      if (cf.items.trim()) {
+        const q = cf.items.toLowerCase();
+        list = list.filter((o) => itemsLabel(o).toLowerCase().includes(q));
+      }
+      if (cf.creator.trim()) {
+        const q = cf.creator.toLowerCase();
+        list = list.filter((o) => (o.createdBy || "Cliente").toLowerCase().includes(q));
+      }
+      if (cf.method !== "all") list = list.filter((o) => o.paymentMethod === cf.method);
+      if (cf.status !== "all") list = list.filter((o) => o.status === cf.status);
+      const min = Number(cf.totalMin);
+      if (cf.totalMin.trim() && !Number.isNaN(min)) list = list.filter((o) => o.total >= min);
+      const max = Number(cf.totalMax);
+      if (cf.totalMax.trim() && !Number.isNaN(max)) list = list.filter((o) => o.total <= max);
+      if (cf.delivery.trim()) {
+        const q = cf.delivery.toLowerCase();
+        list = list.filter((o) =>
+          `${o.deliveredByBar ?? ""} ${o.deliveredBy ?? ""}`.toLowerCase().includes(q),
+        );
+      }
+      if (cf.token.trim()) {
+        const q = cf.token.toLowerCase();
+        list = list.filter((o) => o.token.toLowerCase().includes(q));
+      }
+    }
 
+    return list;
+  }, [currentDayLogs, viewFilter, search, filtersOpen, columnFilters]);
+
+  const sortedLogs = useMemo(() => {
+    const value = (o: Order): string | number => {
+      if (logSortField === "time") return o.createdAt;
+      if (logSortField === "ticket") return o.displayNumber;
+      if (logSortField === "creator") return (o.createdBy || "Cliente").toLowerCase();
+      if (logSortField === "method") return paymentLabel(o.paymentMethod).toLowerCase();
+      return o.total;
+    };
+    return [...filteredLogs].sort((a, b) => {
+      const valA = value(a);
+      const valB = value(b);
       if (valA < valB) return logSortDirection === "asc" ? -1 : 1;
       if (valA > valB) return logSortDirection === "asc" ? 1 : -1;
       return 0;
     });
-    return sorted;
-  }, [currentDayLogs, logSortField, logSortDirection]);
+  }, [filteredLogs, logSortField, logSortDirection]);
 
   const totalLogPages = Math.ceil(sortedLogs.length / logItemsPerPage);
 
@@ -276,7 +346,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
     return getPaginationRange(currentLogPage, totalLogPages);
   }, [currentLogPage, totalLogPages]);
 
-  const handleSort = (field: typeof logSortField) => {
+  const handleSort = (field: LogsSortField) => {
     if (logSortField === field) {
       setLogSortDirection((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -286,23 +356,27 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
     setCurrentLogPage(1);
   };
 
-  const handleCancelTicket = async () => {
-    if (!selectedLogOrder) return;
-    try {
-      const updated = await ordersService.updateStatus(selectedLogOrder.id, "cancelado");
-      setAuditLogs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
-      setSelectedLogOrder(updated);
-      setShowCancelInput(false);
-      setCancelConfirmText("");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al cancelar el ticket");
-    }
-  };
+  const toggleCol = useCallback((col: LogsColId) => {
+    if (LOGS_COLS_REQUIRED.includes(col)) return;
+    setVisibleCols((prev) => {
+      const next = orderLogsCols(
+        prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col],
+      );
+      saveLogsCols(next);
+      return next;
+    });
+  }, []);
 
-  const thActive = "bg-[var(--accent-surface)] text-[var(--accent-text)] font-semibold";
-  const thIdle = "text-[var(--text-secondary)]";
-  const cellActive = "text-[var(--accent-text)] font-semibold";
-  const cellIdle = "text-[var(--text-secondary)]";
+  const handleCancelTicket = useCallback(async (order: Order) => {
+    setConfirmingCancelId(null);
+    try {
+      const updated = await ordersService.updateStatus(order.id, "cancelado");
+      setAuditLogs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    } catch (err) {
+      console.error("Error cancelling ticket:", err);
+      setError(err instanceof Error ? err.message : "Error al cancelar el ticket");
+    }
+  }, []);
 
   return (
     <div key="logs" className="flex flex-col gap-8 w-full animate-dashboard-in">
@@ -405,381 +479,129 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          {paginatedLogs.length === 0 ? (
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-10 text-center text-[var(--text-tertiary)] text-sm shadow-card">
-              No hay tickets para mostrar en este día
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {VIEWS.map((v) => {
+                const active = viewFilter === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setViewFilter(v.id)}
+                    className={`h-10 px-4 rounded-full text-[13px] font-semibold transition-all cursor-pointer ${
+                      active
+                        ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)] border border-transparent"
+                        : "bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                title="Filtros de columna"
+                aria-label="Filtros de columna"
+                aria-pressed={filtersOpen}
+                onClick={() => setFiltersOpenSafe((o) => !o)}
+                className={`w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer transition-colors ${
+                  filtersOpen
+                    ? "bg-[var(--accent-surface)] border-transparent text-[var(--accent-text)]"
+                    : "bg-[var(--bg-surface)] border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
+                }`}
+              >
+                <Filter size={15} />
+              </button>
             </div>
-          ) : (
-            <>
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden shadow-card">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-[var(--bg-panel)] border-b border-[var(--border-subtle)] text-[12px] font-semibold select-none">
-                        {(
-                          [
-                            ["time", Clock, "Hora"],
-                            ["ticket", Tag, "Ticket"],
-                          ] as const
-                        ).map(([field, Icon, label]) => (
-                          <th
-                            key={field}
-                            onClick={() => handleSort(field)}
-                            className={`py-3.5 px-5 cursor-pointer hover:bg-[var(--bg-app)] transition-colors ${
-                              logSortField === field ? thActive : thIdle
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <Icon size={13} strokeWidth={1.8} />
-                              <span>{label}</span>
-                              <span className={`transition-all ${logSortField === field ? "opacity-100" : "opacity-0"}`}>
-                                {logSortField === field && logSortDirection === "desc" ? (
-                                  <ChevronDown size={14} />
-                                ) : (
-                                  <ChevronUp size={14} />
-                                )}
-                              </span>
-                            </div>
-                          </th>
-                        ))}
-                        <th className="py-3.5 px-5 text-[var(--text-secondary)] font-semibold">
-                          <div className="flex items-center gap-1.5">
-                            <Wine size={13} strokeWidth={1.8} />
-                            <span>Detalle</span>
-                          </div>
-                        </th>
-                        {(
-                          [
-                            ["creator", User, "Creador"],
-                            ["method", CreditCard, "Medio de Pago"],
-                            ["total", DollarSign, "Total"],
-                          ] as const
-                        ).map(([field, Icon, label]) => (
-                          <th
-                            key={field}
-                            onClick={() => handleSort(field)}
-                            className={`py-3.5 px-5 cursor-pointer hover:bg-[var(--bg-app)] transition-colors ${
-                              logSortField === field ? thActive : thIdle
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <Icon size={13} strokeWidth={1.8} />
-                              <span>{label}</span>
-                              <span className={`transition-all ${logSortField === field ? "opacity-100" : "opacity-0"}`}>
-                                {logSortField === field && logSortDirection === "desc" ? (
-                                  <ChevronDown size={14} />
-                                ) : (
-                                  <ChevronUp size={14} />
-                                )}
-                              </span>
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border-subtle)]">
-                      {paginatedLogs.map((log) => {
-                        const isCancelled = log.status === "cancelado";
-                        return (
-                          <tr
-                            key={log.id}
-                            onClick={() => setSelectedLogOrder(log)}
-                            className={`hover:bg-[var(--bg-panel)] transition-colors cursor-pointer text-[13px] ${
-                              isCancelled ? "opacity-55 line-through decoration-[var(--text-tertiary)]" : ""
-                            }`}
-                          >
-                            <td
-                              className={`py-3 px-5 font-mono text-[12.5px] tabular ${
-                                logSortField === "time" ? cellActive : cellIdle
-                              }`}
-                            >
-                              {formatHm(log.createdAt)} hs
-                            </td>
-                            <td className="py-3 px-5">
-                              <span
-                                className={`w-12 h-9 flex items-center justify-center rounded-xl border font-mono font-bold text-[13px] shrink-0 ${
-                                  logSortField === "ticket"
-                                    ? "text-[var(--accent-text)] border-[var(--accent-line)] bg-[var(--accent-surface)]"
-                                    : "text-[var(--text-primary)] border-[var(--border-subtle)] bg-[var(--bg-panel)]"
-                                }`}
-                              >
-                                #{log.displayNumber}
-                              </span>
-                            </td>
-                            <td className="py-3 px-5 max-w-[200px] sm:max-w-[300px]">
-                              <span
-                                className="text-[12px] text-[var(--text-primary)] truncate font-medium block"
-                                title={log.items.map((it) => `${it.qty}x ${it.name}`).join(", ")}
-                              >
-                                {log.items.map((it) => `${it.qty}x ${it.name}`).join(", ")}
-                              </span>
-                            </td>
-                            <td className="py-3 px-5">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                                  logSortField === "creator"
-                                    ? "bg-[var(--accent-surface)] text-[var(--accent-text)] border-[var(--accent-line)]"
-                                    : "bg-[var(--bg-panel)] text-[var(--text-secondary)] border-[var(--border-subtle)]"
-                                }`}
-                              >
-                                <User size={11} strokeWidth={1.8} />
-                                <span>{log.createdBy || "Cliente"}</span>
-                              </span>
-                            </td>
-                            <td
-                              className={`py-3 px-5 ${
-                                logSortField === "method" ? cellActive : "text-[var(--text-secondary)]"
-                              }`}
-                            >
-                              {log.paymentMethod === "efectivo"
-                                ? "Efectivo"
-                                : log.paymentMethod === "debito"
-                                  ? "Posnet"
-                                  : log.paymentMethod === "qr"
-                                    ? "QR"
-                                    : log.paymentMethod}
-                            </td>
-                            <td
-                              className={`py-3 px-5 font-mono font-bold tabular ${
-                                logSortField === "total" ? cellActive : "text-[var(--text-primary)]"
-                              }`}
-                            >
-                              ${log.total.toLocaleString("es-AR")}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
 
-              {totalLogPages > 1 && (
-                <div className="flex items-center justify-center gap-1.5 pt-2">
+            <div className="flex-1 min-w-[180px] flex items-center h-10 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] overflow-hidden focus-within:border-[var(--accent-primary)]">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por ticket, trago, creador o token…"
+                className="flex-1 h-full pl-4 pr-2 bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
+              />
+              <span className="w-10 h-10 flex items-center justify-center text-[var(--accent-primary)] shrink-0">
+                <Search size={15} />
+              </span>
+            </div>
+          </div>
+
+          <LogsTable
+            orders={paginatedLogs}
+            hasActiveSearch={Boolean(search.trim()) || viewFilter !== "all"}
+            sortField={logSortField}
+            sortDirection={logSortDirection}
+            visibleCols={visibleCols}
+            filtersOpen={filtersOpen}
+            columnFilters={columnFilters}
+            confirmingCancelId={confirmingCancelId}
+            onSort={handleSort}
+            onToggleCol={toggleCol}
+            onColumnFiltersChange={(patch) => setColumnFilters((prev) => ({ ...prev, ...patch }))}
+            onAskCancel={(o) => setConfirmingCancelId(o.id)}
+            onDismissCancel={() => setConfirmingCancelId(null)}
+            onConfirmCancel={handleCancelTicket}
+          />
+
+          {totalLogPages > 1 && (
+            <div className="flex items-center justify-center gap-1.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setCurrentLogPage((p) => Math.max(1, p - 1))}
+                disabled={currentLogPage === 1}
+                aria-label="Página anterior"
+                className="w-9 h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ArrowLeft size={14} />
+              </button>
+
+              {logPaginationRange.map((page, idx) => {
+                if (page === "...") {
+                  return (
+                    <span
+                      key={`gap-${idx}`}
+                      className="w-9 h-9 flex items-center justify-center text-[var(--text-tertiary)] font-mono"
+                    >
+                      ...
+                    </span>
+                  );
+                }
+                return (
                   <button
+                    key={page}
                     type="button"
-                    onClick={() => setCurrentLogPage((p) => Math.max(1, p - 1))}
-                    disabled={currentLogPage === 1}
-                    aria-label="Página anterior"
-                    className="w-9 h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                    onClick={() => setCurrentLogPage(Number(page))}
+                    aria-current={currentLogPage === page ? "page" : undefined}
+                    className={`w-9 h-9 rounded-xl border font-mono text-xs transition-all cursor-pointer ${
+                      currentLogPage === page
+                        ? "bg-[var(--accent-surface)] text-[var(--accent-text)] border-[var(--accent-line)] font-bold"
+                        : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
+                    }`}
                   >
-                    <ArrowLeft size={14} />
+                    {page}
                   </button>
+                );
+              })}
 
-                  {logPaginationRange.map((page, idx) => {
-                    if (page === "...") {
-                      return (
-                        <span
-                          key={`gap-${idx}`}
-                          className="w-9 h-9 flex items-center justify-center text-[var(--text-tertiary)] font-mono"
-                        >
-                          ...
-                        </span>
-                      );
-                    }
-                    return (
-                      <button
-                        key={page}
-                        type="button"
-                        onClick={() => setCurrentLogPage(Number(page))}
-                        aria-current={currentLogPage === page ? "page" : undefined}
-                        className={`w-9 h-9 rounded-xl border font-mono text-xs transition-all cursor-pointer ${
-                          currentLogPage === page
-                            ? "bg-[var(--accent-surface)] text-[var(--accent-text)] border-[var(--accent-line)] font-bold"
-                            : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    );
-                  })}
-
-                  <button
-                    type="button"
-                    onClick={() => setCurrentLogPage((p) => Math.min(totalLogPages, p + 1))}
-                    disabled={currentLogPage === totalLogPages}
-                    aria-label="Página siguiente"
-                    className="w-9 h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-              )}
-            </>
+              <button
+                type="button"
+                onClick={() => setCurrentLogPage((p) => Math.min(totalLogPages, p + 1))}
+                disabled={currentLogPage === totalLogPages}
+                aria-label="Página siguiente"
+                className="w-9 h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ArrowRight size={14} />
+              </button>
+            </div>
           )}
         </div>
       )}
 
-      {selectedLogOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full max-w-sm rounded-[20px] p-6 shadow-card animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4 pb-3 border-b border-[var(--border-subtle)]">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Tag size={16} className="text-[var(--accent-primary)]" strokeWidth={1.8} />
-                  <h3 className="font-mono text-lg font-bold text-[var(--text-primary)]">
-                    Ticket #{selectedLogOrder.displayNumber}
-                  </h3>
-                </div>
-                <p className="font-mono text-[10px] text-[var(--text-tertiary)] select-all mt-0.5">
-                  {selectedLogOrder.token}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedLogOrder(null)}
-                aria-label="Cerrar detalle del ticket"
-                className="p-2.5 bg-[var(--bg-panel)] rounded-full active:scale-90 transition-transform cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3 py-2 max-h-[35vh] overflow-y-auto">
-              {selectedLogOrder.items.map((item) => (
-                <div key={item.drinkId} className="flex justify-between items-start text-sm">
-                  <div className="flex gap-2 min-w-0">
-                    <Wine size={14} className="text-[var(--text-tertiary)] mt-0.5 shrink-0" strokeWidth={1.8} />
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-semibold text-[var(--text-primary)] truncate">{item.name}</span>
-                      <span className="text-xs text-[var(--text-tertiary)] font-mono tabular">
-                        {item.qty} x ${item.unitPrice.toLocaleString("es-AR")}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="font-mono font-bold text-[var(--text-secondary)] tabular">
-                    ${item.subtotal.toLocaleString("es-AR")}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-col gap-2 font-mono text-xs">
-              <div className="flex justify-between text-[var(--text-secondary)]">
-                <div className="flex items-center gap-1.5">
-                  <User size={13} />
-                  <span>Creado por</span>
-                </div>
-                <span className="font-bold text-[var(--text-primary)]">{selectedLogOrder.createdBy || "Cliente"}</span>
-              </div>
-              <div className="flex justify-between text-[var(--text-secondary)]">
-                <div className="flex items-center gap-1.5">
-                  {selectedLogOrder.paymentMethod === "efectivo" ? (
-                    <DollarSign size={13} className="text-[var(--success-base)]" />
-                  ) : (
-                    <CreditCard size={13} className="text-[var(--accent-primary)]" />
-                  )}
-                  <span>Medio de pago</span>
-                </div>
-                <span className="font-bold text-[var(--text-primary)]">
-                  {selectedLogOrder.paymentMethod === "efectivo"
-                    ? "Efectivo"
-                    : selectedLogOrder.paymentMethod === "debito"
-                      ? "Posnet"
-                      : selectedLogOrder.paymentMethod === "qr"
-                        ? "QR"
-                        : selectedLogOrder.paymentMethod}
-                </span>
-              </div>
-              <div className="flex justify-between text-[var(--text-secondary)]">
-                <div className="flex items-center gap-1.5">
-                  <Clock size={13} />
-                  <span>Creación</span>
-                </div>
-                <span>{formatDateHourDetailed(selectedLogOrder.createdAt)}</span>
-              </div>
-
-              {selectedLogOrder.status === "entregado" && (
-                <div className="p-2.5 rounded-xl bg-[var(--success-soft)] text-[var(--success-base)] mt-2 flex flex-col gap-1">
-                  <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Entrega</span>
-                  {selectedLogOrder.deliveredByBar && (
-                    <span className="text-[10px]">Barra: {selectedLogOrder.deliveredByBar}</span>
-                  )}
-                  {selectedLogOrder.deliveredBy && (
-                    <span className="text-[10px]">Operador: {selectedLogOrder.deliveredBy}</span>
-                  )}
-                  {selectedLogOrder.redeemMethod && (
-                    <span className="text-[10px] capitalize">
-                      Método: {selectedLogOrder.redeemMethod === "manual" ? "Manual" : "Escaneo QR"}
-                    </span>
-                  )}
-                  {selectedLogOrder.deliveredAt && (
-                    <span className="text-[10px]">
-                      Hora: {new Date(selectedLogOrder.deliveredAt).toLocaleString("es-AR")}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {selectedLogOrder.status === "cancelado" && (
-                <div className="p-2.5 rounded-xl bg-[var(--danger-soft)] text-[var(--danger-base)] mt-2 flex flex-col gap-1">
-                  <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Cancelación</span>
-                  <span className="text-[10px]">Cancelado por: {selectedLogOrder.cancelledBy || "sistema"}</span>
-                  {selectedLogOrder.cancelledAt && (
-                    <span className="text-[10px]">
-                      Hora: {new Date(selectedLogOrder.cancelledAt).toLocaleString("es-AR")}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <div className="flex justify-between text-base font-bold text-[var(--text-primary)] pt-2 border-t border-[var(--border-subtle)] pb-2">
-                <div className="flex items-center gap-1.5">
-                  <Tag size={15} className="text-[var(--accent-primary)]" />
-                  <span>TOTAL</span>
-                </div>
-                <span className="text-[var(--accent-text)] tabular">
-                  ${selectedLogOrder.total.toLocaleString("es-AR")}
-                </span>
-              </div>
-
-              {selectedLogOrder.status !== "cancelado" &&
-                selectedLogOrder.status !== "entregado" &&
-                (!showCancelInput ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowCancelInput(true)}
-                    className="w-full mt-2 h-11 bg-[var(--danger-soft)] hover:brightness-95 border border-transparent text-[var(--danger-base)] font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <X size={14} strokeWidth={2.5} />
-                    Cancelar Ticket
-                  </button>
-                ) : (
-                  <div className="mt-3 p-3.5 bg-[var(--danger-soft)]/40 border border-[var(--danger-base)]/20 rounded-xl space-y-2.5 animate-in slide-in-from-top-2 duration-200 text-left">
-                    <label className="text-[10px] font-bold text-[var(--danger-base)] uppercase tracking-wider block">
-                      Escribí exactamente &quot;cancelar&quot; para confirmar:
-                    </label>
-                    <input
-                      type="text"
-                      value={cancelConfirmText}
-                      onChange={(e) => setCancelConfirmText(e.target.value)}
-                      placeholder="Escribir aquí..."
-                      className="w-full h-10 px-3 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--danger-base)] transition-all font-mono"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCancelInput(false);
-                          setCancelConfirmText("");
-                        }}
-                        className="flex-1 h-9 bg-[var(--bg-panel)] hover:bg-[var(--bg-app)] text-[var(--text-secondary)] rounded-lg text-xs font-semibold cursor-pointer"
-                      >
-                        Atrás
-                      </button>
-                      <button
-                        type="button"
-                        disabled={cancelConfirmText !== "cancelar"}
-                        onClick={handleCancelTicket}
-                        className="flex-1 h-9 bg-[var(--danger-base)] text-white rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        Confirmar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
+      {error && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="error" message={error} onClose={() => setError(null)} />
         </div>
       )}
     </div>
