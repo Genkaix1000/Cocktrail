@@ -17,7 +17,16 @@ vi.mock("@/lib/useSSE", () => ({
 }));
 
 vi.mock("@/components/ThemeProvider", () => ({
-  useTheme: () => ({ theme: "bosko" }),
+  useTheme: () => ({
+    theme: "bosko",
+    isDark: true,
+    toggleDark: vi.fn(),
+    useLogoUrl: true,
+    logoUrl: "/bosko.webp",
+    logoSize: 56,
+    textLogoValue: "Bosko",
+    textLogoSize: 26,
+  }),
   useThemeSafe: () => null,
 }));
 

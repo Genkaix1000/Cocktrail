@@ -100,6 +100,15 @@ Plan: [`plans/06-empaquetado/2026-07-13-empaquetado-windows-design.md`](../plans
 | [`dashboard-sin-noche-abierta.md`](./features/dashboard-sin-noche-abierta.md) | `done` | Sin noche abierta el Dashboard muestra la última noche cerrada + fix de la torta de canales |
 | [`export-pdf-historial.md`](./features/export-pdf-historial.md) | `done` | Reemplazar el export CSV por un PDF con `@react-pdf/renderer` |
 | [`acceso-admin-sin-noche.md`](./features/acceso-admin-sin-noche.md) | `done` | Entrar a `/admin` sin noche activa (hoy el gate "Abrir Noche" tapa todo el panel) |
+| [`refactor-ui-bosko/`](./features/refactor-ui-bosko/) | `draft` | Refactor visual skin Bosko (light/dark, tokens, bento); admin shell primero |
+
+Design system: [`docs/design/`](../design/README.md) —
+[`design.md`](../design/design.md),
+referencias [light](../design/reference/bosko-light.png) /
+[dark](../design/reference/bosko-dark.png).
+
+Specs Bosko: [`refactor-ui-bosko.md`](./features/refactor-ui-bosko/refactor-ui-bosko.md) (overview) ·
+[`admin-dashboard.md`](./features/refactor-ui-bosko/admin-dashboard.md) (topbar + sidebar + night CTA).
 
 Planes: [`plans/features/`](../plans/features/) —
 [`useSSE`](../plans/features/2026-07-05-usesse-centralizado-design.md),
