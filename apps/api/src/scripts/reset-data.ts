@@ -18,6 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * `app_config`.
  */
 export const TABLES_TO_RESET = [
+  "orders",
   "mp_orders",
   "mp_webhook_events",
   "night_events",
