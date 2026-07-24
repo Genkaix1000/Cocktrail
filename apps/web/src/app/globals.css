@@ -441,3 +441,39 @@ body {
   background: var(--accent-primary);
   color: var(--text-on-accent);
 }
+
+/* ──────────────────────────────────────────────────────────
+   Card entrance stagger (replaces GSAP .drink-card-anim)
+   ────────────────────────────────────────────────────────── */
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(15px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.drink-card-anim {
+  opacity: 0;
+  animation: cardEnter 0.45s ease-out forwards;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Shopping bag pulse (replaces GSAP bag pulse on totalItems change)
+   ────────────────────────────────────────────────────────── */
+@keyframes bagPulse {
+  0%   { transform: scale(0.95); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.bag-pulse {
+  animation: bagPulse 0.3s ease-out;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Ticket pop‑in (replaces GSAP elastic entrance on success)
+   ────────────────────────────────────────────────────────── */
+@keyframes ticketPop {
+  from { opacity: 0; transform: scale(0.92) translateY(15px); }
+  to   { opacity: 1; transform: scale(1)     translateY(0); }
+}
+.success-ticket-anim {
+  opacity: 0;
+  animation: ticketPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.05s forwards;
+}

@@ -166,10 +166,8 @@ describe("PdvSection", () => {
     render(<PdvSection />);
     await screen.findByRole("heading", { name: "Posnets" });
 
-    await user.selectOptions(
-      screen.getByLabelText("Posnet reportado por Mercado Pago"),
-      "PAX_A910__SMARTPOS1493600985",
-    );
+    await user.click(screen.getByLabelText("Posnet reportado por Mercado Pago"));
+    await user.click(screen.getByRole("option", { name: /PAX_A910__SMARTPOS1493600985/ }));
     await user.type(screen.getByLabelText("Alias del Posnet"), "Caja 1");
     await user.click(screen.getByRole("button", { name: /Agregar/i }));
 
@@ -314,10 +312,8 @@ describe("PdvSection", () => {
     render(<PdvSection />);
     await screen.findByRole("heading", { name: "Posnets" });
 
-    await user.selectOptions(
-      screen.getByLabelText("Posnet reportado por Mercado Pago"),
-      "PAX_A910__SMARTPOS1493600985",
-    );
+    await user.click(screen.getByLabelText("Posnet reportado por Mercado Pago"));
+    await user.click(screen.getByRole("option", { name: /PAX_A910__SMARTPOS1493600985/ }));
     await user.type(screen.getByLabelText("Alias del Posnet"), "Caja 1");
     await user.click(screen.getByRole("button", { name: /Agregar/i }));
 

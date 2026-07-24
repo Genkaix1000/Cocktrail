@@ -15,6 +15,7 @@ import Toast from "@/components/shared/Toast";
 import MpHealthPanel from "./MpHealthPanel";
 import PdvTable from "./PdvTable";
 import PdvFormPanel, { type PdvForm } from "./PdvFormPanel";
+import BoskoSelect from "@/components/shared/BoskoSelect";
 
 const SUPPORTED_BAR_CODE = process.env.NEXT_PUBLIC_BAR_CODE || "BARRA-01";
 
@@ -410,7 +411,7 @@ export default function PdvSection() {
     mpListing.token.userId !== mpListing.sellerUserId;
 
   return (
-    <div className="flex flex-col gap-8 max-w-5xl">
+    <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -533,24 +534,24 @@ export default function PdvSection() {
           </div>
         ) : (
           <div className="flex items-center gap-2.5 flex-wrap">
-            <select
+            <BoskoSelect
+              className="flex-1 min-w-[200px]"
               value={newDeviceId}
-              onChange={(e) => setNewDeviceId(e.target.value)}
+              onChange={setNewDeviceId}
               aria-label="Posnet reportado por Mercado Pago"
-              className="flex-1 min-w-[200px] h-10 px-3 bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-xl text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
-            >
-              <option value="">
-                {mpCandidates.length > 0
+              placeholder={
+                mpCandidates.length > 0
                   ? "Elegí un lector de tu cuenta…"
-                  : "Todos los lectores de la cuenta ya están registrados"}
-              </option>
-              {mpListing.devices.map((d) => (
-                <option key={d.id} value={d.id} disabled={d.registeredLocally}>
-                  {d.model} — {d.operatingMode ?? "modo desconocido"}
-                  {d.registeredLocally ? " — ya registrado" : ""} — {d.id}
-                </option>
-              ))}
-            </select>
+                  : "Todos los lectores de la cuenta ya están registrados"
+              }
+              disabled={mpCandidates.length === 0}
+              options={mpListing.devices.map((d) => ({
+                value: d.id,
+                label: `${d.model} — ${d.operatingMode ?? "modo desconocido"}`,
+                hint: d.registeredLocally ? `${d.id} · ya registrado` : d.id,
+                disabled: d.registeredLocally,
+              }))}
+            />
             <input
               type="text"
               value={newAlias}

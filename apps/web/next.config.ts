@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
     ];
   },
   experimental: {
-    optimizePackageImports: ["lucide-react", "@base-ui/react", "gsap"],
+    optimizePackageImports: ["lucide-react"],
   },
 };
 
