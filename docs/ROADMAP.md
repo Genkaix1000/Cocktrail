@@ -7,7 +7,7 @@
 > [`docs/specs/`](./specs/README.md), organizada por fase (`01-tickets-impresora/`,
 > `02-auditoria-api/`, …). Los planes técnicos correspondientes viven en `docs/plans/` con
 > las mismas subcarpetas. Cada sección de abajo linkea su carpeta y sus documentos.
-> Última actualización: 2026-07-23.
+> Última actualización: 2026-07-24.
 
 ---
 
@@ -24,7 +24,7 @@ Supabase Cloud** (PR 4 cerrado, gate físico en sus dos modos) y **el Posnet ya 
 - **`cobro-verificado`** ✅ `done` (2026-07-22) → [spec](./specs/mercadopago/cobro-verificado.md). Cerró R18/R19/R20/R27.
 - **PR 4** de la remediación MP ✅ done (2026-07-22, `db1e31d` + `00e6ac6`) → ver "Remediación". Cerró R21.
 - **Titularidad del Posnet** ✅ resuelta (2026-07-22): lector `PAX_A910__SMARTPOS1493600985` en la cuenta propia, colgado de "Barra VIP" (`COCKTRAILBAR01`), en modo PDV → ver "Remediación".
-- **`gestion-posnets`** ✅ `implementada` (2026-07-23, backend + PR 6 UI + frontend, typecheck/tests verdes) → [spec](./specs/mercadopago/gestion-posnets.md). Cerró R23/R25, mitigó R24, cubrió R22 (detección + reprovision). Gates físicos con el Posnet real pasados (T11 cobro desde la caja sin env, T14 modo PDV desde la app, T28 E2E, T29 swap con QR intacto + caja sin Posnet + salud verde). Hallazgo: la API de MP y el aparato físico se desalinean con un lag de minutos → el cobro sigue el hardware, por eso STANDALONE solo advierte, nunca bloquea.
+- **`gestion-posnets`** ✅ `implementada` (2026-07-23, backend + frontend + **PR 6 completo** de la remediación MP —D6 sesiones de caja + PDVs + docs, vía T19/T26—, typecheck/tests verdes) → [spec](./specs/mercadopago/gestion-posnets.md). Cerró R23/R25, mitigó R24, cubrió R22 (detección + reprovision). Gates físicos con el Posnet real pasados (T11 cobro desde la caja sin env, T14 modo PDV desde la app, T28 E2E, T29 swap con QR intacto + caja sin Posnet + salud verde). Hallazgo: la API de MP y el aparato físico se desalinean con un lag de minutos → el cobro sigue el hardware, por eso STANDALONE solo advierte, nunca bloquea.
 
 > ⚠️ **Aún sin verificación en vivo**: el cobro por QR (código OK vía polling, `MP_WEBHOOK_SECRET` vacía → R26).
 
@@ -270,7 +270,7 @@ Log de deuda encontrada durante la implementación:
 | 3 | Integridad del cobro: idempotencia real, timeouts, webhooks durables, constancia de ventas cobradas sin registrar | ✅ `e3f1a29` — **cerrado del todo**: gate físico pasado el 2026-07-22 (cobro real aprobado con el Posnet) |
 | 4 | **Invertir la dirección del token**: cobrar deja de depender de Supabase Cloud (D1). Cifrado de tokens, modelo single-seller (vincular reemplaza + Desvincular), validación server-side de barra/dispositivo | ✅ `db1e31d` + `00e6ac6` — **cerrado del todo el 2026-07-22**: gate físico pasado en sus dos modos (ver abajo) |
 | 5 | Conciliación: los cobros MP suben a la nube al cerrar la noche | ⏳ pendiente |
-| 6 | Sesiones de caja (que hoy se auto-bloquean) + cableado del CRUD de PDVs + docs | 🟡 parcial — cableado de PDVs y docs hechos vía `gestion-posnets` (T19/T26); **queda solo** el fix de sesiones de caja que se auto-bloquean |
+| 6 | Sesiones de caja (que se auto-bloqueaban) + cableado del CRUD de PDVs + docs | ✅ hecha del todo vía `gestion-posnets` (2026-07-23, T19/T26) — el "fix de sesiones que se auto-bloquean" ES el cambio de identidad D6, entregado dentro de T19: migración `20260724000100_bar_sessions_identity.sql` + identidad derivada de la cookie de sesión (`rol:username`), sin UUID por pestaña |
 
 > ✅ **PR 4 cerrado el 2026-07-22** (`db1e31d` + `00e6ac6`) — token invertido y **cifrado** en local
 > (Cloud solo metadata), single-seller por índice único (cierra R21), botón Desvincular, y **gate
