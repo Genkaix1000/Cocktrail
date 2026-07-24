@@ -361,6 +361,28 @@ describe("PdvSection", () => {
     expect(screen.queryByText("PAX_A910__SMARTPOS1493600985")).not.toBeInTheDocument();
   });
 
+  // ── G6: el nombre de la caja en la fila del Posnet sale de MP, no de un literal ──
+
+  it("la fila del Posnet muestra el nombre real de la sucursal de MP (G6)", async () => {
+    mockedPdvService.listCajas.mockResolvedValue([{ ...CAJA, storeName: "Sucursal Centro" }]);
+    mockedPdvService.listDevices.mockResolvedValue([
+      { ...DEVICE, cajaId: "caja-1", isActive: true },
+    ]);
+
+    render(<PdvSection />);
+    expect(await screen.findByText(/· Sucursal Centro/)).toBeInTheDocument();
+  });
+
+  it("sin storeName, la fila del Posnet cae al código de la caja (nada hardcodeado)", async () => {
+    mockedPdvService.listCajas.mockResolvedValue([{ ...CAJA, storeName: null }]);
+    mockedPdvService.listDevices.mockResolvedValue([
+      { ...DEVICE, cajaId: "caja-1", isActive: true },
+    ]);
+
+    render(<PdvSection />);
+    expect(await screen.findByText(/· COCKTRAIL-BAR-01/)).toBeInTheDocument();
+  });
+
   // ── Sesión de caja (bloque mudado de PagosSection: su contexto operativo es el PDV) ──
 
   it("muestra la sesión de caja activa y permite cerrarla", async () => {

@@ -17,6 +17,9 @@ const mockedSystemService = vi.mocked(systemService);
 function makeResult(overrides: Partial<RestoreResult> = {}): RestoreResult {
   return {
     nightEvents: { ok: 3, failed: 0 },
+    mpCajas: { ok: 1, failed: 0 },
+    mpDevices: { ok: 2, failed: 0 },
+    mpOrders: { ok: 7, failed: 0 },
     orders: { ok: 10, failed: 0 },
     tickets: { ok: 10, failed: 0 },
     auditLogs: { ok: 5, failed: 0 },
@@ -62,6 +65,35 @@ describe("SistemaSection", () => {
 
     // El modal se cierra tras confirmar con éxito
     expect(screen.queryByText(/Tu contraseña/i)).not.toBeInTheDocument();
+  });
+
+  it("renderiza las filas MP del restore (cajas, posnets y cobros)", async () => {
+    const user = userEvent.setup();
+    mockedSystemService.restore.mockResolvedValue(makeResult());
+    render(<SistemaSection />);
+
+    await user.click(screen.getByRole("button", { name: /Restaurar desde backup/i }));
+    await user.type(screen.getByPlaceholderText("Ingresá tu contraseña para confirmar"), "admin123");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(await screen.findByText("Cajas MP")).toBeInTheDocument();
+    expect(screen.getByText("Posnets")).toBeInTheDocument();
+    expect(screen.getByText("Cobros MP")).toBeInTheDocument();
+    expect(screen.getByText("7 ok")).toBeInTheDocument();
+  });
+
+  it("tras el restore, avisa que los tokens de MP no se restauran y hay que re-vincular por OAuth", async () => {
+    const user = userEvent.setup();
+    mockedSystemService.restore.mockResolvedValue(makeResult());
+    render(<SistemaSection />);
+
+    await user.click(screen.getByRole("button", { name: /Restaurar desde backup/i }));
+    await user.type(screen.getByPlaceholderText("Ingresá tu contraseña para confirmar"), "admin123");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(
+      await screen.findByText(/Volvé a vincular la cuenta de MP por OAuth desde la tarjeta de Pagos/i),
+    ).toBeInTheDocument();
   });
 
   it("si alguna tabla falla, muestra el toast de error y el detalle de esa tabla", async () => {

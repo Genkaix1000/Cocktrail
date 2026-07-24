@@ -427,7 +427,10 @@ export default function PdvSection() {
   const isBosko = theme === "bosko";
   const canCreate = cajas.length < 1;
   const cajaByBarId = new Map(cajas.map((c) => [c.barId, c]));
-  const cajaNameById = new Map(cajas.map((c) => [c.id, "Barra VIP"]));
+  // G6: nombre real de la sucursal en MP; si no llegó, el código de la caja.
+  const cajaNameById = new Map(
+    cajas.map((c) => [c.id, c.storeName?.trim() || c.externalPosId || "—"]),
+  );
 
   // Candidatos del alta: lo que MP reporta y todavía no está registrado acá.
   const mpCandidates = mpListing?.devices.filter((d) => !d.registeredLocally) ?? [];

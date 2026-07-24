@@ -6,8 +6,12 @@ import { systemService, type RestoreResult, type SyncTableResult } from "@/servi
 import { ApiError } from "@/services/api-client";
 import Toast from "@/components/shared/Toast";
 
+// Mismo orden que el restore del backend (nights → MP → orders → tickets → audit).
 const TABLE_LABELS: Record<keyof RestoreResult, string> = {
   nightEvents: "Noches",
+  mpCajas: "Cajas MP",
+  mpDevices: "Posnets",
+  mpOrders: "Cobros MP",
   orders: "Pedidos",
   tickets: "Tickets",
   auditLogs: "Auditoría",
@@ -82,8 +86,8 @@ export default function SistemaSection() {
           <span>Sistema</span>
         </h1>
         <p className="text-[13px] text-ink-400/80 mt-1">
-          Trae de la nube todo el historial (noches, pedidos, tickets y auditoría) y lo
-          suma a lo que ya tenés acá. No borra nada local.
+          Trae de la nube todo el historial (noches, pedidos, tickets, auditoría y cobros
+          de Mercado Pago) y lo suma a lo que ya tenés acá. No borra nada local.
         </p>
       </div>
 
@@ -110,6 +114,14 @@ export default function SistemaSection() {
             {(Object.keys(TABLE_LABELS) as (keyof RestoreResult)[]).map((key) => (
               <TableResultRow key={key} label={TABLE_LABELS[key]} result={result[key]} />
             ))}
+            {/* D3: los tokens de MP nunca viajan a la nube, así que el restore no los trae. */}
+            <div className="flex items-start gap-2 text-xs text-amber bg-amber-soft border border-amber-line rounded-lg px-3 py-2.5 leading-relaxed">
+              <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+              <span>
+                La cuenta de Mercado Pago no se restaura: los tokens nunca salen de esta
+                máquina. Volvé a vincular la cuenta de MP por OAuth desde la tarjeta de Pagos.
+              </span>
+            </div>
           </div>
         )}
       </div>
