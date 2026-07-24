@@ -1,11 +1,14 @@
 # miBoliche Caja — shell Android
 
-WebView a pantalla completa de `/caja` + impresión USB nativa
+WebView a pantalla completa de `/login` + impresión USB nativa
 (`window.MiBolichePrinter`). Sin Chrome y sin HTTPS.
 
 El servidor **no se hardcodea**: al primer arranque la app barre el /24 de la
 tablet buscando quién responde `/api/auth/me` (ver `ServerFinder.kt`). Si no lo
-encuentra, ofrece escribir la dirección a mano (la muestra `/admin` → Sistema).
+encuentra, muestra la pantalla Bosko local de `assets/connect.html` y ofrece
+buscar de nuevo o escribir la dirección a mano (la muestra `/admin` → Sistema).
+La pantalla vive dentro del APK, así que funciona aunque el server no responda;
+la operación del sistema sigue requiriendo conexión.
 
 ## Build
 

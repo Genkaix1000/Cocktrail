@@ -38,7 +38,7 @@ export default function AdminPage() {
           return;
         }
         if (user.role !== "admin") {
-          const dest = user.role === "caja" ? "/caja" : "/barra";
+          const dest = user.role === "caja" ? "/caja" : "/login";
           router.push(dest);
           return;
         }

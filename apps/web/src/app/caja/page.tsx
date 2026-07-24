@@ -103,7 +103,7 @@ export default function CajaPage() {
           return;
         }
         if (user.role !== "caja") {
-          const dest = user.role === "admin" ? "/admin" : "/barra";
+          const dest = user.role === "admin" ? "/admin" : "/login";
           router.push(dest);
           return;
         }

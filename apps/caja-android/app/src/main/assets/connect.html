@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101315" />
+    <title>miBoliche — Conectar con el servidor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+        --bg: #0d1012;
+        --panel: #171b1e;
+        --surface: #1d2225;
+        --line: rgba(255, 255, 255, 0.09);
+        --text: #f4f5f6;
+        --muted: #939a9f;
+        --green: #10b981;
+        --green-deep: #0f382c;
+        --warning: #fbbf24;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+        background: var(--bg);
+      }
+
+      body {
+        min-height: 100dvh;
+        color: var(--text);
+        overflow-x: hidden;
+      }
+
+      .ambient {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+
+      .ambient::before,
+      .ambient::after {
+        content: "";
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(90px);
+      }
+
+      .ambient::before {
+        width: 340px;
+        height: 340px;
+        top: -170px;
+        left: calc(50% - 170px);
+        background: rgba(16, 185, 129, 0.13);
+      }
+
+      .ambient::after {
+        width: 220px;
+        height: 220px;
+        right: -100px;
+        bottom: -80px;
+        background: rgba(16, 185, 129, 0.06);
+      }
+
+      main {
+        position: relative;
+        width: min(100%, 520px);
+        min-height: 100dvh;
+        margin: 0 auto;
+        padding: max(36px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .brand {
+        text-align: center;
+        margin-bottom: 28px;
+      }
+
+      .brand img {
+        display: block;
+        width: min(240px, 66vw);
+        height: auto;
+        margin: 0 auto 12px;
+        filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.28));
+      }
+
+      .brand p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.17em;
+        text-transform: uppercase;
+      }
+
+      .card {
+        position: relative;
+        overflow: hidden;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background:
+          linear-gradient(160deg, rgba(15, 56, 44, 0.48), transparent 48%),
+          var(--panel);
+        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.22;
+        background-image: url("data:image/svg+xml,%3Csvg width='160' height='100' viewBox='0 0 160 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 47 Q40 10 80 47 T160 47' fill='none' stroke='%2334D399' stroke-width='1' opacity='.26'/%3E%3Cpath d='M0 66 Q40 29 80 66 T160 66' fill='none' stroke='%2334D399' stroke-width='1' opacity='.14'/%3E%3C/svg%3E");
+        background-size: 100% 100%;
+      }
+
+      .content {
+        position: relative;
+      }
+
+      .status-icon {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--green);
+        display: grid;
+        place-items: center;
+      }
+
+      .status-icon svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      .status-icon.searching {
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+
+      .status-icon.error {
+        color: var(--warning);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(25px, 7vw, 32px);
+        line-height: 1.1;
+        letter-spacing: -0.035em;
+      }
+
+      #message {
+        min-height: 44px;
+        margin: 10px 0 0;
+        color: #b4b9bc;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .progress {
+        height: 3px;
+        margin: 22px 0 5px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        transition: opacity 180ms ease;
+      }
+
+      .progress span {
+        display: block;
+        width: 42%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--green);
+        animation: scan 1.35s ease-in-out infinite;
+      }
+
+      .progress.hidden {
+        opacity: 0;
+      }
+
+      .actions {
+        display: grid;
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      button {
+        width: 100%;
+        min-height: 48px;
+        border-radius: 14px;
+        border: 0;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button:active {
+        transform: scale(0.985);
+      }
+
+      .primary {
+        color: white;
+        background: var(--green-deep);
+        box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.22);
+      }
+
+      .primary:disabled {
+        cursor: wait;
+        opacity: 0.45;
+      }
+
+      .manual {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+
+      .input-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      input {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        padding: 0 15px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        outline: none;
+        color: var(--text);
+        background: var(--surface);
+        font: 600 15px ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      input::placeholder {
+        color: #687075;
+      }
+
+      input:focus {
+        border-color: rgba(16, 185, 129, 0.65);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+      }
+
+      .connect {
+        width: auto;
+        min-width: 92px;
+        padding: 0 16px;
+        color: var(--text);
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .hint {
+        margin: 12px 2px 0;
+        color: #747c81;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      footer {
+        margin-top: 20px;
+        color: #697176;
+        text-align: center;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      @keyframes scan {
+        from {
+          transform: translateX(-110%);
+        }
+        to {
+          transform: translateX(350%);
+        }
+      }
+
+      @keyframes pulse {
+        50% {
+          border-color: rgba(16, 185, 129, 0.38);
+          box-shadow: 0 0 0 9px rgba(16, 185, 129, 0.06);
+        }
+      }
+
+      @media (max-height: 650px) {
+        main {
+          justify-content: flex-start;
+          padding-top: 24px;
+        }
+
+        .brand {
+          margin-bottom: 18px;
+        }
+
+        .brand img {
+          width: 180px;
+          margin-bottom: 7px;
+        }
+
+        .card {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true"></div>
+    <main>
+      <header class="brand">
+        <img src="bosko.webp" alt="Bosko" />
+        <p>miBoliche</p>
+      </header>
+
+      <section class="card" aria-live="polite">
+        <div class="content">
+          <div id="status-icon" class="status-icon searching" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+              <path d="M12 20h.01" />
+            </svg>
+          </div>
+
+          <h1>Conectar con el servidor</h1>
+          <p id="message">Estamos buscando la computadora del local en esta red.</p>
+          <div id="progress" class="progress"><span></span></div>
+
+          <div class="actions">
+            <button id="retry" class="primary" type="button" disabled>Buscando servidor…</button>
+          </div>
+
+          <form id="manual" class="manual">
+            <label for="server">Dirección del servidor</label>
+            <div class="input-row">
+              <input
+                id="server"
+                name="server"
+                inputmode="url"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="192.168.0.16"
+              />
+              <button class="connect" type="submit">Conectar</button>
+            </div>
+            <p class="hint">
+              Podés encontrar esta dirección abriendo miBoliche desde la computadora del local.
+            </p>
+          </form>
+        </div>
+      </section>
+
+      <footer>La tablet y la computadora deben estar conectadas a la misma red WiFi.</footer>
+    </main>
+
+    <script>
+      const message = document.getElementById("message");
+      const progress = document.getElementById("progress");
+      const icon = document.getElementById("status-icon");
+      const retry = document.getElementById("retry");
+      const input = document.getElementById("server");
+      const form = document.getElementById("manual");
+
+      retry.addEventListener("click", () => {
+        location.href = "miboliche://discover";
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const server = input.value.trim();
+        if (!server) {
+          input.focus();
+          return;
+        }
+        location.href = "miboliche://connect?server=" + encodeURIComponent(server);
+      });
+
+      window.miBoliche = {
+        setState(state, text, savedServer) {
+          const searching = state === "searching" || state === "connecting";
+          message.textContent = text;
+          progress.classList.toggle("hidden", !searching);
+          icon.classList.toggle("searching", searching);
+          icon.classList.toggle("error", state === "error");
+          retry.disabled = searching;
+          retry.textContent =
+            state === "connecting"
+              ? "Comprobando dirección…"
+              : searching
+                ? "Buscando servidor…"
+                : "Buscar de nuevo";
+          if (savedServer && !input.value) {
+            input.value = savedServer.replace(/^https?:\/\//, "");
+          }
+        },
+      };
+    </script>
+  </body>
+</html>

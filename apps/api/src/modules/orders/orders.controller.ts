@@ -28,13 +28,11 @@ export function createOrdersController(
     }
   }
 
-  // POST /api/orders — crear pedido (público)
-  router.post("/", orderLimiter, validate(CreateOrderSchema), async (req, res, next) => {
+  // POST /api/orders — crear pedido (staff only: admin/caja)
+  router.post("/", authMiddleware, requireRole("admin", "caja"), orderLimiter, validate(CreateOrderSchema), async (req, res, next) => {
     try {
       const { items, paymentMethod, payment, idempotencyKey } = req.body;
-      const sessionCookie = req.cookies?.[COOKIE_NAME];
-      const session = verifySession(sessionCookie);
-      const createdBy = session ? session.username : "Cliente";
+      const createdBy = req.session?.username || "Caja";
 
       const order = await service.createOrder({ items, paymentMethod, payment, idempotencyKey }, createdBy);
       await logAction(
@@ -76,8 +74,8 @@ export function createOrdersController(
     }
   });
 
-  // GET /api/orders/by-token/:token — buscar por token (público, para el cliente)
-  router.get("/by-token/:token", async (req, res, next) => {
+  // GET /api/orders/by-token/:token — buscar por token (staff only)
+  router.get("/by-token/:token", authMiddleware, requireRole("admin", "caja"), async (req, res, next) => {
     try {
       const order = await service.getOrderByToken(req.params.token);
       if (!order) {
