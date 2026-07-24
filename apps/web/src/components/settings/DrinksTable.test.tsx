@@ -148,8 +148,9 @@ describe("DrinksTable", () => {
     expect(screen.getByPlaceholderText("Min")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Configurar columnas" }));
-    expect(screen.getByText("ID")).toBeInTheDocument();
-    await user.click(screen.getByRole("checkbox", { name: /ID/i }));
+    const idToggle = screen.getByRole("checkbox", { name: /ID/i });
+    expect(idToggle).toBeChecked();
+    await user.click(idToggle);
     expect(onToggleCol).toHaveBeenCalledWith("id");
   });
 });

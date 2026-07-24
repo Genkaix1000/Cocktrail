@@ -283,7 +283,6 @@ export default function CartaSection() {
     try {
       const updated = await drinksService.update(drink.id, { available: !drink.available });
       setDrinks((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-      setSaved(true);
     } catch (err) {
       console.error("Error toggling availability:", err);
       setError("No se pudo actualizar la disponibilidad. Reintentá en unos segundos.");

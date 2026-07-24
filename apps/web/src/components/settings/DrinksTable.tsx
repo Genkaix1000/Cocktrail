@@ -71,21 +71,17 @@ function SortHeader({
   active,
   direction,
   onClick,
-  align = "left",
 }: {
   label: string;
   active: boolean;
   direction: SortDirection;
   onClick: () => void;
-  align?: "left" | "right" | "center";
 }) {
-  const justify =
-    align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full px-2 py-2 cursor-pointer flex items-center gap-1 ${justify} text-[11px] font-bold uppercase tracking-[0.12em] transition-colors ${
+      className={`w-full px-3 py-2.5 cursor-pointer flex items-center gap-1 justify-start text-[11px] font-bold uppercase tracking-[0.12em] transition-colors ${
         active
           ? "text-[var(--accent-text)] bg-[var(--accent-surface)]/60"
           : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -177,14 +173,13 @@ export default function DrinksTable({
           active={sortField === "price"}
           direction={sortDirection}
           onClick={() => onSort("price")}
-          align="right"
         />
       );
     }
     if (col === "actions") {
       return (
-        <div key={col} className="relative flex items-center justify-end gap-1 px-2" ref={colsRef}>
-          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)] pr-1">
+        <div key={col} className="relative flex items-center justify-start gap-1.5 px-3" ref={colsRef}>
+          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
             Acciones
           </span>
           <button
@@ -202,7 +197,7 @@ export default function DrinksTable({
             <Settings2 size={14} />
           </button>
           {colsOpen && (
-            <div className="absolute right-2 top-full mt-1 z-20 w-44 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-card p-2">
+            <div className="absolute left-3 top-full mt-1 z-20 w-44 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-card p-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)] px-1.5 pb-1.5">
                 Columnas
               </p>
@@ -231,9 +226,7 @@ export default function DrinksTable({
     return (
       <div
         key={col}
-        className={`px-2 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-secondary)] ${
-          col === "status" || col === "tags" || col === "icon" || col === "id" ? "text-center" : ""
-        }`}
+        className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-secondary)]"
       >
         {CARTA_COL_LABELS[col]}
       </div>
@@ -324,7 +317,7 @@ export default function DrinksTable({
       return (
         <div
           key={col}
-          className={`px-2 py-2.5 font-mono text-[12px] text-center tabular ${
+          className={`px-3 py-2.5 font-mono text-[12px] text-left tabular ${
             isConfirming ? "text-[var(--danger-base)]/70" : "text-[var(--text-tertiary)]"
           }`}
         >
@@ -335,25 +328,24 @@ export default function DrinksTable({
     if (col === "icon") {
       const DrinkIcon = ICONS_LIST.find((i) => i.id === d.iconName)?.icon || GlassWater;
       return (
-        <div key={col} className="flex items-center justify-center px-1.5 py-2.5">
+        <div key={col} className="flex items-center justify-start pl-3 pr-1 py-2.5">
           <div
-            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
               isConfirming
                 ? "bg-[var(--danger-base)]/15 text-[var(--danger-base)]"
                 : "bg-[var(--accent-surface)] text-[var(--accent-text)]"
             }`}
           >
-            <DrinkIcon size={14} />
+            <DrinkIcon size={15} />
           </div>
         </div>
       );
     }
     if (col === "name") {
-      // Si la columna Etiquetas está visible, no duplicar el texto bajo el nombre.
       const showInlineTags =
         (d.promo || d.trending) && !visibleCols.includes("tags");
       return (
-        <div key={col} className="flex flex-col justify-center min-w-0 px-2 py-2">
+        <div key={col} className="flex flex-col justify-center min-w-0 pl-1 pr-3 py-2">
           <p
             className={`text-[13px] font-semibold truncate ${
               isConfirming
@@ -381,7 +373,7 @@ export default function DrinksTable({
       return (
         <div
           key={col}
-          className={`px-2 py-2.5 font-mono text-[13px] text-right tabular font-semibold ${
+          className={`px-3 py-2.5 font-mono text-[13px] text-left tabular font-semibold ${
             isConfirming
               ? "text-[var(--danger-base)]/70"
               : !d.available
@@ -395,7 +387,7 @@ export default function DrinksTable({
     }
     if (col === "status") {
       return (
-        <div key={col} className="px-2 py-2.5 flex items-center justify-center">
+        <div key={col} className="px-3 py-2.5 flex items-center justify-start">
           {!isConfirming && (
             <span
               className={`${pillBase} ${d.available ? pillStatusOn : pillStatusOff}`}
@@ -408,7 +400,7 @@ export default function DrinksTable({
     }
     if (col === "tags") {
       return (
-        <div key={col} className="px-2 py-2.5 flex items-center justify-center gap-1 flex-wrap">
+        <div key={col} className="px-3 py-2.5 flex items-center justify-start gap-1.5 flex-wrap">
           {!isConfirming && (
             <>
               {d.promo && <span className={`${pillBase} ${pillPromo}`}>Promo</span>}
@@ -425,31 +417,33 @@ export default function DrinksTable({
       return (
         <div
           key={col}
-          className="flex items-center justify-end gap-1 px-1.5 py-2 min-w-0"
+          className="flex items-center justify-start gap-1.5 px-3 py-2 min-w-0"
           onClick={(e) => e.stopPropagation()}
         >
           {!isConfirming && (
-            <button
-              type="button"
-              onClick={(e) => onToggleAvailable(d, e)}
-              className="w-7 h-7 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--accent-text)] hover:border-[var(--accent-primary)]/40 flex items-center justify-center transition-all cursor-pointer shrink-0"
-              title={d.available ? "Ocultar de la carta" : "Mostrar en la carta"}
-            >
-              {d.available ? <Eye size={12} /> : <EyeOff size={12} />}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={(e) => onToggleAvailable(d, e)}
+                className="w-7 h-7 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--accent-text)] hover:border-[var(--accent-primary)]/40 flex items-center justify-center transition-all cursor-pointer shrink-0"
+                title={d.available ? "Ocultar de la carta" : "Mostrar en la carta"}
+              >
+                {d.available ? <Eye size={12} /> : <EyeOff size={12} />}
+              </button>
+              <ConfirmRail
+                confirm={false}
+                message="¿Eliminar?"
+                className="w-7 shrink-0"
+                onAsk={() => onAskDelete(d)}
+                onCancel={onCancelDelete}
+                onConfirm={() => onConfirmDelete(d)}
+              >
+                <span className="w-7 h-7 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] flex items-center justify-center hover:text-[var(--danger-base)] hover:border-[var(--danger-base)]/40 transition-all">
+                  <Trash2 size={11} />
+                </span>
+              </ConfirmRail>
+            </>
           )}
-          <ConfirmRail
-            confirm={isConfirming}
-            message="¿Eliminar?"
-            className={isConfirming ? "flex-1 min-w-0" : "w-7 shrink-0"}
-            onAsk={() => onAskDelete(d)}
-            onCancel={onCancelDelete}
-            onConfirm={() => onConfirmDelete(d)}
-          >
-            <span className="w-7 h-7 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] flex items-center justify-center hover:text-[var(--danger-base)] hover:border-[var(--danger-base)]/40 transition-all">
-              <Trash2 size={11} />
-            </span>
-          </ConfirmRail>
         </div>
       );
     }
@@ -459,7 +453,7 @@ export default function DrinksTable({
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden shadow-card">
       <div
-        className="grid border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]"
+        className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]"
         style={{ gridTemplateColumns: grid }}
       >
         {visibleCols.map(renderHeaderCell)}
@@ -467,7 +461,7 @@ export default function DrinksTable({
 
       {filtersOpen && (
         <div
-          className="grid border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+          className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]"
           style={{ gridTemplateColumns: grid }}
         >
           {visibleCols.map(renderFilterCell)}
@@ -498,7 +492,7 @@ export default function DrinksTable({
               <div
                 key={d.id}
                 onClick={() => !isConfirming && onSelectDrink(d)}
-                className={`grid items-stretch transition-colors duration-[260ms] ${
+                className={`relative grid gap-x-3 items-stretch transition-colors duration-[260ms] ${
                   isConfirming
                     ? "bg-[var(--danger-soft)] cursor-default"
                     : `cursor-pointer hover:bg-[var(--bg-panel)] ${
@@ -512,6 +506,23 @@ export default function DrinksTable({
                 style={{ gridTemplateColumns: grid }}
               >
                 {visibleCols.map((col) => renderDataCell(col, d, isConfirming))}
+                {isConfirming && (
+                  <div
+                    className="absolute inset-y-0 right-0 z-10 flex items-center min-w-[220px] w-[min(280px,55%)] pl-4 pr-3 bg-[var(--danger-soft)]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ConfirmRail
+                      confirm
+                      message="¿Eliminar?"
+                      className="w-full h-full"
+                      onAsk={() => {}}
+                      onCancel={onCancelDelete}
+                      onConfirm={() => onConfirmDelete(d)}
+                    >
+                      <span />
+                    </ConfirmRail>
+                  </div>
+                )}
               </div>
             );
           })}

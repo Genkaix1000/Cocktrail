@@ -70,16 +70,16 @@ export function ConfirmRail({
       </button>
 
       <div
-        className={`${slide} justify-between gap-1.5 px-1 ${
+        className={`${slide} justify-between gap-2 px-2 ${
           confirm
             ? "translate-x-0 opacity-100"
             : "translate-x-full opacity-0 pointer-events-none"
         }`}
       >
-        <span className="text-[11px] font-semibold text-[var(--danger-base)] truncate pl-0.5">
+        <span className="text-[13px] font-semibold text-[var(--danger-base)] whitespace-nowrap shrink-0">
           {message}
         </span>
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             ref={cancelRef}
             type="button"
@@ -89,9 +89,9 @@ export function ConfirmRail({
               e.stopPropagation();
               onCancel();
             }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
           >
-            <X size={12} />
+            <X size={14} />
           </button>
           <button
             type="button"
@@ -101,9 +101,9 @@ export function ConfirmRail({
               e.stopPropagation();
               onConfirm();
             }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer"
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer"
           >
-            <Check size={12} />
+            <Check size={14} />
           </button>
         </div>
       </div>

@@ -34,8 +34,8 @@ delete `ConfirmRail`), adaptando la referencia de order-management a tokens Bosk
 | Funnel | Toggle fila de filtros; **default off** | Densidad limpia; filtros on-demand. |
 | Search “campo” (Order ID ▾) | **Omitir** en Carta | Search = nombre. |
 | ⚙ columnas | Sí; popover + `localStorage` `crud:carta:cols` | Pedido explícito. |
-| Columnas default ON | Nombre (+icono), Precio, Estado, **Promo**, **Trending**, Acciones | Flags = **dos columnas** (mejor para sort/filter y ⚙). |
-| Columnas opcionales (off por default) | **ID** | Útil para soporte; no ensucia el default. |
+| Columnas default ON | **Todas**: ID, Ícono, Nombre, Precio, Estado, Etiquetas, Acciones | Pedido: celdas activas por defecto. |
+| Columnas opcionales | Ninguna off por default; ⚙ puede ocultar ID/ícono/precio/estado/tags | Nombre + Acciones siempre on. |
 | Descripción / Vibe | **Fuera por completo** de UI Carta (tabla, filtros, form) | Producto: no se usan; no columnas ni campos. |
 | Acciones | **Ojo** + **ConfirmRail** delete | Kebab YAGNI. |
 | Edit | Click fila → drawer | Como hoy. |
@@ -89,8 +89,8 @@ delete `ConfirmRail`), adaptando la referencia de order-management a tokens Bosk
 
 ### Tabla + columnas
 
-8. **Given** default, **then** visibles: Nombre, Precio, Estado, Promo, Trending, Acciones.
-9. **Given** ⚙, **then** puedo toggle **ID**, Promo, Trending (y otras no-obligatorias si se agregan); **no** ocultar Nombre ni Acciones. Precio y Estado: toggleables OK (default on).
+8. **Given** default, **then** todas las columnas visibles: ID, Ícono, Nombre, Precio, Estado, Etiquetas, Acciones.
+9. **Given** ⚙, **then** puedo ocultar ID / Ícono / Precio / Estado / Etiquetas; **no** Nombre ni Acciones.
 10. **Given** cambio de columnas, **then** persiste en `localStorage` `crud:carta:cols`.
 11. **Given** header, **then** Nombre y Precio sorteables; activa con acento. Promo/Trending/Estado: sort opcional (nice-to-have; no bloqueante).
 12. **Given** Estado, **then** pill En carta / Oculto.

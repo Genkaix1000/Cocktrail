@@ -7,12 +7,13 @@ export type CartaColId =
   | "tags"
   | "actions";
 
-export const CARTA_COLS_STORAGE_KEY = "crud:carta:cols";
+export const CARTA_COLS_STORAGE_KEY = "crud:carta:cols:v2";
 
 /** Siempre visibles; no aparecen en el ⚙ como apagables. */
 export const CARTA_COLS_REQUIRED: CartaColId[] = ["name", "actions"];
 
 export const CARTA_COLS_DEFAULT: CartaColId[] = [
+  "id",
   "icon",
   "name",
   "price",
@@ -78,15 +79,15 @@ export function saveCartaCols(cols: CartaColId[]) {
 }
 
 export function cartaGridTemplate(cols: CartaColId[]): string {
-  // Nombre crece, pero el sobrante se reparte con precio/estado/tags (no 1.4fr solo en nombre).
+  // Solo Nombre absorbe el sobrante. Ícono con aire propio (no pegado al nombre).
   const sizes: Record<CartaColId, string> = {
-    id: "52px",
-    icon: "44px",
-    name: "minmax(112px, 1fr)",
-    price: "minmax(80px, 0.32fr)",
-    status: "minmax(92px, 0.38fr)",
-    tags: "minmax(108px, 0.48fr)",
-    actions: "100px",
+    id: "56px",
+    icon: "64px",
+    name: "minmax(160px, 1fr)",
+    price: "104px",
+    status: "116px",
+    tags: "168px",
+    actions: "104px",
   };
   return cols.map((c) => sizes[c]).join(" ");
 }
