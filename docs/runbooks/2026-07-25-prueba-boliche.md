@@ -4,14 +4,24 @@
 
 ## HOY (antes de ir) — ~30 min
 
-- [ ] **Mini-gate QR** (da el QR por validado): desde `/caja`,
-  1. cobro QR → pagar con un celu/cuenta que **no** sea la del seller (MP rechaza auto-pagos) → confirma y sale ticket;
-  2. cobro QR sin pagar → cancelar/expirar → **no** se registra venta;
-  3. en `/admin`, el total sumó exactamente el monto pagado.
-- [ ] **`/admin` → PDV y Posnets**: salud en verde, `COCKTRAILBAR01` con QR y sin marca de huérfana. **Imprimir el QR** para el mostrador.
-- [ ] **Limpiar las 155 noches $0 de Cloud** (basura de tests) para que el Historial se vea real.
-- [ ] **Usuarios**: confirmar las credenciales de `caja` que va a usar la gente del boliche (y no compartir la de `admin`).
-- [ ] **Plata**: confirmar con el dueño que mañana los cobros MP entran a la cuenta de Manuel (`1517393956`) y después se transfieren. La migración a su cuenta es procedimiento aparte (ver ROADMAP → "Pendientes para producción").
+> Lo ya resuelto hoy 24-07 no está acá: el mini-gate QR **pasó** (2 pagos exactos + cancelado sin
+> venta, asentado en el ROADMAP), la decisión de la plata está tomada (cuenta de Manuel, migración
+> después — ver sección más abajo), y la limpieza selectiva de las 155 noches quedó **superada** por
+> el reset total (el dueño quiere arrancar mañana con todo a cero: Historial vacío, primera noche
+> real la del boliche).
+
+- [ ] **Cerrar la noche de prueba de hoy** si sigue abierta (`/admin` → Cerrar Noche).
+- [ ] **Reset total** (todo a cero — borra noches/ventas/cobros MP, conserva catálogo y config MP):
+
+  ```bash
+  pnpm --filter cocktrail-api db:reset --target=cloud   # confirmación tipeada
+  pnpm --filter cocktrail-api db:reset --target=local   # confirmación tipeada
+  ```
+
+  Después: **reiniciar el server** (re-siembra el usuario `admin`) y **re-crear el usuario de
+  `caja` a mano** desde `/admin` (ese no se re-siembra).
+- [ ] **`/admin` → PDV y Posnets**: salud en verde y QR presente — el reset **NO** toca la config
+  MP (sellers/cajas/devices). **Imprimir el QR** para el mostrador.
 - [ ] **Bolso**: Posnet + cargador · impresora + **2 rollos** · notebook + cargador · QR impreso · cable USB impresora.
 
 ## MAÑANA al llegar — ~15 min
@@ -43,10 +53,10 @@
 
 | Qué limpia | Comando | Cuándo |
 |---|---|---|
-| **Noches vacías en Cloud** (las ~155 de $0 que dejaron los tests — ensucian el Historial y cada restore las trae de vuelta) | `cd apps/api && pnpm exec tsx src/scripts/cleanup-empty-nights.ts --target=cloud` (pide confirmación tipeada) | **Hoy**, antes de la prueba |
-| Noches vacías locales | ídem con `--target=local` | Después de correr suites de integración (R16) |
-| **Reset TOTAL local** (borra pedidos/noches/cobros, conserva catálogo y usuarios) | `pnpm --filter cocktrail-api db:reset --target=local` | Opcional antes de la prueba, para arrancar con historial limpio |
-| **Reset TOTAL de Cloud** ⚠️ | `pnpm --filter cocktrail-api db:reset --target=cloud` (confirmación tipeada) | **Recién el día de la entrega real** — NO ahora (se pierden los datos de prueba útiles) |
+| **Noches vacías en Cloud** (las ~155 de $0 que dejaron los tests) | `cd apps/api && pnpm exec tsx src/scripts/cleanup-empty-nights.ts --target=cloud` (pide confirmación tipeada) | **Superada** por el reset total de hoy 24-07 (borra esas noches y todo lo demás) |
+| Noches vacías locales | ídem con `--target=local` | Después de correr suites de integración (R16) — sigue útil |
+| **Reset TOTAL local** (borra noches/ventas/cobros MP y `mp_webhook_events`; conserva catálogo, bars y config MP —sellers/cajas/devices—; `users` se re-siembra: admin en el próximo boot, el de `caja` a mano desde `/admin`) | `pnpm --filter cocktrail-api db:reset --target=local` | **Hoy 24-07** (arrancar la prueba a cero) |
+| **Reset TOTAL de Cloud** ⚠️ (mismas tablas; `mp_webhook_events` no existe en Cloud y se saltea sola) | `pnpm --filter cocktrail-api db:reset --target=cloud` (confirmación tipeada) | **Hoy 24-07** (todo a cero para la prueba) y de nuevo **el día de la entrega real** (borrar los datos de la prueba) |
 | Comparar local vs Cloud (sanidad del sync) | `pnpm --filter cocktrail-api verify-sync` | Después de un cierre, si hay dudas |
 
 ## Migración a la cuenta del dueño — cuándo se haga (NO mañana; decidido 24-07)

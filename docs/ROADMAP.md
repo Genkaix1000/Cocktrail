@@ -345,13 +345,15 @@ red, sin que nadie instale Docker ni Node ni levante nada a mano (ver "Topologí
 Resuelto: `pnpm --filter cocktrail-api db:reset` (local/cloud, confirmación tipeada para cloud) y
 auto-seed de historial demo sacado del boot. Ver `apps/api/src/scripts/reset-data.ts`.
 
-- [ ] **Actualizar `reset-data.ts` para cubrir las tablas MP** (detectado 2026-07-24): `TABLES_TO_RESET`
-  no incluye `mp_orders`/`mercadopago_cajas`/`mercadopago_cajas_devices` (anteriores al PR 5). Correrlo
-  hoy contra Cloud dejaría cobros MP huérfanos apuntando a noches borradas → el próximo restore fallaría
-  por FK. Prerrequisito del item siguiente.
-- [ ] Correr `db:reset --target=cloud` recién el día de la entrega real (no antes, para no perder
-  datos de prueba útiles mientras se sigue developeando — y además Cloud es el backup de emergencia
-  de la prueba en el boliche).
+- [x] **Actualizar `reset-data.ts` para cubrir las tablas MP** (detectado 2026-07-24)
+  → hecho 2026-07-24: borra lo transaccional (`mp_orders` ANTES que `night_events` — FK sin cascade — y
+  `mp_webhook_events`, que en Cloud no existe y se saltea sola) y conserva la config operativa
+  (`mercadopago_sellers`/`mercadopago_cajas`/`mercadopago_cajas_devices`, `drinks`, `bars`) para
+  seguir cobrando después del reset.
+- [ ] Correr `db:reset --target=cloud` el día de la entrega real para borrar los datos de la prueba
+  del boliche. *(Actualizado 2026-07-24: el reset también se corre HOY 24-07 — decisión del dueño de
+  arrancar la prueba con todo a cero, Historial vacío. Eso reemplazó la limpieza selectiva de las
+  ~155 noches $0 en Cloud.)*
 
 ### Topología del deploy: PC servidor + tablet operativa *(corregido 2026-07-21)*
 
