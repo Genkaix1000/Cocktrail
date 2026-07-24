@@ -2,6 +2,8 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Deshabilitar la insignia/botón de desarrollo de Next.js de la esquina inferior izquierda
+  devIndicators: false,
   // Fijar la raíz del monorepo para Turbopack y silenciar advertencias por otros lockfiles en $HOME
   turbopack: {
     root: path.resolve(__dirname, "../../"),
