@@ -1,26 +1,18 @@
 import { apiFetch } from "./api-client";
 
-export type PrinterStatus = {
-  connected: boolean;
-  configured: boolean;
-  message: string;
-};
-
-export type PrintResult = {
+export type PrintPayload = {
   success: boolean;
   message: string;
+  /** Bytes ESC/POS en base64 para WebUSB en el dispositivo. */
+  data: string;
 };
 
 export const printerService = {
-  getStatus() {
-    return apiFetch<PrinterStatus>("/api/printer/status");
-  },
-
   test() {
-    return apiFetch<PrintResult>("/api/printer/test", { method: "POST" });
+    return apiFetch<PrintPayload>("/api/printer/test", { method: "POST" });
   },
 
   reprint(orderId: string) {
-    return apiFetch<PrintResult>(`/api/printer/reprint/${orderId}`, { method: "POST" });
+    return apiFetch<PrintPayload>(`/api/printer/reprint/${orderId}`, { method: "POST" });
   },
 };

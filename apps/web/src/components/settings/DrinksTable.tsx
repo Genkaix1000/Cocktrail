@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
   Eye,
   EyeOff,
   GlassWater,
-  Settings2,
   Trash2,
 } from "lucide-react";
 import type { Drink } from "@cocktrail/shared";
 import { ConfirmRail } from "@/components/shared/ConfirmRail";
+import ColumnPicker from "@/components/shared/ColumnPicker";
+import { gridMinWidth } from "@/lib/crudCols";
 import { ICONS_LIST } from "./cartaConstants";
 import {
   CARTA_COL_LABELS,
@@ -141,17 +141,7 @@ export default function DrinksTable({
   onColumnFiltersChange,
 }: Props) {
   const grid = cartaGridTemplate(visibleCols);
-  const [colsOpen, setColsOpen] = useState(false);
-  const colsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!colsOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!colsRef.current?.contains(e.target as Node)) setColsOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [colsOpen]);
+  const minWidth = gridMinWidth(grid);
 
   function renderHeaderCell(col: CartaColId) {
     if (col === "name") {
@@ -178,48 +168,16 @@ export default function DrinksTable({
     }
     if (col === "actions") {
       return (
-        <div key={col} className="relative flex items-center justify-start gap-1.5 px-3" ref={colsRef}>
+        <div key={col} className="flex items-center justify-start gap-1.5 px-3">
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
             Acciones
           </span>
-          <button
-            type="button"
-            title="Columnas visibles"
-            aria-label="Configurar columnas"
-            aria-expanded={colsOpen}
-            onClick={() => setColsOpen((o) => !o)}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
-              colsOpen
-                ? "bg-[var(--accent-surface)] text-[var(--accent-text)]"
-                : "text-[var(--text-tertiary)] hover:bg-[var(--bg-panel)] hover:text-[var(--text-secondary)]"
-            }`}
-          >
-            <Settings2 size={14} />
-          </button>
-          {colsOpen && (
-            <div className="absolute left-3 top-full mt-1 z-20 w-44 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-card p-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)] px-1.5 pb-1.5">
-                Columnas
-              </p>
-              {CARTA_COLS_TOGGLEABLE.map((c) => {
-                const on = visibleCols.includes(c);
-                return (
-                  <label
-                    key={c}
-                    className="flex items-center gap-2 px-1.5 py-1.5 rounded-lg hover:bg-[var(--bg-panel)] cursor-pointer text-[12px] text-[var(--text-primary)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => onToggleCol(c)}
-                      className="accent-[var(--accent-primary)]"
-                    />
-                    {CARTA_COL_LABELS[c]}
-                  </label>
-                );
-              })}
-            </div>
-          )}
+          <ColumnPicker
+            cols={CARTA_COLS_TOGGLEABLE}
+            labels={CARTA_COL_LABELS}
+            visible={visibleCols}
+            onToggle={onToggleCol}
+          />
         </div>
       );
     }
@@ -452,82 +410,88 @@ export default function DrinksTable({
 
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden shadow-card">
-      <div
-        className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]"
-        style={{ gridTemplateColumns: grid }}
-      >
-        {visibleCols.map(renderHeaderCell)}
-      </div>
-
-      {filtersOpen && (
-        <div
-          className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]"
-          style={{ gridTemplateColumns: grid }}
-        >
-          {visibleCols.map(renderFilterCell)}
-        </div>
-      )}
-
-      {loadError ? (
-        <div className="px-5 py-10 flex flex-col items-center gap-2 text-center text-[12px] text-[var(--danger-base)]">
-          <span>No se pudo cargar la carta. Revisá tu conexión.</span>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="text-[11px] font-bold uppercase tracking-wider underline underline-offset-2 cursor-pointer"
+      <div className="overflow-x-auto">
+        <div style={{ minWidth }}>
+          <div
+            className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]"
+            style={{ gridTemplateColumns: grid }}
           >
-            Reintentar
-          </button>
-        </div>
-      ) : drinks.length === 0 ? (
-        <div className="px-5 py-10 text-center text-[12px] text-[var(--text-tertiary)]">
-          {hasActiveSearch || filtersOpen ? "Sin resultados para tu búsqueda" : "No hay tragos registrados"}
-        </div>
-      ) : (
-        <div className="divide-y divide-[var(--border-subtle)]">
-          {drinks.map((d, idx) => {
-            const isSelected = selectedDrinkId === d.id;
-            const isConfirming = confirmingDeleteId === d.id;
-            return (
-              <div
-                key={d.id}
-                onClick={() => !isConfirming && onSelectDrink(d)}
-                className={`relative grid gap-x-3 items-stretch transition-colors duration-[260ms] ${
-                  isConfirming
-                    ? "bg-[var(--danger-soft)] cursor-default"
-                    : `cursor-pointer hover:bg-[var(--bg-panel)] ${
-                        isSelected
-                          ? "bg-[var(--accent-surface)]/50 border-l-2 border-l-[var(--accent-primary)]"
-                          : idx % 2 === 1
-                            ? "bg-[var(--bg-panel)]/45 border-l-2 border-transparent"
-                            : "bg-[var(--bg-surface)] border-l-2 border-transparent"
-                      }`
-                }`}
-                style={{ gridTemplateColumns: grid }}
+            {visibleCols.map(renderHeaderCell)}
+          </div>
+
+          {filtersOpen && (
+            <div
+              className="grid gap-x-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+              style={{ gridTemplateColumns: grid }}
+            >
+              {visibleCols.map(renderFilterCell)}
+            </div>
+          )}
+
+          {loadError ? (
+            <div className="px-5 py-10 flex flex-col items-center gap-2 text-center text-[12px] text-[var(--danger-base)]">
+              <span>No se pudo cargar la carta. Revisá tu conexión.</span>
+              <button
+                type="button"
+                onClick={onRetry}
+                className="text-[11px] font-bold uppercase tracking-wider underline underline-offset-2 cursor-pointer"
               >
-                {visibleCols.map((col) => renderDataCell(col, d, isConfirming))}
-                {isConfirming && (
+                Reintentar
+              </button>
+            </div>
+          ) : drinks.length === 0 ? (
+            <div className="px-5 py-10 text-center text-[12px] text-[var(--text-tertiary)]">
+              {hasActiveSearch || filtersOpen
+                ? "Sin resultados para tu búsqueda"
+                : "No hay tragos registrados"}
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--border-subtle)]">
+              {drinks.map((d, idx) => {
+                const isSelected = selectedDrinkId === d.id;
+                const isConfirming = confirmingDeleteId === d.id;
+                return (
                   <div
-                    className="absolute inset-y-0 right-0 z-10 flex items-center min-w-[220px] w-[min(280px,55%)] pl-4 pr-3 bg-[var(--danger-soft)]"
-                    onClick={(e) => e.stopPropagation()}
+                    key={d.id}
+                    onClick={() => !isConfirming && onSelectDrink(d)}
+                    className={`relative grid gap-x-3 items-stretch transition-colors duration-[260ms] ${
+                      isConfirming
+                        ? "bg-[var(--danger-soft)] cursor-default"
+                        : `cursor-pointer hover:bg-[var(--bg-panel)] ${
+                            isSelected
+                              ? "bg-[var(--accent-surface)]/50 border-l-2 border-l-[var(--accent-primary)]"
+                              : idx % 2 === 1
+                                ? "bg-[var(--bg-panel)]/45 border-l-2 border-transparent"
+                                : "bg-[var(--bg-surface)] border-l-2 border-transparent"
+                          }`
+                    }`}
+                    style={{ gridTemplateColumns: grid }}
                   >
-                    <ConfirmRail
-                      confirm
-                      message="¿Eliminar?"
-                      className="w-full h-full"
-                      onAsk={() => {}}
-                      onCancel={onCancelDelete}
-                      onConfirm={() => onConfirmDelete(d)}
-                    >
-                      <span />
-                    </ConfirmRail>
+                    {visibleCols.map((col) => renderDataCell(col, d, isConfirming))}
+                    {isConfirming && (
+                      <div
+                        className="absolute inset-y-0 right-0 z-10 flex items-center min-w-[220px] w-[min(280px,55%)] pl-4 pr-3 bg-[var(--danger-soft)]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ConfirmRail
+                          confirm
+                          message="¿Eliminar?"
+                          className="w-full h-full"
+                          onAsk={() => {}}
+                          onCancel={onCancelDelete}
+                          onConfirm={() => onConfirmDelete(d)}
+                        >
+                          <span />
+                        </ConfirmRail>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

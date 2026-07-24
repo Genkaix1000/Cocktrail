@@ -95,7 +95,8 @@ describe("PdvTable", () => {
     const props = renderTable({ cajas: [{ ...CAJA, device: null }], availableDevices: [candidate] });
 
     await user.click(screen.getByRole("button", { name: /\+ Vincular/i }));
-    await user.selectOptions(screen.getByLabelText("Posnet a vincular"), candidate.deviceId);
+    await user.click(screen.getByLabelText("Posnet a vincular"));
+    await user.click(screen.getByRole("option", { name: new RegExp(candidate.deviceId) }));
     await user.type(screen.getByLabelText("Apodo del Posnet"), "Caja 1");
     await user.click(screen.getByRole("button", { name: "Vincular" }));
 

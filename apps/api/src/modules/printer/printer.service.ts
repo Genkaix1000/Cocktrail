@@ -1,4 +1,3 @@
-import { accessSync, constants, existsSync, readdirSync, writeFileSync } from "node:fs";
 import type { NightEvent, Order } from "@cocktrail/shared";
 
 const UTF8_TO_CP437: Record<string, number> = {
@@ -48,42 +47,24 @@ export type PrinterStatus = {
   message: string;
 };
 
-export type PrintResult = {
-  success: boolean;
+export type PrintPayload = {
+  success: true;
   message: string;
+  /** Bytes ESC/POS en base64 — el dispositivo de caja los manda por WebUSB. */
+  data: string;
 };
 
+/**
+ * Arma tickets ESC/POS. No toca hardware: la impresión vive en el navegador
+ * de la tablet de caja (WebUSB), porque la ticketera está enchufada ahí.
+ */
 export class PrinterService {
-  private findDevice(): string | null {
-    // En test (NODE_ENV=test) nunca se debe escribir a la impresora física real —
-    // los tests de integración de orders/tickets crean ventas de staff, que disparan
-    // impresión automática. Sin este guard, cada corrida de la suite manda tickets
-    // reales al hardware conectado.
-    if (process.env.NODE_ENV === "test") return null;
-    try {
-      const usbDir = "/dev/usb";
-      if (!existsSync(usbDir)) return null;
-      const candidates = readdirSync(usbDir).filter((f) => f.startsWith("lp"));
-      for (const candidate of candidates) {
-        const path = `${usbDir}/${candidate}`;
-        try {
-          accessSync(path, constants.W_OK);
-          return path;
-        } catch {
-          continue;
-        }
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
   getStatus(): PrinterStatus {
-    const device = this.findDevice();
-    return device
-      ? { connected: true, configured: true, message: `Impresora conectada en ${device}` }
-      : { connected: false, configured: true, message: "Impresora no encontrada o sin permisos" };
+    return {
+      connected: false,
+      configured: true,
+      message: "La impresora se vincula en el dispositivo de caja (WebUSB)",
+    };
   }
 
   private buildTicketBytes(order: Order, nightEvent: NightEvent): Buffer {
@@ -118,25 +99,28 @@ export class PrinterService {
     ]);
   }
 
-  async printTicket(order: Order, nightEvent: NightEvent): Promise<PrintResult> {
-    try {
-      const device = this.findDevice();
-      if (!device) return { success: false, message: "Impresora no encontrada" };
-      writeFileSync(device, this.buildTicketBytes(order, nightEvent));
-      return { success: true, message: "Impreso correctamente" };
-    } catch (err) {
-      return { success: false, message: err instanceof Error ? err.message : "Error desconocido al imprimir" };
-    }
+  /** Base64 ESC/POS del ticket de una venta (para auto-print o reprint en el cliente). */
+  renderTicket(order: Order, nightEvent: NightEvent): string {
+    return this.buildTicketBytes(order, nightEvent).toString("base64");
   }
 
-  async printTest(): Promise<PrintResult> {
-    try {
-      const device = this.findDevice();
-      if (!device) return { success: false, message: "Impresora no encontrada" };
-      writeFileSync(device, this.buildTestBytes());
-      return { success: true, message: "Prueba enviada" };
-    } catch (err) {
-      return { success: false, message: err instanceof Error ? err.message : "Error desconocido" };
-    }
+  renderTest(): string {
+    return this.buildTestBytes().toString("base64");
+  }
+
+  async printTicket(order: Order, nightEvent: NightEvent): Promise<PrintPayload> {
+    return {
+      success: true,
+      message: "Ticket listo para imprimir en el dispositivo",
+      data: this.renderTicket(order, nightEvent),
+    };
+  }
+
+  async printTest(): Promise<PrintPayload> {
+    return {
+      success: true,
+      message: "Prueba lista para imprimir en el dispositivo",
+      data: this.renderTest(),
+    };
   }
 }

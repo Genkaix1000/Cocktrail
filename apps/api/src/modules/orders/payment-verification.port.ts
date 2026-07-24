@@ -6,7 +6,7 @@ import type { PaymentMethod } from "@cocktrail/shared";
  * Declarado en `modules/orders` a propósito: la dependencia apunta hacia el
  * dominio. `modules/orders` NUNCA importa nada de `modules/mercadopago` — el
  * adaptador vive allá y los une app.ts (mismo patrón que getActiveEvent /
- * printTicket).
+ * renderTicket).
  */
 
 /** Prueba que presenta la caja: SIEMPRE el id del intent/order, nunca un paymentId (forjable). */

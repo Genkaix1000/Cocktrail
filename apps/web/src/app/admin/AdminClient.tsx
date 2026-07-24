@@ -601,9 +601,10 @@ export default function AdminClient({
               )}
 
               {isPagosTab && (
-                <div key="pagos" className="animate-dashboard-in flex flex-col gap-8">
-                  <PagosSection />
-                  <PdvSection />
+                <div key="pagos" className="animate-dashboard-in">
+                  <PagosSection>
+                    <PdvSection />
+                  </PagosSection>
                 </div>
               )}
 

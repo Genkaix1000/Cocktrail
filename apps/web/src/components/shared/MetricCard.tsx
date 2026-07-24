@@ -8,7 +8,6 @@ export default function MetricCard({
   isCurrency,
   delta,
   icon: Icon,
-  color: _color,
   subtitle = "vs. última noche",
   noDeltaLabel = "EN VIVO",
   featured = false,
@@ -18,8 +17,6 @@ export default function MetricCard({
   isCurrency?: boolean;
   delta: DeltaInfo | null | undefined;
   icon: LucideIcon;
-  /** @deprecated Tokens Bosko; se ignora en el look nuevo. */
-  color?: string;
   subtitle?: string;
   noDeltaLabel?: string;
   featured?: boolean;

@@ -122,33 +122,36 @@ describe("OrdersService.createOrder", () => {
     expect(result.printed).toBe(false);
   });
 
-  it("no intenta imprimir para pedidos de 'Cliente' aunque haya callback de impresión", async () => {
-    const printTicket = vi.fn().mockResolvedValue(undefined);
-    const service = makeService({ printTicket });
+  it("no arma ticketData para pedidos de 'Cliente' aunque haya callback de render", async () => {
+    const renderTicket = vi.fn().mockResolvedValue("YQ==");
+    const service = makeService({ renderTicket });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" });
 
-    expect(printTicket).not.toHaveBeenCalled();
+    expect(renderTicket).not.toHaveBeenCalled();
     expect(result.printed).toBe(false);
+    expect(result.ticketData).toBeUndefined();
   });
 
-  it("intenta imprimir para pedidos de staff y marca printed=true si tiene éxito", async () => {
-    const printTicket = vi.fn().mockResolvedValue(undefined);
-    const service = makeService({ printTicket });
+  it("arma ticketData para pedidos de staff (impresión en el cliente)", async () => {
+    const renderTicket = vi.fn().mockResolvedValue("Yml0ZXM=");
+    const service = makeService({ renderTicket });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
-    expect(printTicket).toHaveBeenCalledTimes(1);
-    expect(result.printed).toBe(true);
+    expect(renderTicket).toHaveBeenCalledTimes(1);
+    expect(result.ticketData).toBe("Yml0ZXM=");
+    expect(result.printed).toBe(false);
   });
 
-  it("si la impresión falla (throw), marca printed=false pero no rompe la venta", async () => {
-    const printTicket = vi.fn().mockRejectedValue(new Error("sin papel"));
-    const service = makeService({ printTicket });
+  it("si el render falla, la venta sigue sin ticketData", async () => {
+    const renderTicket = vi.fn().mockRejectedValue(new Error("boom"));
+    const service = makeService({ renderTicket });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
     expect(result.printed).toBe(false);
+    expect(result.ticketData).toBeUndefined();
     expect(result.id).toBeTruthy();
   });
 });
@@ -169,13 +172,13 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
   it("proof rechazada → Conflict PAYMENT_REJECTED, sin Order, sin ticket, sin order.created", async () => {
     const ordersRepo = makeOrdersRepo();
     const emit = vi.fn();
-    const printTicket = vi.fn();
+    const renderTicket = vi.fn();
     const verifyPayment = vi.fn().mockResolvedValue({
       result: "rechazado",
       reason: "Pago rechazado por Mercado Pago.",
       detail: "cc_rejected_insufficient_amount",
     } satisfies PaymentVerdict);
-    const service = makeService({ ordersRepo, emit, printTicket, verifyPayment });
+    const service = makeService({ ordersRepo, emit, renderTicket, verifyPayment });
 
     await expect(
       service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "debito", payment: PROOF }, "cajera1"),
@@ -185,7 +188,7 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
       message: expect.stringContaining("cc_rejected_insufficient_amount"),
     });
     expect(ordersRepo.create).not.toHaveBeenCalled();
-    expect(printTicket).not.toHaveBeenCalled();
+    expect(renderTicket).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -203,12 +206,12 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
     expect(ordersRepo.create).not.toHaveBeenCalled();
   });
 
-  it("proof confirmada → Order 'cobrado' ligada al cobro, ticket impreso y order.created", async () => {
+  it("proof confirmada → Order 'cobrado' ligada al cobro, ticketData y order.created", async () => {
     const ordersRepo = makeOrdersRepo();
     const emit = vi.fn();
-    const printTicket = vi.fn().mockResolvedValue(undefined);
+    const renderTicket = vi.fn().mockResolvedValue("Yml0ZXM=");
     const verifyPayment = vi.fn().mockResolvedValue(CONFIRMADO);
-    const service = makeService({ ordersRepo, emit, printTicket, verifyPayment });
+    const service = makeService({ ordersRepo, emit, renderTicket, verifyPayment });
 
     const result = await service.createOrder(
       { items: [{ drinkId: 1, qty: 1 }], paymentMethod: "debito", payment: PROOF, idempotencyKey: "attempt-1111-2222-3333" },
@@ -220,20 +223,22 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
     expect(result.paymentRef).toBe("pay-99");
     expect(result.paymentRecordId).toBe("mp-row-uuid");
     expect(result.idempotencyKey).toBe("attempt-1111-2222-3333");
-    expect(result.printed).toBe(true);
+    expect(result.ticketData).toBe("Yml0ZXM=");
+    expect(result.printed).toBe(false);
     expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: "order.created" }));
   });
 
-  it("el efectivo pasa por el mismo camino: no_aplica → imprime y queda 'cobrado'", async () => {
-    const printTicket = vi.fn().mockResolvedValue(undefined);
+  it("el efectivo pasa por el mismo camino: no_aplica → ticketData y queda 'cobrado'", async () => {
+    const renderTicket = vi.fn().mockResolvedValue("Yml0ZXM=");
     const verifyPayment = vi.fn().mockResolvedValue({ result: "no_aplica" } satisfies PaymentVerdict);
-    const service = makeService({ printTicket, verifyPayment });
+    const service = makeService({ renderTicket, verifyPayment });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
     expect(verifyPayment).toHaveBeenCalledWith({ expectedAmount: 2000, method: "efectivo" });
     expect(result.paymentStatus).toBe("cobrado");
-    expect(result.printed).toBe(true);
+    expect(result.ticketData).toBe("Yml0ZXM=");
+    expect(result.printed).toBe(false);
   });
 
   it("Cliente (/carta) con método qr sigue andando sin proof y sin paymentStatus", async () => {

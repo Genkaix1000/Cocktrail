@@ -54,14 +54,22 @@ export default function CajaClient({ drinks, currentUser }: Props) {
     });
   };
 
-  const { printerStatus, testPrint, printerTestMessage, reprintTicket, printError, reprinting } =
-    usePrinterStatus();
+  const {
+    printerStatus,
+    testPrint,
+    printerTestMessage,
+    reprintTicket,
+    printTicketData,
+    pairPrinterDevice,
+    printError,
+    reprinting,
+  } = usePrinterStatus();
 
   const { posnetLevel, posnetMessage, testPosnet, posnetTestMessage, testingPosnet } =
     usePosnetStatus();
   const ventaPrinter = useMemo(
-    () => ({ reprintTicket, printError, reprinting }),
-    [reprintTicket, printError, reprinting],
+    () => ({ reprintTicket, printTicketData, printError, reprinting }),
+    [reprintTicket, printTicketData, printError, reprinting],
   );
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
@@ -147,6 +155,7 @@ export default function CajaClient({ drinks, currentUser }: Props) {
     setCloseModalOpen,
     printerStatus,
     testPrint,
+    pairPrinterDevice,
     printerTestMessage,
     posnetLevel,
     posnetMessage,

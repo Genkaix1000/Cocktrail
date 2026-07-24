@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Clase printer + vendor-specific (muchas ticketeras ESC/POS baratas). -->
+    <usb-device class="7" />
+    <usb-device class="255" />
+</resources>

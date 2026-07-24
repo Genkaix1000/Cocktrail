@@ -22,7 +22,6 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
-import { gsap } from "gsap";
 
 import DrinkCard from "@/components/shared/DrinkCard";
 import { drinkIcon } from "@/lib/icons";
@@ -38,6 +37,7 @@ type Props = {
   drinks: Drink[];
   printer: {
     reprintTicket: (orderId: string) => Promise<void>;
+    printTicketData: (base64: string) => Promise<void>;
     printError: string | null;
     reprinting: boolean;
   };
@@ -329,24 +329,6 @@ export default function VentaSection({ drinks, printer }: Props) {
 
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // GSAP stagger entrance on load complete
-  useEffect(() => {
-    if (!loadingProducts) {
-      gsap.fromTo(
-        ".drink-card-anim",
-        { opacity: 0, y: 15 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.45,
-          stagger: 0.04,
-          ease: "power2.out",
-          clearProps: "transform"
-        }
-      );
-    }
-  }, [loadingProducts]);
-
   const [sortBy, setSortBy] = useState<"alfabeto" | "tendencia" | "precio">("alfabeto");
 
   const sortedDrinks = useMemo(() => {
@@ -429,7 +411,14 @@ export default function VentaSection({ drinks, printer }: Props) {
     startPosnetPayment,
     startQrPayment,
     stopPosnetRetry,
-  } = useCheckout({ cart, cartEntries, totalPrice, totalItems, clearCart });
+  } = useCheckout({
+    cart,
+    cartEntries,
+    totalPrice,
+    totalItems,
+    clearCart,
+    printTicketData: printer.printTicketData,
+  });
 
   const { reprintTicket, printError, reprinting } = printer;
 
@@ -447,27 +436,16 @@ export default function VentaSection({ drinks, printer }: Props) {
     }
   }
 
-  // GSAP pulse on shopping bag totalItems change
+  // CSS pulse on shopping bag totalItems change
   useEffect(() => {
     if (shoppingBagRef.current && totalItems > 0) {
-      gsap.fromTo(
-        shoppingBagRef.current,
-        { scale: 0.95 },
-        { scale: 1.08, duration: 0.12, yoyo: true, repeat: 1, ease: "back.out(2)" }
-      );
+      shoppingBagRef.current.classList.add("bag-pulse");
+      const t = setTimeout(() => {
+        shoppingBagRef.current?.classList.remove("bag-pulse");
+      }, 300);
+      return () => clearTimeout(t);
     }
   }, [totalItems]);
-
-  // GSAP ticket pop-in animation on successful payment
-  useEffect(() => {
-    if (latestOrder) {
-      gsap.fromTo(
-        ".success-ticket-anim",
-        { opacity: 0, scale: 0.92, y: 15 },
-        { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.4)", delay: 0.05 }
-      );
-    }
-  }, [latestOrder]);
 
   function openCheckout() {
     setIsCartOpen(false);
@@ -740,8 +718,8 @@ export default function VentaSection({ drinks, printer }: Props) {
               <>
                 {/* Mobile Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:hidden">
-                  {filteredDrinks.map((d) => (
-                    <div key={d.id} className="drink-card-anim opacity-0">
+                  {filteredDrinks.map((d, idx) => (
+                    <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
                       <DrinkCard
                         {...d}
                         icon={d.iconName}
@@ -756,7 +734,7 @@ export default function VentaSection({ drinks, printer }: Props) {
                 {/* Desktop Grid */}
                 <div className="hidden md:grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   {filteredDrinks.map((d, idx) => (
-                    <div key={d.id} className="drink-card-anim opacity-0">
+                    <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
                       <CompactDrinkCard
                         drink={d}
                         qty={cart[d.id] || 0}
@@ -955,7 +933,7 @@ export default function VentaSection({ drinks, printer }: Props) {
 
             {latestOrder ? (
               // Vista Éxito / Ticket (con animación elástica GSAP)
-              <div className="success-ticket-anim opacity-0 flex flex-col items-center justify-center py-6 gap-4 text-center">
+              <div className="success-ticket-anim flex flex-col items-center justify-center py-6 gap-4 text-center">
                 <div className="w-16 h-16 rounded-full bg-green-soft border border-green-line flex items-center justify-center text-green shrink-0">
                   <Check size={32} strokeWidth={3} className="animate-bounce" />
                 </div>

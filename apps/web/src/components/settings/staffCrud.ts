@@ -1,3 +1,5 @@
+import { loadCols, saveCols } from "@/lib/crudCols";
+
 export type StaffColId = "user" | "role" | "type" | "created" | "actions";
 
 export const STAFF_COLS_STORAGE_KEY = "crud:staff:cols:v1";
@@ -31,25 +33,11 @@ export function isSystemUser(username: string) {
 const ALL: StaffColId[] = ["user", "role", "type", "created", "actions"];
 
 export function loadStaffCols(): StaffColId[] {
-  if (typeof window === "undefined") return [...STAFF_COLS_DEFAULT];
-  try {
-    const raw = localStorage.getItem(STAFF_COLS_STORAGE_KEY);
-    if (!raw) return [...STAFF_COLS_DEFAULT];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [...STAFF_COLS_DEFAULT];
-    const set = new Set(parsed.filter((c): c is StaffColId => ALL.includes(c as StaffColId)));
-    for (const req of STAFF_COLS_REQUIRED) set.add(req);
-    const ordered = ALL.filter((c) => set.has(c));
-    return ordered.length >= 2 ? ordered : [...STAFF_COLS_DEFAULT];
-  } catch {
-    return [...STAFF_COLS_DEFAULT];
-  }
+  return loadCols(STAFF_COLS_STORAGE_KEY, ALL, STAFF_COLS_REQUIRED, STAFF_COLS_DEFAULT);
 }
 
 export function saveStaffCols(cols: StaffColId[]) {
-  const set = new Set(cols);
-  for (const req of STAFF_COLS_REQUIRED) set.add(req);
-  localStorage.setItem(STAFF_COLS_STORAGE_KEY, JSON.stringify(ALL.filter((c) => set.has(c))));
+  saveCols(STAFF_COLS_STORAGE_KEY, ALL, STAFF_COLS_REQUIRED, cols);
 }
 
 export function staffGridTemplate(cols: StaffColId[]): string {

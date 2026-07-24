@@ -113,6 +113,29 @@ pnpm --filter cocktrail-app start -H 0.0.0.0      # web por LAN
 3. Generá un QR apuntando a `http://192.168.0.50:3000/carta`.
 4. El cliente escanea, pide, y el flujo barra/caja/admin corre en la laptop.
 
+### 5.1 Caja + impresora térmica (app Android)
+
+La ticketera va enchufada a la **tablet de caja**. La forma recomendada es la
+app **miBoliche Caja** (`apps/caja-android/`): WebView a pantalla completa +
+USB Host nativo. No necesita HTTPS ni IP fija — la app descubre el servidor
+barriendo la subred de la tablet.
+
+1. Compilá el APK: `pnpm build:caja-apk` (deja el archivo en
+   `apps/web/public/miboliche-caja.apk`).
+2. En la tablet, Chrome → `http://<IP-LAN>:3000` → `/admin` → **Sistema** →
+   **Descargar app** → instalar.
+3. Abrí la app: busca el servidor sola. Si falla, la pantalla pide la dirección
+   (la misma que muestra Sistema).
+4. Enchufá la ticketera → aceptá el permiso USB (“usar siempre”).
+
+Conviene igual una **reserva DHCP** en el router para que la IP no cambie, pero
+ya no es un requisito.
+
+Fallback (sin APK): Chrome + WebUSB. Requiere HTTPS (`pnpm dev:web:https` +
+mkcert) o el flag
+`chrome://flags/#unsafely-treat-insecure-origin-as-secure`. Ver
+`apps/caja-android/README.md`.
+
 ---
 
 ## 6. Reset / limpieza

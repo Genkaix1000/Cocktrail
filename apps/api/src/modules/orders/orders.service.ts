@@ -16,7 +16,12 @@ function shortToken(): string {
   return randomBytes(4).toString("hex");
 }
 
-export type CreateOrderResult = Order & { printed: boolean };
+export type CreateOrderResult = Order & {
+  /** Siempre false en server: la tablet de caja imprime por WebUSB. */
+  printed: boolean;
+  /** ESC/POS en base64 para que el cliente imprima (solo ventas de caja). */
+  ticketData?: string;
+};
 
 export type OrdersServiceDeps = {
   ordersRepo: OrdersRepository;
@@ -26,7 +31,8 @@ export type OrdersServiceDeps = {
   emit: EmitFn;
   generateTicketCodeString?: (orderId: string) => string;
   saveTicket?: (orderId: string, code: string) => Promise<void>;
-  printTicket?: (order: Order, nightEvent: NightEvent) => Promise<void>;
+  /** Arma bytes ESC/POS (base64). La impresión física es en el navegador. */
+  renderTicket?: (order: Order, nightEvent: NightEvent) => Promise<string>;
   /** Puerto de verificación de pago — el adaptador (MP) lo cablea app.ts. */
   verifyPayment?: VerifyPaymentFn;
   /**
@@ -170,20 +176,20 @@ export class OrdersService {
       await this.deps.saveTicket(order.id, order.ticketCode);
     }
 
-    let printed = false;
-    // La impresión cuelga del veredicto (no_aplica = efectivo; confirmado = MP
+    let ticketData: string | undefined;
+    // El payload cuelga del veredicto (no_aplica = efectivo; confirmado = MP
     // verificado) — a esta altura los otros veredictos ya abortaron.
-    if (this.deps.printTicket && esVentaDeCaja && (verdict.result === "no_aplica" || verdict.result === "confirmado")) {
+    // La tablet imprime por WebUSB; el server solo arma los bytes.
+    if (this.deps.renderTicket && esVentaDeCaja && (verdict.result === "no_aplica" || verdict.result === "confirmado")) {
       try {
-        await this.deps.printTicket(order, event);
-        printed = true;
+        ticketData = await this.deps.renderTicket(order, event);
       } catch {
-        printed = false; // red de seguridad extra; printTicket ya no debería nunca tirar
+        ticketData = undefined;
       }
     }
 
     this.deps.emit({ type: "order.created", order });
-    return { ...order, printed };
+    return { ...order, printed: false, ticketData };
   }
 
   async updateOrderStatus(

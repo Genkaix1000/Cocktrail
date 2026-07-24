@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Monitor, Plus, RotateCw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Monitor, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { ApiError } from "@/services/api-client";
 import {
   pdvService,
@@ -15,6 +15,7 @@ import Toast from "@/components/shared/Toast";
 import MpHealthPanel from "./MpHealthPanel";
 import PdvTable from "./PdvTable";
 import PdvFormPanel, { type PdvForm } from "./PdvFormPanel";
+import BoskoSelect from "@/components/shared/BoskoSelect";
 
 const SUPPORTED_BAR_CODE = process.env.NEXT_PUBLIC_BAR_CODE || "BARRA-01";
 
@@ -29,6 +30,15 @@ function deviceEstado(device: DeviceRow): "activo" | "historico" | "sin-caja" {
   if (device.cajaId) return "historico";
   return "sin-caja";
 }
+
+type PosnetEstadoFilter = "all" | ReturnType<typeof deviceEstado>;
+
+const POSNET_VIEWS: { id: PosnetEstadoFilter; label: string }[] = [
+  { id: "all", label: "Todos" },
+  { id: "activo", label: "Activos" },
+  { id: "historico", label: "Históricos" },
+  { id: "sin-caja", label: "Sin caja" },
+];
 
 export default function PdvSection() {
   const [cajas, setCajas] = useState<CajaRow[]>([]);
@@ -54,12 +64,27 @@ export default function PdvSection() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ deviceId: string; label: string } | null>(null);
 
+  // Búsqueda + filtro de estado de la lista de Posnets
+  const [posnetSearch, setPosnetSearch] = useState("");
+  const [posnetEstado, setPosnetEstado] = useState<PosnetEstadoFilter>("all");
+
   // Acciones por fila de la lista única
   const [modePendingId, setModePendingId] = useState<string | null>(null);
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);
 
   // Re-provisioning (bloque H): confirmación previa — el QR cambia.
   const [reprovisionConfirm, setReprovisionConfirm] = useState<CajaRow | null>(null);
+
+  const filteredDevices = useMemo(() => {
+    const q = posnetSearch.trim().toLowerCase();
+    return devices.filter((d) => {
+      if (posnetEstado !== "all" && deviceEstado(d) !== posnetEstado) return false;
+      if (!q) return true;
+      return `${d.deviceId} ${d.deviceUsername ?? ""} ${d.operatingMode ?? ""}`
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [devices, posnetSearch, posnetEstado]);
 
   const createBtnRef = useRef<HTMLButtonElement>(null);
   const qrRefreshAttemptedRef = useRef(false);
@@ -413,7 +438,7 @@ export default function PdvSection() {
     mpListing.token.userId !== mpListing.sellerUserId;
 
   return (
-    <div className="flex flex-col gap-8 max-w-5xl">
+    <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -536,24 +561,24 @@ export default function PdvSection() {
           </div>
         ) : (
           <div className="flex items-center gap-2.5 flex-wrap">
-            <select
+            <BoskoSelect
+              className="flex-1 min-w-[200px]"
               value={newDeviceId}
-              onChange={(e) => setNewDeviceId(e.target.value)}
+              onChange={setNewDeviceId}
               aria-label="Posnet reportado por Mercado Pago"
-              className="flex-1 min-w-[200px] h-10 px-3 bg-[var(--bg-input)] border border-[var(--border-strong)] rounded-xl text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
-            >
-              <option value="">
-                {mpCandidates.length > 0
+              placeholder={
+                mpCandidates.length > 0
                   ? "Elegí un lector de tu cuenta…"
-                  : "Todos los lectores de la cuenta ya están registrados"}
-              </option>
-              {mpListing.devices.map((d) => (
-                <option key={d.id} value={d.id} disabled={d.registeredLocally}>
-                  {d.model} — {d.operatingMode ?? "modo desconocido"}
-                  {d.registeredLocally ? " — ya registrado" : ""} — {d.id}
-                </option>
-              ))}
-            </select>
+                  : "Todos los lectores de la cuenta ya están registrados"
+              }
+              disabled={mpCandidates.length === 0}
+              options={mpListing.devices.map((d) => ({
+                value: d.id,
+                label: `${d.model} — ${d.operatingMode ?? "modo desconocido"}`,
+                hint: d.registeredLocally ? `${d.id} · ya registrado` : d.id,
+                disabled: d.registeredLocally,
+              }))}
+            />
             <input
               type="text"
               value={newAlias}
@@ -574,9 +599,47 @@ export default function PdvSection() {
           </div>
         )}
 
-        {devices.length > 0 ? (
+        {devices.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {POSNET_VIEWS.map((v) => {
+                const active = posnetEstado === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setPosnetEstado(v.id)}
+                    className={`h-9 px-3.5 rounded-full text-[12px] font-semibold transition-all cursor-pointer ${
+                      active
+                        ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)] border border-transparent"
+                        : "bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex-1 min-w-[180px] flex items-center h-9 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] overflow-hidden focus-within:border-[var(--accent-primary)]">
+              <input
+                type="text"
+                value={posnetSearch}
+                onChange={(e) => setPosnetSearch(e.target.value)}
+                placeholder="Buscar por ID, alias o modo…"
+                aria-label="Buscar Posnet"
+                className="flex-1 h-full pl-4 pr-2 bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
+              />
+              <span className="w-9 h-9 flex items-center justify-center text-[var(--accent-primary)] shrink-0">
+                <Search size={15} />
+              </span>
+            </div>
+          </div>
+        )}
+
+        {filteredDevices.length > 0 ? (
           <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
-            {devices.map((p) => {
+            {filteredDevices.map((p) => {
               const estado = deviceEstado(p);
               return (
                 <div key={p.id} className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
@@ -677,7 +740,11 @@ export default function PdvSection() {
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-panel)] p-6 text-center">
-            <p className="text-[12px] text-[var(--text-tertiary)]">No hay Posnets registrados.</p>
+            <p className="text-[12px] text-[var(--text-tertiary)]">
+              {devices.length > 0
+                ? "Sin resultados para tu búsqueda."
+                : "No hay Posnets registrados."}
+            </p>
           </div>
         )}
       </div>

@@ -32,11 +32,21 @@ beforeEach(() => {
 });
 
 describe("SistemaSection", () => {
-  it("muestra el título y el botón de restore, sin modal abierto inicialmente", () => {
+  it("muestra el título, el botón de restore y la descarga del APK, sin modal abierto inicialmente", () => {
     render(<SistemaSection />);
     expect(screen.getByText("Sistema")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Restaurar desde backup/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Descargar app/i })).toHaveAttribute(
+      "href",
+      "/miboliche-caja.apk",
+    );
     expect(screen.queryByText(/Tu contraseña/i)).not.toBeInTheDocument();
+  });
+
+  // La dirección que la app pide a mano es el origen real del server, no una IP fija.
+  it("muestra como dirección del servidor el origen desde el que se sirve la página", async () => {
+    render(<SistemaSection />);
+    expect(await screen.findByText(window.location.origin)).toBeInTheDocument();
   });
 
   it("al apretar el botón, abre el modal de confirmación con contraseña", async () => {

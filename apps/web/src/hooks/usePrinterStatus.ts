@@ -2,32 +2,44 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  isPrinterBackendAvailable,
+  isPrinterConnected,
+  pairPrinter,
+  printEscPos,
+} from "@/lib/webusb-printer";
 import { printerService } from "@/services/printer.service";
 
 /**
- * Estado de la impresora térmica de caja: polling de conexión (cada 30s),
- * impresión de prueba y reimpresión de tickets.
- *
- * Extraído de CajaClient.tsx — vive en el shell porque lo consume tanto el
- * sidebar (printerStatus/testPrint/printerTestMessage) como el ticket de
- * éxito de VentaSection y el popup de detalle de Historial
- * (reprintTicket/printError/reprinting). Se agrupa todo en un solo hook de
- * "impresora" en vez de partir reprintTicket hacia useCheckout: es lógica de
- * impresión, no de cobro, y así el shell puede compartir un único hook con
- * ambos consumidores sin duplicar estado.
+ * Estado de la impresora térmica de caja: vínculo USB en ESTE dispositivo
+ * (app Android nativa o WebUSB), impresión de prueba y reimpresión.
+ * El server solo arma bytes ESC/POS.
  */
 export function usePrinterStatus() {
-  const [printerStatus, setPrinterStatus] = useState<{ connected: boolean; message: string } | null>(null);
+  const [printerStatus, setPrinterStatus] = useState<{ connected: boolean; message: string } | null>(
+    null,
+  );
   const [printerTestMessage, setPrinterTestMessage] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [reprinting, setReprinting] = useState(false);
 
   const refreshPrinterStatus = useCallback(async () => {
+    if (!isPrinterBackendAvailable()) {
+      setPrinterStatus({
+        connected: false,
+        message: "Abrí la app miBoliche Caja (o Chrome con WebUSB/HTTPS).",
+      });
+      return;
+    }
     try {
-      const status = await printerService.getStatus();
-      setPrinterStatus(status);
+      const connected = await isPrinterConnected();
+      setPrinterStatus(
+        connected
+          ? { connected: true, message: "Impresora vinculada en este dispositivo" }
+          : { connected: false, message: "Sin impresora vinculada en este dispositivo" },
+      );
     } catch {
-      setPrinterStatus({ connected: false, message: "No se pudo consultar el estado de la impresora." });
+      setPrinterStatus({ connected: false, message: "No se pudo consultar la impresora USB." });
     }
   }, []);
 
@@ -38,11 +50,37 @@ export function usePrinterStatus() {
     return () => clearInterval(interval);
   }, [refreshPrinterStatus]);
 
+  const pairPrinterDevice = useCallback(async () => {
+    setPrinterTestMessage(null);
+    try {
+      await pairPrinter();
+      // El diálogo nativo es async; refrescar un poco después.
+      setTimeout(() => refreshPrinterStatus(), 800);
+      setPrinterTestMessage("Pedí permiso USB — aceptá «Usar siempre» si aparece.");
+    } catch (err) {
+      setPrinterTestMessage(err instanceof Error ? err.message : "No se pudo vincular la impresora.");
+    } finally {
+      refreshPrinterStatus();
+    }
+  }, [refreshPrinterStatus]);
+
+  const printTicketData = useCallback(async (base64: string) => {
+    setPrintError(null);
+    try {
+      await printEscPos(base64);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al imprimir.";
+      setPrintError(message);
+      throw err;
+    }
+  }, []);
+
   const testPrint = useCallback(async () => {
     setPrinterTestMessage(null);
     try {
-      const result = await printerService.test();
-      setPrinterTestMessage(result.message);
+      const payload = await printerService.test();
+      await printEscPos(payload.data);
+      setPrinterTestMessage(payload.message);
     } catch (err) {
       setPrinterTestMessage(err instanceof Error ? err.message : "Error al imprimir la prueba.");
     } finally {
@@ -54,10 +92,8 @@ export function usePrinterStatus() {
     setReprinting(true);
     setPrintError(null);
     try {
-      const result = await printerService.reprint(orderId);
-      if (!result.success) {
-        setPrintError(result.message || "No se pudo imprimir el ticket.");
-      }
+      const payload = await printerService.reprint(orderId);
+      await printEscPos(payload.data);
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : "Error al reimprimir.");
     } finally {
@@ -68,6 +104,8 @@ export function usePrinterStatus() {
   return {
     printerStatus,
     refreshPrinterStatus,
+    pairPrinterDevice,
+    printTicketData,
     testPrint,
     printerTestMessage,
     reprintTicket,
@@ -75,4 +113,3 @@ export function usePrinterStatus() {
     reprinting,
   };
 }
-

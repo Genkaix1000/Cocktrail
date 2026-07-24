@@ -1,3 +1,5 @@
+import { loadCols, saveCols } from "@/lib/crudCols";
+
 export type CartaColId =
   | "id"
   | "icon"
@@ -52,30 +54,11 @@ const ALL: CartaColId[] = [
 ];
 
 export function loadCartaCols(): CartaColId[] {
-  if (typeof window === "undefined") return [...CARTA_COLS_DEFAULT];
-  try {
-    const raw = localStorage.getItem(CARTA_COLS_STORAGE_KEY);
-    if (!raw) return [...CARTA_COLS_DEFAULT];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [...CARTA_COLS_DEFAULT];
-    const set = new Set(
-      parsed.filter((c): c is CartaColId => ALL.includes(c as CartaColId)),
-    );
-    for (const req of CARTA_COLS_REQUIRED) set.add(req);
-    const ordered = ALL.filter((c) => set.has(c));
-    return ordered.length >= 2 ? ordered : [...CARTA_COLS_DEFAULT];
-  } catch {
-    return [...CARTA_COLS_DEFAULT];
-  }
+  return loadCols(CARTA_COLS_STORAGE_KEY, ALL, CARTA_COLS_REQUIRED, CARTA_COLS_DEFAULT);
 }
 
 export function saveCartaCols(cols: CartaColId[]) {
-  const set = new Set(cols);
-  for (const req of CARTA_COLS_REQUIRED) set.add(req);
-  localStorage.setItem(
-    CARTA_COLS_STORAGE_KEY,
-    JSON.stringify(ALL.filter((c) => set.has(c))),
-  );
+  saveCols(CARTA_COLS_STORAGE_KEY, ALL, CARTA_COLS_REQUIRED, cols);
 }
 
 export function cartaGridTemplate(cols: CartaColId[]): string {
