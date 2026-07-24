@@ -85,7 +85,7 @@ export function logsGridTemplate(cols: LogsColId[]): string {
   return cols.map((c) => sizes[c]).join(" ");
 }
 
-export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   efectivo: "Efectivo",
   debito: "Posnet",
   qr: "QR",

@@ -14,9 +14,9 @@ export const metadata: Metadata = {
   title: "Bosko - Menú Digital",
   description: "Pedí tus tragos favoritos desde tu mesa",
   icons: {
-    icon: "/bosko.webp",
-    shortcut: "/bosko.webp",
-    apple: "/bosko.webp",
+    icon: "/navicon.png",
+    shortcut: "/navicon.png",
+    apple: "/navicon.png",
   },
 };
 
