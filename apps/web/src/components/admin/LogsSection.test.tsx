@@ -57,7 +57,25 @@ describe("LogsSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("cancela un ticket tras confirmar el texto exacto", async () => {
+  it("muestra el detalle del ticket en la propia tabla, sin popup", async () => {
+    const order = makeOrder({
+      status: "entregado",
+      deliveredByBar: "Barra VIP",
+      deliveredBy: "barman1",
+      redeemMethod: "manual",
+    });
+    mockedOrdersService.getAuditLogs.mockResolvedValue([order]);
+
+    render(<LogsSection isBosko={false} />);
+
+    // Lo que antes vivía en el modal ahora son columnas de la fila.
+    expect(await screen.findByText("TKN-1")).toBeInTheDocument();
+    expect(screen.getByText("Entregado")).toBeInTheDocument();
+    expect(screen.getByText("Barra VIP · barman1")).toBeInTheDocument();
+    expect(screen.getByText("2x Fernet con Coca")).toBeInTheDocument();
+  });
+
+  it("cancela un ticket desde la acción de la fila tras confirmar", async () => {
     const user = userEvent.setup();
     const order = makeOrder();
     const cancelledOrder: Order = { ...order, status: "cancelado", cancelledBy: "cajera1" };
@@ -67,23 +85,33 @@ describe("LogsSection", () => {
 
     render(<LogsSection isBosko={false} />);
 
-    // Abre el detalle del ticket haciendo click en la fila.
-    const ticketCell = await screen.findByText("#1");
-    await user.click(ticketCell);
-
-    // Inicia el flujo de cancelación.
-    const cancelButton = await screen.findByRole("button", { name: /Cancelar Ticket/i });
-    await user.click(cancelButton);
-
-    const input = screen.getByPlaceholderText("Escribir aquí...");
-    await user.type(input, "cancelar");
-
-    const confirmButton = screen.getByRole("button", { name: /Confirmar/i });
-    await user.click(confirmButton);
+    await user.click(await screen.findByRole("button", { name: "Cancelar ticket #1" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     await waitFor(() =>
       expect(mockedOrdersService.updateStatus).toHaveBeenCalledWith(order.id, "cancelado"),
     );
+    expect(await screen.findByText("Cancelado")).toBeInTheDocument();
+  });
+
+  it("filtra los tickets con el buscador", async () => {
+    const user = userEvent.setup();
+    mockedOrdersService.getAuditLogs.mockResolvedValue([
+      makeOrder(),
+      makeOrder({ id: "order-2", token: "TKN-2", displayNumber: 2, createdBy: "cajera2" }),
+    ]);
+
+    render(<LogsSection isBosko={false} />);
+
+    expect(await screen.findByText("#2")).toBeInTheDocument();
+
+    await user.type(
+      screen.getByPlaceholderText("Buscar por ticket, trago, creador o token…"),
+      "cajera2",
+    );
+
+    expect(screen.queryByText("#1")).not.toBeInTheDocument();
+    expect(screen.getByText("#2")).toBeInTheDocument();
   });
 
   it("precarga el filtro de mes/día cuando llega un initialFilterTimestamp (redirect desde Historial)", async () => {

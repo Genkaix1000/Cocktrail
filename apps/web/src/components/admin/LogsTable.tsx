@@ -546,6 +546,7 @@ export default function LogsTable({
                           confirm
                           message={`¿Cancelar #${o.displayNumber}?`}
                           className="w-full h-full"
+                          askLabel={`Cancelar ticket #${o.displayNumber}`}
                           onAsk={() => {}}
                           onCancel={onDismissCancel}
                           onConfirm={() => onConfirmCancel(o)}
