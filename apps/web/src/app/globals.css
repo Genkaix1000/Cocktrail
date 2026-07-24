@@ -11,11 +11,19 @@
 /* BOSKO · LIGHT                                             */
 /* ────────────────────────────────────────────────────────── */
 :root {
-  --bg-app: #F4F5F6;
+  /*
+    Jerarquía light (ref Bosko):
+      --bg-app     = fondo página (más blanco)
+      --bg-panel   = topbar / sidebar / canvas dashboard (blanco gris)
+      --bg-surface = cards KPI / widgets (mismo blanco que el fondo)
+    Anidar dentro de una card → otra vez --bg-panel.
+  */
+  --bg-app: #FFFFFF;
   --bg-primary: var(--bg-app);
+  --bg-panel: #F4F5F6;
   --bg-surface: #FFFFFF;
-  --bg-surface-elevated: #F9FAFB;
-  --bg-input: #FFFFFF;
+  --bg-surface-elevated: var(--bg-panel);
+  --bg-input: var(--bg-panel);
 
   --border-subtle: #E5E7EB;
   --border-strong: #D1D5DB;
@@ -39,9 +47,9 @@
 
   /* ink scale → semánticos (compat Tailwind ink-*) */
   --ink-950: var(--bg-app);
-  --ink-925: var(--bg-surface);
+  --ink-925: var(--bg-panel);
   --ink-900: var(--bg-surface);
-  --ink-850: var(--bg-surface-elevated);
+  --ink-850: var(--bg-panel);
   --ink-800: var(--border-subtle);
   --ink-750: var(--border-strong);
   --ink-700: var(--border-strong);
@@ -84,11 +92,13 @@
 /* BOSKO · DARK                                              */
 /* ────────────────────────────────────────────────────────── */
 .dark {
+  /* app = más profundo; panel = chrome; surface = cards elevadas */
   --bg-app: #111315;
   --bg-primary: var(--bg-app);
-  --bg-surface: #1A1D21;
-  --bg-surface-elevated: #22262C;
-  --bg-input: #22262C;
+  --bg-panel: #1A1D21;
+  --bg-surface: #22262C;
+  --bg-surface-elevated: #2A2F36;
+  --bg-input: var(--bg-surface);
 
   --border-subtle: #2D323B;
   --border-strong: #374151;
@@ -108,7 +118,7 @@
   --accent-featured-deep: #0F382C;
 
   --ink-950: var(--bg-app);
-  --ink-925: var(--bg-surface);
+  --ink-925: var(--bg-panel);
   --ink-900: var(--bg-surface);
   --ink-850: var(--bg-surface-elevated);
   --ink-800: var(--border-subtle);
@@ -145,8 +155,8 @@
   --danger-soft: #451212;
   --danger-line: color-mix(in oklab, var(--danger) 25%, transparent);
 
-  --shadow-card: 0 0 0 1px var(--border-subtle);
-  --shadow-card-hover: 0 0 0 1px var(--border-strong);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 6px 28px rgba(0, 0, 0, 0.45);
 }
 
 /* ────────────────────────────────────────────────────────── */
@@ -176,6 +186,7 @@
   /* Semantic Variables (New System) */
   --color-primary: var(--bg-primary);
   --color-surface: var(--bg-surface);
+  --color-panel: var(--bg-panel);
   --color-accent: var(--text-accent);
 
   /* Surfaces (Backward Compatibility) */
@@ -264,6 +275,18 @@ body {
   transition: box-shadow 0.2s ease;
 }
 
+/* Escotillado diagonal — barras / segmentos secundarios (charts Bosko) */
+.bosko-stripe {
+  background-color: var(--bg-panel);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    var(--border-strong) 3px,
+    var(--border-strong) 5px
+  );
+}
+
 /* ──────────────────────────────────────────────────────────
    Animaciones reutilizables (extraídas del handoff)
    ────────────────────────────────────────────────────────── */
@@ -299,6 +322,39 @@ body {
 /* Hide scrollbars on horizontal chip rows / scroll containers */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
+
+/* Scrollbar Bosko — fina, pill, tokens de borde */
+.bosko-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.bosko-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.bosko-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bosko-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.bosko-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-tertiary);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.dark .bosko-scroll {
+  scrollbar-color: var(--border-subtle) transparent;
+}
+.dark .bosko-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--border-subtle);
+}
+.dark .bosko-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-tertiary);
+}
 
 /* ──────────────────────────────────────────────────────────
    Bosko · utilidades legacy (carta / promo) — se limpian en fases posteriores

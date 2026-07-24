@@ -53,7 +53,7 @@ describe("LogsSection", () => {
     render(<LogsSection isBosko={false} />);
 
     expect(
-      await screen.findByText("— No hay tickets registrados en el historial —"),
+      await screen.findByText("No hay tickets registrados en el historial"),
     ).toBeInTheDocument();
   });
 

@@ -16,7 +16,7 @@ import Toast from "@/components/shared/Toast";
 import { groupNightsByDay } from "@/lib/analytics";
 import { exportHistorialPdf } from "@/lib/pdfExport";
 import { useTheme } from "@/components/ThemeProvider";
-import { MONTHS_SHORT, formatShortDate } from "@/lib/utils";
+import { formatShortDate } from "@/lib/utils";
 
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
 import type { UnifiedNightDay } from "@/lib/analytics";
@@ -33,6 +33,9 @@ type Props = {
   // sección no conoce nada de LogsSection, solo invoca el callback.
   onRedirectToLogs: (ts: number) => void;
 };
+
+const cardShell =
+  "bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-card";
 
 // "Esta Semana" (semana calendario, lun-dom) y "Este Mes" (desde el día 1)
 // son ventanas distintas que pueden solaparse solo parcialmente — al
@@ -72,56 +75,44 @@ export default function HistorialSection({
   const weekRange = formatDateRange(weeklyDelta.thisWeekStart, now);
   const monthRange = formatDateRange(monthlyDelta.thisMonthStart, now);
 
-  // Memoized unified days
   const unifiedHistoryDays: UnifiedNightDay[] = useMemo(
     () => groupNightsByDay(historyEvents),
     [historyEvents],
   );
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-8 w-full">
       {!historyLoaded || isTabTransitioning ? (
         <div className="space-y-6 animate-dashboard-in">
-          {/* Title Skeleton */}
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-ink-800 pb-5">
+          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
             <div className="space-y-2">
-              <div className="h-8 bg-ink-900 border border-ink-850 rounded-lg w-52 animate-pulse" />
-              <div className="h-4 bg-ink-900 border border-ink-850 rounded-lg w-72 animate-pulse" />
+              <div className="h-8 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg w-52 animate-pulse" />
+              <div className="h-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg w-72 animate-pulse" />
             </div>
           </div>
-
-          {/* Cards Skeleton (3 Cards) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-ink-900 border border-ink-800/80 rounded-2xl p-5 animate-pulse h-[125px] flex flex-col justify-between">
-                <div className="h-3.5 bg-ink-850 rounded w-1/2" />
-                <div className="h-8 bg-ink-850 rounded w-3/4" />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="bg-[var(--accent-primary)]/30 rounded-2xl p-5 animate-pulse h-[125px]" />
+            {[1, 2].map((i) => (
+              <div key={i} className={`${cardShell} p-5 animate-pulse h-[125px]`} />
             ))}
           </div>
-
-          {/* Trago Estrella Skeleton */}
-          <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 animate-pulse h-[100px] mt-4" />
-
-          {/* Comparator Skeleton */}
-          <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 animate-pulse h-[250px] mt-4" />
+          <div className={`${cardShell} p-5 animate-pulse h-[100px]`} />
+          <div className={`${cardShell} p-5 animate-pulse h-[250px]`} />
         </div>
       ) : (
-        <div key="historial" className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-ink-800 pb-5">
+        <div key="historial" className="flex flex-col gap-8">
+          <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
             <div>
-              <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-                  <History size={16} />
-                </div>
-                <span>Historial de Noches</span>
+              <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+                Historial de Noches
               </h1>
-              <p className="text-[13px] text-ink-400 mt-1">
-                Cada noche cerrada se archiva acá con sus totales, pedidos y ventas en efectivo
+              <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+                Cada noche cerrada se archiva acá con sus totales, pedidos y ventas
               </p>
             </div>
             {historyEvents.length > 0 && (
               <button
+                type="button"
                 disabled={isExporting}
                 onClick={async () => {
                   setIsExporting(true);
@@ -133,10 +124,10 @@ export default function HistorialSection({
                     setIsExporting(false);
                   }
                 }}
-                className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ink-300 hover:text-ink-50 px-2.5 py-1.5 rounded bg-ink-800 border border-ink-700 transition-all cursor-pointer active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-10 px-4 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)] text-[13px] font-semibold flex items-center gap-2 transition-all cursor-pointer active:scale-[0.98] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Download size={12} />
-                <span>{isExporting ? "Generando..." : "Exportar"}</span>
+                <Download size={14} strokeWidth={1.8} />
+                <span>{isExporting ? "Generando…" : "Exportar PDF"}</span>
               </button>
             )}
           </div>
@@ -145,16 +136,15 @@ export default function HistorialSection({
             <Toast variant="error" message={exportError} onClose={() => setExportError(null)} />
           )}
 
-          {/* Grids / Aggregations (Boxed style with sparklines and respective icons) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <MetricCard
               label="Esta Semana"
               value={weeklyDelta.thisWeek}
               isCurrency
               delta={weeklyDelta.delta}
               icon={CalendarDays}
-              color="#10b981"
               subtitle={weekRange}
+              featured
             />
             <MetricCard
               label="Este Mes"
@@ -162,7 +152,6 @@ export default function HistorialSection({
               isCurrency
               delta={monthlyDelta.delta}
               icon={TrendingUp}
-              color="#3b82f6"
               subtitle={monthRange}
             />
             <MetricCard
@@ -171,15 +160,12 @@ export default function HistorialSection({
               isCurrency
               delta={{ label: `${historyEvents.length} noches`, direction: "up", value: 0, pct: 0 }}
               icon={History}
-              color="#a855f7"
               subtitle="acumulado"
             />
           </div>
 
-          {/* Trago Estrella */}
           <NightRecords records={nightRecords} isBosko={isBosko} />
 
-          {/* Selector único: elegir 1 noche = detalle, elegir 2da = comparación */}
           <div className="w-full">
             <NightComparator
               nights={unifiedHistoryDays}
@@ -189,7 +175,6 @@ export default function HistorialSection({
           </div>
         </div>
       )}
-
     </div>
   );
 }

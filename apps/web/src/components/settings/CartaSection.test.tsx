@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import CartaSection from "./CartaSection";
@@ -126,29 +126,56 @@ describe("CartaSection", () => {
     expect(await screen.findByText("Fernet Branca")).toBeInTheDocument();
   });
 
-  it("elimina un trago tras confirmar el texto exacto en SafeDeleteModal", async () => {
-    const user = userEvent.setup();
+  it("elimina un trago con ConfirmRail y Deshacer cancela el DELETE", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const existing = makeDrink({ id: 1, name: "Fernet con Coca" });
     mockedDrinksService.list.mockResolvedValue([existing]);
     mockedDrinksService.delete.mockResolvedValue({ ok: true });
 
-    render(<CartaSection />);
+    try {
+      render(<CartaSection />);
+      await screen.findByText("Fernet con Coca");
 
-    await screen.findByText("Fernet con Coca");
+      await user.click(screen.getByTitle("Eliminar"));
+      expect(await screen.findByText("¿Eliminar?")).toBeInTheDocument();
 
-    await user.click(screen.getByTitle("Eliminar"));
+      await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
-    // SafeDeleteModal usa `expectedText` (el nombre del trago) como placeholder.
-    const input = await screen.findByPlaceholderText("Fernet con Coca");
-    await user.type(input, "Fernet con Coca");
+      await waitFor(() => expect(screen.queryByText("Fernet con Coca")).not.toBeInTheDocument());
+      expect(await screen.findByText("Eliminado: Fernet con Coca")).toBeInTheDocument();
+      expect(mockedDrinksService.delete).not.toHaveBeenCalled();
 
-    // Hay dos botones "Eliminar" en pantalla (el ícono de la fila y el submit
-    // del modal): escopeamos al form del modal para evitar ambigüedad.
-    const modalForm = input.closest("form")!;
-    await user.click(within(modalForm).getByRole("button", { name: "Eliminar" }));
+      await user.click(screen.getByRole("button", { name: "Deshacer" }));
+      expect(await screen.findByText("Fernet con Coca")).toBeInTheDocument();
 
-    await waitFor(() => expect(mockedDrinksService.delete).toHaveBeenCalledWith(1));
-    await waitFor(() => expect(screen.queryByText("Fernet con Coca")).not.toBeInTheDocument());
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(mockedDrinksService.delete).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("confirma el DELETE a la API cuando expira la ventana de Deshacer", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const existing = makeDrink({ id: 1, name: "Fernet con Coca" });
+    mockedDrinksService.list.mockResolvedValue([existing]);
+    mockedDrinksService.delete.mockResolvedValue({ ok: true });
+
+    try {
+      render(<CartaSection />);
+      await screen.findByText("Fernet con Coca");
+
+      await user.click(screen.getByTitle("Eliminar"));
+      await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+      await waitFor(() => expect(screen.queryByText("Fernet con Coca")).not.toBeInTheDocument());
+
+      await vi.advanceTimersByTimeAsync(5000);
+      await waitFor(() => expect(mockedDrinksService.delete).toHaveBeenCalledWith(1));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("togglea disponibilidad de un trago sin abrir el panel de edición", async () => {
@@ -201,21 +228,25 @@ describe("CartaSection", () => {
   });
 
   it("muestra un toast de error si falla la eliminación de un trago", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const existing = makeDrink({ id: 1, name: "Fernet con Coca" });
     mockedDrinksService.list.mockResolvedValue([existing]);
     mockedDrinksService.delete.mockRejectedValue(new Error("network down"));
 
-    render(<CartaSection />);
-    await screen.findByText("Fernet con Coca");
-    await user.click(screen.getByTitle("Eliminar"));
+    try {
+      render(<CartaSection />);
+      await screen.findByText("Fernet con Coca");
+      await user.click(screen.getByTitle("Eliminar"));
+      await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+      await waitFor(() => expect(screen.queryByText("Fernet con Coca")).not.toBeInTheDocument());
 
-    const input = await screen.findByPlaceholderText("Fernet con Coca");
-    await user.type(input, "Fernet con Coca");
-    const modalForm = input.closest("form")!;
-    await user.click(within(modalForm).getByRole("button", { name: "Eliminar" }));
-
-    expect(await screen.findByText(/No se pudo eliminar el trago/i)).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(await screen.findByText(/No se pudo eliminar el trago/i)).toBeInTheDocument();
+      expect(await screen.findByText("Fernet con Coca")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("muestra un toast de error si falla el toggle de disponibilidad", async () => {

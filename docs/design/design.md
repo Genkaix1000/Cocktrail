@@ -12,9 +12,12 @@ Skin oficial: **Bosko**. Referencias: [`reference/bosko-light.png`](./reference/
 
 - **Component-first**: tarjetas, botones, métricas, badges, topbar y sidebar son reutilizables; no estilos one-off por pantalla.
 - **Shared → esta carpeta**: todo elemento que se repita entre rutas (admin, caja, login…) se documenta acá y se implementa una sola vez en `apps/web/src/components/`. Las specs de feature deben apuntar a estas convenciones, no reinventarlas.
-- **Sin negros ni blancos puros en superficies**:
-  - Dark: evitar `#000000`; usar carbón / gris azulado profundo.
-  - Light: evitar `#FFFFFF` plano como fondo de app; usar gris neutro desaturado. El surface de tarjeta puede ser blanco suave.
+- **Jerarquía de superficies (anidación)** — light:
+  1. `--bg-app` (`#FFFFFF`) — fondo de página (**más blanco**).
+  2. `--bg-panel` (`#F4F5F6`) — topbar, sidebar, canvas del dashboard (**blanco gris**).
+  3. `--bg-surface` (`#FFFFFF`) — cards KPI / widgets (mismo blanco que el fondo), sobre el panel.
+  4. Panel anidado **dentro** de una card → otra vez `--bg-panel`.
+  - Dark: app (más profundo) → panel → surface (cards elevadas); anidar en surface vuelve a panel.
 - **Acento**: verde esmeralda (productividad, completado, crecimiento).
 - **Layout**: shell tipo app (sidebar + main) con grid bento (cards con gutters generosos).
 - **Border radius**:
@@ -38,10 +41,11 @@ Nombres semánticos. Al implementar, mapear a CSS variables en `apps/web/src/app
 :root[data-theme="light"],
 :root:not(.dark) {
   /* Superficies */
-  --bg-app: #F4F5F6;
-  --bg-surface: #FFFFFF;
-  --bg-surface-elevated: #F9FAFB;
-  --bg-input: #FFFFFF;
+  --bg-app: #FFFFFF;           /* fondo página — más blanco */
+  --bg-panel: #F4F5F6;         /* topbar / sidebar / canvas — blanco gris */
+  --bg-surface: #FFFFFF;       /* cards KPI — blanco del fondo */
+  --bg-surface-elevated: var(--bg-panel);
+  --bg-input: var(--bg-panel);
 
   /* Bordes */
   --border-subtle: #E5E7EB;
@@ -83,9 +87,10 @@ Elevación por contraste de superficie (o glow sutil de borde), no sombra negra 
 :root[data-theme="dark"] {
   /* Superficies */
   --bg-app: #111315;
-  --bg-surface: #1A1D21;
-  --bg-surface-elevated: #22262C;
-  --bg-input: #22262C;
+  --bg-panel: #1A1D21;
+  --bg-surface: #22262C;
+  --bg-surface-elevated: #2A2F36;
+  --bg-input: var(--bg-surface);
 
   /* Bordes */
   --border-subtle: #2D323B;
@@ -157,7 +162,7 @@ Números de KPI: `tabular-nums`.
 
 Documentar e implementar como componente reutilizable (admin y, más adelante, caja si aplica).
 
-- Contenedor tipo card: fondo `#F8F9FA` (light) / `--bg-surface` (dark), `border-radius: 24px`, margen respecto al borde de la ventana — no full-bleed con borde derecho.
+- Contenedor tipo card: fondo `--bg-panel` sobre el `--bg-app` de la ventana, `border-radius: 24px`, margen — no full-bleed con borde derecho.
 - **Sin divisores horizontales** (ni bajo el logo ni sobre la night card).
 - **Logo** arriba, **alineado a la izquierda**, integrado al flujo (sin centrar ni línea debajo).
   Light → `--accent-primary` (color fuerte). Dark → `--text-primary`.
@@ -188,28 +193,31 @@ GENERAL
 
 ### 4.2 Topbar / headbar (compartido)
 
-Componente compartido entre shells (`AppTopbar`). **No** incluir mail ni notificaciones hasta que existan features.
+Componente compartido (`AppTopbar`). **Autónoma en el flujo**: va al inicio del scroll del
+canvas (`--bg-panel`), **sin border/outline** y **sin sticky** — al scrollear se va con el contenido.
+Las KPI debajo usan `--bg-surface` (blanco) sobre el mismo canvas.
+
+**No** incluir mail ni notificaciones hasta que existan features.
 
 Layout (izquierda → derecha):
 
-1. **Enrutado / ubicación** (obligatorio): breadcrumb o badge de pantalla activa
-   (reemplaza el rol del `OSHeadbar` actual: “dónde estoy”). Ej. `Administración / Dashboard`.
-2. (Opcional futuro) search pill — **omitida** mientras no haya búsqueda global implementada.
-3. **Toggle día/noche**: icono Sun/Moon a la izquierda del bloque de usuario (ocupa el lugar del icono de notificaciones de la referencia).
-4. **Usuario** (derecha):
-   - Icono circular minimalista (iniciales) en `--accent-surface` / `--accent-text`.
-   - Línea 1: **nombre** (SemiBold, `--text-primary`) + icono de persona en acento.
-   - Línea 2: **rol** (Regular, `--text-secondary`) + icono de rol (escudo/admin, billete/caja).
-   - Misma lógica tipográfica que la referencia (primaria + secundaria), pero la secundaria es el **rol**, no el mail.
+1. **Enrutado / ubicación** (obligatorio): breadcrumb. Ej. `Administración / Dashboard`.
+2. (Opcional futuro) search pill — **omitida** mientras no haya búsqueda global.
+3. **Toggle día/noche**: botón circular (mismo lenguaje que iconos de utilidad de la ref).
+4. **Usuario** (derecha): avatar circular + nombre (SemiBold) + rol (Regular, secondary).
 
 ### 4.3 KPI / Metric cards
 
-- **Featured** (una por fila):
+Componente: `MetricCard` (`featured?: boolean`).
+
+- **Featured** (Dashboard → Ventas Totales):
   - Light: fondo `--accent-primary`, texto `--text-on-accent`.
-  - Dark: fondo `--accent-featured` o `--accent-featured-deep`.
-- **Estándar**: `--bg-surface`, borde `1px --border-subtle`.
-- Píldora de tendencia: badge success/danger según dirección.
-- **Datos**: métricas actuales de Cocktrail; solo cambia el envoltorio (`MetricCard` + variante `featured`).
+  - Dark: fondo `--accent-featured`.
+  - Icono: círculo outline semitransparente; en featured se usa flecha `ArrowUpRight` (como la ref).
+- **Estándar**: `--bg-surface` (blanco del fondo) sobre canvas `--bg-panel`, borde `1px --border-subtle`, sombra `--shadow-card`; icono Lucide en círculo outline con `--accent-primary`.
+- Píldora de tendencia: badge success/danger (`--success-soft` / `--danger-soft`); sobre featured, pill blanca/10.
+- **Datos**: métricas actuales de Cocktrail; solo cambia el envoltorio. Spec: [`dashboard-kpis.md`](../specs/features/refactor-ui-bosko/dashboard-kpis.md).
+- Prop `color` hex: deprecated / ignorada.
 
 ### 4.4 Botones
 
@@ -226,9 +234,10 @@ Par `*-bg` / `*-text` del tema. Pills compactos.
 
 ### 4.6 Charts y visualización
 
-- Barras activas: `--accent-primary` / `--accent-bright`, radio superior redondeado.
-- Inactivas / pending: escotillado diagonal (stripes) o `--border-subtle`.
-- Donut: completado → acento; pendiente → stripes.
+- Contenedor: `--bg-surface`, borde `--border-subtle`, `rounded-2xl`, `--shadow-card`.
+- Barras activas / pico: `--accent-primary`, `rounded-t-xl`; secundarias: clase `.bosko-stripe`.
+- Donut: top-2 canales → acento sólido; resto → patrón SVG stripe; centro = `%` + label del #1.
+- Spec: [`dashboard-charts.md`](../specs/features/refactor-ui-bosko/dashboard-charts.md).
 
 ### 4.7 Modales / popups
 
@@ -236,7 +245,29 @@ Overlay semitransparente; panel `--bg-surface`, radius 16–20px; primary + seco
 
 ### 4.8 Forms / CRUD
 
-Tablas sobre `--bg-surface`; inputs con focus ring `--accent-primary`; drawers = mismo lenguaje que modales.
+Plantilla de referencia: **Carta** (`CartaSection` + `DrinksTable`).
+
+**Layout**
+- Toolbar: título con icono + subtítulo (conteo) · CTA “Nuevo …”
+- Search encima de la lista
+- Filas: icono/avatar · nombre · **chip de estado** · meta (precio) · acciones a la derecha
+- Form create/edit: drawer/panel lateral (un solo patrón por sección)
+
+**Color vivo (sin arcoíris)**
+- Chips semánticos (`success` / `warning` / `danger` / `accent`) para rol o estado
+- Iconos Lucide solo en acciones e identidad de fila
+- Tokens Bosko; no paletas de mocks Dribbble
+
+**Delete reversible** (tragos, staff no-sistema, PDVs…)
+1. Click trash → fila tinte `--danger-soft`; idle sale a la izq.; entra `ConfirmRail` (¿Eliminar? · X / Check) desde la derecha — mismo gesto que `LogoutNavRail`
+2. Escape o X cancela
+3. Check → sale de la lista; toast “Eliminado: …” + **Deshacer** (`Toast` `action`)
+4. Undo en ~5s cancela el DELETE; si expira, se llama a la API
+5. Un solo delete pendiente a la vez (el siguiente flushea el anterior)
+
+**Delete irreversible** (desvincular MP, etc.) → `SafeDeleteModal` (escribir nombre). Sin undo.
+
+Componentes: `ConfirmRail`, `Toast` (+ `action`), `SafeDeleteModal`.
 
 ### 4.9 Widgets especiales
 
@@ -275,6 +306,9 @@ Reemplaza el bloque tipo “promo”: **tarjeta flotante** con margen respecto a
 | Night CTA | [`NightActionCard`](../../apps/web/src/components/shared/NightActionCard.tsx) §4.10 |
 | [`MetricCard`](../../apps/web/src/components/shared/MetricCard.tsx) | §4.3 |
 | [`BrandLogo`](../../apps/web/src/components/shared/BrandLogo.tsx) | Logo sidebar en `--text-primary` |
+| [`ConfirmRail`](../../apps/web/src/components/shared/ConfirmRail.tsx) | §4.8 delete inline |
+| [`Toast`](../../apps/web/src/components/shared/Toast.tsx) | Feedback + `action` (Deshacer) |
+| Carta CRUD | Plantilla §4.8 |
 
 ---
 

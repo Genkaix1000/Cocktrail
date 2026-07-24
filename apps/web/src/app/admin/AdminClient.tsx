@@ -8,9 +8,9 @@ import {
   Users,
   FileText,
   CloudDownload,
-  LogOut,
-  X,
-  Check,
+  ChevronLeft,
+  ChevronRight,
+  Power,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
@@ -21,6 +21,7 @@ import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
 import { AppTopbar } from "@/components/shared/AppTopbar";
 import { NightActionCard } from "@/components/shared/NightActionCard";
+import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
 
 import { computeTotals } from "@cocktrail/shared";
 import { useEventState } from "@/hooks/useEventState";
@@ -40,6 +41,11 @@ import { MpFallbackBanner } from "@/components/admin/MpFallbackBanner";
 import HistorialSection from "@/components/admin/HistorialSection";
 import LogsSection from "@/components/admin/LogsSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
+import {
+  MOCK_DEMO_TOTALS,
+  MOCK_DEMO_ORDERS,
+  MOCK_DEMO_HISTORY,
+} from "@/lib/mockDashboard";
 
 import type {
   EventSummary,
@@ -88,6 +94,19 @@ export default function AdminClient({
   const [activeTab, setActiveTab] = useState<string>("monitoreo");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("admin_sidebar_collapsed") === "true";
+  });
+
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("admin_sidebar_collapsed", String(next));
+      return next;
+    });
+    setConfirmLogout(false);
+  }
 
   const [currentUser, setCurrentUser] = useState<{ role: Role; username?: string } | null>(null);
 
@@ -120,9 +139,14 @@ export default function AdminClient({
     });
   }, []);
 
+  const [isDemo, setIsDemo] = useState(false);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      if (params.get("demo") === "true") {
+        setIsDemo(true);
+      }
       const tab = params.get("tab");
       if (tab === "pagos") {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -180,12 +204,17 @@ export default function AdminClient({
   );
 
   const isNightOpen = event?.status === "activo";
-  const lastNight = historyEvents[0] ?? null;
+  const effectiveHistoryEvents = useMemo(() => {
+    if (isDemo && historyEvents.length === 0) return MOCK_DEMO_HISTORY;
+    return historyEvents;
+  }, [isDemo, historyEvents]);
+
+  const lastNight = effectiveHistoryEvents[0] ?? null;
   const dashboardTotals = useMemo(
-    () => (isNightOpen ? totals : lastNight?.totals ?? EMPTY_TOTALS),
-    [isNightOpen, totals, lastNight],
+    () => (isDemo ? MOCK_DEMO_TOTALS : isNightOpen ? totals : lastNight?.totals ?? EMPTY_TOTALS),
+    [isDemo, isNightOpen, totals, lastNight],
   );
-  const dashboardOrders = isNightOpen ? orders : lastNight?.orders ?? [];
+  const dashboardOrders = isDemo ? MOCK_DEMO_ORDERS : isNightOpen ? orders : lastNight?.orders ?? [];
   const dashboardStartedAt = isNightOpen ? event?.startedAt : lastNight?.startedAt;
 
   const customPaymentBreakdown = useMemo(() => {
@@ -298,9 +327,6 @@ export default function AdminClient({
   }, [activeTab]);
 
   const isBosko = theme === "bosko";
-  const barColorClass = isBosko
-    ? "from-[#4ade80]/20 to-[#4ade80] group-hover:shadow-[0_0_15px_rgba(74,222,128,0.4)]"
-    : "from-blue/15 to-blue group-hover:shadow-[0_0_15px_rgba(109,179,242,0.4)]";
 
   const nightSubtitle = event?.startedAt
     ? `Desde ${new Date(event.startedAt).toLocaleTimeString("es-AR", {
@@ -338,22 +364,25 @@ export default function AdminClient({
       : "text-[var(--text-tertiary)] font-normal hover:text-[var(--text-secondary)]";
   };
 
-  function renderNavButton(item: NavItem) {
+  function renderNavButton(item: NavItem, collapsed: boolean) {
     const Icon = item.icon;
     const active = item.id === "pdv" ? isPagosTab : activeTab === item.id;
     return (
       <button
         key={item.id}
         type="button"
+        title={collapsed ? item.label : undefined}
         onClick={() => (item.onClick ? item.onClick() : handleTabChange(item.id))}
-        className={`w-full flex items-center gap-2.5 pl-4 pr-3 py-1.5 text-left transition-colors duration-150 cursor-pointer bg-transparent ${navBtnClass(item.id)}`}
+        className={`w-full flex items-center text-left transition-colors duration-150 cursor-pointer bg-transparent ${
+          collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 pl-4 pr-3 py-1.5"
+        } ${navBtnClass(item.id)}`}
       >
         <Icon
           size={17}
           strokeWidth={active ? 2.1 : 1.75}
           className={active ? "text-[var(--accent-primary)] shrink-0" : "text-[var(--text-tertiary)] shrink-0"}
         />
-        <span className="text-[13.5px] truncate">{item.label}</span>
+        {!collapsed && <span className="text-[13.5px] truncate">{item.label}</span>}
       </button>
     );
   }
@@ -361,101 +390,129 @@ export default function AdminClient({
   const sectionLabelClass =
     "px-4 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--text-tertiary)] mb-0.5";
 
-  const renderSidebar = (isDrawer = false) => (
-    <aside
-      className={`
-        w-[260px] shrink-0 flex flex-col print:hidden relative overflow-hidden
-        bg-[#F8F9FA] dark:bg-[var(--bg-surface)] text-[var(--text-primary)]
-        rounded-[24px]
-        ${isDrawer ? "h-full" : "h-full hidden md:flex my-3 ml-3"}
-      `}
-    >
-      <div className="flex items-center justify-start shrink-0 w-full px-4 pt-4 pb-1">
-        <BrandLogo size="md" />
-      </div>
+  const renderSidebar = (isDrawer = false) => {
+    const collapsed = sidebarCollapsed && !isDrawer;
 
-      <div className="flex-1 overflow-y-auto flex flex-col gap-4 no-scrollbar pt-2 pb-[180px]">
-        <div className="flex flex-col">
-          <p className={sectionLabelClass}>Menu</p>
-          {menuItems.map(renderNavButton)}
-        </div>
-
-        <div className="flex flex-col">
-          <p className={sectionLabelClass}>Configuración</p>
-          {configItems.map(renderNavButton)}
-        </div>
-
-        <div className="flex flex-col">
-          <p className={sectionLabelClass}>General</p>
-          {renderNavButton({ id: "sistema", label: "Sistema", icon: CloudDownload })}
-
-          {confirmLogout ? (
-            <div className="flex items-center justify-between gap-2 mx-2 px-3 py-2 rounded-xl bg-[var(--danger-soft)]">
-              <span className="text-[12px] font-semibold text-[var(--danger-base)] truncate">
-                ¿Cerrar sesión?
-              </span>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setConfirmLogout(false)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-secondary)] cursor-pointer hover:bg-black/5"
-                  title="Cancelar"
-                >
-                  <X size={12} />
-                </button>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer"
-                  title="Confirmar"
-                >
-                  <Check size={12} />
-                </button>
-              </div>
-            </div>
-          ) : (
+    return (
+      <aside
+        className={`
+          shrink-0 flex flex-col print:hidden relative overflow-hidden
+          bg-[var(--bg-panel)] text-[var(--text-primary)]
+          rounded-[24px] shadow-card transition-[width] duration-300 ease-in-out
+          ${collapsed ? "w-[76px]" : "w-[260px]"}
+          ${isDrawer ? "h-full" : "h-full hidden md:flex"}
+        `}
+      >
+        <div
+          className={`flex items-center shrink-0 w-full pt-4 pb-2 ${
+            collapsed ? "justify-center px-2" : "justify-between px-4"
+          }`}
+        >
+          {collapsed ? (
             <button
               type="button"
-              onClick={() => setConfirmLogout(true)}
-              className={`w-full flex items-center gap-2.5 pl-4 pr-3 py-1.5 text-left transition-colors duration-150 cursor-pointer bg-transparent ${navBtnClass("", false)}`}
+              onClick={toggleSidebarCollapsed}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--accent-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
+              title="Expandir menú"
+              aria-label="Expandir menú"
             >
-              <LogOut size={17} strokeWidth={1.75} className="text-[var(--text-tertiary)] shrink-0" />
-              <span className="text-[13.5px]">Cerrar sesión</span>
+              <ChevronRight size={18} strokeWidth={2} />
             </button>
+          ) : (
+            <>
+              <BrandLogo size="md" />
+              <button
+                type="button"
+                onClick={toggleSidebarCollapsed}
+                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
+                title="Colapsar menú"
+                aria-label="Colapsar menú"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </>
           )}
         </div>
-      </div>
 
-      <div className="absolute bottom-0 left-0 right-0 px-3 pt-3 pb-5 z-20 pointer-events-none">
-        <div className="pointer-events-auto">
-          <NightActionCard
-            nightOpen={isNightOpen}
-            subtitle={nightSubtitle}
-            onCloseNight={() => {
-              setModalOpen(true);
-              setMobileMenuOpen(false);
-            }}
-            onOpenNight={() => {
-              setOpenNightOpen(true);
-              setMobileMenuOpen(false);
-            }}
-            onEditKeyword={
-              isNightOpen
-                ? () => {
-                    setEditKeywordOpen(true);
-                    setMobileMenuOpen(false);
-                  }
-                : undefined
-            }
-          />
+        <div
+          className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-2 ${
+            collapsed ? "gap-2 px-1 pb-[88px]" : "gap-4 pb-[180px]"
+          }`}
+        >
+          <div className="flex flex-col">
+            {!collapsed && <p className={sectionLabelClass}>Menu</p>}
+            {menuItems.map((item) => renderNavButton(item, collapsed))}
+          </div>
+
+          <div className="flex flex-col">
+            {!collapsed && <p className={sectionLabelClass}>Configuración</p>}
+            {configItems.map((item) => renderNavButton(item, collapsed))}
+          </div>
+
+          <div className="flex flex-col">
+            {!collapsed && <p className={sectionLabelClass}>General</p>}
+            {renderNavButton({ id: "sistema", label: "Sistema", icon: CloudDownload }, collapsed)}
+
+            <LogoutNavRail
+              collapsed={collapsed}
+              confirm={confirmLogout}
+              onAsk={() => setConfirmLogout(true)}
+              onCancel={() => setConfirmLogout(false)}
+              onConfirm={logout}
+            />
+          </div>
         </div>
-      </div>
-    </aside>
-  );
+
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-20 pointer-events-none ${
+            collapsed ? "p-2 pb-4" : "px-3 pt-3 pb-5"
+          }`}
+        >
+          <div className="pointer-events-auto">
+            {collapsed ? (
+              <button
+                type="button"
+                title={isNightOpen ? "Cerrar noche" : "Abrir noche"}
+                onClick={() => {
+                  if (isNightOpen) setModalOpen(true);
+                  else setOpenNightOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full h-11 rounded-xl bg-[var(--accent-primary)] text-white flex items-center justify-center cursor-pointer hover:bg-[var(--accent-primary-hover)] transition-colors"
+              >
+                <Power size={16} strokeWidth={2} />
+              </button>
+            ) : (
+              <NightActionCard
+                nightOpen={isNightOpen}
+                subtitle={nightSubtitle}
+                onCloseNight={() => {
+                  setModalOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                onOpenNight={() => {
+                  setOpenNightOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                onEditKeyword={
+                  isNightOpen
+                    ? () => {
+                        setEditKeywordOpen(true);
+                        setMobileMenuOpen(false);
+                      }
+                    : undefined
+                }
+              />
+            )}
+          </div>
+        </div>
+      </aside>
+    );
+  };
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
-      <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full">
+      <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {editKeywordOpen && event && (
           <OpenNightModal
             mode="edit"
@@ -496,75 +553,78 @@ export default function AdminClient({
           </div>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden md:my-3 md:mr-3 md:rounded-[24px] md:border md:border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-          <header className="h-[60px] px-5 md:px-6 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center shrink-0 print:hidden md:rounded-t-[24px]">
-            <AppTopbar
-              breadcrumbs={breadcrumbs}
-              username={currentUser?.username}
-              role={currentUser?.role}
-              onMenuClick={() => setMobileMenuOpen(true)}
-            />
-          </header>
-          <MigrationsBanner />
-          <MpFallbackBanner />
-          <div className="flex-1 overflow-y-auto p-5 md:p-6 bg-[var(--bg-app)] min-h-0 md:rounded-b-[24px]">
-            {activeTab === "monitoreo" && (
-              <DashboardSection
-                analytics={analytics}
-                totals={dashboardTotals}
-                historyEvents={historyEvents}
-                customPaymentBreakdown={customPaymentBreakdown}
-                isFirstLoad={isFirstLoad}
-                isTabTransitioning={isTabTransitioning}
-                activeTab={activeTab}
-                isBosko={isBosko}
-                barColorClass={barColorClass}
-                isNightOpen={isNightOpen}
+        {/* Scroll único: topbar separado visualmente + contenido; no sticky */}
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto bosko-scroll">
+          <div className="flex flex-col gap-3 md:gap-4 p-3 md:p-0 min-h-full">
+            <header className="h-14 md:h-16 px-4 md:px-5 shrink-0 print:hidden flex items-center bg-[var(--bg-panel)] md:rounded-[20px] shadow-card">
+              <AppTopbar
+                breadcrumbs={breadcrumbs}
+                username={currentUser?.username}
+                role={currentUser?.role}
+                onMenuClick={() => setMobileMenuOpen(true)}
               />
-            )}
+            </header>
 
-            {activeTab === "historial" && (
-              <HistorialSection
-                analytics={analytics}
-                historyEvents={historyEvents}
-                historyLoaded={historyLoaded}
-                isTabTransitioning={isTabTransitioning}
-                isBosko={isBosko}
-                onRedirectToLogs={onRedirectToLogs}
-              />
-            )}
+            <div className="flex-1 bg-[var(--bg-panel)] md:rounded-[24px] shadow-card p-5 md:p-6">
+              <MigrationsBanner />
+              <MpFallbackBanner />
 
-            {activeTab === "logs" && (
-              <LogsSection
-                initialFilterTimestamp={logsFilterTimestamp}
-                isBosko={isBosko}
-              />
-            )}
+              {activeTab === "monitoreo" && (
+                <DashboardSection
+                  analytics={analytics}
+                  totals={dashboardTotals}
+                  historyEvents={historyEvents}
+                  customPaymentBreakdown={customPaymentBreakdown}
+                  isFirstLoad={isFirstLoad}
+                  isTabTransitioning={isTabTransitioning}
+                  activeTab={activeTab}
+                  isNightOpen={isNightOpen}
+                />
+              )}
 
-            {activeTab === "carta" && (
-              <div key="carta" className="animate-dashboard-in">
-                <CartaSection />
-              </div>
-            )}
+              {activeTab === "historial" && (
+                <HistorialSection
+                  analytics={analytics}
+                  historyEvents={historyEvents}
+                  historyLoaded={historyLoaded}
+                  isTabTransitioning={isTabTransitioning}
+                  isBosko={isBosko}
+                  onRedirectToLogs={onRedirectToLogs}
+                />
+              )}
 
-            {isPagosTab && (
-              <div key="pagos" className="animate-dashboard-in flex flex-col gap-6">
-                <PagosSection />
-                <PdvSection />
-              </div>
-            )}
+              {activeTab === "logs" && (
+                <LogsSection
+                  initialFilterTimestamp={logsFilterTimestamp}
+                  isBosko={isBosko}
+                />
+              )}
 
-            {activeTab === "usuarios" && (
-              <div key="usuarios" className="animate-dashboard-in">
-                <UsuariosSection />
-              </div>
-            )}
+              {activeTab === "carta" && (
+                <div key="carta" className="animate-dashboard-in">
+                  <CartaSection />
+                </div>
+              )}
 
-            {activeTab === "sistema" && (
-              <div key="sistema" className="animate-dashboard-in">
-                <SistemaSection />
-              </div>
-            )}
+              {isPagosTab && (
+                <div key="pagos" className="animate-dashboard-in flex flex-col gap-2">
+                  <PagosSection />
+                  <PdvSection />
+                </div>
+              )}
+
+              {activeTab === "usuarios" && (
+                <div key="usuarios" className="animate-dashboard-in">
+                  <UsuariosSection />
+                </div>
+              )}
+
+              {activeTab === "sistema" && (
+                <div key="sistema" className="animate-dashboard-in">
+                  <SistemaSection />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>

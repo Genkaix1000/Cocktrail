@@ -29,11 +29,14 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DrinksTable>> 
     sortField: "name" as const,
     sortDirection: "asc" as const,
     isBosko: false,
+    confirmingDeleteId: null,
     onSort: vi.fn(),
     onRetry: vi.fn(),
     onSelectDrink: vi.fn(),
     onToggleAvailable: vi.fn(),
-    onDeleteClick: vi.fn(),
+    onAskDelete: vi.fn(),
+    onCancelDelete: vi.fn(),
+    onConfirmDelete: vi.fn(),
     ...overrides,
   };
 }
@@ -56,29 +59,58 @@ describe("DrinksTable", () => {
     expect(screen.getByText("No hay tragos registrados")).toBeInTheDocument();
   });
 
-  it("dispara onSelectDrink, onToggleAvailable y onDeleteClick sin propagar entre sí", async () => {
+  it("dispara onSelectDrink, onToggleAvailable y onAskDelete sin propagar entre sí", async () => {
     const user = userEvent.setup();
     const onSelectDrink = vi.fn();
     const onToggleAvailable = vi.fn();
-    const onDeleteClick = vi.fn();
+    const onAskDelete = vi.fn();
     const drink = makeDrink();
 
     render(
       <DrinksTable
-        {...baseProps({ drinks: [drink], onSelectDrink, onToggleAvailable, onDeleteClick })}
+        {...baseProps({ drinks: [drink], onSelectDrink, onToggleAvailable, onAskDelete })}
       />,
     );
+
+    expect(screen.getByText("En carta")).toBeInTheDocument();
 
     await user.click(screen.getByTitle("Ocultar de la carta"));
     expect(onToggleAvailable).toHaveBeenCalled();
     expect(onSelectDrink).not.toHaveBeenCalled();
 
     await user.click(screen.getByTitle("Eliminar"));
-    expect(onDeleteClick).toHaveBeenCalledWith(drink);
+    expect(onAskDelete).toHaveBeenCalledWith(drink);
     expect(onSelectDrink).not.toHaveBeenCalled();
 
     await user.click(screen.getByText("Fernet con Coca"));
     expect(onSelectDrink).toHaveBeenCalledWith(drink);
+  });
+
+  it("en confirm muestra rail y dispara onConfirmDelete / onCancelDelete", async () => {
+    const user = userEvent.setup();
+    const drink = makeDrink();
+    const onConfirmDelete = vi.fn();
+    const onCancelDelete = vi.fn();
+
+    render(
+      <DrinksTable
+        {...baseProps({
+          drinks: [drink],
+          confirmingDeleteId: drink.id,
+          onConfirmDelete,
+          onCancelDelete,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("¿Eliminar?")).toBeInTheDocument();
+    expect(screen.queryByText("En carta")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(onConfirmDelete).toHaveBeenCalledWith(drink);
+
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(onCancelDelete).toHaveBeenCalledTimes(1);
   });
 
   it("dispara onSort al tocar los headers de Nombre/Precio", async () => {

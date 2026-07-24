@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus, Search, Wine } from "lucide-react";
 import { drinksService } from "@/services/drinks.service";
 import type { Drink } from "@cocktrail/shared";
 import { useTheme } from "@/components/ThemeProvider";
-import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import Toast from "@/components/shared/Toast";
 import DrinksTable from "./DrinksTable";
 import DrinkFormModal, { type DrinkForm } from "./DrinkFormModal";
+
+/** Ventana para deshacer un delete antes de pegarle a la API. */
+const DELETE_UNDO_MS = 5000;
 
 // Función en vez de constante: `flavors` es un array y si fuera un objeto
 // módulo-level compartido, todas las aperturas de "Nuevo Trago" mutarían la
@@ -33,13 +35,46 @@ export default function CartaSection() {
   const [modalOpen, setModalOpen] = useState(false); // Controls side-drawer visibility
   const [editDrink, setEditDrink] = useState<DrinkForm | null>(null);
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<Drink | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
+  const [undoDelete, setUndoDelete] = useState<Drink | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
 
   const [sortField, setSortField] = useState<"name" | "price">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  // ponytail: un solo delete pendiente a la vez; cola si hace falta paralelizar
+  const pendingDeleteRef = useRef<{ drink: Drink; timer: ReturnType<typeof setTimeout> } | null>(null);
+
+  const commitDelete = useCallback(async (drink: Drink) => {
+    try {
+      await drinksService.delete(drink.id);
+    } catch (err) {
+      console.error("Error deleting trago:", err);
+      setDrinks((prev) => (prev.some((d) => d.id === drink.id) ? prev : [...prev, drink]));
+      setError("No se pudo eliminar el trago. Reintentá en unos segundos.");
+    }
+  }, []);
+
+  const flushPendingDelete = useCallback(() => {
+    const pending = pendingDeleteRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingDeleteRef.current = null;
+    void commitDelete(pending.drink);
+  }, [commitDelete]);
+
+  useEffect(() => {
+    return () => {
+      const pending = pendingDeleteRef.current;
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      // Best-effort: no await en unmount; el DELETE sigue en vuelo.
+      void drinksService.delete(pending.drink.id).catch(() => {});
+      pendingDeleteRef.current = null;
+    };
+  }, []);
 
   const loadDrinks = useCallback(async () => {
     setLoadError(false);
@@ -131,16 +166,34 @@ export default function CartaSection() {
     }
   }, [editDrink, saving, closeModal]);
 
-  const handleDelete = useCallback(async (id: number) => {
-    try {
-      await drinksService.delete(id);
-      setDrinks((prev) => prev.filter((d) => d.id !== id));
-      setDeleteConfirm(null);
-      setSaved(true);
-    } catch (err) {
-      console.error("Error deleting trago:", err);
-      setError("No se pudo eliminar el trago. Reintentá en unos segundos.");
-    }
+  const handleConfirmDelete = useCallback(
+    (drink: Drink) => {
+      setConfirmingDeleteId(null);
+      flushPendingDelete();
+      setDrinks((prev) => prev.filter((d) => d.id !== drink.id));
+      if (editDrink?.id === drink.id) {
+        setModalOpen(false);
+        setEditDrink(null);
+      }
+      const timer = setTimeout(() => {
+        pendingDeleteRef.current = null;
+        setUndoDelete((current) => (current?.id === drink.id ? null : current));
+        void commitDelete(drink);
+      }, DELETE_UNDO_MS);
+      pendingDeleteRef.current = { drink, timer };
+      setUndoDelete(drink);
+      setError(null);
+    },
+    [flushPendingDelete, commitDelete, editDrink?.id],
+  );
+
+  const handleUndoDelete = useCallback(() => {
+    const pending = pendingDeleteRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingDeleteRef.current = null;
+    setDrinks((prev) => (prev.some((d) => d.id === pending.drink.id) ? prev : [...prev, pending.drink]));
+    setUndoDelete(null);
   }, []);
 
   const toggleAvailable = useCallback(async (drink: Drink, e: React.MouseEvent) => {
@@ -213,11 +266,14 @@ export default function CartaSection() {
             sortDirection={sortDirection}
             isBosko={isBosko}
             selectedDrinkId={editDrink?.id}
+            confirmingDeleteId={confirmingDeleteId}
             onSort={handleSort}
             onRetry={loadDrinks}
             onSelectDrink={openEdit}
             onToggleAvailable={toggleAvailable}
-            onDeleteClick={setDeleteConfirm}
+            onAskDelete={(d) => setConfirmingDeleteId(d.id)}
+            onCancelDelete={() => setConfirmingDeleteId(null)}
+            onConfirmDelete={handleConfirmDelete}
           />
         </div>
 
@@ -235,27 +291,25 @@ export default function CartaSection() {
       </div>
 
       {/* Saved feedback popup */}
-      {saved && (
+      {undoDelete ? (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast
+            variant="success"
+            message={`Eliminado: ${undoDelete.name}`}
+            duration={DELETE_UNDO_MS}
+            action={{ label: "Deshacer", onClick: handleUndoDelete }}
+            onClose={() => setUndoDelete(null)}
+          />
+        </div>
+      ) : saved ? (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast variant="success" message="Cambios guardados" duration={2500} onClose={() => setSaved(false)} />
         </div>
-      )}
-      {error && (
+      ) : error ? (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast variant="error" message={error} onClose={() => setError(null)} />
         </div>
-      )}
-
-      {/* Safe Delete Modal */}
-      {deleteConfirm && (
-        <SafeDeleteModal
-          onClose={() => setDeleteConfirm(null)}
-          onConfirm={() => handleDelete(deleteConfirm.id)}
-          title="Eliminar Trago/Producto"
-          expectedText={deleteConfirm.name}
-          typeLabel="el trago"
-        />
-      )}
+      ) : null}
     </div>
   );
 }

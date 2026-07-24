@@ -108,7 +108,9 @@ referencias [light](../design/reference/bosko-light.png) /
 [dark](../design/reference/bosko-dark.png).
 
 Specs Bosko: [`refactor-ui-bosko.md`](./features/refactor-ui-bosko/refactor-ui-bosko.md) (overview) ·
-[`admin-dashboard.md`](./features/refactor-ui-bosko/admin-dashboard.md) (topbar + sidebar + night CTA).
+[`admin-dashboard.md`](./features/refactor-ui-bosko/admin-dashboard.md) (shell) ·
+[`dashboard-kpis.md`](./features/refactor-ui-bosko/dashboard-kpis.md) (KPI cards) ·
+[`dashboard-charts.md`](./features/refactor-ui-bosko/dashboard-charts.md) (charts).
 
 Planes: [`plans/features/`](../plans/features/) —
 [`useSSE`](../plans/features/2026-07-05-usesse-centralizado-design.md),

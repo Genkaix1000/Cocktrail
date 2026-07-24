@@ -54,7 +54,7 @@ describe("NightComparator", () => {
 
   it("con una sola noche, muestra su detalle en vez de pedir una comparación", () => {
     render(<NightComparator nights={[makeNight()]} isBosko={false} onRedirectToLogs={noop} />);
-    expect(screen.getByText("Totales Consolidados del Día")).toBeInTheDocument();
+    expect(screen.getByText("Recaudado")).toBeInTheDocument();
     expect(screen.getByText("Ver Auditoría de Tickets")).toBeInTheDocument();
   });
 
@@ -107,7 +107,7 @@ describe("NightComparator", () => {
     render(<NightComparator nights={[nightA, nightB]} isBosko={false} onRedirectToLogs={noop} />);
 
     // Por default (sin elegir B) se ve el detalle de A, no la comparación.
-    expect(screen.getByText("Totales Consolidados del Día")).toBeInTheDocument();
+    expect(screen.getByText("Recaudado")).toBeInTheDocument();
 
     const selects = screen.getAllByRole("combobox");
     await user.selectOptions(selects[1]!, "1");

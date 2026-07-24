@@ -11,7 +11,6 @@ import {
 } from "@/services/pdv.service";
 import { mercadopagoService } from "@/services/mercadopago.service";
 import { barSessionsService, type BarSession } from "@/services/bar-sessions.service";
-import { useTheme } from "@/components/ThemeProvider";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import Toast from "@/components/shared/Toast";
 import MpHealthPanel from "./MpHealthPanel";
@@ -43,7 +42,6 @@ function deviceEstado(device: DeviceRow): "activo" | "historico" | "sin-caja" {
 }
 
 export default function PdvSection() {
-  const { theme } = useTheme();
   const [cajas, setCajas] = useState<CajaRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [sessions, setSessions] = useState<BarSession[]>([]);
@@ -424,7 +422,6 @@ export default function PdvSection() {
     );
   }
 
-  const isBosko = theme === "bosko";
   const canCreate = cajas.length < 1;
   const cajaByBarId = new Map(cajas.map((c) => [c.barId, c]));
   const cajaNameById = new Map(cajas.map((c) => [c.id, "Barra VIP"]));
@@ -439,26 +436,19 @@ export default function PdvSection() {
     mpListing.token.userId !== mpListing.sellerUserId;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="space-y-6 max-w-5xl pt-2 border-t border-[var(--border-subtle)]">
+      <div className="flex items-center justify-between gap-4 flex-wrap pt-6">
         <div>
-          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-              <Store size={16} />
-            </div>
-            <span>Puntos de Venta</span>
-            <span
-              className={`ml-1 px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-                isBosko
-                  ? "bg-[#4ade80]/15 text-[#4ade80] border border-[#4ade80]/25"
-                  : "bg-blue/15 text-blue border border-blue/25"
-              }`}
-            >
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-[18px] font-semibold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+              Puntos de Venta
+            </h2>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--accent-surface)] text-[var(--accent-text)]">
               {cajas.length} PDV {cajas.length === 1 ? "activo" : "activos"}
             </span>
-          </h1>
-          <p className="text-[13px] text-ink-400/80 mt-1">
-            Administrá la caja QR, los Posnets y la sesión de caja de Barra VIP.
+          </div>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            Caja QR, Posnets y sesión de Barra VIP
           </p>
         </div>
 
@@ -472,10 +462,10 @@ export default function PdvSection() {
               ? "Crear PDV para Barra VIP"
               : "Solo Barra VIP disponible — multi-barra no implementado"
           }
-          className="h-10 px-4 rounded-xl bg-ink-800 border border-ink-700 text-ink-100 hover:text-ink-50 text-[12px] font-bold uppercase tracking-[0.08em] flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.97] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100"
+          className="h-10 px-4 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100 disabled:bg-[var(--bg-surface)] disabled:text-[var(--text-tertiary)] disabled:border disabled:border-[var(--border-strong)]"
         >
           <Plus size={14} strokeWidth={2.5} />
-          {canCreate ? "+ Nueva barra" : "Solo Barra VIP"}
+          {canCreate ? "Nueva barra" : "Solo Barra VIP"}
         </button>
       </div>
 

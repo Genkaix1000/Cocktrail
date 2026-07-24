@@ -127,9 +127,9 @@ describe("HistorialSection", () => {
       />,
     );
 
-    expect(screen.getByText("Totales Consolidados del Día")).toBeInTheDocument();
+    expect(screen.getByText("Recaudado")).toBeInTheDocument();
     // "Fernet" aparece 2 veces: la card de Trago Estrella y el detalle de la noche.
-    expect(screen.getAllByText("Fernet").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Fernet/).length).toBeGreaterThanOrEqual(2);
 
     const auditButton = screen.getByRole("button", { name: /Ver Auditoría de Tickets/i });
     await user.click(auditButton);

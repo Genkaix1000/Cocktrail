@@ -24,13 +24,14 @@ No copiar estilos one-off por ruta: si algo aparece en admin y luego en caja, vi
 |---|---|
 | [`refactor-ui-bosko.md`](../specs/features/refactor-ui-bosko/refactor-ui-bosko.md) | Overview + fases globales |
 | [`admin-dashboard.md`](../specs/features/refactor-ui-bosko/admin-dashboard.md) | Shell `/admin`: topbar, sidebar, night CTA |
+| [`dashboard-kpis.md`](../specs/features/refactor-ui-bosko/dashboard-kpis.md) | KPI cards: featured Ventas + estándar |
 
 ## Cómo usarlo
 
 - **Al implementar UI**: leer `design.md` antes de inventar colores, radios o variantes.
 - **En PRs visuales**: linkear la spec de fase + captura light/dark de referencia.
-- **No fragmentar aún**: menús, botones, CRUD y popups van como secciones en `design.md`.
-  Si una sección crece al implementar, recién ahí se parte a un archivo propio en esta carpeta.
+- **No fragmentar aún**: menús, botones y popups van como secciones en `design.md`.
+  CRUD (§4.8) ya está ahí; si crece, partir a `crud.md` en esta carpeta.
 
 ## Fuera de alcance de esta carpeta
 

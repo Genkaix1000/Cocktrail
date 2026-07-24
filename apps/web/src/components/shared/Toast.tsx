@@ -14,6 +14,8 @@ type Props = {
   badge?: string;
   /** Tiempo en ms antes de auto-cerrarse. */
   duration?: number;
+  /** Acción opcional (ej. Deshacer). Al click: onClick + onClose. */
+  action?: { label: string; onClick: () => void };
   onClose: () => void;
 };
 
@@ -39,7 +41,15 @@ const VARIANT_META: Record<ToastVariant, { icon: LucideIcon; iconBg: string; ico
  * para no reiniciarse si `onClose` cambia de identidad en cada render del
  * padre — mismo fix aplicado a ToastItem en Fase 3B (PendingOrdersList).
  */
-export default function Toast({ variant = "success", message, title, badge, duration = 4000, onClose }: Props) {
+export default function Toast({
+  variant = "success",
+  message,
+  title,
+  badge,
+  duration = 4000,
+  action,
+  onClose,
+}: Props) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -86,6 +96,20 @@ export default function Toast({ variant = "success", message, title, badge, dura
       <p className={`text-xs font-semibold leading-snug line-clamp-2 ${title || badge ? "pl-9" : ""} ${variant === "error" ? "text-ink-100" : "text-ink-200"}`}>
         {message}
       </p>
+      {action && (
+        <div className={title || badge ? "pl-9" : ""}>
+          <button
+            type="button"
+            onClick={() => {
+              action.onClick();
+              onClose();
+            }}
+            className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-accent/15 hover:bg-accent/25 text-accent border border-accent/20 hover:border-accent/40 transition-all cursor-pointer"
+          >
+            {action.label}
+          </button>
+        </div>
+      )}
 
       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-ink-950">
         <div

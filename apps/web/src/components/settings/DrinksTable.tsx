@@ -2,6 +2,7 @@
 
 import { ChevronDown, ChevronUp, DollarSign, Eye, EyeOff, GlassWater, Trash2, Wine } from "lucide-react";
 import type { Drink } from "@cocktrail/shared";
+import { ConfirmRail } from "@/components/shared/ConfirmRail";
 import { ICONS_LIST } from "./cartaConstants";
 
 type SortField = "name" | "price";
@@ -15,11 +16,14 @@ type Props = {
   sortDirection: SortDirection;
   isBosko: boolean;
   selectedDrinkId?: number;
+  confirmingDeleteId: number | null;
   onSort: (field: SortField) => void;
   onRetry: () => void;
   onSelectDrink: (drink: Drink) => void;
   onToggleAvailable: (drink: Drink, e: React.MouseEvent) => void;
-  onDeleteClick: (drink: Drink) => void;
+  onAskDelete: (drink: Drink) => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: (drink: Drink) => void;
 };
 
 export default function DrinksTable({
@@ -30,16 +34,19 @@ export default function DrinksTable({
   sortDirection,
   isBosko,
   selectedDrinkId,
+  confirmingDeleteId,
   onSort,
   onRetry,
   onSelectDrink,
   onToggleAvailable,
-  onDeleteClick,
+  onAskDelete,
+  onCancelDelete,
+  onConfirmDelete,
 }: Props) {
   return (
     <div className="bg-ink-900 border border-ink-800 rounded-xl overflow-hidden">
       {/* Table header */}
-      <div className="grid grid-cols-[1fr_120px_110px] gap-0 border-b border-ink-800 bg-ink-950 text-[13px] font-bold select-none">
+      <div className="grid grid-cols-[1fr_120px_140px] gap-0 border-b border-ink-800 bg-ink-950 text-[13px] font-bold select-none">
         <div
           onClick={() => onSort("name")}
           className={`px-5 py-3 cursor-pointer hover:bg-ink-900/60 transition-colors flex items-center gap-1.5 group/th ${
@@ -97,74 +104,100 @@ export default function DrinksTable({
           {drinks.map((d, idx) => {
             const DrinkIcon = ICONS_LIST.find((i) => i.id === d.iconName)?.icon || GlassWater;
             const isSelected = selectedDrinkId === d.id;
+            const isConfirming = confirmingDeleteId === d.id;
             return (
               <div
                 key={d.id}
-                onClick={() => onSelectDrink(d)}
-                className={`grid grid-cols-[1fr_120px_110px] gap-0 items-stretch transition-colors cursor-pointer hover:bg-ink-850/30 ${
-                  idx % 2 === 0 ? "bg-ink-800/30" : ""
-                } ${
-                  isSelected
-                    ? isBosko
-                      ? "bg-[#4ade80]/5 border-l-2 border-l-[#4ade80]"
-                      : "bg-blue/5 border-l-2 border-l-blue"
-                    : "border-l-2 border-transparent"
+                onClick={() => !isConfirming && onSelectDrink(d)}
+                className={`grid grid-cols-[1fr_120px_140px] gap-0 items-stretch transition-colors duration-[260ms] ${
+                  isConfirming
+                    ? "bg-[var(--danger-soft)] cursor-default"
+                    : `cursor-pointer hover:bg-ink-850/30 ${idx % 2 === 0 ? "bg-ink-800/30" : ""} ${
+                        isSelected
+                          ? isBosko
+                            ? "bg-[#4ade80]/5 border-l-2 border-l-[#4ade80]"
+                            : "bg-blue/5 border-l-2 border-l-blue"
+                          : "border-l-2 border-transparent"
+                      }`
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0 px-5 py-3 h-full">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-                    sortField === "name"
-                      ? isBosko
-                        ? "bg-[#4ade80]/15 text-[#4ade80]"
-                        : "bg-blue/15 text-blue"
-                      : "bg-ink-800 text-ink-450"
+                    isConfirming
+                      ? "bg-[var(--danger-base)]/15 text-[var(--danger-base)]"
+                      : sortField === "name"
+                        ? isBosko
+                          ? "bg-[#4ade80]/15 text-[#4ade80]"
+                          : "bg-blue/15 text-blue"
+                        : "bg-ink-800 text-ink-450"
                   }`}>
                     <DrinkIcon size={16} />
                   </div>
                   <div className="min-w-0">
                     <p className={`text-[13px] truncate transition-all ${
-                      !d.available
-                        ? "text-ink-500 line-through"
-                        : sortField === "name"
-                        ? isBosko
-                          ? "text-[#4ade80] font-bold"
-                          : "text-blue font-bold"
-                        : "text-ink-50 font-semibold"
+                      isConfirming
+                        ? "text-[var(--danger-base)] font-semibold"
+                        : !d.available
+                          ? "text-ink-500 line-through"
+                          : sortField === "name"
+                            ? isBosko
+                              ? "text-[#4ade80] font-bold"
+                              : "text-blue font-bold"
+                            : "text-ink-50 font-semibold"
                     }`}>{d.name}</p>
+                    {!isConfirming && (
+                      <span
+                        className={`mt-1 inline-flex text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded leading-none ${
+                          d.available
+                            ? "bg-green-soft text-green"
+                            : "bg-ink-800 text-ink-500"
+                        }`}
+                      >
+                        {d.available ? "En carta" : "Oculto"}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <span className={`font-mono text-[13px] text-right tabular px-5 py-3 h-full flex items-center justify-end transition-all ${
-                  !d.available
-                    ? "text-ink-500"
-                    : sortField === "price"
-                    ? isBosko
-                      ? "text-[#4ade80] font-bold"
-                      : "text-blue font-bold"
-                    : "text-ink-100 font-semibold"
+                  isConfirming
+                    ? "text-[var(--danger-base)]/70"
+                    : !d.available
+                      ? "text-ink-500"
+                      : sortField === "price"
+                        ? isBosko
+                          ? "text-[#4ade80] font-bold"
+                          : "text-blue font-bold"
+                        : "text-ink-100 font-semibold"
                 }`}>
                   ${d.price.toLocaleString("es-AR")}
                 </span>
-                <div className="flex items-center justify-center gap-1.5 px-5 py-3 h-full" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={(e) => onToggleAvailable(d, e)}
-                    className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all cursor-pointer ${
-                      d.available
-                        ? "bg-ink-800 border-ink-700 text-ink-300 hover:text-blue hover:border-blue-line"
-                        : "bg-ink-800/40 border-ink-800 text-ink-550 hover:text-ink-300 hover:border-ink-700"
-                    }`}
-                    title={d.available ? "Ocultar de la carta" : "Mostrar en la carta"}
+                <div className="flex items-center justify-end gap-1.5 px-3 py-3 h-full min-w-0" onClick={(e) => e.stopPropagation()}>
+                  {!isConfirming && (
+                    <button
+                      type="button"
+                      onClick={(e) => onToggleAvailable(d, e)}
+                      className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                        d.available
+                          ? "bg-ink-800 border-ink-700 text-ink-300 hover:text-blue hover:border-blue-line"
+                          : "bg-ink-800/40 border-ink-800 text-ink-550 hover:text-ink-300 hover:border-ink-700"
+                      }`}
+                      title={d.available ? "Ocultar de la carta" : "Mostrar en la carta"}
+                    >
+                      {d.available ? <Eye size={12} /> : <EyeOff size={12} />}
+                    </button>
+                  )}
+                  <ConfirmRail
+                    confirm={isConfirming}
+                    message="¿Eliminar?"
+                    className={isConfirming ? "flex-1 min-w-0" : "w-7 shrink-0"}
+                    onAsk={() => onAskDelete(d)}
+                    onCancel={onCancelDelete}
+                    onConfirm={() => onConfirmDelete(d)}
                   >
-                    {d.available ? <Eye size={12} /> : <EyeOff size={12} />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteClick(d)}
-                    className="w-7 h-7 rounded-md bg-ink-800 border border-ink-700 text-ink-300 flex items-center justify-center hover:text-danger hover:border-danger-line transition-all cursor-pointer"
-                    title="Eliminar"
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                    <span className="w-7 h-7 rounded-md bg-ink-800 border border-ink-700 text-ink-300 flex items-center justify-center hover:text-danger hover:border-danger-line transition-all">
+                      <Trash2 size={11} />
+                    </span>
+                  </ConfirmRail>
                 </div>
               </div>
             );

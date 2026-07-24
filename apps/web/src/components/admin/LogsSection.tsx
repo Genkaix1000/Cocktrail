@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  FileText,
   CalendarDays,
   RefreshCw,
   Clock,
@@ -106,7 +105,7 @@ const logItemsPerPage = 10;
  * completo (estado + fetch + filtros/orden/paginación + cancelación de
  * tickets).
  */
-export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) {
+export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko }: Props) {
   const [auditLogs, setAuditLogs] = useState<Order[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [logsLoaded, setLogsLoaded] = useState(false);
@@ -300,21 +299,23 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
     }
   };
 
+  const thActive = "bg-[var(--accent-surface)] text-[var(--accent-text)] font-semibold";
+  const thIdle = "text-[var(--text-secondary)]";
+  const cellActive = "text-[var(--accent-text)] font-semibold";
+  const cellIdle = "text-[var(--text-secondary)]";
+
   return (
-    <div key="logs" className="space-y-6 max-w-6xl mx-auto w-full animate-dashboard-in">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+    <div key="logs" className="flex flex-col gap-8 w-full animate-dashboard-in">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
         <div>
-          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-              <FileText size={16} />
-            </div>
-            <span>Auditoría de Tickets</span>
+          <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+            Auditoría de Tickets
           </h1>
-          <p className="text-[13px] text-ink-400/80 mt-1">
-            Historial completo de todos los tickets emitidos, con registro de operadores y estado de canje.
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+            Historial de tickets emitidos, con operadores y estado de canje
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => {
@@ -322,42 +323,40 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
               setViewAllNights(nextVal);
               fetchLogs(nextVal);
             }}
-            className={`h-10 px-4 rounded-xl border text-[12px] font-bold uppercase tracking-[0.08em] flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.97] ${
+            className={`h-10 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] border ${
               viewAllNights
-                ? "bg-accent-soft/20 border-accent/35 text-accent shadow-sm"
-                : "bg-ink-800 border-ink-700 text-ink-100 hover:text-ink-50"
+                ? "bg-[var(--accent-primary)] border-transparent text-[var(--text-on-accent)]"
+                : "bg-[var(--bg-surface)] border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
             }`}
           >
-            <CalendarDays size={14} />
-            {viewAllNights ? "Ver Noche Actual" : "Ver Noches Anteriores"}
+            <CalendarDays size={14} strokeWidth={1.8} />
+            {viewAllNights ? "Noche actual" : "Noches anteriores"}
           </button>
 
           <button
             type="button"
             onClick={() => fetchLogs(viewAllNights)}
             disabled={loadingLogs}
-            className="h-10 px-4 rounded-xl bg-ink-800 border border-ink-700 text-ink-100 hover:text-ink-50 text-[12px] font-bold uppercase tracking-[0.08em] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 select-none active:scale-[0.97]"
+            className="h-10 px-4 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 select-none active:scale-[0.98]"
           >
-            <RefreshCw size={14} className={loadingLogs ? "animate-spin" : ""} />
+            <RefreshCw size={14} strokeWidth={1.8} className={loadingLogs ? "animate-spin" : ""} />
             Actualizar
           </button>
         </div>
       </div>
 
-      {/* Filtros de Fecha: Mes -> Días */}
       {!loadingLogs && logMonths.length > 0 && (
-        <div className="space-y-4">
-          {/* Meses */}
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-ink-800">
+        <div className="space-y-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             {logMonths.map((month) => (
               <button
                 key={month}
                 type="button"
                 onClick={() => setSelectedLogMonth(month)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
+                className={`px-4 py-2 rounded-full text-[12px] font-semibold transition-all cursor-pointer shrink-0 border ${
                   selectedLogMonth === month
-                    ? "bg-accent/20 text-accent border border-accent/35 shadow-sm"
-                    : "bg-ink-900 border border-ink-800 text-ink-400 hover:text-ink-200"
+                    ? "bg-[var(--accent-surface)] text-[var(--accent-text)] border-[var(--accent-line)]"
+                    : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 }`}
               >
                 {month}
@@ -365,9 +364,8 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
             ))}
           </div>
 
-          {/* Días dentro del mes seleccionado */}
           {logDays.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
               {logDays.map((day) => {
                 const ordersForDay = groupedLogData[selectedLogMonth]?.[day] || [];
                 const firstOrderTs = ordersForDay[0]?.createdAt;
@@ -382,10 +380,10 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                     key={day}
                     type="button"
                     onClick={() => setSelectedLogDay(day)}
-                    className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
+                    className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all cursor-pointer shrink-0 border ${
                       selectedLogDay === day
-                        ? "bg-ink-700 text-ink-50 border border-ink-600 shadow-sm"
-                        : "bg-ink-900/40 border border-ink-850 text-ink-450 hover:text-ink-250"
+                        ? "bg-[var(--text-primary)] text-[var(--bg-app)] border-transparent"
+                        : "bg-transparent border-[var(--border-subtle)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                     }`}
                   >
                     {dayLabel}
@@ -398,198 +396,155 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
       )}
 
       {loadingLogs ? (
-        <div className="flex justify-center items-center h-64 bg-ink-900 border border-ink-800 rounded-xl">
-          <span className="text-sm text-ink-400 font-mono">Cargando logs...</span>
+        <div className="flex justify-center items-center h-64 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-card">
+          <span className="text-sm text-[var(--text-tertiary)] font-mono">Cargando logs…</span>
         </div>
       ) : auditLogs.length === 0 ? (
-        <div className="bg-ink-900 border border-ink-800 rounded-xl p-10 text-center">
-          <p className="text-sm text-ink-500 font-serif-italic">— No hay tickets registrados en el historial —</p>
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-10 text-center shadow-card">
+          <p className="text-sm text-[var(--text-tertiary)]">No hay tickets registrados en el historial</p>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
           {paginatedLogs.length === 0 ? (
-            <div className="bg-ink-900 border border-ink-800 rounded-xl p-10 text-center text-ink-500 font-serif-italic text-sm">
-              — No hay tickets para mostrar en este día —
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-10 text-center text-[var(--text-tertiary)] text-sm shadow-card">
+              No hay tickets para mostrar en este día
             </div>
           ) : (
             <>
-              <div className="bg-ink-900 border border-ink-800 rounded-xl overflow-hidden shadow-xl">
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden shadow-card">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-ink-950 border-b border-ink-800 text-[13px] font-bold select-none">
-                        <th
-                          onClick={() => handleSort("time")}
-                          className={`py-4 px-5 cursor-pointer hover:bg-ink-900/60 transition-colors group/th ${
-                            logSortField === "time"
-                              ? isBosko
-                                ? "bg-[#4ade80]/10 text-[#4ade80] font-bold"
-                                : "bg-blue/10 text-blue font-bold"
-                              : "text-ink-200"
-                          }`}
-                        >
+                      <tr className="bg-[var(--bg-panel)] border-b border-[var(--border-subtle)] text-[12px] font-semibold select-none">
+                        {(
+                          [
+                            ["time", Clock, "Hora"],
+                            ["ticket", Tag, "Ticket"],
+                          ] as const
+                        ).map(([field, Icon, label]) => (
+                          <th
+                            key={field}
+                            onClick={() => handleSort(field)}
+                            className={`py-3.5 px-5 cursor-pointer hover:bg-[var(--bg-app)] transition-colors ${
+                              logSortField === field ? thActive : thIdle
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <Icon size={13} strokeWidth={1.8} />
+                              <span>{label}</span>
+                              <span className={`transition-all ${logSortField === field ? "opacity-100" : "opacity-0"}`}>
+                                {logSortField === field && logSortDirection === "desc" ? (
+                                  <ChevronDown size={14} />
+                                ) : (
+                                  <ChevronUp size={14} />
+                                )}
+                              </span>
+                            </div>
+                          </th>
+                        ))}
+                        <th className="py-3.5 px-5 text-[var(--text-secondary)] font-semibold">
                           <div className="flex items-center gap-1.5">
-                            <Clock size={13} className={logSortField === "time" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
-                            <span>Hora</span>
-                            <span className={`transition-all duration-200 ${logSortField === "time" ? "scale-100 opacity-100" : "opacity-0 scale-75"}`}>
-                              {logSortField === "time" && logSortDirection === "desc" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                            </span>
-                          </div>
-                        </th>
-                        <th
-                          onClick={() => handleSort("ticket")}
-                          className={`py-4 px-5 cursor-pointer hover:bg-ink-900/60 transition-colors group/th ${
-                            logSortField === "ticket"
-                              ? isBosko
-                                ? "bg-[#4ade80]/10 text-[#4ade80] font-bold"
-                                : "bg-blue/10 text-blue font-bold"
-                              : "text-ink-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <Tag size={13} className={logSortField === "ticket" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
-                            <span>Ticket</span>
-                            <span className={`transition-all duration-200 ${logSortField === "ticket" ? "scale-100 opacity-100" : "opacity-0 scale-75"}`}>
-                              {logSortField === "ticket" && logSortDirection === "desc" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                            </span>
-                          </div>
-                        </th>
-                        <th className="py-4 px-5 text-ink-200 font-bold">
-                          <div className="flex items-center gap-1.5">
-                            <Wine size={13} className="text-ink-400" />
+                            <Wine size={13} strokeWidth={1.8} />
                             <span>Detalle</span>
                           </div>
                         </th>
-                        <th
-                          onClick={() => handleSort("creator")}
-                          className={`py-4 px-5 cursor-pointer hover:bg-ink-900/60 transition-colors group/th ${
-                            logSortField === "creator"
-                              ? isBosko
-                                ? "bg-[#4ade80]/10 text-[#4ade80] font-bold"
-                                : "bg-blue/10 text-blue font-bold"
-                              : "text-ink-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <User size={13} className={logSortField === "creator" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
-                            <span>Creador</span>
-                            <span className={`transition-all duration-200 ${logSortField === "creator" ? "scale-100 opacity-100" : "opacity-0 scale-75"}`}>
-                              {logSortField === "creator" && logSortDirection === "desc" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                            </span>
-                          </div>
-                        </th>
-                        <th
-                          onClick={() => handleSort("method")}
-                          className={`py-4 px-5 cursor-pointer hover:bg-ink-900/60 transition-colors group/th ${
-                            logSortField === "method"
-                              ? isBosko
-                                ? "bg-[#4ade80]/10 text-[#4ade80] font-bold"
-                                : "bg-blue/10 text-blue font-bold"
-                              : "text-ink-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <CreditCard size={13} className={logSortField === "method" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
-                            <span>Medio de Pago</span>
-                            <span className={`transition-all duration-200 ${logSortField === "method" ? "scale-100 opacity-100" : "opacity-0 scale-75"}`}>
-                              {logSortField === "method" && logSortDirection === "desc" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                            </span>
-                          </div>
-                        </th>
-                        <th
-                          onClick={() => handleSort("total")}
-                          className={`py-4 px-5 cursor-pointer hover:bg-ink-900/60 transition-colors group/th ${
-                            logSortField === "total"
-                              ? isBosko
-                                ? "bg-[#4ade80]/10 text-[#4ade80] font-bold"
-                                : "bg-blue/10 text-blue font-bold"
-                              : "text-ink-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <DollarSign size={13} className={logSortField === "total" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
-                            <span>Total</span>
-                            <span className={`transition-all duration-200 ${logSortField === "total" ? "scale-100 opacity-100" : "opacity-0 scale-75"}`}>
-                              {logSortField === "total" && logSortDirection === "desc" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                            </span>
-                          </div>
-                        </th>
+                        {(
+                          [
+                            ["creator", User, "Creador"],
+                            ["method", CreditCard, "Medio de Pago"],
+                            ["total", DollarSign, "Total"],
+                          ] as const
+                        ).map(([field, Icon, label]) => (
+                          <th
+                            key={field}
+                            onClick={() => handleSort(field)}
+                            className={`py-3.5 px-5 cursor-pointer hover:bg-[var(--bg-app)] transition-colors ${
+                              logSortField === field ? thActive : thIdle
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <Icon size={13} strokeWidth={1.8} />
+                              <span>{label}</span>
+                              <span className={`transition-all ${logSortField === field ? "opacity-100" : "opacity-0"}`}>
+                                {logSortField === field && logSortDirection === "desc" ? (
+                                  <ChevronDown size={14} />
+                                ) : (
+                                  <ChevronUp size={14} />
+                                )}
+                              </span>
+                            </div>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-ink-850">
-                      {paginatedLogs.map((log, idx) => {
+                    <tbody className="divide-y divide-[var(--border-subtle)]">
+                      {paginatedLogs.map((log) => {
                         const isCancelled = log.status === "cancelado";
-
                         return (
                           <tr
                             key={log.id}
                             onClick={() => setSelectedLogOrder(log)}
-                            className={`hover:bg-ink-850/30 transition-colors cursor-pointer text-[13px] group ${
-                              idx % 2 === 0 ? "bg-ink-800/30" : ""
-                            } ${isCancelled ? "opacity-60 line-through decoration-ink-600" : ""}`}
+                            className={`hover:bg-[var(--bg-panel)] transition-colors cursor-pointer text-[13px] ${
+                              isCancelled ? "opacity-55 line-through decoration-[var(--text-tertiary)]" : ""
+                            }`}
                           >
-                            <td className={`py-3 px-5 font-mono text-[12.5px] transition-all ${
-                              logSortField === "time"
-                                ? isBosko
-                                  ? "text-[#4ade80] font-bold"
-                                  : "text-blue font-bold"
-                                : "text-ink-300"
-                            }`}>
+                            <td
+                              className={`py-3 px-5 font-mono text-[12.5px] tabular ${
+                                logSortField === "time" ? cellActive : cellIdle
+                              }`}
+                            >
                               {formatHm(log.createdAt)} hs
                             </td>
                             <td className="py-3 px-5">
-                              <span className={`w-12 h-10 flex items-center justify-center rounded-xl bg-ink-800 border font-mono font-black text-[14px] shrink-0 transition-all ${
-                                logSortField === "ticket"
-                                  ? isBosko
-                                    ? "text-[#4ade80] border-[#4ade80]/40"
-                                    : "text-blue border-blue-line"
-                                  : "text-ink-100 border-ink-750"
-                              }`}>
+                              <span
+                                className={`w-12 h-9 flex items-center justify-center rounded-xl border font-mono font-bold text-[13px] shrink-0 ${
+                                  logSortField === "ticket"
+                                    ? "text-[var(--accent-text)] border-[var(--accent-line)] bg-[var(--accent-surface)]"
+                                    : "text-[var(--text-primary)] border-[var(--border-subtle)] bg-[var(--bg-panel)]"
+                                }`}
+                              >
                                 #{log.displayNumber}
                               </span>
                             </td>
                             <td className="py-3 px-5 max-w-[200px] sm:max-w-[300px]">
-                              <span className="text-[12px] text-ink-200 truncate font-semibold block" title={log.items.map((it) => `${it.qty}x ${it.name}`).join(", ")}>
+                              <span
+                                className="text-[12px] text-[var(--text-primary)] truncate font-medium block"
+                                title={log.items.map((it) => `${it.qty}x ${it.name}`).join(", ")}
+                              >
                                 {log.items.map((it) => `${it.qty}x ${it.name}`).join(", ")}
                               </span>
                             </td>
                             <td className="py-3 px-5">
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all ${
-                                logSortField === "creator"
-                                  ? isBosko
-                                    ? "bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/20"
-                                    : "bg-blue/10 text-blue border border-blue/20"
-                                  : "bg-ink-850 text-ink-300 border border-ink-750"
-                              }`}>
-                                <User size={11} className={logSortField === "creator" ? (isBosko ? "text-[#4ade80]" : "text-blue") : "text-ink-400"} />
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                  logSortField === "creator"
+                                    ? "bg-[var(--accent-surface)] text-[var(--accent-text)] border-[var(--accent-line)]"
+                                    : "bg-[var(--bg-panel)] text-[var(--text-secondary)] border-[var(--border-subtle)]"
+                                }`}
+                              >
+                                <User size={11} strokeWidth={1.8} />
                                 <span>{log.createdBy || "Cliente"}</span>
                               </span>
                             </td>
-                            <td className={`py-3 px-5 transition-all ${
-                              logSortField === "method"
-                                ? isBosko
-                                  ? "text-[#4ade80] font-bold"
-                                  : "text-blue font-bold"
-                                : "text-ink-400"
-                            }`}>
-                              <span>
-                                {log.paymentMethod === "efectivo"
-                                  ? "Efectivo"
-                                  : log.paymentMethod === "debito"
+                            <td
+                              className={`py-3 px-5 ${
+                                logSortField === "method" ? cellActive : "text-[var(--text-secondary)]"
+                              }`}
+                            >
+                              {log.paymentMethod === "efectivo"
+                                ? "Efectivo"
+                                : log.paymentMethod === "debito"
                                   ? "Posnet"
                                   : log.paymentMethod === "qr"
-                                  ? "QR"
-                                  : log.paymentMethod}
-                              </span>
+                                    ? "QR"
+                                    : log.paymentMethod}
                             </td>
-                            <td className={`py-3 px-5 font-mono font-black transition-all ${
-                              logSortField === "total"
-                                ? isBosko
-                                  ? "text-[#4ade80]"
-                                  : "text-blue"
-                                : "text-ink-100"
-                            }`}>
-                              <span>${log.total.toLocaleString("es-AR")}</span>
+                            <td
+                              className={`py-3 px-5 font-mono font-bold tabular ${
+                                logSortField === "total" ? cellActive : "text-[var(--text-primary)]"
+                              }`}
+                            >
+                              ${log.total.toLocaleString("es-AR")}
                             </td>
                           </tr>
                         );
@@ -599,14 +554,14 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                 </div>
               </div>
 
-              {/* Pagination Section (Limitada a 7 celdas con gaps) */}
               {totalLogPages > 1 && (
-                <div className="flex items-center justify-center gap-1.5 pt-4">
+                <div className="flex items-center justify-center gap-1.5 pt-2">
                   <button
+                    type="button"
                     onClick={() => setCurrentLogPage((p) => Math.max(1, p - 1))}
                     disabled={currentLogPage === 1}
                     aria-label="Página anterior"
-                    className="w-9 h-9 rounded-lg border border-ink-800 bg-ink-900 hover:bg-ink-850 text-ink-400 hover:text-ink-50 flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-ink-900 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-9 h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                   >
                     <ArrowLeft size={14} />
                   </button>
@@ -616,7 +571,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                       return (
                         <span
                           key={`gap-${idx}`}
-                          className="w-9 h-9 flex items-center justify-center text-ink-500 font-mono"
+                          className="w-9 h-9 flex items-center justify-center text-[var(--text-tertiary)] font-mono"
                         >
                           ...
                         </span>
@@ -625,12 +580,13 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                     return (
                       <button
                         key={page}
+                        type="button"
                         onClick={() => setCurrentLogPage(Number(page))}
                         aria-current={currentLogPage === page ? "page" : undefined}
-                        className={`w-9 h-9 rounded-lg border font-mono text-xs transition-all cursor-pointer ${
+                        className={`w-9 h-9 rounded-xl border font-mono text-xs transition-all cursor-pointer ${
                           currentLogPage === page
-                            ? "bg-accent/15 text-accent border-accent/20 font-bold"
-                            : "bg-ink-900 border-ink-800 text-ink-400 hover:text-ink-200 hover:bg-ink-850"
+                            ? "bg-[var(--accent-surface)] text-[var(--accent-text)] border-[var(--accent-line)] font-bold"
+                            : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
                         }`}
                       >
                         {page}
@@ -639,10 +595,11 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                   })}
 
                   <button
+                    type="button"
                     onClick={() => setCurrentLogPage((p) => Math.min(totalLogPages, p + 1))}
                     disabled={currentLogPage === totalLogPages}
                     aria-label="Página siguiente"
-                    className="w-9 h-9 rounded-lg border border-ink-800 bg-ink-900 hover:bg-ink-850 text-ink-400 hover:text-ink-50 flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-ink-900 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-9 h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                   >
                     <ArrowRight size={14} />
                   </button>
@@ -653,19 +610,27 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
         </div>
       )}
 
-      {/* Log Order Detail Popup */}
       {selectedLogOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="bg-ink-900 border border-white/10 w-full max-w-sm rounded-[24px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full max-w-sm rounded-[20px] p-6 shadow-card animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-[var(--border-subtle)]">
               <div>
                 <div className="flex items-center gap-2">
-                  <Tag size={18} className="text-accent" />
-                  <h3 className="font-mono text-lg font-black text-ink-50">Ticket #{selectedLogOrder.displayNumber}</h3>
+                  <Tag size={16} className="text-[var(--accent-primary)]" strokeWidth={1.8} />
+                  <h3 className="font-mono text-lg font-bold text-[var(--text-primary)]">
+                    Ticket #{selectedLogOrder.displayNumber}
+                  </h3>
                 </div>
-                <p className="font-mono text-[10px] text-ink-400 select-all mt-0.5">{selectedLogOrder.token}</p>
+                <p className="font-mono text-[10px] text-[var(--text-tertiary)] select-all mt-0.5">
+                  {selectedLogOrder.token}
+                </p>
               </div>
-              <button onClick={() => setSelectedLogOrder(null)} aria-label="Cerrar detalle del ticket" className="p-2.5 bg-white/5 rounded-full active:scale-90 transition-transform cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setSelectedLogOrder(null)}
+                aria-label="Cerrar detalle del ticket"
+                className="p-2.5 bg-[var(--bg-panel)] rounded-full active:scale-90 transition-transform cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -674,55 +639,59 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
               {selectedLogOrder.items.map((item) => (
                 <div key={item.drinkId} className="flex justify-between items-start text-sm">
                   <div className="flex gap-2 min-w-0">
-                    <Wine size={14} className="text-ink-400 mt-0.5 shrink-0" />
+                    <Wine size={14} className="text-[var(--text-tertiary)] mt-0.5 shrink-0" strokeWidth={1.8} />
                     <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-ink-50 truncate">{item.name}</span>
-                      <span className="text-xs text-ink-400 font-mono tabular">{item.qty} x ${item.unitPrice.toLocaleString("es-AR")}</span>
+                      <span className="font-semibold text-[var(--text-primary)] truncate">{item.name}</span>
+                      <span className="text-xs text-[var(--text-tertiary)] font-mono tabular">
+                        {item.qty} x ${item.unitPrice.toLocaleString("es-AR")}
+                      </span>
                     </div>
                   </div>
-                  <span className="font-mono font-bold text-ink-200">${item.subtotal.toLocaleString("es-AR")}</span>
+                  <span className="font-mono font-bold text-[var(--text-secondary)] tabular">
+                    ${item.subtotal.toLocaleString("es-AR")}
+                  </span>
                 </div>
               ))}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-white/10 flex flex-col gap-2 font-mono text-xs">
-              <div className="flex justify-between text-ink-300">
+            <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-col gap-2 font-mono text-xs">
+              <div className="flex justify-between text-[var(--text-secondary)]">
                 <div className="flex items-center gap-1.5">
-                  <User size={13} className="text-ink-450" />
+                  <User size={13} />
                   <span>Creado por</span>
                 </div>
-                <span className="font-bold">{selectedLogOrder.createdBy || "Cliente"}</span>
+                <span className="font-bold text-[var(--text-primary)]">{selectedLogOrder.createdBy || "Cliente"}</span>
               </div>
-              <div className="flex justify-between text-ink-300">
+              <div className="flex justify-between text-[var(--text-secondary)]">
                 <div className="flex items-center gap-1.5">
                   {selectedLogOrder.paymentMethod === "efectivo" ? (
-                    <DollarSign size={13} className="text-green" />
+                    <DollarSign size={13} className="text-[var(--success-base)]" />
                   ) : (
-                    <CreditCard size={13} className="text-blue" />
+                    <CreditCard size={13} className="text-[var(--accent-primary)]" />
                   )}
                   <span>Medio de pago</span>
                 </div>
-                <span className="font-bold">
+                <span className="font-bold text-[var(--text-primary)]">
                   {selectedLogOrder.paymentMethod === "efectivo"
                     ? "Efectivo"
                     : selectedLogOrder.paymentMethod === "debito"
-                    ? "Posnet"
-                    : selectedLogOrder.paymentMethod === "qr"
-                    ? "QR"
-                    : selectedLogOrder.paymentMethod}
+                      ? "Posnet"
+                      : selectedLogOrder.paymentMethod === "qr"
+                        ? "QR"
+                        : selectedLogOrder.paymentMethod}
                 </span>
               </div>
-              <div className="flex justify-between text-ink-300">
+              <div className="flex justify-between text-[var(--text-secondary)]">
                 <div className="flex items-center gap-1.5">
-                  <Clock size={13} className="text-ink-450" />
+                  <Clock size={13} />
                   <span>Creación</span>
                 </div>
                 <span>{formatDateHourDetailed(selectedLogOrder.createdAt)}</span>
               </div>
 
               {selectedLogOrder.status === "entregado" && (
-                <div className="p-2.5 rounded-lg bg-green-soft border border-green-line text-green mt-2 flex flex-col gap-1">
-                  <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Entrega:</span>
+                <div className="p-2.5 rounded-xl bg-[var(--success-soft)] text-[var(--success-base)] mt-2 flex flex-col gap-1">
+                  <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Entrega</span>
                   {selectedLogOrder.deliveredByBar && (
                     <span className="text-[10px]">Barra: {selectedLogOrder.deliveredByBar}</span>
                   )}
@@ -743,37 +712,41 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
               )}
 
               {selectedLogOrder.status === "cancelado" && (
-                <div className="p-2.5 rounded-lg bg-danger-soft border border-danger-line text-danger mt-2 flex flex-col gap-1">
-                  <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Cancelación:</span>
+                <div className="p-2.5 rounded-xl bg-[var(--danger-soft)] text-[var(--danger-base)] mt-2 flex flex-col gap-1">
+                  <span className="font-bold uppercase text-[9px] tracking-wider">Detalles de Cancelación</span>
                   <span className="text-[10px]">Cancelado por: {selectedLogOrder.cancelledBy || "sistema"}</span>
                   {selectedLogOrder.cancelledAt && (
-                    <span className="text-[10px]">Hora: {new Date(selectedLogOrder.cancelledAt).toLocaleString("es-AR")}</span>
+                    <span className="text-[10px]">
+                      Hora: {new Date(selectedLogOrder.cancelledAt).toLocaleString("es-AR")}
+                    </span>
                   )}
                 </div>
               )}
 
-              <div className="flex justify-between text-base font-black text-ink-50 pt-2 border-t border-white/5 pb-2">
+              <div className="flex justify-between text-base font-bold text-[var(--text-primary)] pt-2 border-t border-[var(--border-subtle)] pb-2">
                 <div className="flex items-center gap-1.5">
-                  <Tag size={15} className="text-blue" />
+                  <Tag size={15} className="text-[var(--accent-primary)]" />
                   <span>TOTAL</span>
                 </div>
-                <span className="text-blue">${selectedLogOrder.total.toLocaleString("es-AR")}</span>
+                <span className="text-[var(--accent-text)] tabular">
+                  ${selectedLogOrder.total.toLocaleString("es-AR")}
+                </span>
               </div>
 
-              {/* Cancel Flow inline in details */}
-              {selectedLogOrder.status !== "cancelado" && selectedLogOrder.status !== "entregado" && (
-                !showCancelInput ? (
+              {selectedLogOrder.status !== "cancelado" &&
+                selectedLogOrder.status !== "entregado" &&
+                (!showCancelInput ? (
                   <button
                     type="button"
                     onClick={() => setShowCancelInput(true)}
-                    className="w-full mt-2 h-11 bg-danger-soft hover:bg-danger-soft/80 border border-danger-line text-danger font-black rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full mt-2 h-11 bg-[var(--danger-soft)] hover:brightness-95 border border-transparent text-[var(--danger-base)] font-bold rounded-xl active:scale-95 transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <X size={14} strokeWidth={2.5} />
                     Cancelar Ticket
                   </button>
                 ) : (
-                  <div className="mt-3 p-3.5 bg-danger-soft/20 border border-danger-line rounded-xl space-y-2.5 animate-in slide-in-from-top-2 duration-200 text-left">
-                    <label className="text-[10px] font-bold text-danger uppercase tracking-wider block">
+                  <div className="mt-3 p-3.5 bg-[var(--danger-soft)]/40 border border-[var(--danger-base)]/20 rounded-xl space-y-2.5 animate-in slide-in-from-top-2 duration-200 text-left">
+                    <label className="text-[10px] font-bold text-[var(--danger-base)] uppercase tracking-wider block">
                       Escribí exactamente &quot;cancelar&quot; para confirmar:
                     </label>
                     <input
@@ -781,7 +754,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                       value={cancelConfirmText}
                       onChange={(e) => setCancelConfirmText(e.target.value)}
                       placeholder="Escribir aquí..."
-                      className="w-full h-10 px-3 bg-ink-950 border border-danger-line/30 rounded-lg text-sm text-ink-50 focus:outline-none focus:border-danger transition-all font-mono"
+                      className="w-full h-10 px-3 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--danger-base)] transition-all font-mono"
                     />
                     <div className="flex gap-2">
                       <button
@@ -790,7 +763,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                           setShowCancelInput(false);
                           setCancelConfirmText("");
                         }}
-                        className="flex-1 h-9 bg-ink-800 hover:bg-ink-750 text-ink-300 rounded-lg text-xs font-semibold cursor-pointer"
+                        className="flex-1 h-9 bg-[var(--bg-panel)] hover:bg-[var(--bg-app)] text-[var(--text-secondary)] rounded-lg text-xs font-semibold cursor-pointer"
                       >
                         Atrás
                       </button>
@@ -798,14 +771,13 @@ export default function LogsSection({ initialFilterTimestamp, isBosko }: Props) 
                         type="button"
                         disabled={cancelConfirmText !== "cancelar"}
                         onClick={handleCancelTicket}
-                        className="flex-1 h-9 bg-danger text-white rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        className="flex-1 h-9 bg-[var(--danger-base)] text-white rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       >
                         Confirmar
                       </button>
                     </div>
                   </div>
-                )
-              )}
+                ))}
             </div>
           </div>
         </div>
