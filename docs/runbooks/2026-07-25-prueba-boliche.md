@@ -37,6 +37,34 @@
 2. Verificar en `/admin` que el resumen cuadre (efectivo vs Posnet vs QR).
 3. Si algo del sync falló, no pasa nada: queda `pending` y reintenta al próximo arranque con internet.
 
+## Limpieza de datos — scripts (correr desde la raíz del repo)
+
+> El stack local (Docker `cocktrail-db` + rest + kong) no se toca: los scripts operan sobre los datos.
+
+| Qué limpia | Comando | Cuándo |
+|---|---|---|
+| **Noches vacías en Cloud** (las ~155 de $0 que dejaron los tests — ensucian el Historial y cada restore las trae de vuelta) | `cd apps/api && pnpm exec tsx src/scripts/cleanup-empty-nights.ts --target=cloud` (pide confirmación tipeada) | **Hoy**, antes de la prueba |
+| Noches vacías locales | ídem con `--target=local` | Después de correr suites de integración (R16) |
+| **Reset TOTAL local** (borra pedidos/noches/cobros, conserva catálogo y usuarios) | `pnpm --filter cocktrail-api db:reset --target=local` | Opcional antes de la prueba, para arrancar con historial limpio |
+| **Reset TOTAL de Cloud** ⚠️ | `pnpm --filter cocktrail-api db:reset --target=cloud` (confirmación tipeada) | **Recién el día de la entrega real** — NO ahora (se pierden los datos de prueba útiles) |
+| Comparar local vs Cloud (sanidad del sync) | `pnpm --filter cocktrail-api verify-sync` | Después de un cierre, si hay dudas |
+
+## Migración a la cuenta del dueño — cuándo se haga (NO mañana; decidido 24-07)
+
+> La plata de la prueba entra a la cuenta de Manuel (`1517393956`) y se transfiere después.
+> La migración se hace con calma otro día, con el dueño presente. Funciona igual si la cuenta
+> es personal del dueño o del negocio — lo único: los pasos 2 y 4 los hace **el titular**.
+
+1. **Manuel** saca el lector de su app de MP: Configuración del lector → **"Eliminar el lector de mi cuenta"**.
+2. **El dueño** reclama el lector desde SU app de MP (paso manual irreductible — MP no tiene API para transferir hardware).
+3. Verificar en la app del dueño que el lector aparezca y **ponerlo en modo PDV** (o después desde `/admin`, que tiene el botón).
+4. **El dueño** vincula su cuenta por **OAuth** en `/admin` → Pagos ("Vincular Mercado Pago"), **con sus propias credenciales** (no un colaborador — supuesto no verificado).
+5. **Desvincular** el seller viejo de Manuel (botón Desvincular en `/admin` → Pagos) si el paso 4 no lo reemplazó solo.
+6. `/admin` → PDV y Posnets: la caja va a figurar **huérfana** → **Re-provisionar** (crea store/POS en la cuenta nueva). ⚠️ **El QR estático CAMBIA** → imprimir el nuevo y tirar el viejo.
+7. Vincular el lector a la caja desde PDV y Posnets; salud en verde.
+8. **Re-gates completos contra la cuenta nueva**: un cobro Posnet real + el mini-gate QR (pago con otro celu / no-pago / monto). Sin esto no se opera.
+9. Verificar en la app de MP **del dueño** que la plata de las pruebas entró ahí.
+
 ## Si algo se rompe
 
 | Síntoma | Acción |
