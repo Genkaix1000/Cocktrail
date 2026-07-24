@@ -45,3 +45,6 @@ supabase/docker/kong.yml
 # estado local del CLI de Supabase (no versionar)
 supabase/.temp/
 **/.branches/
+
+# referencias de diseño locales
+docs/design/reference/*.png
