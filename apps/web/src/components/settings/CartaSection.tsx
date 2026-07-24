@@ -1,20 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, Search, Wine } from "lucide-react";
+import { Filter, Loader2, Plus, Search } from "lucide-react";
 import { drinksService } from "@/services/drinks.service";
 import type { Drink } from "@cocktrail/shared";
-import { useTheme } from "@/components/ThemeProvider";
 import Toast from "@/components/shared/Toast";
-import DrinksTable from "./DrinksTable";
+import DrinksTable, {
+  type ColumnFilters,
+  type SortDirection,
+  type SortField,
+} from "./DrinksTable";
 import DrinkFormModal, { type DrinkForm } from "./DrinkFormModal";
+import {
+  type CartaColId,
+  CARTA_COLS_DEFAULT,
+  CARTA_COLS_REQUIRED,
+  loadCartaCols,
+  saveCartaCols,
+} from "./cartaCrud";
 
-/** Ventana para deshacer un delete antes de pegarle a la API. */
 const DELETE_UNDO_MS = 5000;
 
-// Función en vez de constante: `flavors` es un array y si fuera un objeto
-// módulo-level compartido, todas las aperturas de "Nuevo Trago" mutarían la
-// misma referencia. Hoy no hay UI para editar `flavors`, pero evita la trampa.
+const EMPTY_COL_FILTERS: ColumnFilters = {
+  name: "",
+  priceMin: "",
+  priceMax: "",
+  status: "all",
+  tags: "all",
+  promo: "all",
+  trending: "all",
+  id: "",
+};
+
 const makeEmptyForm = (): DrinkForm => ({
   name: "",
   price: 0,
@@ -27,25 +44,33 @@ const makeEmptyForm = (): DrinkForm => ({
   available: true,
 });
 
+type ViewFilter = "all" | "in" | "out";
+
 export default function CartaSection() {
   const [drinks, setDrinks] = useState<Drink[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
-  const [modalOpen, setModalOpen] = useState(false); // Controls side-drawer visibility
+  const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>(EMPTY_COL_FILTERS);
+  const [visibleCols, setVisibleCols] = useState<CartaColId[]>(CARTA_COLS_DEFAULT);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editDrink, setEditDrink] = useState<DrinkForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const [undoDelete, setUndoDelete] = useState<Drink | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { theme } = useTheme();
 
-  const [sortField, setSortField] = useState<"name" | "price">("name");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
-  // ponytail: un solo delete pendiente a la vez; cola si hace falta paralelizar
   const pendingDeleteRef = useRef<{ drink: Drink; timer: ReturnType<typeof setTimeout> } | null>(null);
+
+  useEffect(() => {
+    setVisibleCols(loadCartaCols());
+  }, []);
 
   const commitDelete = useCallback(async (drink: Drink) => {
     try {
@@ -70,7 +95,6 @@ export default function CartaSection() {
       const pending = pendingDeleteRef.current;
       if (!pending) return;
       clearTimeout(pending.timer);
-      // Best-effort: no await en unmount; el DELETE sigue en vuelo.
       void drinksService.delete(pending.drink.id).catch(() => {});
       pendingDeleteRef.current = null;
     };
@@ -83,8 +107,6 @@ export default function CartaSection() {
       setDrinks(data);
     } catch (err) {
       console.error("Error loading drinks:", err);
-      // Sin esto, un error de red se ve idéntico a "carta vacía" y el dueño
-      // del boliche puede pensar que borró todos los tragos.
       setLoadError(true);
     } finally {
       setLoading(false);
@@ -96,11 +118,47 @@ export default function CartaSection() {
     loadDrinks();
   }, [loadDrinks]);
 
+  const setFiltersOpenSafe = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
+    setFiltersOpen((prev) => {
+      const next = typeof open === "function" ? open(prev) : open;
+      if (!next) setColumnFilters(EMPTY_COL_FILTERS);
+      return next;
+    });
+  }, []);
+
   const sortedAndFiltered = useMemo(() => {
     let list = [...drinks];
+
+    if (viewFilter === "in") list = list.filter((d) => d.available);
+    if (viewFilter === "out") list = list.filter((d) => !d.available);
+
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((d) => d.name.toLowerCase().includes(q));
+    }
+
+    if (filtersOpen) {
+      const cf = columnFilters;
+      if (cf.name.trim()) {
+        const q = cf.name.toLowerCase();
+        list = list.filter((d) => d.name.toLowerCase().includes(q));
+      }
+      if (cf.id.trim()) {
+        list = list.filter((d) => String(d.id).includes(cf.id.trim()));
+      }
+      const min = cf.priceMin === "" ? null : Number(cf.priceMin);
+      const max = cf.priceMax === "" ? null : Number(cf.priceMax);
+      if (min != null && !Number.isNaN(min)) list = list.filter((d) => d.price >= min);
+      if (max != null && !Number.isNaN(max)) list = list.filter((d) => d.price <= max);
+      if (cf.status === "in") list = list.filter((d) => d.available);
+      if (cf.status === "out") list = list.filter((d) => !d.available);
+      if (cf.tags === "promo") list = list.filter((d) => d.promo);
+      if (cf.tags === "trending") list = list.filter((d) => d.trending);
+      if (cf.tags === "any") list = list.filter((d) => d.promo || d.trending);
+      if (cf.promo === "yes") list = list.filter((d) => d.promo);
+      if (cf.promo === "no") list = list.filter((d) => !d.promo);
+      if (cf.trending === "yes") list = list.filter((d) => d.trending);
+      if (cf.trending === "no") list = list.filter((d) => !d.trending);
     }
 
     list.sort((a, b) => {
@@ -108,16 +166,15 @@ export default function CartaSection() {
         sortField === "name"
           ? [a.name.toLowerCase(), b.name.toLowerCase()]
           : [a.price, b.price];
-
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
 
     return list;
-  }, [drinks, search, sortField, sortDirection]);
+  }, [drinks, search, sortField, sortDirection, viewFilter, filtersOpen, columnFilters]);
 
-  const handleSort = (field: "name" | "price") => {
+  const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -126,13 +183,33 @@ export default function CartaSection() {
     }
   };
 
+  const toggleCol = useCallback((col: CartaColId) => {
+    if (CARTA_COLS_REQUIRED.includes(col)) return;
+    setVisibleCols((prev) => {
+      const next = prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col];
+      // keep stable order from default+id
+      const order: CartaColId[] = [
+        "id",
+        "icon",
+        "name",
+        "price",
+        "status",
+        "tags",
+        "actions",
+      ];
+      const ordered = order.filter((c) => next.includes(c) || CARTA_COLS_REQUIRED.includes(c));
+      saveCartaCols(ordered);
+      return ordered;
+    });
+  }, []);
+
   const openCreate = useCallback(() => {
     setEditDrink(makeEmptyForm());
     setModalOpen(true);
   }, []);
 
   const openEdit = useCallback((drink: Drink) => {
-    setEditDrink({ ...drink });
+    setEditDrink({ ...drink, description: "", vibe: "" });
     setModalOpen(true);
   }, []);
 
@@ -146,14 +223,19 @@ export default function CartaSection() {
     setSaving(true);
     setError(null);
     try {
-      if (editDrink.id) {
-        // Update
-        const { id, ...rest } = editDrink;
-        const updated = await drinksService.update(id, rest);
+      const payload = {
+        ...editDrink,
+        description: "",
+        vibe: "",
+        flavors: editDrink.flavors ?? [],
+      };
+      if (editDrink.id != null) {
+        const drinkId = editDrink.id;
+        const { id: _, ...rest } = payload;
+        const updated = await drinksService.update(drinkId, rest);
         setDrinks((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
       } else {
-        // Create
-        const created = await drinksService.create(editDrink);
+        const created = await drinksService.create(payload);
         setDrinks((prev) => [...prev, created]);
       }
       closeModal();
@@ -211,62 +293,107 @@ export default function CartaSection() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 size={24} className="animate-spin text-ink-400" />
+        <Loader2 size={24} className="animate-spin text-[var(--text-tertiary)]" />
       </div>
     );
   }
 
-  const isBosko = theme === "bosko";
+  const views: { id: ViewFilter; label: string }[] = [
+    { id: "all", label: "Todos" },
+    { id: "in", label: "En carta" },
+    { id: "out", label: "Ocultos" },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Title + actions */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[32px] font-black tracking-tight text-ink-50 leading-tight flex items-center gap-3 select-none">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent/10 border border-accent/20 text-accent shrink-0">
-              <Wine size={16} />
-            </div>
-            <span>Carta</span>
-          </h1>
-          <p className="text-[13px] text-ink-400/80 mt-1">
-            Gestioná los tragos de tu boliche. {drinks.length} tragos registrados.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="h-10 px-4 rounded-xl bg-ink-800 border border-ink-700 text-ink-100 hover:text-ink-50 text-[12px] font-bold uppercase tracking-[0.08em] flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.97]"
-        >
-          <Plus size={14} strokeWidth={2.5} />
-          Nuevo Trago
-        </button>
+    <div className="flex flex-col gap-8 max-w-5xl">
+      <div>
+        <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+          Carta
+        </h1>
+        <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+          Gestioná los tragos de tu boliche. {sortedAndFiltered.length}{" "}
+          {sortedAndFiltered.length === 1 ? "trago" : "tragos"}
+          {sortedAndFiltered.length !== drinks.length
+            ? sortedAndFiltered.length === 1
+              ? " visible"
+              : " visibles"
+            : " registrados"}
+          .
+        </p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
-        {/* Table & search panel */}
-        <div className={`flex-1 w-full space-y-4 min-w-0 ${modalOpen ? "" : "max-w-4xl"}`}>
-          {/* Search */}
-          <div className="relative">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre..."
-              className="w-full h-10 pl-10 pr-4 bg-ink-900 border border-ink-800 rounded-lg text-sm text-ink-50 placeholder:text-ink-500 focus:outline-none focus:border-blue focus:ring-1 focus:ring-blue/30 transition-all"
-            />
+        <div className={`flex-1 w-full space-y-4 min-w-0 ${modalOpen ? "" : ""}`}>
+          {/* Toolbar — layout §4.8, chrome como Logs/Pagos */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {views.map((v) => {
+                const active = viewFilter === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setViewFilter(v.id)}
+                    className={`h-10 px-4 rounded-full text-[13px] font-semibold transition-all cursor-pointer ${
+                      active
+                        ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)] border border-transparent"
+                        : "bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                title="Filtros de columna"
+                aria-label="Filtros de columna"
+                aria-pressed={filtersOpen}
+                onClick={() => setFiltersOpenSafe((o) => !o)}
+                className={`w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer transition-colors ${
+                  filtersOpen
+                    ? "bg-[var(--accent-surface)] border-transparent text-[var(--accent-text)]"
+                    : "bg-[var(--bg-surface)] border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
+                }`}
+              >
+                <Filter size={15} />
+              </button>
+            </div>
+
+            <div className="flex-1 min-w-[180px] flex items-center h-10 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] overflow-hidden focus-within:border-[var(--accent-primary)]">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nombre…"
+                className="flex-1 h-full pl-4 pr-2 bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
+              />
+              <span className="w-10 h-10 flex items-center justify-center text-[var(--accent-primary)] shrink-0">
+                <Search size={15} />
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="h-10 px-4 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98]"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              Nuevo trago
+            </button>
           </div>
 
           <DrinksTable
             drinks={sortedAndFiltered}
             loadError={loadError}
-            search={search}
+            hasActiveSearch={Boolean(search.trim())}
             sortField={sortField}
             sortDirection={sortDirection}
-            isBosko={isBosko}
             selectedDrinkId={editDrink?.id}
             confirmingDeleteId={confirmingDeleteId}
+            visibleCols={visibleCols}
+            filtersOpen={filtersOpen}
+            columnFilters={columnFilters}
             onSort={handleSort}
             onRetry={loadDrinks}
             onSelectDrink={openEdit}
@@ -274,14 +401,14 @@ export default function CartaSection() {
             onAskDelete={(d) => setConfirmingDeleteId(d.id)}
             onCancelDelete={() => setConfirmingDeleteId(null)}
             onConfirmDelete={handleConfirmDelete}
+            onToggleCol={toggleCol}
+            onColumnFiltersChange={(patch) => setColumnFilters((prev) => ({ ...prev, ...patch }))}
           />
         </div>
 
-        {/* Inline Drawer/Side Panel for CRUD operations */}
         {modalOpen && editDrink && (
           <DrinkFormModal
             editDrink={editDrink}
-            isBosko={isBosko}
             saving={saving}
             onChange={(patch) => setEditDrink({ ...editDrink, ...patch })}
             onCancel={closeModal}
@@ -290,7 +417,6 @@ export default function CartaSection() {
         )}
       </div>
 
-      {/* Saved feedback popup */}
       {undoDelete ? (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast

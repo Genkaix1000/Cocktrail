@@ -7,10 +7,11 @@ Skin oficial: **Bosko** (bento, esmeralda, light + dark con grises — no monocr
 
 | Archivo | Para qué |
 |---|---|
-| [`design.md`](./design.md) | Principios, tokens light/dark, tipografía, convenciones por componente, a11y |
+| [`design.md`](./design.md) | Principios, tokens light/dark, tipografía, convenciones por componente (incl. **CRUD §4.8**), a11y |
 | [`reference/bosko-light.png`](./reference/bosko-light.png) | Referencia visual — modo claro |
 | [`reference/bosko-dark.png`](./reference/bosko-dark.png) | Referencia visual — modo oscuro |
 | [`reference/bosko-sidebar.png`](./reference/bosko-sidebar.png) | Detalle sidebar (pill activo, iconos sin caja, widget flotante) |
+| [`reference/crud-table-ref.png`](./reference/crud-table-ref.png) | Layout de tabla CRUD (estructura; colores = Bosko, no el azul del mock) |
 
 ## Componentes compartidos
 
@@ -31,7 +32,8 @@ No copiar estilos one-off por ruta: si algo aparece en admin y luego en caja, vi
 - **Al implementar UI**: leer `design.md` antes de inventar colores, radios o variantes.
 - **En PRs visuales**: linkear la spec de fase + captura light/dark de referencia.
 - **No fragmentar aún**: menús, botones y popups van como secciones en `design.md`.
-  CRUD (§4.8) ya está ahí; si crece, partir a `crud.md` en esta carpeta.
+  CRUD tabla está en §4.8; la feature Carta vive en [`crud-carta.md`](../specs/features/refactor-ui-bosko/crud-carta.md).
+  Si §4.8 crece al implementar Staff/PDV, partir a `crud.md` en esta carpeta.
 
 ## Fuera de alcance de esta carpeta
 

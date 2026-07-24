@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import CartaSection from "./CartaSection";
 import { drinksService } from "@/services/drinks.service";
-import { useTheme } from "@/components/ThemeProvider";
+import { CARTA_COLS_STORAGE_KEY } from "./cartaCrud";
 
 import type { Drink } from "@cocktrail/shared";
 
@@ -17,12 +17,7 @@ vi.mock("@/services/drinks.service", () => ({
   },
 }));
 
-vi.mock("@/components/ThemeProvider", () => ({
-  useTheme: vi.fn(),
-}));
-
 const mockedDrinksService = vi.mocked(drinksService);
-const mockedUseTheme = vi.mocked(useTheme);
 
 function makeDrink(overrides: Partial<Drink> = {}): Drink {
   return {
@@ -42,16 +37,7 @@ function makeDrink(overrides: Partial<Drink> = {}): Drink {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedUseTheme.mockReturnValue({
-    theme: "bosko",
-    useLogoUrl: true,
-    logoUrl: "/bosko.webp",
-    logoSize: 56,
-    textLogoValue: "Bosko",
-    textLogoSize: 26,
-    isDark: true,
-    toggleDark: vi.fn(),
-  });
+  localStorage.removeItem(CARTA_COLS_STORAGE_KEY);
 });
 
 describe("CartaSection", () => {
@@ -65,9 +51,6 @@ describe("CartaSection", () => {
 
     expect(await screen.findByText("Fernet con Coca")).toBeInTheDocument();
     expect(screen.getByText("Gin Tonic")).toBeInTheDocument();
-    // El contador está partido en varios text nodes por la interpolación JSX
-    // ("... {drinks.length} tragos registrados."), por eso se matchea por
-    // textContent en vez de por string exacto.
     expect(
       screen.getByText((_, node) => node?.textContent === "Gestioná los tragos de tu boliche. 2 tragos registrados."),
     ).toBeInTheDocument();
@@ -83,7 +66,7 @@ describe("CartaSection", () => {
 
     await screen.findByText("No hay tragos registrados");
 
-    await user.click(screen.getByRole("button", { name: /Nuevo Trago/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo trago/i }));
 
     await user.type(screen.getByPlaceholderText("Fernet con Coca"), "Campari Spritz");
     await user.type(screen.getByPlaceholderText("5500"), "4800");
@@ -192,8 +175,7 @@ describe("CartaSection", () => {
     await waitFor(() =>
       expect(mockedDrinksService.update).toHaveBeenCalledWith(1, { available: false }),
     );
-    // El panel de edición no debe abrirse: el toggle detiene la propagación del click de fila.
-    expect(screen.queryByText("Editar Trago")).not.toBeInTheDocument();
+    expect(screen.queryByText("Editar trago")).not.toBeInTheDocument();
   });
 
   it("muestra un error distinguible de 'carta vacía' si falla la carga inicial, con reintento", async () => {
@@ -219,7 +201,7 @@ describe("CartaSection", () => {
     render(<CartaSection />);
     await screen.findByText("No hay tragos registrados");
 
-    await user.click(screen.getByRole("button", { name: /Nuevo Trago/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo trago/i }));
     await user.type(screen.getByPlaceholderText("Fernet con Coca"), "Campari Spritz");
     await user.type(screen.getByPlaceholderText("5500"), "4800");
     await user.click(screen.getByRole("button", { name: "Crear" }));
@@ -262,19 +244,27 @@ describe("CartaSection", () => {
     expect(await screen.findByText(/No se pudo actualizar la disponibilidad/i)).toBeInTheDocument();
   });
 
-  it("filtra por búsqueda de nombre", async () => {
+  it("filtra por búsqueda de nombre y por vista En carta / Ocultos", async () => {
     const user = userEvent.setup();
     mockedDrinksService.list.mockResolvedValue([
-      makeDrink({ id: 1, name: "Fernet con Coca" }),
-      makeDrink({ id: 2, name: "Gin Tonic" }),
+      makeDrink({ id: 1, name: "Fernet con Coca", available: true }),
+      makeDrink({ id: 2, name: "Gin Tonic", available: false }),
     ]);
 
     render(<CartaSection />);
     await screen.findByText("Fernet con Coca");
 
-    await user.type(screen.getByPlaceholderText("Buscar por nombre..."), "gin");
+    await user.type(screen.getByPlaceholderText("Buscar por nombre…"), "gin");
 
     expect(screen.queryByText("Fernet con Coca")).not.toBeInTheDocument();
     expect(screen.getByText("Gin Tonic")).toBeInTheDocument();
+
+    await user.clear(screen.getByPlaceholderText("Buscar por nombre…"));
+    await user.click(screen.getByRole("button", { name: "En carta" }));
+    expect(screen.getByText("Fernet con Coca")).toBeInTheDocument();
+    expect(screen.queryByText("Gin Tonic")).not.toBeInTheDocument();
+    expect(
+      screen.getByText((_, node) => node?.textContent === "Gestioná los tragos de tu boliche. 1 trago visible."),
+    ).toBeInTheDocument();
   });
 });

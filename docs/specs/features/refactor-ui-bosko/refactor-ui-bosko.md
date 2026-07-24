@@ -4,7 +4,9 @@
 **Fecha**: 2026-07-24  
 **Design system**: [`docs/design/`](../../../design/README.md) · [`design.md`](../../../design/design.md)  
 **Referencias**: [light](../../../design/reference/bosko-light.png) · [dark](../../../design/reference/bosko-dark.png)  
-**Specs de esta carpeta**: [`admin-dashboard.md`](./admin-dashboard.md) · [`dashboard-kpis.md`](./dashboard-kpis.md) · [`dashboard-charts.md`](./dashboard-charts.md)
+**Specs de esta carpeta**: [`admin-dashboard.md`](./admin-dashboard.md) · [`dashboard-kpis.md`](./dashboard-kpis.md) · [`dashboard-charts.md`](./dashboard-charts.md) · [`crud-carta.md`](./crud-carta.md)  
+**Referencia CRUD**: [`crud-table-ref.png`](../../../design/reference/crud-table-ref.png)
+
 
 ---
 
@@ -62,7 +64,7 @@ el design system.
 | **1 — Shell admin** | `done` | Tokens + topbar + sidebar + night CTA | [`admin-dashboard.md`](./admin-dashboard.md) |
 | **2 — Dashboard KPIs** | `done` | `MetricCard` featured (Ventas) + estándar; misma data | [`dashboard-kpis.md`](./dashboard-kpis.md) |
 | **2b — Dashboard charts** | `done` | Barras/donut con stripes Bosko | [`dashboard-charts.md`](./dashboard-charts.md) |
-| **3 — Resto admin** | pendiente | Historial, Logs, settings CRUD/modales | (spec futura) |
+| **3 — Resto admin** | pendiente | Historial, Logs, settings CRUD/modales | empieza en [`crud-carta.md`](./crud-carta.md) |
 | **4 — Caja** | pendiente | `/caja` alineada al sistema | (spec futura) |
 | **5 — Login y restos** | pendiente | Login + menores; `/carta`/`/barra` pueden diferirse | (spec futura) |
 

@@ -243,31 +243,71 @@ Par `*-bg` / `*-text` del tema. Pills compactos.
 
 Overlay semitransparente; panel `--bg-surface`, radius 16–20px; primary + secondary.
 
-### 4.8 Forms / CRUD
+### 4.8 Forms / CRUD (tabla estándar)
 
-Plantilla de referencia: **Carta** (`CartaSection` + `DrinksTable`).
+**Referencia de layout** (estructura, no colores): [`reference/crud-table-ref.png`](./reference/crud-table-ref.png).  
+**Skin**: solo tokens Bosko (§2). El azul del mock → `--accent-primary` / `--accent-bright`.  
+**Plantilla de producto**: Carta — spec [`crud-carta.md`](../specs/features/refactor-ui-bosko/crud-carta.md).  
+Staff / PDV / etc. reutilizan este patrón; no inventan otra tabla.
 
-**Layout**
-- Toolbar: título con icono + subtítulo (conteo) · CTA “Nuevo …”
-- Search encima de la lista
-- Filas: icono/avatar · nombre · **chip de estado** · meta (precio) · acciones a la derecha
-- Form create/edit: drawer/panel lateral (un solo patrón por sección)
+#### Anatomía (arriba → abajo)
 
-**Color vivo (sin arcoíris)**
-- Chips semánticos (`success` / `warning` / `danger` / `accent`) para rol o estado
-- Iconos Lucide solo en acciones e identidad de fila
-- Tokens Bosko; no paletas de mocks Dribbble
+```
+[ Título sección (fuera de la card) ]
 
-**Delete reversible** (tragos, staff no-sistema, PDVs…)
-1. Click trash → fila tinte `--danger-soft`; idle sale a la izq.; entra `ConfirmRail` (¿Eliminar? · X / Check) desde la derecha — mismo gesto que `LogoutNavRail`
-2. Escape o X cancela
-3. Check → sale de la lista; toast “Eliminado: …” + **Deshacer** (`Toast` `action`)
-4. Undo en ~5s cancela el DELETE; si expira, se llama a la API
-5. Un solo delete pendiente a la vez (el siguiente flushea el anterior)
+┌─ card `--bg-surface`, radius 16–20, borde `--border-subtle`, shadow `--shadow-card`
+│  Toolbar
+│    · Segmented (filtros de vista)     · Botón funnel (toggle fila filtros)
+│    · Search (pill)                    · CTA primary “+ Nuevo …”
+│  Tabla
+│    · Header: labels UPPERCASE + sort  · ⚙ columnas (derecha)
+│    · (opc.) Fila filtros por columna
+│    · Filas de datos + pills de estado · Acciones fijas a la derecha
+└─
+[ Drawer / panel form create-edit ]
+[ Toast / ConfirmRail ]
+```
 
-**Delete irreversible** (desvincular MP, etc.) → `SafeDeleteModal` (escribir nombre). Sin undo.
+#### Toolbar
 
-Componentes: `ConfirmRail`, `Toast` (+ `action`), `SafeDeleteModal`.
+| Pieza | Comportamiento | Tokens |
+|---|---|---|
+| **Segmented** | 2–3 vistas mutuamente excluyentes (ej. Todos / En carta / Ocultos). Activo = fondo `--accent-primary`, texto `--text-on-accent`. Inactivo = `--bg-surface` + borde `--border-subtle`, texto `--text-primary`. Radius 8–12. | §2, botones §4.4 |
+| **Funnel** | Botón cuadrado radius 8–12; activo = `--accent-surface` + icono `--accent-text`. Toggle **mostrar/ocultar** la fila de filtros de columna. Default **cerrado**. | |
+| **Search** | Input pill (`9999px`) o radius alto; placeholder “Buscar…”. Sin dropdown de “campo” salvo que la entidad lo necesite de verdad. Icono/lupa en `--accent-primary`. | |
+| **CTA Nuevo** | Primary §4.4 + icono `Plus`. Derecha de la toolbar. | |
+
+No meter KPIs ni stats en esta toolbar.
+
+#### Tabla
+
+| Pieza | Regla |
+|---|---|
+| Contenedor | Una sola card; sin “card por fila”. |
+| Header | Fondo sutil (`--bg-panel` o `--bg-surface-elevated`); labels `11–12px`, bold, uppercase, tracking amplio, `--text-secondary`. Sort: chevron; columna activa → `--accent-text`. |
+| ⚙ Columnas | Última celda del header (antes o sobre acciones). Popover checklist: mostrar/ocultar columnas **opcionales**. Persistencia `localStorage` por entidad (`crud:<entity>:cols`). Columnas **obligatorias** (identidad + acciones) no se pueden apagar. |
+| Fila filtros | Solo si funnel activo. Text texto en columnas free-text; `<select>` “Todos” en columnas categóricas. Inputs compactos, borde `--border-subtle`, focus ring acento. |
+| Filas | Separador horizontal `--border-subtle`; sin bordes verticales. Hover `--bg-panel` / soft. Click fila → editar (si aplica). |
+| Pills estado | §4.5 (`success` / `warning` / `danger` / accent-surface). Una pill por estado semántico; no arcoíris por celda. |
+| Acciones | Columna **fija** (no configurable). Controles directos preferidos (ojo / trash); menú `⋯` solo si hay ≥4 acciones. |
+
+#### Delete / feedback (ya acordado)
+
+- **Reversible**: `ConfirmRail` en la fila (tinte `--danger-soft`, slide R→L) → toast + **Deshacer** (~5s) → DELETE diferido. Ver Carta actual.
+- **Irreversible**: `SafeDeleteModal` (escribir nombre).
+- Componentes: `ConfirmRail`, `Toast` (+ `action`), `SafeDeleteModal`.
+
+#### Form
+
+Un solo patrón por sección: **drawer/panel lateral** (mismo lenguaje que §4.7). Create y edit comparten el form.
+
+#### Qué no hacer en CRUDs
+
+- No clonar la paleta azul del mock.
+- No DataTable genérico tipo AG Grid / TanStack Table “por las dudas”.
+- No fila de filtros siempre visible (default off).
+- No cards anidadas por fila ni hero overlays.
+- No inventar columnas que el modelo no tiene.
 
 ### 4.9 Widgets especiales
 
@@ -308,7 +348,8 @@ Reemplaza el bloque tipo “promo”: **tarjeta flotante** con margen respecto a
 | [`BrandLogo`](../../apps/web/src/components/shared/BrandLogo.tsx) | Logo sidebar en `--text-primary` |
 | [`ConfirmRail`](../../apps/web/src/components/shared/ConfirmRail.tsx) | §4.8 delete inline |
 | [`Toast`](../../apps/web/src/components/shared/Toast.tsx) | Feedback + `action` (Deshacer) |
-| Carta CRUD | Plantilla §4.8 |
+| Carta CRUD | Plantilla §4.8 · spec [`crud-carta.md`](../specs/features/refactor-ui-bosko/crud-carta.md) |
+| [`crud-table-ref.png`](./reference/crud-table-ref.png) | Layout tabla (estructura) |
 
 ---
 

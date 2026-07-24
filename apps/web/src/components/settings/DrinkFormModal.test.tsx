@@ -20,19 +20,17 @@ function makeForm(overrides: Partial<DrinkForm> = {}): DrinkForm {
 }
 
 describe("DrinkFormModal", () => {
-  it("dispara onChange con el patch correcto al editar nombre, precio y vibe", async () => {
+  it("dispara onChange al editar nombre y no expone vibe", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
 
     render(
-      <DrinkFormModal editDrink={makeForm()} isBosko={false} saving={false} onChange={onChange} onCancel={vi.fn()} onSave={vi.fn()} />,
+      <DrinkFormModal editDrink={makeForm()} saving={false} onChange={onChange} onCancel={vi.fn()} onSave={vi.fn()} />,
     );
 
     await user.type(screen.getByPlaceholderText("Fernet con Coca"), "G");
     expect(onChange).toHaveBeenCalledWith({ name: "G" });
-
-    await user.type(screen.getByPlaceholderText("ej. PROMO AMIGOS, FIESTA TOTAL"), "P");
-    expect(onChange).toHaveBeenCalledWith({ vibe: "P" });
+    expect(screen.queryByPlaceholderText("ej. PROMO AMIGOS, FIESTA TOTAL")).not.toBeInTheDocument();
   });
 
   it("dispara onChange al elegir un tag (promo/trending)", async () => {
@@ -40,7 +38,7 @@ describe("DrinkFormModal", () => {
     const onChange = vi.fn();
 
     render(
-      <DrinkFormModal editDrink={makeForm()} isBosko={false} saving={false} onChange={onChange} onCancel={vi.fn()} onSave={vi.fn()} />,
+      <DrinkFormModal editDrink={makeForm()} saving={false} onChange={onChange} onCancel={vi.fn()} onSave={vi.fn()} />,
     );
 
     await user.click(screen.getByText("Promo"));
@@ -51,7 +49,6 @@ describe("DrinkFormModal", () => {
     render(
       <DrinkFormModal
         editDrink={makeForm({ id: 1, name: "Fernet", price: 2500 })}
-        isBosko={false}
         saving={false}
         onChange={vi.fn()}
         onCancel={vi.fn()}
@@ -59,7 +56,7 @@ describe("DrinkFormModal", () => {
       />,
     );
 
-    expect(screen.getByText("Editar Trago")).toBeInTheDocument();
+    expect(screen.getByText("Editar trago")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
   });
 
@@ -68,7 +65,7 @@ describe("DrinkFormModal", () => {
     const onChange = vi.fn();
 
     render(
-      <DrinkFormModal editDrink={makeForm()} isBosko={false} saving={false} onChange={onChange} onCancel={vi.fn()} onSave={vi.fn()} />,
+      <DrinkFormModal editDrink={makeForm()} saving={false} onChange={onChange} onCancel={vi.fn()} onSave={vi.fn()} />,
     );
 
     await user.type(screen.getByPlaceholderText("/imagen.webp o URL externa"), "/nueva.webp");

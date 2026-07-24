@@ -110,7 +110,8 @@ referencias [light](../design/reference/bosko-light.png) /
 Specs Bosko: [`refactor-ui-bosko.md`](./features/refactor-ui-bosko/refactor-ui-bosko.md) (overview) ·
 [`admin-dashboard.md`](./features/refactor-ui-bosko/admin-dashboard.md) (shell) ·
 [`dashboard-kpis.md`](./features/refactor-ui-bosko/dashboard-kpis.md) (KPI cards) ·
-[`dashboard-charts.md`](./features/refactor-ui-bosko/dashboard-charts.md) (charts).
+[`dashboard-charts.md`](./features/refactor-ui-bosko/dashboard-charts.md) (charts) ·
+[`crud-carta.md`](./features/refactor-ui-bosko/crud-carta.md) (CRUD Carta / tabla estándar, `in-progress`).
 
 Planes: [`plans/features/`](../plans/features/) —
 [`useSSE`](../plans/features/2026-07-05-usesse-centralizado-design.md),
