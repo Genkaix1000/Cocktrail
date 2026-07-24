@@ -10,6 +10,7 @@ import {
   updatePendingSale,
   type PendingSale,
 } from "@/lib/pendingSales";
+import { randomId } from "@/lib/utils";
 import { ApiError } from "@/services/api-client";
 import {
   mercadopagoService,
@@ -260,7 +261,7 @@ export function useCheckout({
 
   const buildPendingSale = useCallback(
     (method: "qr" | "debito", mpRef: string, idempotencyKey?: string): PendingSale => ({
-      id: crypto.randomUUID(),
+      id: randomId(),
       createdAt: Date.now(),
       paymentMethod: method,
       mpRef,
@@ -563,7 +564,7 @@ export function useCheckout({
     // intento lógico) y es la idempotencyKey con la que después se registra la
     // venta. Nace una nueva recién después de un reset (terminal/cancel).
     if (!paymentAttemptIdRef.current) {
-      paymentAttemptIdRef.current = crypto.randomUUID();
+      paymentAttemptIdRef.current = randomId();
     }
     const attemptId = paymentAttemptIdRef.current;
     isSubmittingRef.current = true;
@@ -663,7 +664,7 @@ export function useCheckout({
     // corte de red) se REUSA — el backend devuelve la misma order en vez de
     // crear un segundo cobro. Nace una nueva recién después de un reset.
     if (!paymentAttemptIdRef.current) {
-      paymentAttemptIdRef.current = crypto.randomUUID();
+      paymentAttemptIdRef.current = randomId();
     }
     const idempotencyKey = paymentAttemptIdRef.current;
     isSubmittingRef.current = true;
