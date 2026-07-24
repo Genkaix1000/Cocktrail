@@ -1,23 +1,48 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Tablas que se vacían en un reset. `night_events` arrastra `orders`,
- * `cash_sales` (y transitivamente `tickets`) por ON DELETE CASCADE — no
- * hace falta listarlas aparte. `drinks`/`app_config` quedan afuera a
- * propósito: son contenido real del local, no dato de prueba.
+ * Tablas que se vacían en un reset: lo TRANSACCIONAL (cobros, noches,
+ * usuarios, auditoría). `night_events` arrastra `orders`, `cash_sales`
+ * (y transitivamente `tickets`) por ON DELETE CASCADE — no hace falta
+ * listarlas aparte.
+ *
+ * El ORDEN importa: `mp_orders.event_id` referencia `night_events(id)`
+ * SIN cascade, así que `mp_orders` va ANTES que `night_events` (si no,
+ * el delete de las noches falla por FK). `mp_webhook_events` es
+ * local-only (no se sincroniza a Cloud): en cloud no existe y el reset
+ * la saltea con un aviso.
+ *
+ * La CONFIG operativa queda afuera a propósito — es lo que permite
+ * seguir cobrando después del reset: `mercadopago_sellers`,
+ * `mercadopago_cajas`, `mercadopago_cajas_devices`, `drinks`, `bars`,
+ * `app_config`.
  */
-export const TABLES_TO_RESET = ["night_events", "users", "audit_logs"] as const;
+export const TABLES_TO_RESET = [
+  "mp_orders",
+  "mp_webhook_events",
+  "night_events",
+  "users",
+  "audit_logs",
+] as const;
 
 export type Target = "local" | "cloud";
 
-export async function countRows(client: SupabaseClient, table: string): Promise<number> {
-  const { count, error } = await client.from(table).select("*", { count: "exact", head: true });
-  if (error) throw new Error(`No se pudo contar filas de "${table}": ${error.message}`);
-  return count ?? 0;
-}
-
 function isMissingTableError(error: { code?: string; message: string }): boolean {
   return error.code === "PGRST205" || error.message.includes("Could not find the table");
+}
+
+/**
+ * Cuenta las filas de `table`. Devuelve `null` si la tabla no existe en ese
+ * entorno (ej. `mp_webhook_events` es local-only y no está en Cloud) — el
+ * caller decide saltearla en vez de abortar todo el reset.
+ */
+export async function countRows(client: SupabaseClient, table: string): Promise<number | null> {
+  const { count, error } = await client.from(table).select("*", { count: "exact", head: true });
+  if (error) {
+    if (isMissingTableError(error)) return null;
+    throw new Error(`No se pudo contar filas de "${table}": ${error.message}`);
+  }
+  return count ?? 0;
 }
 
 /**
@@ -38,6 +63,11 @@ export async function resetData(
   const deleted: Record<string, number | null> = {};
   for (const table of tables) {
     const before = await countRows(client, table);
+    if (before === null) {
+      console.warn(`⚠️  "${table}" no existe en este entorno — se saltea (no bloquea el resto).`);
+      deleted[table] = null;
+      continue;
+    }
     const { error } = await client.from(table).delete().not("id", "is", null);
     if (error) {
       if (isMissingTableError(error)) {
@@ -91,9 +121,13 @@ if (isMainModule) {
   const label = target === "local" ? `local (${env.SUPABASE_URL})` : `CLOUD / PRODUCCIÓN (${env.SUPABASE_CLOUD_URL})`;
   console.log(`\n⚠️  Vas a vaciar la base ${label}.`);
   console.log(`   Tablas: ${TABLES_TO_RESET.join(", ")} (orders/tickets/cash_sales caen por CASCADE de night_events).`);
-  console.log(`   drinks/app_config NO se tocan.\n`);
+  console.log(
+    "   NO se toca la config operativa: mercadopago_sellers, mercadopago_cajas, " +
+      "mercadopago_cajas_devices, drinks, bars, app_config — se puede seguir cobrando después del reset.\n",
+  );
 
-  const counts: Record<string, number> = {};
+  // null = la tabla no existe en este entorno (ej. mp_webhook_events en Cloud)
+  const counts: Record<string, number | null> = {};
   for (const table of TABLES_TO_RESET) {
     counts[table] = await countRows(client, table);
   }
@@ -113,6 +147,7 @@ if (isMainModule) {
   console.log("\n✅ Listo. Filas borradas:", deleted);
   console.log(
     '   La tabla "users" se re-siembra sola con el admin default en el próximo boot del server ' +
-      "(ensureLocalMasterDataSeeded). El login de admin/caja sigue funcionando igual — no depende de esa tabla.",
+      "(ensureLocalMasterDataSeeded). Los logins de fallback por env (ADMIN_USER/CAJA_USER) siguen andando.\n" +
+      '   ⚠️  El usuario de "caja" creado desde /admin NO se re-siembra: hay que volver a crearlo a mano.',
   );
 }
