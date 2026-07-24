@@ -202,8 +202,10 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
 
   /**
    * Sube a cloud los `mp_orders` de la noche (por `event_id`). Passthrough local→cloud
-   * (mismo criterio que pushAuditLogs: las filas ya están en forma, el DDL cloud de
-   * pr5-cloud.sql es espejo columna a columna del esquema local vigente).
+   * (mismo criterio que pushAuditLogs: las filas ya están en forma). Requiere
+   * pr5-cloud.sql aplicado allá: crea la tabla o la CONVERGE al espejo del esquema
+   * local vigente — las tablas MP ya existían en Cloud con esquema viejo (la
+   * integración pre-remediación del 2026-07-17 operaba contra Cloud vía `mpDb`).
    */
   async pushMpOrders(eventId: string): Promise<SyncTableResult> {
     if (!supabaseCloud) return { ok: 0, failed: 0 };
