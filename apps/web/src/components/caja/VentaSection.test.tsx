@@ -212,7 +212,11 @@ describe("VentaSection", () => {
     await user.click(efectivoButton);
 
     const amountInput = screen.getByPlaceholderText("0");
-    await user.type(amountInput, "5000");
+    await user.click(screen.getByRole("button", { name: "5" }));
+    await user.click(screen.getByRole("button", { name: "0" }));
+    await user.click(screen.getByRole("button", { name: "0" }));
+    await user.click(screen.getByRole("button", { name: "0" }));
+    expect(amountInput).toHaveValue("5.000");
 
     const confirmButton = screen.getByRole("button", { name: /pedido concretado/i });
     await user.click(confirmButton);
@@ -378,11 +382,11 @@ describe("VentaSection", () => {
     const efectivoButton = await screen.findByRole("button", { name: /efectivo/i });
     await user.click(efectivoButton);
 
-    expect(await screen.findByText("Monto Recibido")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /exacto/i })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "Escape" });
 
-    expect(await screen.findByText("Total a cobrar")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /efectivo/i })).toBeInTheDocument();
   });
 
   it("Escape con un cobro Posnet en curso cancela la intención y vuelve a elegir método", async () => {
@@ -525,5 +529,39 @@ describe("VentaSection", () => {
 
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     expect(JSON.parse(localStorage.getItem("cocktrail:pendingSales")!)).toEqual([]);
+  });
+
+  describe("Custom Numpad (F2)", () => {
+    it("ingresa montos con las teclas del Numpad y permite borrar", async () => {
+      render(<VentaSection drinks={[makeDrink({ price: 2500 })]} categories={[]} printer={printer} />);
+      const user = await addFirstDrinkToCart();
+
+      const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+      await user.click(cobrarButtons[0]);
+      const efectivoButton = await screen.findByRole("button", { name: /efectivo/i });
+      await user.click(efectivoButton);
+
+      // Presionar teclas 3, 0, 0, 0 -> $3.000
+      await user.click(screen.getByRole("button", { name: "3" }));
+      await user.click(screen.getByRole("button", { name: "0" }));
+      await user.click(screen.getByRole("button", { name: "0" }));
+      await user.click(screen.getByRole("button", { name: "0" }));
+
+      // Verificar que el input tenga $3.000
+      const input = screen.getByPlaceholderText("0") as HTMLInputElement;
+      expect(input.value).toBe("3.000");
+
+      // Presionar Backspace -> $300
+      await user.click(screen.getByRole("button", { name: /borrar último/i }));
+      expect(input.value).toBe("300");
+
+      // Presionar Clear -> vacío
+      await user.click(screen.getByRole("button", { name: /limpiar monto/i }));
+      expect(input.value).toBe("");
+
+      // Exacto -> autocompleta $2.500
+      await user.click(screen.getByRole("button", { name: /total a cobrar|exacto/i }));
+      expect(input.value).toBe("2.500");
+    });
   });
 });

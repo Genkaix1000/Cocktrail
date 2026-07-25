@@ -249,7 +249,7 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
       console.error("[SupabaseCloudSyncRepository] Error leyendo mercadopago_cajas local:", error.message);
       return { ok: 0, failed: 0, error: error.message };
     }
-    return batchUpsertCloud("mercadopago_cajas", data ?? []);
+    return batchUpsertCloud("mercadopago_cajas", data ?? [], { onConflict: "seller_user_id,external_pos_id" });
   }
 
   /** Sube la tabla completa de posnets a cloud (passthrough, idempotente por id). */
@@ -260,7 +260,7 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
       console.error("[SupabaseCloudSyncRepository] Error leyendo mercadopago_cajas_devices local:", error.message);
       return { ok: 0, failed: 0, error: error.message };
     }
-    return batchUpsertCloud("mercadopago_cajas_devices", data ?? []);
+    return batchUpsertCloud("mercadopago_cajas_devices", data ?? [], { onConflict: "device_id" });
   }
 
   /**

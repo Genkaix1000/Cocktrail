@@ -21,6 +21,8 @@ import {
   Home,
   LayoutGrid,
   Search,
+  Zap,
+  Delete,
 } from "lucide-react";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -176,14 +178,38 @@ function CompactDrinkCard({
       onClick={handleAdd}
       className={`group relative bg-ink-900 border rounded-xl p-3 flex flex-col gap-2.5 cursor-pointer ${cardBorderClass} ${focusRingClass}`}
     >
-      {drink.promo && (
+      {/* Botón decrementar (-) superior izquierdo si qty > 0 */}
+      {qty > 0 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="absolute top-2 left-2 z-20 w-6 h-6 rounded-full bg-ink-950/80 border border-ink-700 text-ink-300 hover:text-white hover:border-danger hover:bg-danger/20 flex items-center justify-center active:scale-90 transition-all cursor-pointer shadow-sm"
+          aria-label="Restar una unidad"
+          title="Restar 1"
+        >
+          <Minus size={12} strokeWidth={3} />
+        </button>
+      )}
+
+      {/* Promos / Trends (solo si no hay botón restar tapándolo o posicionado a la derecha de éste) */}
+      {!active && drink.promo && (
         <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-amber-soft text-amber border border-amber-line rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
           <Sparkles size={10} /> Promo
         </span>
       )}
-      {drink.trending && !drink.promo && (
+      {!active && drink.trending && !drink.promo && (
         <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-purple-soft text-purple border border-purple-border rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
           <Flame size={10} /> Trend
+        </span>
+      )}
+
+      {/* Badge de cantidad agregada (Superior Derecha) */}
+      {qty > 0 && (
+        <span className="absolute top-2 right-2 z-20 min-w-[24px] h-[24px] px-1.5 rounded-full bg-green text-ink-950 font-black text-[12px] tabular flex items-center justify-center shadow-lg animate-in zoom-in-50 duration-150">
+          {qty}
         </span>
       )}
 
@@ -205,7 +231,7 @@ function CompactDrinkCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-0.5 h-[52px] justify-between">
+      <div className="flex flex-col gap-0.5 min-h-[44px] justify-between">
         <span className="text-[13px] font-bold text-ink-50 leading-tight line-clamp-2">
           {drink.name}
         </span>
@@ -213,29 +239,6 @@ function CompactDrinkCard({
           ${drink.price.toLocaleString("es-AR")}
         </span>
       </div>
-
-      {qty > 0 && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="h-9 rounded-lg bg-green-soft border border-green-line flex items-center justify-between px-1 gap-1"
-        >
-          <button
-            onClick={onRemove}
-            className="w-8 h-8 rounded-md hover:bg-green-soft text-green flex items-center justify-center active:scale-90 transition-all cursor-pointer"
-            aria-label="Restar"
-          >
-            <Minus size={14} strokeWidth={3} />
-          </button>
-          <span className="text-green font-black tabular text-sm">{qty}</span>
-          <button
-            onClick={onAdd}
-            className="w-8 h-8 rounded-md hover:bg-green-soft text-green flex items-center justify-center active:scale-90 transition-all cursor-pointer"
-            aria-label="Sumar"
-          >
-            <Plus size={14} strokeWidth={3} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -435,6 +438,7 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
     discardPendingSale,
     resetPaymentAttempt,
     displayCashValue,
+    receivedAmount,
     change,
     canConfirmCash,
     handleChangeCash,
@@ -1022,7 +1026,7 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
           }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
         >
-          <div onClick={(e) => e.stopPropagation()} className={`bg-ink-900 border border-ink-800 w-full ${paymentMethod === "efectivo" && !latestOrder && posnetStatus !== "error" ? "max-w-2xl" : "max-w-md"} rounded-[32px] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh] transition-all duration-300`}>
+          <div onClick={(e) => e.stopPropagation()} className={`bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full ${paymentMethod === "efectivo" && !latestOrder && posnetStatus !== "error" ? "max-w-lg" : "max-w-md"} rounded-[24px] p-6 shadow-card animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh] transition-[max-width] duration-200`}>
 
             {latestOrder ? (
               // Vista Éxito / Ticket (con animación elástica GSAP)
@@ -1407,89 +1411,160 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
                   </div>
                 ) : (
                   // Confirmar Método Elegido
-                  <div className="flex flex-col gap-6 overflow-y-auto pr-1">
-                    <div className="flex justify-between items-center p-4 bg-ink-950 rounded-2xl border border-ink-800">
-                      <div className="flex items-center gap-2">
-                        <Receipt size={15} className="text-ink-400" />
-                        <span className="text-sm font-bold text-ink-300">Total</span>
+                  <div className="flex flex-col gap-5 overflow-y-auto pr-1">
+                    {/* Total genérico solo para débito/QR — en efectivo va en la fila Total+Exacto */}
+                    {paymentMethod !== "efectivo" && (
+                      <div className="flex justify-between items-center p-4 bg-[var(--bg-panel)] rounded-2xl border border-[var(--border-subtle)]">
+                        <div className="flex items-center gap-2">
+                          <Receipt size={15} className="text-[var(--text-tertiary)]" />
+                          <span className="text-sm font-semibold text-[var(--text-secondary)]">Total</span>
+                        </div>
+                        <span className="text-2xl font-bold tabular text-[var(--accent-text)]">
+                          ${totalPrice.toLocaleString("es-AR")}
+                        </span>
                       </div>
-                      <span className="text-2xl font-black text-accent">${totalPrice.toLocaleString("es-AR")}</span>
-                    </div>
+                    )}
 
                     {paymentMethod === "efectivo" && (
-                      <div className="flex flex-col gap-5">
-                        {/* Split 2-column layout: Left (Input) | Right (Change) */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          
-                          {/* Col 1: Monto Recibido */}
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between h-7">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-ink-400">Monto Recibido</span>
-                              <button
-                                type="button"
-                                onClick={() => handleChangeCash(String(totalPrice))}
-                                className="h-7 px-2.5 rounded-md bg-ink-850 border border-ink-750 text-ink-300 hover:text-ink-50 text-[10px] font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
-                              >
-                                Monto exacto <span className="opacity-60 normal-case">(E)</span>
-                              </button>
-                            </div>
-                            <div className="flex flex-col items-center justify-center py-5 bg-ink-950 border border-ink-800 rounded-2xl relative h-[90px]">
-                              <div className="relative w-full max-w-[200px] flex items-center justify-center">
-                                <span className="text-2xl font-black text-ink-400 mr-2 select-none">$</span>
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                  value={displayCashValue}
-                                  onChange={(e) => handleChangeCash(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      if (canConfirmCash && !submitting) {
-                                        confirmOrder();
-                                      }
-                                    }
-                                  }}
-                                  style={{ fontSize: displayCashValue.length > 5 ? `${Math.max(18, 38 - (displayCashValue.length - 5) * 3)}px` : "38px" }}
-                                  className="w-full bg-transparent text-center font-black text-ink-50 outline-none pb-1 placeholder:text-ink-700"
-                                  placeholder="0"
-                                  autoFocus
-                                />
-                              </div>
-                            </div>
+                      <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+                        {/* Total + Exacto — una fila, pill larga + pill acción */}
+                        <div className="flex items-stretch gap-2">
+                          <div className="flex-1 min-w-0 flex items-center justify-between gap-3 px-4 h-14 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)]">
+                            <span className="text-[11px] font-medium text-[var(--text-tertiary)] shrink-0">
+                              Total
+                            </span>
+                            <span className="text-[22px] font-bold tabular text-[var(--text-primary)] tracking-tight truncate">
+                              <span className="text-[0.65em] text-[var(--text-tertiary)] mr-0.5 font-semibold">$</span>
+                              {totalPrice.toLocaleString("es-AR")}
+                            </span>
                           </div>
-
-                          {/* Col 2: Vuelto a entregar */}
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center h-7">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-ink-400">Vuelto a entregar</span>
-                            </div>
-                            <div className={`flex flex-col items-center justify-center rounded-2xl border h-[90px] transition-all ${canConfirmCash ? 'bg-green-soft border-green-line' : 'bg-ink-950 border-ink-800'}`}>
-                              <span className="text-[10px] uppercase font-black tracking-wider text-ink-400 mb-0.5">Vuelto</span>
-                              <span className={`text-3xl font-black ${canConfirmCash ? 'text-green' : 'text-ink-500'}`}>
-                                ${canConfirmCash ? change.toLocaleString("es-AR") : "0"}
-                              </span>
-                            </div>
-                          </div>
-
+                          <button
+                            type="button"
+                            onClick={() => handleChangeCash(String(totalPrice))}
+                            className="shrink-0 h-14 px-4 rounded-full bg-[var(--accent-surface)] border border-[var(--accent-line)] text-[var(--accent-text)] flex items-center gap-2 cursor-pointer active:scale-[0.98] transition-all hover:brightness-110"
+                            aria-label="Total a cobrar — cargar monto exacto"
+                          >
+                            <Zap size={15} strokeWidth={2.2} />
+                            <span className="text-[12px] font-semibold">Exacto</span>
+                            <kbd className="text-[10px] font-mono font-medium opacity-70 px-1.5 py-0.5 rounded-md bg-black/10 dark:bg-black/25">
+                              E
+                            </kbd>
+                          </button>
                         </div>
 
-                        {/* Confirm Button & Errors */}
-                        <div className="mt-1 pt-4 border-t border-ink-800 shrink-0 flex flex-col gap-2.5">
+                        {/* Recibido | Vuelto — display vivo arriba del pad */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex flex-col justify-center gap-0.5 px-4 py-3 rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-line)] min-h-[72px]">
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--accent-text)]/80">
+                              Recibido
+                            </span>
+                            <div className="flex items-baseline gap-0.5 min-w-0">
+                              <span className="text-[0.7em] font-semibold text-[var(--accent-text)]/70">$</span>
+                              <input
+                                type="text"
+                                readOnly
+                                inputMode="none"
+                                aria-label="Monto recibido"
+                                value={displayCashValue}
+                                className="w-full bg-transparent font-bold text-[var(--accent-text)] text-[26px] leading-none outline-none pointer-events-none tabular tracking-tight truncate"
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+                          <div
+                            role="status"
+                            className={`flex flex-col justify-center gap-0.5 px-4 py-3 rounded-2xl border min-h-[72px] transition-colors ${
+                              canConfirmCash
+                                ? "bg-[var(--success-soft)] border-[var(--success-line)]"
+                                : receivedAmount && change < 0
+                                  ? "bg-[var(--danger-soft)] border-[var(--danger-line)]"
+                                  : "bg-[var(--bg-panel)] border-[var(--border-subtle)]"
+                            }`}
+                          >
+                            <span
+                              className={`text-[10px] font-medium uppercase tracking-wider ${
+                                canConfirmCash
+                                  ? "text-[var(--success)]"
+                                  : receivedAmount && change < 0
+                                    ? "text-[var(--danger)]"
+                                    : "text-[var(--text-tertiary)]"
+                              }`}
+                            >
+                              {receivedAmount && change < 0 ? "Faltan" : "Vuelto"}
+                            </span>
+                            <span
+                              className={`text-[26px] font-bold tabular leading-none tracking-tight ${
+                                canConfirmCash
+                                  ? "text-[var(--success)]"
+                                  : receivedAmount && change < 0
+                                    ? "text-[var(--danger)]"
+                                    : "text-[var(--text-tertiary)]"
+                              }`}
+                            >
+                              <span className="text-[0.7em] font-semibold mr-0.5">$</span>
+                              {receivedAmount
+                                ? Math.abs(change).toLocaleString("es-AR")
+                                : "0"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Numpad */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                            <button
+                              key={digit}
+                              type="button"
+                              onClick={() => handleChangeCash(receivedAmount + digit)}
+                              className="h-14 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)] text-[var(--text-primary)] font-semibold text-2xl flex items-center justify-center active:scale-95 active:bg-[var(--accent-surface)] active:text-[var(--accent-text)] transition-all cursor-pointer select-none"
+                            >
+                              {digit}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => handleChangeCash("")}
+                            className="h-14 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:bg-[var(--badge-danger-bg)] hover:border-[var(--danger-line)] hover:text-[var(--badge-danger-text)] text-[var(--text-secondary)] font-semibold text-base flex items-center justify-center active:scale-95 transition-all cursor-pointer select-none"
+                            aria-label="Limpiar monto"
+                          >
+                            C
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleChangeCash(receivedAmount + "0")}
+                            className="h-14 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)] text-[var(--text-primary)] font-semibold text-2xl flex items-center justify-center active:scale-95 active:bg-[var(--accent-surface)] active:text-[var(--accent-text)] transition-all cursor-pointer select-none"
+                          >
+                            0
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleChangeCash(receivedAmount.slice(0, -1))}
+                            className="h-14 rounded-xl bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center active:scale-95 transition-all cursor-pointer select-none"
+                            aria-label="Borrar último dígito"
+                          >
+                            <Delete size={20} strokeWidth={1.8} />
+                          </button>
+                        </div>
+
+                        {/* CTA */}
+                        <div className="pt-1 shrink-0 flex flex-col gap-2.5">
                           {saleError && (
-                            <div className="bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-sm">
+                            <div className="bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger)] rounded-xl px-3 py-2.5 text-sm">
                               {saleError}
                             </div>
                           )}
                           <button
+                            type="button"
                             onClick={confirmOrder}
                             disabled={submitting || !canConfirmCash}
-                            className="ct-checkout-btn w-full h-14 font-black rounded-xl text-sm uppercase tracking-widest disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+                            className="w-full h-14 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-[15px] shadow-card disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all"
                           >
                             {submitting && <Loader2 size={18} className="animate-spin" />}
                             {submitting ? "Cargando..." : "Pedido Concretado"}
                             {!submitting && (
-                              <span className="text-[9px] font-mono opacity-60 normal-case tracking-normal">Enter</span>
+                              <kbd className="text-[10px] font-mono font-medium opacity-70 normal-case tracking-normal px-1.5 py-0.5 rounded-md bg-black/15">
+                                Enter
+                              </kbd>
                             )}
                           </button>
                         </div>
