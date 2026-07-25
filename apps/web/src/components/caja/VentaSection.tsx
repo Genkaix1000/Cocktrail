@@ -76,7 +76,7 @@ const SwipeableCartItem = memo(function SwipeableCartItem({ drink, qty, onAdd, o
   const handleMove = (clientX: number) => {
     if (!swiping) return;
     const diff = clientX - startX;
-    if (diff > 0) {
+    if (diff < 0) {
       setCurrentX(diff);
     }
   };
@@ -85,7 +85,7 @@ const SwipeableCartItem = memo(function SwipeableCartItem({ drink, qty, onAdd, o
     if (!swiping) return;
     setSwiping(false);
     isMouseDownRef.current = false;
-    if (currentX > 100) {
+    if (currentX < -100) {
       setIsRemoving(true);
       setTimeout(() => {
         onRemoveAll();
@@ -99,8 +99,8 @@ const SwipeableCartItem = memo(function SwipeableCartItem({ drink, qty, onAdd, o
     <div className="relative overflow-hidden rounded-xl bg-ink-950 shrink-0 select-none">
       {/* Background deletion reveal indicator */}
       <div 
-        className="absolute inset-0 bg-danger/20 flex items-center pl-4 text-danger transition-opacity duration-150"
-        style={{ opacity: currentX > 20 ? 1 : 0 }}
+        className="absolute inset-0 bg-danger/20 flex items-center justify-end pr-4 text-danger transition-opacity duration-150"
+        style={{ opacity: currentX < -20 ? 1 : 0 }}
       >
         <Trash2 size={16} className="animate-bounce" style={{ animationDuration: '0.6s' }} />
       </div>
@@ -119,7 +119,7 @@ const SwipeableCartItem = memo(function SwipeableCartItem({ drink, qty, onAdd, o
         onMouseUp={handleEnd}
         onMouseLeave={handleEnd}
         style={{
-          transform: `translateX(${isRemoving ? "100%" : `${currentX}px`})`,
+          transform: `translateX(${isRemoving ? "-100%" : `${currentX}px`})`,
           transition: swiping ? "none" : "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
         }}
         className="bg-ink-900 border border-ink-800 rounded-xl p-3 flex flex-col gap-2 relative z-10 select-none touch-pan-y cursor-grab active:cursor-grabbing"
