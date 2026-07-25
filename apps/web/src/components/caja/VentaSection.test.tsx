@@ -105,29 +105,44 @@ function seedPendingSale(overrides: Record<string, unknown> = {}) {
 
 async function waitForProductsGrid() {
   // El grid tiene un skeleton simulado de 800ms antes de mostrar productos.
-  await screen.findAllByRole("button", { name: /agregar/i }, { timeout: 3000 });
+  await screen.findAllByText("Fernet con Coca", {}, { timeout: 3000 });
 }
 
 async function addFirstDrinkToCart() {
   const user = userEvent.setup();
   await waitForProductsGrid();
-  // El shell renderiza a la vez el grid mobile (DrinkCard) y el desktop
-  // (CompactDrinkCard) — jsdom no filtra por media query, así que ambos
-  // matchean "Agregar"; cualquiera de los dos llama a addToCart(d.id).
-  const [addButton] = screen.getAllByRole("button", { name: /agregar/i });
-  await user.click(addButton!);
+  // Click en la card (mobile + desktop se montan juntos en jsdom).
+  const [name] = screen.getAllByText("Fernet con Coca");
+  await user.click(name!);
   return user;
 }
 
 describe("VentaSection", () => {
   it("renderiza el grid de productos", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
 
     expect((await screen.findAllByText("Fernet con Coca", {}, { timeout: 3000 })).length).toBeGreaterThan(0);
   });
 
+  it("filtra el grid por nombre con el buscador", async () => {
+    const user = userEvent.setup();
+    render(
+      <VentaSection
+        drinks={[makeDrink(), makeDrink({ id: 2, name: "Corona" })]}
+        categories={[]}
+        printer={printer}
+      />,
+    );
+    await waitForProductsGrid();
+
+    await user.type(screen.getByPlaceholderText("Buscar trago…"), "corona");
+
+    expect(screen.getAllByText("Corona").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Fernet con Coca")).not.toBeInTheDocument();
+  });
+
   it("agrega y quita productos del carrito", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     // El carrito lateral (desktop) refleja la cantidad de items agregados.
@@ -143,7 +158,7 @@ describe("VentaSection", () => {
   });
 
   it("abre el checkout con el total del pedido actual", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -154,7 +169,7 @@ describe("VentaSection", () => {
   });
 
   it("abre el checkout con la tecla C cuando el carrito tiene items (atajo de teclado)", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     await addFirstDrinkToCart();
 
     fireEvent.keyDown(window, { key: "c" });
@@ -163,7 +178,7 @@ describe("VentaSection", () => {
   });
 
   it("Enter ya no abre el checkout (evita re-agregar sin querer con el grid resaltado)", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     await addFirstDrinkToCart();
 
     fireEvent.keyDown(window, { key: "Enter" });
@@ -172,7 +187,7 @@ describe("VentaSection", () => {
   });
 
   it("navega el grid con flechas y agrega el producto resaltado con Enter", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     await waitForProductsGrid();
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
@@ -187,7 +202,7 @@ describe("VentaSection", () => {
     const order = makeOrder();
     mockedOrdersService.create.mockResolvedValue(order);
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -214,7 +229,7 @@ describe("VentaSection", () => {
   });
 
   it("el selector de método de pago muestra Efectivo, Tarjeta y Código QR", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -239,7 +254,7 @@ describe("VentaSection", () => {
       amount: 2500,
     });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -263,7 +278,7 @@ describe("VentaSection", () => {
     mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
     mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "PENDING", rawState: "OPEN" });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -291,7 +306,7 @@ describe("VentaSection", () => {
       rawState: "FINISHED",
     });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -314,7 +329,7 @@ describe("VentaSection", () => {
     mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
     mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "CANCELED" });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -329,7 +344,7 @@ describe("VentaSection", () => {
     mockedMercadopagoService.createPosIntent.mockResolvedValue(makePosCreated());
     mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "EXPIRED" });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -343,7 +358,7 @@ describe("VentaSection", () => {
   }, 10000);
 
   it("Escape sin método elegido cierra el checkout por completo", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     await addFirstDrinkToCart();
 
     fireEvent.keyDown(window, { key: "c" });
@@ -355,7 +370,7 @@ describe("VentaSection", () => {
   });
 
   it("Escape en efectivo vuelve a la selección de método (sin cerrar el checkout)", async () => {
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -375,7 +390,7 @@ describe("VentaSection", () => {
     mockedMercadopagoService.getPosIntentStatus.mockResolvedValue({ status: "PENDING", rawState: "OPEN" });
     mockedMercadopagoService.cancelPosIntent.mockResolvedValue({ status: "canceled" });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = await addFirstDrinkToCart();
 
     const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
@@ -395,7 +410,7 @@ describe("VentaSection", () => {
   it("muestra el banner de ventas cobradas sin registrar al montar", async () => {
     seedPendingSale();
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
 
     const banner = await screen.findByRole("alert");
     expect(within(banner).getByText("Hay 1 venta cobrada sin registrar")).toBeInTheDocument();
@@ -410,7 +425,7 @@ describe("VentaSection", () => {
     seedPendingSale();
     mockedOrdersService.create.mockResolvedValue(makeOrder({ paymentMethod: "qr" }));
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = userEvent.setup();
 
     const banner = await screen.findByRole("alert");
@@ -440,7 +455,7 @@ describe("VentaSection", () => {
       },
     });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
 
     const banner = await screen.findByRole("alert");
     expect(within(banner).queryByRole("button", { name: /reintentar/i })).not.toBeInTheDocument();
@@ -461,7 +476,7 @@ describe("VentaSection", () => {
       },
     });
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
 
     const banner = await screen.findByRole("alert");
     expect(within(banner).queryByRole("button", { name: /reintentar/i })).not.toBeInTheDocument();
@@ -474,7 +489,7 @@ describe("VentaSection", () => {
     seedPendingSale();
     mockedOrdersService.create.mockRejectedValue(new Error("sigue caído"));
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = userEvent.setup();
 
     const banner = await screen.findByRole("alert");
@@ -488,7 +503,7 @@ describe("VentaSection", () => {
   it("Descartar pide confirmación explícita y recién ahí borra la constancia", async () => {
     seedPendingSale();
 
-    render(<VentaSection drinks={[makeDrink()]} printer={printer} />);
+    render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
     const user = userEvent.setup();
 
     const banner = await screen.findByRole("alert");

@@ -8,6 +8,7 @@ import { generalLimiter } from "./shared/middleware/rate-limit.js";
 // Controllers
 import { createAuthController } from "./modules/auth/auth.controller.js";
 import { createDrinksController } from "./modules/drinks/drinks.controller.js";
+import { createDrinkCategoriesController } from "./modules/drinks/categories.controller.js";
 import { createOrdersController } from "./modules/orders/orders.controller.js";
 import { createEventsController } from "./modules/events/events.controller.js";
 import { createSSEController } from "./modules/sse/sse.controller.js";
@@ -26,6 +27,8 @@ import { createPrinterController } from "./modules/printer/printer.controller.js
 // Services & Repositories
 import { SupabaseDrinksRepository } from "./modules/drinks/drinks.repository.js";
 import { DrinksService } from "./modules/drinks/drinks.service.js";
+import { SupabaseDrinkCategoriesRepository } from "./modules/drinks/categories.repository.js";
+import { DrinkCategoriesService } from "./modules/drinks/categories.service.js";
 import { SupabaseOrdersRepository } from "./modules/orders/orders.repository.js";
 import { OrdersService } from "./modules/orders/orders.service.js";
 import { SupabaseTicketsRepository } from "./modules/tickets/tickets.repository.js";
@@ -68,6 +71,7 @@ import { errorHandler } from "./shared/middleware/error-handler.js";
 // ── Dependency Injection ──
 
 const drinksRepo = new SupabaseDrinksRepository();
+const drinkCategoriesRepo = new SupabaseDrinkCategoriesRepository();
 const eventsRepo = new SupabaseEventsRepository();
 const ordersRepo = new SupabaseOrdersRepository();
 const ticketsRepo = new SupabaseTicketsRepository();
@@ -75,6 +79,7 @@ const usersRepo = new SupabaseUsersRepository();
 const configRepo = new SupabaseConfigRepository();
 
 const drinksService = new DrinksService(drinksRepo);
+const drinkCategoriesService = new DrinkCategoriesService(drinkCategoriesRepo);
 const usersService = new UsersService(usersRepo);
 
 const cloudSyncRepo = new SupabaseCloudSyncRepository();
@@ -285,6 +290,7 @@ app.use(
   }),
 );
 app.use("/api/drinks", createDrinksController(drinksService));
+app.use("/api/drink-categories", createDrinkCategoriesController(drinkCategoriesService));
 app.use("/api/orders", createOrdersController(ordersService));
 app.use("/api/events", createSSEController());
 app.use("/api/tickets", createTicketsController(ticketsService));

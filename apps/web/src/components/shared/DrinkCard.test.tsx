@@ -11,9 +11,10 @@ describe("DrinkCard", () => {
     expect(screen.getByText("$2.500")).toBeInTheDocument();
   });
 
-  it("solo muestra el botón de agregar cuando quantity es 0", () => {
+  it("no muestra botones de cantidad cuando quantity es 0 (click en card agrega)", () => {
     render(<DrinkCard name="Gin Tonic" price={3000} quantity={0} />);
-    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Agregar al pedido" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quitar del pedido" })).not.toBeInTheDocument();
   });
 
   it("muestra el contador y el botón de quitar cuando quantity > 0", async () => {

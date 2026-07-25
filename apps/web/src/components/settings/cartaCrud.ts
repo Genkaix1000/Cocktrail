@@ -4,12 +4,13 @@ export type CartaColId =
   | "id"
   | "icon"
   | "name"
+  | "category"
   | "price"
   | "status"
   | "tags"
   | "actions";
 
-export const CARTA_COLS_STORAGE_KEY = "crud:carta:cols:v2";
+export const CARTA_COLS_STORAGE_KEY = "crud:carta:cols:v3";
 
 /** Siempre visibles; no aparecen en el ⚙ como apagables. */
 export const CARTA_COLS_REQUIRED: CartaColId[] = ["name", "actions"];
@@ -18,6 +19,7 @@ export const CARTA_COLS_DEFAULT: CartaColId[] = [
   "id",
   "icon",
   "name",
+  "category",
   "price",
   "status",
   "tags",
@@ -28,9 +30,10 @@ export const CARTA_COL_LABELS: Record<CartaColId, string> = {
   id: "ID",
   icon: "Ícono",
   name: "Nombre",
+  category: "Categoría",
   price: "Precio",
   status: "Estado",
-  tags: "Etiquetas",
+  tags: "Badge",
   actions: "Acciones",
 };
 
@@ -38,6 +41,7 @@ export const CARTA_COL_LABELS: Record<CartaColId, string> = {
 export const CARTA_COLS_TOGGLEABLE: CartaColId[] = [
   "id",
   "icon",
+  "category",
   "price",
   "status",
   "tags",
@@ -47,6 +51,7 @@ const ALL: CartaColId[] = [
   "id",
   "icon",
   "name",
+  "category",
   "price",
   "status",
   "tags",
@@ -66,7 +71,8 @@ export function cartaGridTemplate(cols: CartaColId[]): string {
   const sizes: Record<CartaColId, string> = {
     id: "56px",
     icon: "64px",
-    name: "minmax(160px, 1fr)",
+    name: "minmax(140px, 1fr)",
+    category: "140px",
     price: "104px",
     status: "116px",
     tags: "168px",

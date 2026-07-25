@@ -1,7 +1,5 @@
 import type { Drink } from "@cocktrail/shared";
 
-// ── Interface (contrato) ──
-
 export interface DrinksRepository {
   list(): Promise<Drink[]>;
   findById(id: number): Promise<Drink | undefined>;
@@ -10,8 +8,6 @@ export interface DrinksRepository {
   delete(id: number): Promise<boolean>;
   nextId(): Promise<number>;
 }
-
-// ── Implementación Supabase (fase 4 — Edge Sync) ──
 
 import { supabase, supabaseCloud } from "../../shared/supabase.js";
 
@@ -27,6 +23,8 @@ type DrinkRow = {
   trending: boolean;
   promo: boolean | null;
   available: boolean;
+  category_id: string | null;
+  sort_order: number | null;
 };
 
 function mapRowToDrink(row: DrinkRow): Drink {
@@ -42,6 +40,26 @@ function mapRowToDrink(row: DrinkRow): Drink {
     trending: row.trending,
     promo: row.promo || undefined,
     available: row.available,
+    categoryId: row.category_id,
+    sortOrder: row.sort_order ?? 0,
+  };
+}
+
+function toInsertPayload(drink: Drink) {
+  return {
+    id: drink.id,
+    name: drink.name,
+    price: drink.price,
+    description: drink.description,
+    vibe: drink.vibe,
+    flavors: drink.flavors,
+    icon_name: drink.iconName,
+    image: drink.image || null,
+    trending: drink.trending,
+    promo: drink.promo || false,
+    available: drink.available,
+    category_id: drink.categoryId ?? null,
+    sort_order: drink.sortOrder ?? 0,
   };
 }
 
@@ -76,23 +94,8 @@ export class SupabaseDrinksRepository implements DrinksRepository {
   }
 
   async create(drink: Drink): Promise<Drink> {
-    const { data, error } = await supabase
-      .from("drinks")
-      .insert({
-        id: drink.id,
-        name: drink.name,
-        price: drink.price,
-        description: drink.description,
-        vibe: drink.vibe,
-        flavors: drink.flavors,
-        icon_name: drink.iconName,
-        image: drink.image || null,
-        trending: drink.trending,
-        promo: drink.promo || false,
-        available: drink.available,
-      })
-      .select()
-      .single();
+    const payload = toInsertPayload(drink);
+    const { data, error } = await supabase.from("drinks").insert(payload).select().single();
 
     if (error) {
       console.error("[SupabaseDrinksRepository] Error creating drink locally:", error);
@@ -101,21 +104,7 @@ export class SupabaseDrinksRepository implements DrinksRepository {
 
     if (supabaseCloud) {
       try {
-        const { error: cloudError } = await supabaseCloud
-          .from("drinks")
-          .insert({
-            id: drink.id,
-            name: drink.name,
-            price: drink.price,
-            description: drink.description,
-            vibe: drink.vibe,
-            flavors: drink.flavors,
-            icon_name: drink.iconName,
-            image: drink.image || null,
-            trending: drink.trending,
-            promo: drink.promo || false,
-            available: drink.available,
-          });
+        const { error: cloudError } = await supabaseCloud.from("drinks").insert(payload);
         if (cloudError) {
           console.error("[SupabaseDrinksRepository] Error creating drink in cloud:", cloudError);
         } else {
@@ -141,6 +130,8 @@ export class SupabaseDrinksRepository implements DrinksRepository {
     if (partial.trending !== undefined) updates.trending = partial.trending;
     if (partial.promo !== undefined) updates.promo = partial.promo;
     if (partial.available !== undefined) updates.available = partial.available;
+    if (partial.categoryId !== undefined) updates.category_id = partial.categoryId || null;
+    if (partial.sortOrder !== undefined) updates.sort_order = partial.sortOrder ?? 0;
 
     const { data, error } = await supabase
       .from("drinks")
@@ -156,10 +147,7 @@ export class SupabaseDrinksRepository implements DrinksRepository {
 
     if (data && supabaseCloud) {
       try {
-        const { error: cloudError } = await supabaseCloud
-          .from("drinks")
-          .update(updates)
-          .eq("id", id);
+        const { error: cloudError } = await supabaseCloud.from("drinks").update(updates).eq("id", id);
         if (cloudError) {
           console.error("[SupabaseDrinksRepository] Error updating drink in cloud:", cloudError);
         } else {
@@ -174,10 +162,7 @@ export class SupabaseDrinksRepository implements DrinksRepository {
   }
 
   async delete(id: number): Promise<boolean> {
-    const { error } = await supabase
-      .from("drinks")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("drinks").delete().eq("id", id);
 
     if (error) {
       console.error("[SupabaseDrinksRepository] Error deleting drink locally:", error);
@@ -186,10 +171,7 @@ export class SupabaseDrinksRepository implements DrinksRepository {
 
     if (supabaseCloud) {
       try {
-        const { error: cloudError } = await supabaseCloud
-          .from("drinks")
-          .delete()
-          .eq("id", id);
+        const { error: cloudError } = await supabaseCloud.from("drinks").delete().eq("id", id);
         if (cloudError) {
           console.error("[SupabaseDrinksRepository] Error deleting drink in cloud:", cloudError);
         } else {

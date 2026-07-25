@@ -77,7 +77,7 @@ export function createOrdersController(
   // GET /api/orders/by-token/:token — buscar por token (staff only)
   router.get("/by-token/:token", authMiddleware, requireRole("admin", "caja"), async (req, res, next) => {
     try {
-      const order = await service.getOrderByToken(req.params.token);
+      const order = await service.getOrderByToken(String(req.params.token));
       if (!order) {
         res.status(404).json({ error: "Pedido no encontrado" });
         return;

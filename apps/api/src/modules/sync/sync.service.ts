@@ -60,8 +60,22 @@ export class SyncService {
   }
 
   private async seedDefaultDrinksIfMissing(): Promise<void> {
-    const { SEED_DRINKS } = await import("../../data/drinks.js");
-    const drinksToInsert = SEED_DRINKS.map(d => ({
+    const { SEED_CATEGORIES, SEED_DRINKS } = await import("../../data/drinks.js");
+    const categoriesToUpsert = SEED_CATEGORIES.map((c) => ({
+      id: c.id,
+      name: c.name,
+      sort_order: c.sortOrder,
+      is_system: c.isSystem ?? false,
+    }));
+    const { error: catError } = await supabase
+      .from("drink_categories")
+      .upsert(categoriesToUpsert);
+    if (catError) {
+      console.error("[SyncService] Error seeding drink_categories:", catError);
+      throw catError;
+    }
+
+    const drinksToInsert = SEED_DRINKS.map((d) => ({
       id: d.id,
       name: d.name,
       price: d.price,
@@ -72,7 +86,9 @@ export class SyncService {
       image: d.image || null,
       trending: d.trending,
       promo: d.promo || false,
-      available: d.available
+      available: d.available,
+      category_id: d.categoryId ?? null,
+      sort_order: d.sortOrder ?? 0,
     }));
     await supabase.from("drinks").insert(drinksToInsert);
   }
@@ -102,7 +118,13 @@ export class SyncService {
         }
       }
 
-      // 2. Pull Drinks
+      // 2. Pull categorías (antes que drinks por FK)
+      const { count: categoriesCount } = await this.cloudSyncRepo.pullDrinkCategories();
+      if (categoriesCount > 0) {
+        console.log(`[SyncService] ✅ Categorías actualizadas: ${categoriesCount}`);
+      }
+
+      // 3. Pull Drinks
       const { count: drinksCount } = await this.cloudSyncRepo.pullDrinks();
       if (drinksCount > 0) {
         console.log(`[SyncService] ✅ Drinks actualizados: ${drinksCount}`);

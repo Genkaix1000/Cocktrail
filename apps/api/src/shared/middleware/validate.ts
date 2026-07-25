@@ -96,6 +96,8 @@ export const CreateDrinkSchema = z.object({
   trending: z.boolean().default(false),
   promo: z.boolean().default(false),
   available: z.boolean().default(true),
+  categoryId: z.string().max(80).nullable().optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
 });
 
 // 8. Esquema para actualizar un trago (todos los campos opcionales)
@@ -110,6 +112,8 @@ export const UpdateDrinkSchema = z.object({
   trending: z.boolean().optional(),
   promo: z.boolean().optional(),
   available: z.boolean().optional(),
+  categoryId: z.string().max(80).nullable().optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
 });
 
 // 9. Esquema para crear un usuario de staff

@@ -20,7 +20,7 @@ import {
   cartaGridTemplate,
 } from "./cartaCrud";
 
-export type SortField = "name" | "price";
+export type SortField = "name" | "price" | "category";
 export type SortDirection = "asc" | "desc";
 export type TriFilter = "all" | "yes" | "no";
 export type TagFilter = "all" | "promo" | "trending" | "any";
@@ -38,6 +38,7 @@ export type ColumnFilters = {
 
 type Props = {
   drinks: Drink[];
+  categoryNames?: Record<string, string>;
   loadError: boolean;
   hasActiveSearch: boolean;
   sortField: SortField;
@@ -121,6 +122,7 @@ function FilterInput({
 
 export default function DrinksTable({
   drinks,
+  categoryNames = {},
   loadError,
   hasActiveSearch,
   sortField,
@@ -163,6 +165,17 @@ export default function DrinksTable({
           active={sortField === "price"}
           direction={sortDirection}
           onClick={() => onSort("price")}
+        />
+      );
+    }
+    if (col === "category") {
+      return (
+        <SortHeader
+          key={col}
+          label={CARTA_COL_LABELS.category}
+          active={sortField === "category"}
+          direction={sortDirection}
+          onClick={() => onSort("category")}
         />
       );
     }
@@ -324,6 +337,19 @@ export default function DrinksTable({
                   : "Tendencia"}
             </span>
           )}
+        </div>
+      );
+    }
+    if (col === "category") {
+      const label = d.categoryId ? categoryNames[d.categoryId] ?? d.categoryId : "—";
+      return (
+        <div
+          key={col}
+          className={`px-3 py-2.5 text-[12px] truncate ${
+            isConfirming ? "text-[var(--danger-base)]/70" : "text-[var(--text-secondary)]"
+          }`}
+        >
+          {label}
         </div>
       );
     }

@@ -6,6 +6,13 @@ export type CustomTheme = {
 };
 export type Theme = string;
 
+export type DrinkCategory = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isSystem?: boolean;
+};
+
 export type Drink = {
   id: number;
   name: string;
@@ -18,6 +25,9 @@ export type Drink = {
   trending: boolean;
   promo?: boolean;
   available: boolean;
+  categoryId?: string | null;
+  /** Orden dentro de su categoría; menor = más arriba. 0/undefined = sin preferencia (al final). */
+  sortOrder?: number;
 };
 
 export type OrderItem = {

@@ -17,6 +17,16 @@ vi.mock("@/services/drinks.service", () => ({
   },
 }));
 
+vi.mock("@/services/drink-categories.service", () => ({
+  drinkCategoriesService: {
+    list: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+    update: vi.fn(),
+    reorder: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
+
 const mockedDrinksService = vi.mocked(drinksService);
 
 function makeDrink(overrides: Partial<Drink> = {}): Drink {

@@ -34,6 +34,8 @@ export class DrinksService {
       trending: input.trending ?? false,
       promo: input.promo ?? false,
       available: input.available ?? true,
+      categoryId: input.categoryId ?? null,
+      sortOrder: input.sortOrder ?? 0,
     };
 
     return this.repo.create(drink);

@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Filter, Loader2, Plus, Search } from "lucide-react";
+import { Filter, Loader2, Plus, Search, Tags } from "lucide-react";
 import { drinksService } from "@/services/drinks.service";
-import type { Drink } from "@cocktrail/shared";
+import { drinkCategoriesService } from "@/services/drink-categories.service";
+import type { Drink, DrinkCategory } from "@cocktrail/shared";
 import Toast from "@/components/shared/Toast";
 import DrinksTable, {
   type ColumnFilters,
   type SortDirection,
   type SortField,
 } from "./DrinksTable";
-import DrinkFormModal, { type DrinkForm } from "./DrinkFormModal";
+import DrinkFormModal, { flagsForCategory, type DrinkForm } from "./DrinkFormModal";
+import CategoriesEditorModal from "./CategoriesEditorModal";
 import {
   type CartaColId,
   CARTA_COLS_DEFAULT,
@@ -42,12 +44,16 @@ const makeEmptyForm = (): DrinkForm => ({
   trending: false,
   promo: false,
   available: true,
+  categoryId: null,
+  sortOrder: 0,
 });
 
 type ViewFilter = "all" | "in" | "out";
+type SidePanel = "drink" | "categories" | null;
 
 export default function CartaSection() {
   const [drinks, setDrinks] = useState<Drink[]>([]);
+  const [categories, setCategories] = useState<DrinkCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
@@ -55,22 +61,34 @@ export default function CartaSection() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>(EMPTY_COL_FILTERS);
   const [visibleCols, setVisibleCols] = useState<CartaColId[]>(CARTA_COLS_DEFAULT);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const [editDrink, setEditDrink] = useState<DrinkForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const [undoDelete, setUndoDelete] = useState<Drink | null>(null);
+  const [undoDeleteCategory, setUndoDeleteCategory] = useState<DrinkCategory | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savingCategory, setSavingCategory] = useState(false);
 
-  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortField, setSortField] = useState<SortField>("category");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const pendingDeleteRef = useRef<{ drink: Drink; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const pendingCategoryDeleteRef = useRef<{ category: DrinkCategory; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   useEffect(() => {
     setVisibleCols(loadCartaCols());
   }, []);
+
+  const categoryNames = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c.name])),
+    [categories],
+  );
+  const categorySort = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c.sortOrder])),
+    [categories],
+  );
 
   const commitDelete = useCallback(async (drink: Drink) => {
     try {
@@ -100,11 +118,25 @@ export default function CartaSection() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      const pending = pendingCategoryDeleteRef.current;
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      void drinkCategoriesService.delete(pending.category.id).catch(() => {});
+      pendingCategoryDeleteRef.current = null;
+    };
+  }, []);
+
   const loadDrinks = useCallback(async () => {
     setLoadError(false);
     try {
-      const data = await drinksService.list();
-      setDrinks(data);
+      const [drinksData, categoriesData] = await Promise.all([
+        drinksService.list(),
+        drinkCategoriesService.list(),
+      ]);
+      setDrinks(drinksData);
+      setCategories(categoriesData);
     } catch (err) {
       console.error("Error loading drinks:", err);
       setLoadError(true);
@@ -162,17 +194,23 @@ export default function CartaSection() {
     }
 
     list.sort((a, b) => {
-      const [valA, valB]: [string | number, string | number] =
-        sortField === "name"
-          ? [a.name.toLowerCase(), b.name.toLowerCase()]
-          : [a.price, b.price];
-      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
-      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
-      return 0;
+      let cmp = 0;
+      if (sortField === "category") {
+        const orderA = a.categoryId ? (categorySort[a.categoryId] ?? 9999) : 9999;
+        const orderB = b.categoryId ? (categorySort[b.categoryId] ?? 9999) : 9999;
+        const soA = a.sortOrder && a.sortOrder > 0 ? a.sortOrder : Infinity;
+        const soB = b.sortOrder && b.sortOrder > 0 ? b.sortOrder : Infinity;
+        cmp = orderA - orderB || soA - soB || a.name.localeCompare(b.name);
+      } else if (sortField === "name") {
+        cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+      } else {
+        cmp = a.price - b.price;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
     });
 
     return list;
-  }, [drinks, search, sortField, sortDirection, viewFilter, filtersOpen, columnFilters]);
+  }, [drinks, search, sortField, sortDirection, viewFilter, filtersOpen, columnFilters, categorySort]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -187,11 +225,11 @@ export default function CartaSection() {
     if (CARTA_COLS_REQUIRED.includes(col)) return;
     setVisibleCols((prev) => {
       const next = prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col];
-      // keep stable order from default+id
       const order: CartaColId[] = [
         "id",
         "icon",
         "name",
+        "category",
         "price",
         "status",
         "tags",
@@ -205,16 +243,21 @@ export default function CartaSection() {
 
   const openCreate = useCallback(() => {
     setEditDrink(makeEmptyForm());
-    setModalOpen(true);
+    setSidePanel("drink");
   }, []);
 
   const openEdit = useCallback((drink: Drink) => {
     setEditDrink({ ...drink, description: "", vibe: "" });
-    setModalOpen(true);
+    setSidePanel("drink");
   }, []);
 
-  const closeModal = useCallback(() => {
-    setModalOpen(false);
+  const openCategories = useCallback(() => {
+    setEditDrink(null);
+    setSidePanel("categories");
+  }, []);
+
+  const closeSidePanel = useCallback(() => {
+    setSidePanel(null);
     setEditDrink(null);
   }, []);
 
@@ -223,11 +266,14 @@ export default function CartaSection() {
     setSaving(true);
     setError(null);
     try {
+      const flags = flagsForCategory(editDrink.categoryId);
       const payload = {
         ...editDrink,
         description: "",
         vibe: "",
         flavors: editDrink.flavors ?? [],
+        categoryId: editDrink.categoryId ?? null,
+        ...flags,
       };
       if (editDrink.id != null) {
         const drinkId = editDrink.id;
@@ -238,7 +284,7 @@ export default function CartaSection() {
         const created = await drinksService.create(payload);
         setDrinks((prev) => [...prev, created]);
       }
-      closeModal();
+      closeSidePanel();
       setSaved(true);
     } catch (err) {
       console.error("Error saving trago:", err);
@@ -246,7 +292,7 @@ export default function CartaSection() {
     } finally {
       setSaving(false);
     }
-  }, [editDrink, saving, closeModal]);
+  }, [editDrink, saving, closeSidePanel]);
 
   const handleConfirmDelete = useCallback(
     (drink: Drink) => {
@@ -254,7 +300,7 @@ export default function CartaSection() {
       flushPendingDelete();
       setDrinks((prev) => prev.filter((d) => d.id !== drink.id));
       if (editDrink?.id === drink.id) {
-        setModalOpen(false);
+        setSidePanel(null);
         setEditDrink(null);
       }
       const timer = setTimeout(() => {
@@ -287,6 +333,97 @@ export default function CartaSection() {
       console.error("Error toggling availability:", err);
       setError("No se pudo actualizar la disponibilidad. Reintentá en unos segundos.");
     }
+  }, []);
+
+  const handleCreateCategory = useCallback(
+    async (name: string) => {
+      setSavingCategory(true);
+      setError(null);
+      try {
+        const created = await drinkCategoriesService.create({ name });
+        setCategories((prev) => [...prev, created].sort((a, b) => a.sortOrder - b.sortOrder));
+      } catch (err) {
+        console.error("Error creating category:", err);
+        setError("No se pudo crear la categoría.");
+        throw err;
+      } finally {
+        setSavingCategory(false);
+      }
+    },
+    [],
+  );
+
+  const handleReorderCategories = useCallback(async (ids: string[]) => {
+    setSavingCategory(true);
+    setError(null);
+    try {
+      const next = await drinkCategoriesService.reorder(ids);
+      setCategories(next);
+    } catch (err) {
+      console.error("Error reordering categories:", err);
+      setError("No se pudo guardar el orden de categorías.");
+      // Recargar para no dejar el UI desync.
+      const fresh = await drinkCategoriesService.list().catch(() => null);
+      if (fresh) setCategories(fresh);
+    } finally {
+      setSavingCategory(false);
+    }
+  }, []);
+
+  const commitDeleteCategory = useCallback(async (category: DrinkCategory) => {
+    try {
+      await drinkCategoriesService.delete(category.id);
+      setDrinks((prev) =>
+        prev.map((d) =>
+          d.categoryId === category.id ? { ...d, categoryId: null, promo: false, trending: false } : d,
+        ),
+      );
+    } catch (err) {
+      console.error("Error deleting category:", err);
+      setCategories((prev) =>
+        prev.some((c) => c.id === category.id)
+          ? prev
+          : [...prev, category].sort((a, b) => a.sortOrder - b.sortOrder),
+      );
+      setError("No se pudo eliminar la categoría.");
+    }
+  }, []);
+
+  const handleDeleteCategory = useCallback(
+    async (id: string) => {
+      const category = categories.find((c) => c.id === id);
+      if (!category) return;
+      // Flush cualquier borrado de categoría pendiente antes de encolar otro.
+      const prevPending = pendingCategoryDeleteRef.current;
+      if (prevPending) {
+        clearTimeout(prevPending.timer);
+        pendingCategoryDeleteRef.current = null;
+        void commitDeleteCategory(prevPending.category);
+      }
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+      const timer = setTimeout(() => {
+        pendingCategoryDeleteRef.current = null;
+        setUndoDeleteCategory((current) => (current?.id === id ? null : current));
+        void commitDeleteCategory(category);
+      }, DELETE_UNDO_MS);
+      pendingCategoryDeleteRef.current = { category, timer };
+      setUndoDeleteCategory(category);
+      setError(null);
+    },
+    [categories, commitDeleteCategory],
+  );
+
+  const handleUndoDeleteCategory = useCallback(() => {
+    const pending = pendingCategoryDeleteRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingCategoryDeleteRef.current = null;
+    setCategories((prev) =>
+      prev.some((c) => c.id === pending.category.id)
+        ? prev
+        : [...prev, pending.category].sort((a, b) => a.sortOrder - b.sortOrder),
+    );
+    setUndoDeleteCategory(null);
   }, []);
 
   if (loading) {
@@ -322,8 +459,7 @@ export default function CartaSection() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
-        <div className={`flex-1 w-full space-y-4 min-w-0 ${modalOpen ? "" : ""}`}>
-          {/* Toolbar — layout §4.8, chrome como Logs/Pagos */}
+        <div className="flex-1 w-full space-y-4 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               {views.map((v) => {
@@ -380,10 +516,25 @@ export default function CartaSection() {
               <Plus size={14} strokeWidth={2.5} />
               Nuevo trago
             </button>
+
+            <button
+              type="button"
+              onClick={openCategories}
+              aria-pressed={sidePanel === "categories"}
+              className={`h-10 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] border ${
+                sidePanel === "categories"
+                  ? "bg-[var(--accent-surface)] border-transparent text-[var(--accent-text)]"
+                  : "bg-[var(--bg-surface)] border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
+              }`}
+            >
+              <Tags size={14} strokeWidth={2.5} />
+              Categorías
+            </button>
           </div>
 
           <DrinksTable
             drinks={sortedAndFiltered}
+            categoryNames={categoryNames}
             loadError={loadError}
             hasActiveSearch={Boolean(search.trim())}
             sortField={sortField}
@@ -405,18 +556,41 @@ export default function CartaSection() {
           />
         </div>
 
-        {modalOpen && editDrink && (
+        {sidePanel === "drink" && editDrink && (
           <DrinkFormModal
             editDrink={editDrink}
+            categories={categories}
             saving={saving}
             onChange={(patch) => setEditDrink({ ...editDrink, ...patch })}
-            onCancel={closeModal}
+            onCancel={closeSidePanel}
             onSave={handleSave}
+          />
+        )}
+
+        {sidePanel === "categories" && (
+          <CategoriesEditorModal
+            categories={categories}
+            saving={savingCategory}
+            onChange={setCategories}
+            onCreate={handleCreateCategory}
+            onReorder={handleReorderCategories}
+            onDelete={handleDeleteCategory}
+            onClose={closeSidePanel}
           />
         )}
       </div>
 
-      {undoDelete ? (
+      {undoDeleteCategory ? (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast
+            variant="success"
+            message={`Categoría eliminada: ${undoDeleteCategory.name}`}
+            duration={DELETE_UNDO_MS}
+            action={{ label: "Deshacer", onClick: handleUndoDeleteCategory }}
+            onClose={() => setUndoDeleteCategory(null)}
+          />
+        </div>
+      ) : undoDelete ? (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast
             variant="success"
@@ -428,13 +602,15 @@ export default function CartaSection() {
         </div>
       ) : saved ? (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
-          <Toast variant="success" message="Cambios guardados" duration={2500} onClose={() => setSaved(false)} />
-        </div>
-      ) : error ? (
-        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
-          <Toast variant="error" message={error} onClose={() => setError(null)} />
+          <Toast variant="success" message="Cambios guardados" onClose={() => setSaved(false)} />
         </div>
       ) : null}
+
+      {error && (
+        <div className="fixed bottom-6 left-6 z-50 w-full max-w-xs">
+          <Toast variant="error" message={error} onClose={() => setError(null)} />
+        </div>
+      )}
     </div>
   );
 }

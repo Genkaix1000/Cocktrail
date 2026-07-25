@@ -80,6 +80,7 @@ function makeCloudSyncRepo(overrides?: Partial<CloudSyncRepository>): CloudSyncR
     isConfigured: vi.fn().mockReturnValue(true),
     pullUsers: vi.fn().mockResolvedValue({ count: 0 }),
     pullDrinks: vi.fn().mockResolvedValue({ count: 0 }),
+    pullDrinkCategories: vi.fn().mockResolvedValue({ count: 0 }),
     pushNightEvent: vi.fn().mockResolvedValue(undefined),
     pushOrders: vi.fn().mockResolvedValue(undefined),
     pushTickets: vi.fn().mockResolvedValue(undefined),

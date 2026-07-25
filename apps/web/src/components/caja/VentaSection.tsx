@@ -20,8 +20,9 @@ import {
   Printer,
   Home,
   LayoutGrid,
+  Search,
 } from "lucide-react";
-import { createElement, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import DrinkCard from "@/components/shared/DrinkCard";
 import { drinkIcon } from "@/lib/icons";
@@ -31,10 +32,11 @@ import { useCheckout } from "@/hooks/useCheckout";
 import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
-import type { Drink } from "@cocktrail/shared";
+import type { Drink, DrinkCategory } from "@cocktrail/shared";
 
 type Props = {
   drinks: Drink[];
+  categories: DrinkCategory[];
   printer: {
     reprintTicket: (orderId: string) => Promise<void>;
     printTicketData: (base64: string) => Promise<void>;
@@ -152,8 +154,7 @@ function CompactDrinkCard({
 }) {
   const [imageBroken, setImageBroken] = useState(false);
   const [isClicked, setIsClicked] = useState(false);
-  const isFeatured = drink.promo || drink.trending;
-  const showImage = isFeatured && Boolean(drink.image) && !imageBroken;
+  const showImage = Boolean(drink.image) && !imageBroken;
   const active = qty > 0;
 
   const handleAdd = () => {
@@ -213,15 +214,7 @@ function CompactDrinkCard({
         </span>
       </div>
 
-      {qty === 0 ? (
-        <button
-          onClick={(e) => { e.stopPropagation(); handleAdd(); }}
-          className="h-9 rounded-lg bg-green-soft hover:brightness-125 border border-green-line text-green flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
-        >
-          <Plus size={14} strokeWidth={3} />
-          Agregar
-        </button>
-      ) : (
+      {qty > 0 && (
         <div
           onClick={(e) => e.stopPropagation()}
           className="h-9 rounded-lg bg-green-soft border border-green-line flex items-center justify-between px-1 gap-1"
@@ -270,7 +263,6 @@ function CompactDrinkSkeleton() {
         <div className="h-3.5 bg-ink-800/40 rounded w-3/4" />
         <div className="h-3 bg-ink-800/30 rounded w-1/2" />
       </div>
-      <div className="h-9 bg-ink-800/40 rounded-lg w-full" />
     </div>
   );
 }
@@ -285,7 +277,7 @@ function CompactDrinkSkeleton() {
  * prop desde `usePrinterStatus` en el shell, porque ese mismo hook también
  * lo usa el popup de detalle de Historial (que todavía vive en CajaClient).
  */
-export default function VentaSection({ drinks, printer }: Props) {
+export default function VentaSection({ drinks, categories, printer }: Props) {
   const loadingProducts = false;
   const shoppingBagRef = useRef<HTMLDivElement>(null);
 
@@ -329,28 +321,70 @@ export default function VentaSection({ drinks, printer }: Props) {
 
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  const [sortBy, setSortBy] = useState<"alfabeto" | "tendencia" | "precio">("alfabeto");
+  const [sortBy, setSortBy] = useState<"categoria" | "alfabeto" | "precio">("categoria");
+  const [search, setSearch] = useState("");
+
+  const categorySort = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c.sortOrder])),
+    [categories],
+  );
+  const categoryName = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c.name])),
+    [categories],
+  );
+
+  // Un trago pertenece a UN solo grupo: su categoría. Jerarquía = sortOrder
+  // (1 = arriba). Sin categoría al final.
+  const groupOf = useCallback(
+    (d: Drink) => {
+      if (d.categoryId && categoryName[d.categoryId] != null) {
+        return {
+          key: d.categoryId,
+          title: categoryName[d.categoryId],
+          order: categorySort[d.categoryId] ?? 99997,
+        };
+      }
+      return { key: "__none__", title: "Sin categoría", order: 99998 };
+    },
+    [categoryName, categorySort],
+  );
 
   const sortedDrinks = useMemo(() => {
     const list = [...drinks];
+    if (sortBy === "categoria") {
+      return list.sort((a, b) => {
+        const cmp = groupOf(a).order - groupOf(b).order;
+        if (cmp) return cmp;
+        const soA = a.sortOrder && a.sortOrder > 0 ? a.sortOrder : Infinity;
+        const soB = b.sortOrder && b.sortOrder > 0 ? b.sortOrder : Infinity;
+        return soA - soB || a.name.localeCompare(b.name);
+      });
+    }
     if (sortBy === "alfabeto") {
       return list.sort((a, b) => a.name.localeCompare(b.name));
     }
-    if (sortBy === "tendencia") {
-      return list.sort((a, b) => {
-        const catA = a.promo ? 1 : a.trending ? 2 : 3;
-        const catB = b.promo ? 1 : b.trending ? 2 : 3;
-        if (catA !== catB) return catA - catB;
-        return a.name.localeCompare(b.name);
-      });
-    }
-    if (sortBy === "precio") {
-      return list.sort((a, b) => a.price - b.price);
-    }
-    return list;
-  }, [drinks, sortBy]);
+    return list.sort((a, b) => a.price - b.price);
+  }, [drinks, sortBy, groupOf]);
 
-  const filteredDrinks = sortedDrinks;
+  const filteredDrinks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sortedDrinks;
+    return sortedDrinks.filter((d) => d.name.toLowerCase().includes(q));
+  }, [sortedDrinks, search]);
+
+  const drinkSections = useMemo(() => {
+    if (sortBy !== "categoria") return null;
+    const groups = new Map<string, { title: string; order: number; drinks: Drink[] }>();
+    for (const d of filteredDrinks) {
+      const g = groupOf(d);
+      const existing = groups.get(g.key);
+      if (existing) existing.drinks.push(d);
+      else groups.set(g.key, { title: g.title, order: g.order, drinks: [d] });
+    }
+    return [...groups.entries()]
+      .sort((a, b) => a[1].order - b[1].order)
+      .map(([key, g]) => ({ id: key, title: g.title, drinks: g.drinks }));
+  }, [sortBy, filteredDrinks, groupOf]);
 
   const clearCart = () => setCart({});
 
@@ -653,43 +687,60 @@ export default function VentaSection({ drinks, printer }: Props) {
         {/* Products column */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Ordenar y Filtrar (Mobile y Desktop) */}
-          <div className="flex items-center gap-3 px-5 pt-5 pb-1 select-none w-full shrink-0">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] shrink-0">Ordenar:</span>
-            <div className="flex items-center gap-1 bg-[var(--bg-surface)] p-0.5 rounded-xl border border-[var(--border-subtle)] overflow-x-auto no-scrollbar shrink-0">
-              <button
-                type="button"
-                onClick={() => setSortBy("alfabeto")}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
-                  sortBy === "alfabeto"
-                    ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                Alfabeto
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortBy("tendencia")}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
-                  sortBy === "tendencia"
-                    ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                Tendencia
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortBy("precio")}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
-                  sortBy === "precio"
-                    ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                Precio
-              </button>
+          {/* Buscar + Ordenar */}
+          <div className="flex flex-wrap items-center gap-3 px-5 pt-5 pb-1 select-none w-full shrink-0">
+            <div className="relative flex-1 min-w-[160px] max-w-sm">
+              <Search
+                size={14}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none"
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar trago…"
+                className="w-full h-10 pl-10 pr-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-full text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] shrink-0">
+                Ordenar:
+              </span>
+              <div className="flex items-center gap-1 bg-[var(--bg-surface)] p-0.5 rounded-xl border border-[var(--border-subtle)] overflow-x-auto no-scrollbar shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSortBy("categoria")}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+                    sortBy === "categoria"
+                      ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  Categoría
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortBy("alfabeto")}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+                    sortBy === "alfabeto"
+                      ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  Alfabeto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortBy("precio")}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+                    sortBy === "precio"
+                      ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  Precio
+                </button>
+              </div>
             </div>
           </div>
 
@@ -712,7 +763,49 @@ export default function VentaSection({ drinks, printer }: Props) {
               </>
             ) : filteredDrinks.length === 0 ? (
               <div className="h-full flex items-center justify-center text-ink-500">
-                — No hay productos en esta categoría —
+                {search.trim()
+                  ? "— Sin resultados para tu búsqueda —"
+                  : "— No hay productos en esta categoría —"}
+              </div>
+            ) : drinkSections ? (
+              <div className="space-y-6">
+                {drinkSections.map((section) => (
+                  <section key={section.id}>
+                    <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)] mb-3">
+                      {section.title}
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:hidden">
+                      {section.drinks.map((d, idx) => (
+                          <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
+                            <DrinkCard
+                              {...d}
+                              icon={d.iconName}
+                              variant={d.promo ? "promo" : d.trending ? "trending" : "regular"}
+                              quantity={cart[d.id] || 0}
+                              onAdd={() => addToCart(d.id)}
+                              onRemove={() => removeFromCart(d.id)}
+                            />
+                          </div>
+                      ))}
+                    </div>
+                    <div className="hidden md:grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                      {section.drinks.map((d, idx) => {
+                        const flatIdx = filteredDrinks.findIndex((x) => x.id === d.id);
+                        return (
+                          <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
+                            <CompactDrinkCard
+                              drink={d}
+                              qty={cart[d.id] || 0}
+                              focused={flatIdx === gridHighlightedIndex}
+                              onAdd={() => addToCart(d.id)}
+                              onRemove={() => removeFromCart(d.id)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
               </div>
             ) : (
               <>

@@ -73,6 +73,8 @@ export interface CloudSyncRepository {
   pullUsers(): Promise<{ count: number }>;
   /** Descarga `drinks` de cloud y hace upsert local. */
   pullDrinks(): Promise<{ count: number }>;
+  /** Descarga `drink_categories` de cloud y hace upsert local. */
+  pullDrinkCategories(): Promise<{ count: number }>;
   pushNightEvent(event: NightEvent, totals: EventTotals): Promise<void>;
   pushOrders(eventId: string, orders: Order[]): Promise<void>;
   pushTickets(tickets: Ticket[]): Promise<void>;
@@ -133,6 +135,28 @@ export class SupabaseCloudSyncRepository implements CloudSyncRepository {
     const { error: upsertError } = await supabase.from("drinks").upsert(data);
     if (upsertError) {
       console.error("[SupabaseCloudSyncRepository] Error escribiendo drinks en local (upsert):", upsertError.message);
+      return { count: 0 };
+    }
+    return { count: data.length };
+  }
+
+  async pullDrinkCategories(): Promise<{ count: number }> {
+    if (!supabaseCloud) return { count: 0 };
+    const { data, error } = await supabaseCloud.from("drink_categories").select("*");
+    if (error) {
+      console.error(
+        "[SupabaseCloudSyncRepository] Error descargando drink_categories:",
+        error.message,
+      );
+      return { count: 0 };
+    }
+    if (!data || data.length === 0) return { count: 0 };
+    const { error: upsertError } = await supabase.from("drink_categories").upsert(data);
+    if (upsertError) {
+      console.error(
+        "[SupabaseCloudSyncRepository] Error escribiendo drink_categories en local:",
+        upsertError.message,
+      );
       return { count: 0 };
     }
     return { count: data.length };

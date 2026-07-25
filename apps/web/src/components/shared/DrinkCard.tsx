@@ -38,26 +38,23 @@ interface ActionButtonsProps {
 }
 
 function ActionButtons({ quantity, onAdd, onRemove }: ActionButtonsProps) {
+  if (quantity <= 0) return null;
   return (
     <div
       onClick={(e) => e.stopPropagation()}
       className="flex items-center gap-2 bg-black/30 backdrop-blur-md p-1.5 rounded-[16px] border border-white/10"
     >
-      {quantity > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
-            aria-label="Quitar del pedido"
-            className="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
-          >
-            <Minus size={18} strokeWidth={3} />
-          </button>
-          <span className="text-[15px] font-black text-white w-6 text-center tabular">
-            {quantity}
-          </span>
-        </>
-      )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+        aria-label="Quitar del pedido"
+        className="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
+      >
+        <Minus size={18} strokeWidth={3} />
+      </button>
+      <span className="text-[15px] font-black text-white w-6 text-center tabular">
+        {quantity}
+      </span>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
@@ -105,8 +102,10 @@ export default function DrinkCard({
         }`}
       >
         <div className="flex items-center gap-4 min-w-0">
-          <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-white/[0.03] border border-white/10 text-white/50 shadow-inner">
-            {IconComponent ? (
+          <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-white/[0.03] border border-white/10 text-white/50 shadow-inner overflow-hidden relative">
+            {image ? (
+              <Image src={image} alt={name} fill className="object-cover" sizes="56px" />
+            ) : IconComponent ? (
               <IconComponent size={26} strokeWidth={1.5} />
             ) : (
               <GlassWater size={26} strokeWidth={1.5} />

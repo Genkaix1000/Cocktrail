@@ -100,9 +100,8 @@ Cada bebida se vincula a su categoría asignada (`category` o `categoryId`).
 
 ---
 
-## 6. Consigna Abierta de Maquetación Visual
+## 6. Maquetación Visual (caja)
 
-> ❓ **Consigna Abierta para Evaluación de UI/UX**:
-> Evaluar cuál es la mejor alternativa de diseño para separar visualmente las categorías en la pantalla de la caja:
-> - **Opción A (Secciones con Título de Encabezado)**: Colocar un encabezado/título de texto para cada categoría (estilo Dashboard), seguido por los elementos que pertenecen a esa categoría.
-> - **Opción B (Grilla Continua con Barra de Chips/Pestañas de Filtrado)**: Mantener una grilla única con un menú de pestañas o chips superiores para navegar directamente a la categoría elegida.
+> ✅ **Decisión**: secciones con título por categoría, ordenadas por `sortOrder`.
+> Tendencias / Promos son categorías normales (no etiquetas booleanas).
+> El editor de categorías en admin es un panel lateral con drag & drop horizontal.

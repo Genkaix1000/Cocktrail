@@ -15,7 +15,7 @@ import VentaSection from "@/components/caja/VentaSection";
 import HistorialSection from "@/components/caja/HistorialSection";
 import MetricasSection from "@/components/caja/MetricasSection";
 import CajaSidebar from "@/components/caja/Sidebar";
-import type { Drink } from "@cocktrail/shared";
+import type { Drink, DrinkCategory } from "@cocktrail/shared";
 
 type CurrentUser = {
   role: string;
@@ -30,10 +30,11 @@ type CurrentUser = {
 
 type Props = {
   drinks: Drink[];
+  categories: DrinkCategory[];
   currentUser: CurrentUser;
 };
 
-export default function CajaClient({ drinks, currentUser }: Props) {
+export default function CajaClient({ drinks, categories, currentUser }: Props) {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<"venta" | "historial" | "metricas">("venta");
@@ -168,11 +169,11 @@ export default function CajaClient({ drinks, currentUser }: Props) {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
-        {event && closeModalOpen && (
+        {((event && closeModalOpen) || summary) && (
           <CloseNightModal
             totals={totals}
             pendingDeliveries={pendingDeliveries}
-            startedAt={event.startedAt}
+            startedAt={event?.startedAt ?? summary?.startedAt ?? 0}
             summary={summary}
             onConfirm={handleCloseConfirm}
             onClose={handleCloseModalClose}
@@ -268,7 +269,7 @@ export default function CajaClient({ drinks, currentUser }: Props) {
                         : "hidden"
                     }
                   >
-                    <VentaSection drinks={drinks} printer={ventaPrinter} />
+                    <VentaSection drinks={drinks} categories={categories} printer={ventaPrinter} />
                   </div>
 
                   <div

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import CajaClient from "./CajaClient";
 import CajaSessionOnboarding from "@/components/caja/CajaSessionOnboarding";
 import { drinksService } from "@/services/drinks.service";
+import { drinkCategoriesService } from "@/services/drink-categories.service";
 import { authService } from "@/services/auth.service";
 import {
   barSessionsService,
@@ -15,7 +16,7 @@ import {
 } from "@/services/bar-sessions.service";
 import { ApiError } from "@/services/api-client";
 import { useSSE } from "@/lib/useSSE";
-import type { Drink } from "@cocktrail/shared";
+import type { Drink, DrinkCategory } from "@cocktrail/shared";
 
 type CurrentUser = {
   username: string;
@@ -31,6 +32,7 @@ type CurrentUser = {
 export default function CajaPage() {
   const router = useRouter();
   const [drinks, setDrinks] = useState<Drink[]>([]);
+  const [categories, setCategories] = useState<DrinkCategory[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [boxes, setBoxes] = useState<BarSessionOption[]>([]);
   const [activeSession, setActiveSession] = useState<BarSession | null>(null);
@@ -137,10 +139,12 @@ export default function CajaPage() {
   useEffect(() => {
     if (!activeBarId) return;
     let cancelled = false;
-    drinksService
-      .list()
-      .then((data) => {
-        if (!cancelled) setDrinks(data);
+    Promise.all([drinksService.list(), drinkCategoriesService.list()])
+      .then(([drinksData, categoriesData]) => {
+        if (!cancelled) {
+          setDrinks(drinksData);
+          setCategories(categoriesData);
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -241,5 +245,5 @@ export default function CajaPage() {
     );
   }
 
-  return <CajaClient drinks={drinks} currentUser={currentUser} />;
+  return <CajaClient drinks={drinks} categories={categories} currentUser={currentUser} />;
 }

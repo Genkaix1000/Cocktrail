@@ -515,11 +515,11 @@ export default function AdminClient({
             currentKeyword={event.keyword}
           />
         )}
-        {modalOpen && event && (
+        {((modalOpen && event) || summary) && (
           <CloseNightModal
             totals={totals}
             pendingDeliveries={pendingDeliveries}
-            startedAt={event.startedAt}
+            startedAt={event?.startedAt ?? summary?.startedAt ?? 0}
             summary={summary}
             onConfirm={handleCloseConfirm}
             onClose={handleModalClose}
