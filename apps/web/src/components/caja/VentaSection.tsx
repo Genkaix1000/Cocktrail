@@ -25,6 +25,7 @@ import {
   Delete,
   Gift,
   GitFork,
+  RotateCw,
 } from "lucide-react";
 import { createElement, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -37,11 +38,13 @@ import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
 import Toast from "@/components/shared/Toast";
-import type { Drink, DrinkCategory } from "@cocktrail/shared";
+import type { Drink, DrinkCategory, Order } from "@cocktrail/shared";
 
 type Props = {
   drinks: Drink[];
   categories: DrinkCategory[];
+  orders?: Order[];
+  onReloadCarta?: () => Promise<void>;
   printer: {
     reprintTicket: (orderId: string) => Promise<void>;
     printTicketData: (base64: string) => Promise<void>;
@@ -295,7 +298,7 @@ function CompactDrinkSkeleton() {
  * prop desde `usePrinterStatus` en el shell, porque ese mismo hook también
  * lo usa el popup de detalle de Historial (que todavía vive en CajaClient).
  */
-export default function VentaSection({ drinks, categories, printer }: Props) {
+export default function VentaSection({ drinks, categories, orders = [], onReloadCarta, printer }: Props) {
   const loadingProducts = false;
   const shoppingBagRef = useRef<HTMLDivElement>(null);
 
@@ -305,7 +308,31 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   const [sortBy, setSortBy] = useState<"categoria" | "alfabeto" | "precio">("categoria");
+  const [dynamicTrendsActive, setDynamicTrendsActive] = useState(false);
+  const [isReloadingCarta, setIsReloadingCarta] = useState(false);
   const [search, setSearch] = useState("");
+
+  const handleReloadCarta = async () => {
+    if (!onReloadCarta || isReloadingCarta) return;
+    setIsReloadingCarta(true);
+    try {
+      await onReloadCarta();
+    } finally {
+      setIsReloadingCarta(false);
+    }
+  };
+
+  // Mapeo de ventas acumuladas por id de trago
+  const salesMap = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const order of orders) {
+      if (order.status === "cancelado") continue;
+      for (const item of order.items) {
+        map[item.drinkId] = (map[item.drinkId] || 0) + item.qty;
+      }
+    }
+    return map;
+  }, [orders]);
 
   const categorySort = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c.sortOrder])),
@@ -336,18 +363,32 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
     const list = [...drinks];
     if (sortBy === "categoria") {
       return list.sort((a, b) => {
-        const cmp = groupOf(a).order - groupOf(b).order;
-        if (cmp) return cmp;
+        const cmpGroup = groupOf(a).order - groupOf(b).order;
+        if (cmpGroup) return cmpGroup;
+
         const soA = a.sortOrder && a.sortOrder > 0 ? a.sortOrder : Infinity;
         const soB = b.sortOrder && b.sortOrder > 0 ? b.sortOrder : Infinity;
-        return soA - soB || a.name.localeCompare(b.name);
+        const baseOrderDiff = soA - soB || a.name.localeCompare(b.name);
+
+        if (dynamicTrendsActive) {
+          const qtyA = salesMap[a.id] || 0;
+          const qtyB = salesMap[b.id] || 0;
+          const diffSales = qtyB - qtyA;
+
+          // Margen de gracia de 6 tragos: solo cambia de posición si supera por más de 6 ventas
+          if (Math.abs(diffSales) > 6) {
+            return diffSales;
+          }
+        }
+
+        return baseOrderDiff;
       });
     }
     if (sortBy === "alfabeto") {
       return list.sort((a, b) => a.name.localeCompare(b.name));
     }
     return list.sort((a, b) => a.price - b.price);
-  }, [drinks, sortBy, groupOf]);
+  }, [drinks, sortBy, groupOf, dynamicTrendsActive, salesMap]);
 
   const filteredDrinks = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -715,45 +756,76 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
                 className="w-full h-10 pl-10 pr-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-full text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
               />
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] shrink-0">
-                Ordenar:
-              </span>
-              <div className="flex items-center gap-1 bg-[var(--bg-surface)] p-0.5 rounded-xl border border-[var(--border-subtle)] overflow-x-auto no-scrollbar shrink-0">
+            <div className="flex items-center gap-2 wrap shrink-0">
+              {onReloadCarta && (
                 <button
                   type="button"
-                  onClick={() => setSortBy("categoria")}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
-                    sortBy === "categoria"
-                      ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  }`}
+                  onClick={handleReloadCarta}
+                  disabled={isReloadingCarta}
+                  title="Recargar Carta"
+                  className="h-10 px-3 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bold)] transition-all flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer disabled:opacity-50"
                 >
-                  Categoría
+                  <RotateCw size={13} className={isReloadingCarta ? "animate-spin" : ""} />
+                  <span className="hidden sm:inline">Recargar</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setSortBy("alfabeto")}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
-                    sortBy === "alfabeto"
-                      ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  }`}
-                >
-                  Alfabeto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSortBy("precio")}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
-                    sortBy === "precio"
-                      ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  }`}
-                >
-                  Precio
-                </button>
+              )}
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] shrink-0">
+                  Ordenar:
+                </span>
+                <div className="flex items-center gap-1 bg-[var(--bg-surface)] p-0.5 rounded-xl border border-[var(--border-subtle)] overflow-x-auto no-scrollbar shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("categoria")}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+                      sortBy === "categoria"
+                        ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    Categoría
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("alfabeto")}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+                      sortBy === "alfabeto"
+                        ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    Alfabeto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("precio")}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+                      sortBy === "precio"
+                        ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    Precio
+                  </button>
+                </div>
               </div>
+
+              {sortBy === "categoria" && (
+                <button
+                  type="button"
+                  onClick={() => setDynamicTrendsActive((prev) => !prev)}
+                  title="Reordenar tragos en vivo según ventas (con margen de gracia de 6 unidades)"
+                  className={`h-10 px-3 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                    dynamicTrendsActive
+                      ? "bg-[var(--amber-soft)] text-[var(--amber-base)] border-[var(--amber-line)] shadow-sm"
+                      : "bg-[var(--bg-surface)] text-[var(--text-tertiary)] border-[var(--border-subtle)] hover:text-[var(--text-secondary)]"
+                  }`}
+                >
+                  <Zap size={13} className={dynamicTrendsActive ? "fill-current" : ""} />
+                  <span>Tendencias Dinámicas</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -903,11 +975,12 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
               <button
                 type="button"
                 onClick={clearCart}
-                className="text-[var(--text-tertiary)] hover:text-[var(--danger-base)] p-1.5 rounded-lg hover:bg-[var(--danger-soft)] transition-all cursor-pointer"
+                className="bg-[var(--danger-soft)] text-[var(--danger-base)] border border-[var(--danger-line)] hover:bg-[var(--danger-base)] hover:text-white px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
                 title="Vaciar carrito"
                 aria-label="Vaciar carrito"
               >
-                <Trash2 size={14} />
+                <Trash2 size={13} />
+                <span>Vaciar</span>
               </button>
             )}
           </div>

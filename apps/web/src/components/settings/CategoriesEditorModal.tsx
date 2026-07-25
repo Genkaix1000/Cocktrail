@@ -123,7 +123,11 @@ export default function CategoriesEditorModal({
             <GripHorizontal size={13} className="opacity-50 shrink-0" aria-hidden />
             <span className="font-mono text-[10px] opacity-70 tabular w-4 text-center">{c.sortOrder}</span>
             <span className="max-w-[140px] truncate">{c.name}</span>
-            {confirmId === c.id ? (
+            {c.name.toLowerCase().startsWith("tendencia") ? (
+              <span className="text-[10px] opacity-60 px-1.5 py-0.5 rounded bg-black/10 select-none">
+                Sistema
+              </span>
+            ) : confirmId === c.id ? (
               <span className="flex items-center gap-0.5">
                 <button
                   type="button"

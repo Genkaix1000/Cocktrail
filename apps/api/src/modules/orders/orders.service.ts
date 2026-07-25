@@ -104,7 +104,7 @@ export class OrdersService {
           throw new Conflict("La verificación de pagos no está configurada en el servidor.");
         }
       }
-      if (verifyPayment) {
+      if (verifyPayment && input.paymentMethod !== "cortesia") {
         const proofInput = input.payment
           ? { proof: input.payment, expectedAmount: total, method: input.paymentMethod }
           : { expectedAmount: total, method: input.paymentMethod };

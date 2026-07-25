@@ -32,9 +32,10 @@ type Props = {
   drinks: Drink[];
   categories: DrinkCategory[];
   currentUser: CurrentUser;
+  onReloadCarta?: () => Promise<void>;
 };
 
-export default function CajaClient({ drinks, categories, currentUser }: Props) {
+export default function CajaClient({ drinks, categories, currentUser, onReloadCarta }: Props) {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<"venta" | "historial" | "metricas">("venta");
@@ -269,7 +270,13 @@ export default function CajaClient({ drinks, categories, currentUser }: Props) {
                         : "hidden"
                     }
                   >
-                    <VentaSection drinks={drinks} categories={categories} printer={ventaPrinter} />
+                    <VentaSection
+                      drinks={drinks}
+                      categories={categories}
+                      printer={ventaPrinter}
+                      orders={activeNightOrders}
+                      onReloadCarta={onReloadCarta}
+                    />
                   </div>
 
                   <div

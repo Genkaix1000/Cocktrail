@@ -245,5 +245,25 @@ export default function CajaPage() {
     );
   }
 
-  return <CajaClient drinks={drinks} categories={categories} currentUser={currentUser} />;
+  const reloadCarta = useCallback(async () => {
+    try {
+      const [drinksData, categoriesData] = await Promise.all([
+        drinksService.list(),
+        drinkCategoriesService.list(),
+      ]);
+      setDrinks(drinksData);
+      setCategories(categoriesData);
+    } catch (err) {
+      console.error("Error al recargar la carta:", err);
+    }
+  }, []);
+
+  return (
+    <CajaClient
+      drinks={drinks}
+      categories={categories}
+      currentUser={currentUser}
+      onReloadCarta={reloadCarta}
+    />
+  );
 }

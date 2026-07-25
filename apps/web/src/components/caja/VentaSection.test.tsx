@@ -622,4 +622,53 @@ describe("VentaSection", () => {
       expect(await screen.findByText("¡Cobro Concretado!")).toBeInTheDocument();
     });
   });
+
+  describe("Mejoras de Tendencias, Recarga de Carta y Vaciar Carrito", () => {
+    it("renderiza el botón de recargar carta y dispara la función onReloadCarta al hacer click", async () => {
+      const onReloadCarta = vi.fn().mockResolvedValue(undefined);
+      render(
+        <VentaSection
+          drinks={[makeDrink()]}
+          categories={[]}
+          printer={printer}
+          onReloadCarta={onReloadCarta}
+        />,
+      );
+
+      const reloadBtn = screen.getByRole("button", { name: /recargar/i });
+      expect(reloadBtn).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(reloadBtn);
+
+      expect(onReloadCarta).toHaveBeenCalledTimes(1);
+    });
+
+    it("muestra el botón de vaciar carrito con el label 'Vaciar' al agregar productos", async () => {
+      render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
+      const user = await addFirstDrinkToCart();
+
+      const clearBtn = screen.getByRole("button", { name: /vaciar carrito/i });
+      expect(clearBtn).toBeInTheDocument();
+      expect(clearBtn).toHaveTextContent("Vaciar");
+
+      await user.click(clearBtn);
+      expect(screen.queryByRole("button", { name: /vaciar carrito/i })).not.toBeInTheDocument();
+    });
+
+    it("activa y desactiva el botón de Tendencias Dinámicas", async () => {
+      render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
+      await waitForProductsGrid();
+
+      const trendsBtn = screen.getByRole("button", { name: /tendencias dinámicas/i });
+      expect(trendsBtn).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(trendsBtn);
+      expect(trendsBtn).toHaveClass("bg-[var(--amber-soft)]");
+
+      await user.click(trendsBtn);
+      expect(trendsBtn).not.toHaveClass("bg-[var(--amber-soft)]");
+    });
+  });
 });
