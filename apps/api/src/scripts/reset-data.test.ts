@@ -79,6 +79,7 @@ describe("countRows", () => {
 describe("resetData", () => {
   it("borra todas las tablas de TABLES_TO_RESET por defecto (incluye las MP transaccionales)", async () => {
     const { client, calls } = makeFakeClient({
+      orders: { count: 5 },
       mp_orders: { count: 7 },
       mp_webhook_events: { count: 4 },
       night_events: { count: 3 },
@@ -89,6 +90,7 @@ describe("resetData", () => {
     const deleted = await resetData(client);
 
     expect(deleted).toEqual({
+      orders: 5,
       mp_orders: 7,
       mp_webhook_events: 4,
       night_events: 3,
@@ -158,6 +160,7 @@ describe("resetData", () => {
     // Caso real: mp_webhook_events es local-only, en Cloud no existe → el
     // count ya falla con PGRST205 y ni se intenta el delete.
     const { client, calls } = makeFakeClient({
+      orders: { count: 5 },
       mp_orders: { count: 7 },
       mp_webhook_events: {
         countError: {
@@ -173,6 +176,7 @@ describe("resetData", () => {
     const deleted = await resetData(client);
 
     expect(deleted).toEqual({
+      orders: 5,
       mp_orders: 7,
       mp_webhook_events: null,
       night_events: 3,

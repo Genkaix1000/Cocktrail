@@ -2,13 +2,17 @@ import { Conflict, NotFound } from "../../shared/errors/http-errors.js";
 import type { BarsRepository } from "../mercadopago/bars.repository.js";
 import type { BarSessionsRepository, BarSession } from "./bar-sessions.repository.js";
 
-export const BAR_SESSION_TTL_MS = 2 * 60 * 1000;
+export const BAR_SESSION_TTL_MS = 10 * 60 * 1000;
 
 /**
  * D6: la identidad de la sesión de caja deriva de la sesión autenticada
  * (rol + usuario), no del navegador. Sin deviceId por pestaña: reentrar
  * desde cualquier pestaña devuelve la propia caja, y el logout la libera
  * de verdad. El TTL queda solo como red de seguridad (corte de luz).
+ *
+ * 10 min y no 2: con heartbeat cada 30s, 2 min liberaba la caja ante un
+ * WiFi inestable y devolvía a la cajera al selector en plena venta. Una caja
+ * realmente muerta la libera el admin con force-logout, sin esperar el TTL.
  */
 export type AuthenticatedUser = { username: string; role: "caja" | "admin" };
 

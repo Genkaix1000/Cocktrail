@@ -51,7 +51,9 @@ export default function Toast({
   onClose,
 }: Props) {
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const timer = setTimeout(() => onCloseRef.current(), duration);

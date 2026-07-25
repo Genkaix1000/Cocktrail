@@ -48,9 +48,9 @@ describe("POST/PATCH/DELETE /api/drinks (admin only)", () => {
     const res = await request(app)
       .post("/api/drinks")
       .set("Cookie", cookie)
-      .send({ name: "Mojito", price: 2800, description: "", vibe: "", flavors: [], iconName: "glass-water", trending: false, promo: false, available: true });
+      .send({ name: "TragoTest", price: 2800, description: "", vibe: "", flavors: [], iconName: "glass-water", trending: false, promo: false, available: true });
     expect(res.status).toBe(201);
-    expect(res.body.name).toBe("Mojito");
+    expect(res.body.name).toBe("TragoTest");
 
     const list = await request(app).get("/api/drinks");
     expect(list.body.some((d: any) => d.id === res.body.id)).toBe(true);

@@ -239,7 +239,7 @@ export function useCheckout({
     setSaleError(null);
     try {
       const items = Object.entries(cart).map(([idStr, qty]) => ({ drinkId: Number(idStr), qty }));
-      const order = await ordersService.create({ items, paymentMethod, isGift: paymentMethod === "cortesia" });
+      const order = await ordersService.create({ items, paymentMethod });
 
       setLatestOrder(order);
       clearCart();

@@ -69,14 +69,19 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                // Cubre también las navegaciones client-side de Next (pushState),
+                // que no disparan onPageFinished.
+                override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                    if (url.startsWith("http")) savePath(url)
+                }
+
                 override fun onReceivedError(
                     view: WebView,
                     request: WebResourceRequest,
                     error: WebResourceError,
                 ) {
                     if (request.isForMainFrame && request.url.scheme in listOf("http", "https")) {
-                        operationId++
-                        showConnectionPage("error", LOAD_FAILED_MESSAGE)
+                        reconnect()
                     }
                 }
             }
@@ -112,9 +117,48 @@ class MainActivity : AppCompatActivity() {
         prefs().edit().putString(KEY_SERVER, base.trimEnd('/')).apply()
     }
 
+    /** Última pantalla abierta: al reconectar se vuelve ahí, no al login. */
+    private fun savePath(url: String) {
+        val path = Uri.parse(url).path?.takeIf { it.isNotEmpty() } ?: return
+        prefs().edit().putString(KEY_PATH, path).apply()
+    }
+
     private fun loadServer(base: String) {
         connectPageReady = false
-        webView.loadUrl("${base.trimEnd('/')}/login")
+        webView.loadUrl("${base.trimEnd('/')}${prefs().getString(KEY_PATH, null) ?: "/login"}")
+    }
+
+    /**
+     * Un microcorte de WiFi no puede expulsar a la caja al buscador de servidores:
+     * se sondea el server guardado unas cuantas veces antes de darlo por perdido.
+     */
+    private fun reconnect() {
+        val base = savedServer()
+        if (base == null) {
+            operationId++
+            showConnectionPage("error", LOAD_FAILED_MESSAGE)
+            return
+        }
+
+        val currentOperation = ++operationId
+        showConnectionPage("searching", RECONNECTING_MESSAGE)
+        Thread {
+            repeat(RECONNECT_ATTEMPTS) {
+                if (currentOperation != operationId) return@Thread
+                if (ServerFinder.isServer(base)) {
+                    main.post {
+                        if (currentOperation != operationId) return@post
+                        loadServer(base)
+                    }
+                    return@Thread
+                }
+                Thread.sleep(RECONNECT_DELAY_MS)
+            }
+            main.post {
+                if (currentOperation != operationId) return@post
+                showConnectionPage("error", LOAD_FAILED_MESSAGE)
+            }
+        }.start()
     }
 
     private fun startDiscovery() {
@@ -206,8 +250,17 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS = "miboliche_caja"
         private const val KEY_SERVER = "server_base"
+        private const val KEY_PATH = "last_path"
         private const val APP_SCHEME = "miboliche"
         private const val CONNECT_PAGE = "file:///android_asset/connect.html"
+
+        // ~20s de tolerancia (isServer corta a 2.5s por intento) — cubre el
+        // microcorte de WiFi sin dejar colgada una tablet con el server caído.
+        private const val RECONNECT_ATTEMPTS = 5
+        private const val RECONNECT_DELAY_MS = 1500L
+
+        private const val RECONNECTING_MESSAGE =
+            "Se cortó la conexión con el servidor. Reintentando…"
         private const val SEARCHING_MESSAGE =
             "Estamos buscando la computadora del local en esta red. Puede tardar unos segundos."
         private const val NOT_FOUND_MESSAGE =

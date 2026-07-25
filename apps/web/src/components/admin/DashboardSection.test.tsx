@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, renderHook, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 
 import DashboardSection from "./DashboardSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
@@ -49,7 +50,7 @@ function makeProps(overrides: {
   orders?: Order[];
   totals?: EventTotals;
   historyEvents?: EventSummary[];
-  customPaymentBreakdown?: any[];
+  customPaymentBreakdown?: ComponentProps<typeof DashboardSection>["customPaymentBreakdown"];
   isFirstLoad?: boolean;
   isTabTransitioning?: boolean;
   activeTab?: string;

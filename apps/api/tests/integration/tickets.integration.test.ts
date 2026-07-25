@@ -20,13 +20,14 @@ async function openNightEvent() {
   expect(res.status).toBe(201);
 }
 
-// Se crea sin cookie de sesión (createdBy = "Cliente") a propósito: el ticket se genera
-// igual, pero evita que OrdersService dispare renderTicket (solo arma
-// para ventas de staff) — con la impresora física ya desconectada, ese write síncrono a
-// /dev/usb/lp* puede quedar colgado y trabar el test.
+// POST /api/orders es staff-only desde el hardening de rutas: va con cookie de
+// admin. El renderTicket que dispara una venta de staff solo arma los bytes
+// ESC/POS en memoria (la impresión física es por WebUSB en el navegador), así
+// que no hay I/O a la impresora que pueda colgar el test.
 async function createOrderWithTicket(drinkId: number) {
   const res = await request(app)
     .post("/api/orders")
+    .set("Cookie", adminCookie)
     .send({ items: [{ drinkId, qty: 1 }], paymentMethod: "efectivo" });
   expect(res.status).toBe(201);
   return res.body as { id: string; token: string; ticketCode?: string; displayNumber: number };
@@ -115,8 +116,8 @@ describe("POST /api/tickets/redeem (integración)", () => {
     const winner = res1.status === 200 ? res1 : res2;
     expect(winner.body.order.status).toBe("entregado");
 
-    // El pedido quedó "entregado" una sola vez (endpoint público por token, no requiere rol).
-    const finalOrder = await request(app).get(`/api/orders/by-token/${order.token}`);
+    // El pedido quedó "entregado" una sola vez (consulta por token, staff only).
+    const finalOrder = await request(app).get(`/api/orders/by-token/${order.token}`).set("Cookie", adminCookie);
     expect(finalOrder.body.status).toBe("entregado");
   });
 

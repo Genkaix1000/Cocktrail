@@ -593,34 +593,6 @@ describe("VentaSection", () => {
 
       expect(await screen.findByText("¡Cobro Concretado!")).toBeInTheDocument();
     });
-
-    it("permite procesar un Pago Dividido", async () => {
-      const order = makeOrder({ total: 2500, paymentMethod: "split" });
-      mockedOrdersService.create.mockResolvedValue(order);
-
-      render(<VentaSection drinks={[makeDrink({ price: 2500 })]} categories={[]} printer={printer} />);
-      const user = await addFirstDrinkToCart();
-
-      const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
-      await user.click(cobrarButtons[0]);
-
-      const splitButton = await screen.findByRole("button", { name: /pago dividido/i });
-      await user.click(splitButton);
-
-      expect(await screen.findByText(/Pago Dividido \(Efectivo \+ QR\)/i)).toBeInTheDocument();
-
-      const confirmBtn = screen.getByRole("button", { name: /confirmar pago dividido/i });
-      await user.click(confirmBtn);
-
-      await waitFor(() =>
-        expect(mockedOrdersService.create).toHaveBeenCalledWith({
-          items: [{ drinkId: 1, qty: 1 }],
-          paymentMethod: "split",
-        }),
-      );
-
-      expect(await screen.findByText("¡Cobro Concretado!")).toBeInTheDocument();
-    });
   });
 
   describe("Mejoras de Tendencias, Recarga de Carta y Vaciar Carrito", () => {

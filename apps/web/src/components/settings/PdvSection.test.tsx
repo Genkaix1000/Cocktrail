@@ -97,7 +97,16 @@ const HEALTH = {
 };
 
 beforeEach(() => {
-  mockedUseTheme.mockReturnValue({ theme: "bosko", setTheme: vi.fn(), isDark: true } as any);
+  mockedUseTheme.mockReturnValue({
+    theme: "bosko",
+    useLogoUrl: false,
+    logoUrl: "",
+    logoSize: 0,
+    textLogoValue: "",
+    textLogoSize: 0,
+    isDark: true,
+    toggleDark: vi.fn(),
+  });
   mockedPdvService.listCajas.mockResolvedValue([]);
   mockedPdvService.listDevices.mockResolvedValue([]);
   mockedPdvService.listMpDevices.mockResolvedValue(MP_LISTING);

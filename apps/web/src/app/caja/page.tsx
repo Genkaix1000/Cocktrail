@@ -96,6 +96,7 @@ export default function CajaPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let retryTimer: number | undefined;
 
     async function initialize() {
       try {
@@ -110,9 +111,18 @@ export default function CajaPage() {
           return;
         }
         setCurrentUser(user);
-      } catch {
-        router.push("/login");
-        setLoading(false);
+      } catch (err) {
+        // Sin sesión, /api/auth/me responde null (200): un throw acá es red
+        // caída o 401. Mandar a /login por un microcorte obliga a la cajera a
+        // re-loguearse con la cookie todavía válida — mejor reintentar.
+        if (err instanceof ApiError && err.status === 401) {
+          router.push("/login");
+          setLoading(false);
+          return;
+        }
+        if (!controller.signal.aborted) {
+          retryTimer = window.setTimeout(() => void initialize(), 3_000);
+        }
         return;
       }
 
@@ -133,7 +143,10 @@ export default function CajaPage() {
     }
 
     void initialize();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      window.clearTimeout(retryTimer);
+    };
   }, [applyOptions, router]);
 
   useEffect(() => {
@@ -218,6 +231,20 @@ export default function CajaPage() {
     router.refresh();
   }
 
+  // Debe vivir arriba de los early returns: Rules of Hooks.
+  const reloadCarta = useCallback(async () => {
+    try {
+      const [drinksData, categoriesData] = await Promise.all([
+        drinksService.list(),
+        drinkCategoriesService.list(),
+      ]);
+      setDrinks(drinksData);
+      setCategories(categoriesData);
+    } catch (err) {
+      console.error("Error al recargar la carta:", err);
+    }
+  }, []);
+
   if (loading || (activeBarId && loadedBarId !== activeBarId)) {
     return (
       <main className="min-h-[100dvh] bg-ink-950 text-ink-50 flex items-center justify-center">
@@ -244,19 +271,6 @@ export default function CajaPage() {
       />
     );
   }
-
-  const reloadCarta = useCallback(async () => {
-    try {
-      const [drinksData, categoriesData] = await Promise.all([
-        drinksService.list(),
-        drinkCategoriesService.list(),
-      ]);
-      setDrinks(drinksData);
-      setCategories(categoriesData);
-    } catch (err) {
-      console.error("Error al recargar la carta:", err);
-    }
-  }, []);
 
   return (
     <CajaClient

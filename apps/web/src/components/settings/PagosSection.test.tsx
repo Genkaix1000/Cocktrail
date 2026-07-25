@@ -68,7 +68,16 @@ const SUMMARY = {
 };
 
 beforeEach(() => {
-  mockedUseTheme.mockReturnValue({ theme: "bosko", setTheme: vi.fn(), isDark: true } as any);
+  mockedUseTheme.mockReturnValue({
+    theme: "bosko",
+    useLogoUrl: false,
+    logoUrl: "",
+    logoSize: 0,
+    textLogoValue: "",
+    textLogoSize: 0,
+    isDark: true,
+    toggleDark: vi.fn(),
+  });
   mockedMpService.getSellerStatus.mockResolvedValue(UNLINKED_STATUS);
   mockedMpService.getOAuthUrl.mockResolvedValue({ url: "https://auth.mercadopago.com/authorization?..." });
   mockedMpService.unlinkSeller.mockResolvedValue({ ok: true, cloudCleaned: true });
@@ -77,10 +86,10 @@ beforeEach(() => {
   mockedBarSessions.forceLogout.mockResolvedValue({ ok: true });
   mockedConfigService.get.mockResolvedValue({
     mercadoPago: { publicKey: "", accessTokenMasked: "", sandbox: false },
-  } as any);
+  } as Awaited<ReturnType<typeof configService.get>>);
   mockedConfigService.update.mockResolvedValue({
     mercadoPago: { publicKey: "", accessTokenMasked: "", sandbox: true },
-  } as any);
+  } as Awaited<ReturnType<typeof configService.update>>);
 });
 
 describe("PagosSection", () => {

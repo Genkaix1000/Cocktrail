@@ -763,10 +763,9 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                   onClick={handleReloadCarta}
                   disabled={isReloadingCarta}
                   title="Recargar Carta"
-                  className="h-10 px-3 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bold)] transition-all flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+                  className="h-10 w-10 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bold)] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
                 >
                   <RotateCw size={13} className={isReloadingCarta ? "animate-spin" : ""} />
-                  <span className="hidden sm:inline">Recargar</span>
                 </button>
               )}
 
@@ -1500,6 +1499,10 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                         </div>
                         <span className="font-bold text-xs text-ink-50">Cortesía / Regalo</span>
                       </button>
+
+                      {/* ponytail: split payment UI existe más abajo pero el flujo real
+                          (QR del remanente + prueba de pago) no está cableado — oculto
+                          del selector hasta que se implemente. */}
                     </div>
                   </div>
                 ) : (

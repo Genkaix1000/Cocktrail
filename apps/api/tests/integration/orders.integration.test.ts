@@ -17,10 +17,11 @@ import {
 // memoria, así que se abre una única vez vía la API real para todo este archivo.
 const adminCookie = signTestSession("admin-test", "admin");
 
-async function createOrder(body: unknown, cookie?: string) {
-  const req = request(app).post("/api/orders");
-  if (cookie) req.set("Cookie", cookie);
-  return req.send(body as object);
+// Crear pedidos es staff-only desde el hardening de rutas: sin cookie el
+// endpoint corta en 401 antes de validar el body, así que el default es admin y
+// los tests que miran el 401 arman el request a mano.
+async function createOrder(body: unknown, cookie: string = adminCookie) {
+  return request(app).post("/api/orders").set("Cookie", cookie).send(body as object);
 }
 
 describe("orders (integración)", () => {
@@ -55,11 +56,18 @@ describe("orders (integración)", () => {
       expect(res.status).toBe(404);
     });
 
-    it("crea un pedido público como 'Cliente' cuando no hay cookie de sesión", async () => {
+    it("sin cookie de sesión responde 401 (ya no hay alta pública de pedidos)", async () => {
+      const drink = await createTestDrink({ price: 1000 });
+      const res = await request(app)
+        .post("/api/orders")
+        .send({ items: [{ drinkId: drink.id, qty: 2 }], paymentMethod: "efectivo" });
+      expect(res.status).toBe(401);
+    });
+
+    it("con sesión de staff calcula el total y arranca en 'pendiente'", async () => {
       const drink = await createTestDrink({ price: 1000 });
       const res = await createOrder({ items: [{ drinkId: drink.id, qty: 2 }], paymentMethod: "efectivo" });
       expect(res.status).toBe(201);
-      expect(res.body.createdBy).toBe("Cliente");
       expect(res.body.total).toBe(2000);
       expect(res.body.status).toBe("pendiente");
     });
@@ -218,16 +226,21 @@ describe("orders (integración)", () => {
     });
   });
 
-  describe("GET /api/orders/by-token/:token (público)", () => {
-    it("con un token inexistente responde 404", async () => {
+  describe("GET /api/orders/by-token/:token (staff only)", () => {
+    it("sin sesión responde 401", async () => {
       const res = await request(app).get("/api/orders/by-token/no-existe");
+      expect(res.status).toBe(401);
+    });
+
+    it("con un token inexistente responde 404", async () => {
+      const res = await request(app).get("/api/orders/by-token/no-existe").set("Cookie", adminCookie);
       expect(res.status).toBe(404);
     });
 
     it("con un token real, devuelve el pedido", async () => {
       const drink = await createTestDrink();
       const created = await createOrder({ items: [{ drinkId: drink.id, qty: 1 }], paymentMethod: "efectivo" });
-      const res = await request(app).get(`/api/orders/by-token/${created.body.token}`);
+      const res = await request(app).get(`/api/orders/by-token/${created.body.token}`).set("Cookie", adminCookie);
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(created.body.id);
     });

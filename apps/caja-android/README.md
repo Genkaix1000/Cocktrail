@@ -10,6 +10,10 @@ buscar de nuevo o escribir la dirección a mano (la muestra `/admin` → Sistema
 La pantalla vive dentro del APK, así que funciona aunque el server no responda;
 la operación del sistema sigue requiriendo conexión.
 
+Ante un corte, el shell reintenta el server guardado ~20s antes de mostrar esa
+pantalla, y al volver reabre la última ruta visitada (no `/login`): un microcorte
+de WiFi ya no manda a la cajera a loguearse de nuevo.
+
 ## Build
 
 Requisitos: Android Studio (aporta el JDK) o SDK + JDK 17+.

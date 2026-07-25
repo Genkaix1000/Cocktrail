@@ -19,8 +19,22 @@ const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 export const TEST_DRINK_ID_FLOOR = 200;
 export const TEST_USERNAME_PREFIX = "test-";
 
-/** Borra night_events (cascadea orders/tickets/cash_sales vía ON DELETE CASCADE). */
+/**
+ * Borra night_events (cascadea orders/tickets/cash_sales vía ON DELETE CASCADE).
+ *
+ * `mp_orders.event_id` es la excepción: referencia night_events SIN cascade, así
+ * que hay que desvincularla ANTES o el delete falla por FK (mismo orden que
+ * respeta TABLES_TO_RESET en scripts/reset-data.ts). Se pone en NULL en vez de
+ * borrar: los cobros son historial real de la DB local compartida y no son
+ * hijos de la noche.
+ */
 export async function cleanNightEvents(): Promise<void> {
+  const { error: unlinkError } = await supabase
+    .from("mp_orders")
+    .update({ event_id: null })
+    .not("event_id", "is", null);
+  if (unlinkError) throw unlinkError;
+
   const { error } = await supabase.from("night_events").delete().neq("id", NIL_UUID);
   if (error) throw error;
 }
