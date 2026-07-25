@@ -103,8 +103,19 @@ export default function DrinkFormModal({
           <label className="text-[13px] font-semibold text-[var(--text-primary)] block mb-1.5">Precio *</label>
           <input
             type="number"
-            value={editDrink.price || ""}
-            onChange={(e) => onChange({ price: Number(e.target.value) })}
+            min={0}
+            value={editDrink.price === 0 ? "" : editDrink.price}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") {
+                onChange({ price: 0 });
+              } else {
+                const parsed = parseInt(raw, 10);
+                if (!isNaN(parsed)) {
+                  onChange({ price: parsed });
+                }
+              }
+            }}
             className={`${inputCls} font-mono`}
             placeholder="5500"
           />

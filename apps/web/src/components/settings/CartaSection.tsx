@@ -561,7 +561,7 @@ export default function CartaSection() {
             editDrink={editDrink}
             categories={categories}
             saving={saving}
-            onChange={(patch) => setEditDrink({ ...editDrink, ...patch })}
+            onChange={(patch) => setEditDrink((prev) => ({ ...(prev ?? makeEmptyForm()), ...patch } as DrinkForm))}
             onCancel={closeSidePanel}
             onSave={handleSave}
           />
