@@ -796,3 +796,86 @@ describe("useCheckout — cobro QR (integridad)", () => {
     expect(listPendingSales()).toEqual([]);
   });
 });
+
+describe("useCheckout — confirmOrder (efectivo / cortesía)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function openCashCheckout() {
+    const hook = setupHook();
+    await act(async () => {
+      hook.result.current.handleOpenCheckout();
+      hook.result.current.setPaymentMethod("efectivo");
+      hook.result.current.handleChangeCash("2500");
+    });
+    return hook;
+  }
+
+  it("manda idempotencyKey en el POST", async () => {
+    mockedOrdersService.create.mockResolvedValue(makeOrder({ paymentMethod: "efectivo" }));
+    const { result } = await openCashCheckout();
+
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+
+    expect(mockedOrdersService.create).toHaveBeenCalledWith({
+      items: [{ drinkId: 1, qty: 1 }],
+      paymentMethod: "efectivo",
+      idempotencyKey: expect.any(String),
+    });
+  });
+
+  it("reintento tras fallo de red reusa la misma key (no duplica la fantasma)", async () => {
+    mockedOrdersService.create
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce(makeOrder({ paymentMethod: "efectivo" }));
+
+    const { result } = await openCashCheckout();
+
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+    expect(result.current.saleError).toBe("network down");
+
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+
+    expect(mockedOrdersService.create).toHaveBeenCalledTimes(2);
+    const key1 = mockedOrdersService.create.mock.calls[0][0].idempotencyKey;
+    const key2 = mockedOrdersService.create.mock.calls[1][0].idempotencyKey;
+    expect(key1).toBeTruthy();
+    expect(key2).toBe(key1);
+    expect(result.current.latestOrder).not.toBeNull();
+  });
+
+  it("tras un cobro OK, el próximo intento genera key nueva", async () => {
+    mockedOrdersService.create.mockResolvedValue(makeOrder({ paymentMethod: "efectivo" }));
+    const { result } = await openCashCheckout();
+
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+    const keyFirst = mockedOrdersService.create.mock.calls[0][0].idempotencyKey;
+
+    // Nueva venta: reabrir checkout (como hace la UI) + rearmar monto.
+    await act(async () => {
+      result.current.handleOpenCheckout();
+      result.current.setPaymentMethod("efectivo");
+      result.current.handleChangeCash("2500");
+    });
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+
+    const keySecond = mockedOrdersService.create.mock.calls[1][0].idempotencyKey;
+    expect(keySecond).toBeTruthy();
+    expect(keySecond).not.toBe(keyFirst);
+  });
+});

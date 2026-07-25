@@ -234,13 +234,21 @@ export function useCheckout({
     if (isSubmittingRef.current || submitting || totalItems === 0 || !paymentMethod) return;
     if (paymentMethod === "efectivo" && !canConfirmCash) return;
 
+    // Misma semilla que QR/Posnet: un POST que llega al server pero no a la
+    // tablet (microcorte) no puede duplicar la venta al reintentar.
+    if (!paymentAttemptIdRef.current) {
+      paymentAttemptIdRef.current = randomId();
+    }
+    const idempotencyKey = paymentAttemptIdRef.current;
+
     isSubmittingRef.current = true;
     setSubmitting(true);
     setSaleError(null);
     try {
       const items = Object.entries(cart).map(([idStr, qty]) => ({ drinkId: Number(idStr), qty }));
-      const order = await ordersService.create({ items, paymentMethod });
+      const order = await ordersService.create({ items, paymentMethod, idempotencyKey });
 
+      resetPaymentAttempt();
       setLatestOrder(order);
       clearCart();
       if (order.ticketData && printTicketData) {
@@ -257,7 +265,7 @@ export function useCheckout({
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
-  }, [cart, canConfirmCash, clearCart, paymentMethod, printTicketData, submitting, totalItems]);
+  }, [cart, canConfirmCash, clearCart, paymentMethod, printTicketData, resetPaymentAttempt, submitting, totalItems]);
 
   const buildPendingSale = useCallback(
     (method: "qr" | "debito", mpRef: string, idempotencyKey?: string): PendingSale => ({

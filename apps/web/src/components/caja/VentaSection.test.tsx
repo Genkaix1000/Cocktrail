@@ -225,6 +225,7 @@ describe("VentaSection", () => {
       expect(mockedOrdersService.create).toHaveBeenCalledWith({
         items: [{ drinkId: 1, qty: 1 }],
         paymentMethod: "efectivo",
+        idempotencyKey: expect.any(String),
       }),
     );
 
@@ -588,6 +589,7 @@ describe("VentaSection", () => {
         expect(mockedOrdersService.create).toHaveBeenCalledWith({
           items: [{ drinkId: 1, qty: 1 }],
           paymentMethod: "cortesia",
+          idempotencyKey: expect.any(String),
         }),
       );
 
