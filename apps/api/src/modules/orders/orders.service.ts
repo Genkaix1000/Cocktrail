@@ -87,7 +87,7 @@ export class OrdersService {
 
     let verdict: PaymentVerdict = { result: "no_aplica" };
     if (esVentaDeCaja) {
-      if (input.paymentMethod !== "efectivo") {
+      if (input.paymentMethod !== "efectivo" && input.paymentMethod !== "cortesia") {
         if (!schemaReady) {
           throw new Conflict(
             "El cobro con QR/Posnet está bloqueado: faltan aplicar migraciones de base (ver banner de /admin). El efectivo sigue funcionando.",
@@ -145,6 +145,10 @@ export class OrdersService {
       order.paymentRecordId = verdict.proofRecordId;
     } else if (esVentaDeCaja && input.paymentMethod === "efectivo" && schemaReady) {
       // El escape del efectivo es irreductible: nadie verifica billetes server-side.
+      order.paymentStatus = "cobrado";
+    } else if (input.paymentMethod === "cortesia") {
+      order.total = 0;
+      order.isGift = true;
       order.paymentStatus = "cobrado";
     }
     // /carta ("Cliente"): sin paymentStatus → la DB aplica el default 'desconocido'.

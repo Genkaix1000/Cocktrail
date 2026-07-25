@@ -41,12 +41,12 @@ function d(
 
 /** Carta real (40). Imágenes solo donde ya hay asset en /public. */
 export const SEED_DRINKS: SeedDrink[] = [
-  d(1, "Andes", 5000, "tendencias", { iconName: "beer", image: "/drinks/andes.jpg", sortOrder: 5 }),
+  d(1, "Andes", 5000, "tendencias", { iconName: "beer", image: "/drinks/andes_origen.webp", sortOrder: 5 }),
   d(2, "Corona", 6000, "tendencias", { iconName: "beer", image: "/drinks/corona.jpg", sortOrder: 4 }),
 
   d(3, "Vodka con jugo", 7000, "vodkas", { iconName: "zap", image: "/drinks/vodka_jugo.jpg" }),
   d(4, "Vodka con Speed", 8000, "tendencias", { iconName: "zap", image: "/vodka.webp", sortOrder: 1 }),
-  d(5, "Absolut con Speed", 11000, "tendencias", { iconName: "zap", image: "/vodka.webp", sortOrder: 2 }),
+  d(5, "Absolut con Speed", 11000, "tendencias", { iconName: "zap", image: "/drinks/absolut_speed.webp", sortOrder: 2 }),
   d(6, "Absolut con RedBull", 13000, "vodkas", { iconName: "zap", image: "/drinks/absolut_redbull.jpg" }),
 
   d(7, "Whisky con coca", 7000, "whiskys", { iconName: "wine", image: "/drinks/whisky_coca.jpg" }),
@@ -54,7 +54,7 @@ export const SEED_DRINKS: SeedDrink[] = [
   d(9, "Whisky con Speed", 8000, "whiskys", { iconName: "wine", image: "/drinks/whisky_coca.jpg" }),
   d(10, "Whisky Red Label con Speed", 10000, "whiskys", { iconName: "wine", image: "/drinks/whisky_coca.jpg" }),
 
-  d(11, "Gin (Trago Estándar)", 7000, "tendencias", { iconName: "martini", image: "/drinks/gin.jpg", sortOrder: 6 }),
+  d(11, "Gin Fisherman", 7000, "tendencias", { iconName: "martini", image: "/drinks/gin_fisherman.webp", sortOrder: 6 }),
   d(12, "Sur (Sur Gin)", 8000, "gines", { iconName: "martini", image: "/drinks/gin.jpg" }),
   d(13, "Beefeater", 9000, "gines", { iconName: "martini", image: "/drinks/beefeater.jpg" }),
   d(14, "Bombay", 12000, "gines", { iconName: "martini", image: "/drinks/bombay.jpg" }),
@@ -77,14 +77,14 @@ export const SEED_DRINKS: SeedDrink[] = [
   d(28, "Melón con Speed", 8000, "tragos-aperitivos", { iconName: "zap", image: "/vodka.webp" }),
   d(29, "Malibú", 8000, "tragos-aperitivos", { image: "/drinks/malibu.jpg" }),
 
-  d(30, "Agua", 3000, "tendencias", { iconName: "droplet", image: "/drinks/gin.jpg", sortOrder: 9 }),
+  d(30, "Agua", 3000, "tendencias", { iconName: "droplet", image: "/drinks/agua_mineral.webp", sortOrder: 9 }),
   d(31, "Gaseosa", 3000, "sin-alcohol", { iconName: "cup-soda", image: "/drinks/whisky_coca.jpg" }),
   d(32, "Speed", 5000, "sin-alcohol", { iconName: "zap", image: "/vodka.webp" }),
   d(33, "RedBull", 6000, "sin-alcohol", { iconName: "zap", image: "/drinks/redbull.jpg" }),
 
-  d(34, "Champagne Renacer + 2 Speed", 18000, "tendencias", {
+  d(34, "Champagne Renaissance + 2 Speed", 18000, "tendencias", {
     iconName: "wine",
-    image: "/drinks/champagne.jpg",
+    image: "/drinks/champagne_renaissance_speed.webp",
     sortOrder: 8,
   }),
   d(35, "Champagne Chandon o María + 2 Speed", 48000, "promos-combos", {

@@ -221,6 +221,9 @@ export default function SistemaSection() {
 
           {result && (
             <div className="flex flex-col gap-2 mt-5 pt-4 border-t border-[var(--border-subtle)]">
+              <p className="text-[12px] text-[var(--text-tertiary)] mb-1">
+                Volvé a vincular la cuenta de MP por OAuth desde la tarjeta de Pagos si restauraste cajas o terminales.
+              </p>
               {(Object.keys(TABLE_LABELS) as (keyof RestoreResult)[]).map((key) => (
                 <TableResultRow key={key} label={TABLE_LABELS[key]} result={result[key]} />
               ))}

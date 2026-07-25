@@ -36,7 +36,7 @@ export const CreateOrderSchema = z.object({
     )
     .min(1, "El pedido debe tener al menos 1 ítem")
     .max(50, "Máximo 50 ítems por pedido"),
-  paymentMethod: z.enum(["efectivo", "qr", "debito"], {
+  paymentMethod: z.enum(["efectivo", "qr", "debito", "cortesia", "split"], {
     errorMap: () => ({ message: "Método de pago inválido" }),
   }),
   // Ojo: validate() reemplaza req.body por result.data — si un campo no está
@@ -51,6 +51,16 @@ export const CreateOrderSchema = z.object({
   idempotencyKey: z
     .string()
     .regex(/^[A-Za-z0-9-]{16,64}$/, "idempotencyKey inválida: alfanumérica (con guiones) de 16 a 64 caracteres")
+    .optional(),
+  isGift: z.boolean().optional(),
+  isSplit: z.boolean().optional(),
+  payments: z
+    .array(
+      z.object({
+        method: z.enum(["efectivo", "qr", "debito", "cortesia", "split"]),
+        amount: z.number().positive(),
+      })
+    )
     .optional(),
 });
 

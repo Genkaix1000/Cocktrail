@@ -43,7 +43,12 @@ export type OrderStatus =
   | "entregado"
   | "cancelado";
 
-export type PaymentMethod = "efectivo" | "qr" | "debito";
+export type PaymentMethod = "efectivo" | "qr" | "debito" | "cortesia" | "split";
+
+export type OrderPaymentDetail = {
+  method: PaymentMethod;
+  amount: number;
+};
 
 export type Order = {
   id: string;
@@ -58,6 +63,9 @@ export type Order = {
   deliveredAt?: number;
   ticketCode?: string;
   createdBy?: string;
+  isGift?: boolean;
+  isSplit?: boolean;
+  payments?: OrderPaymentDetail[];
   cancelledBy?: string;
   cancelledAt?: number;
   deliveredBy?: string;
@@ -95,6 +103,7 @@ export type EventTotals = {
   qrCount: number;
   debitoTotal: number;
   debitoCount: number;
+  cortesiaCount?: number;
   drinksSold: DrinkSold[];
   total: number;
 };
@@ -109,6 +118,9 @@ export type NewOrderInput = {
   paymentMethod: PaymentMethod;
   payment?: { provider: "mercadopago"; kind: "point_intent" | "qr_order"; id: string };
   idempotencyKey?: string;
+  isGift?: boolean;
+  isSplit?: boolean;
+  payments?: OrderPaymentDetail[];
 };
 
 export function computeTotals(orders: Order[]): EventTotals {
@@ -120,6 +132,7 @@ export function computeTotals(orders: Order[]): EventTotals {
   let qrCount = 0;
   let debitoTotal = 0;
   let debitoCount = 0;
+  let cortesiaCount = 0;
   const drinksByDrinkId = new Map<number, DrinkSold>();
 
   for (const order of orders) {
@@ -130,7 +143,22 @@ export function computeTotals(orders: Order[]): EventTotals {
       webCount += 1;
     }
 
-    if (order.paymentMethod === "efectivo") {
+    if (order.isGift || order.paymentMethod === "cortesia") {
+      cortesiaCount += 1;
+    } else if (order.isSplit && order.payments) {
+      for (const p of order.payments) {
+        if (p.method === "efectivo") {
+          efectivoTotal += p.amount;
+          efectivoCount += 1;
+        } else if (p.method === "qr") {
+          qrTotal += p.amount;
+          qrCount += 1;
+        } else if (p.method === "debito") {
+          debitoTotal += p.amount;
+          debitoCount += 1;
+        }
+      }
+    } else if (order.paymentMethod === "efectivo") {
       efectivoTotal += order.total;
       efectivoCount += 1;
     } else if (order.paymentMethod === "qr") {
@@ -157,6 +185,9 @@ export function computeTotals(orders: Order[]): EventTotals {
     }
   }
 
+  const drinksSold = [...drinksByDrinkId.values()].sort((a, b) => b.qty - a.qty);
+  const total = efectivoTotal + qrTotal + debitoTotal;
+
   return {
     webTotal,
     webCount,
@@ -166,9 +197,8 @@ export function computeTotals(orders: Order[]): EventTotals {
     qrCount,
     debitoTotal,
     debitoCount,
-    drinksSold: Array.from(drinksByDrinkId.values()).sort(
-      (a, b) => b.qty - a.qty,
-    ),
-    total: efectivoTotal + qrTotal + debitoTotal,
+    cortesiaCount,
+    drinksSold,
+    total,
   };
 }

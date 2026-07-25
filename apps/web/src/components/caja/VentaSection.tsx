@@ -23,8 +23,10 @@ import {
   Search,
   Zap,
   Delete,
+  Gift,
+  GitFork,
 } from "lucide-react";
-import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import DrinkCard from "@/components/shared/DrinkCard";
 import { drinkIcon } from "@/lib/icons";
@@ -34,6 +36,7 @@ import { useCheckout } from "@/hooks/useCheckout";
 import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
+import Toast from "@/components/shared/Toast";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
 
 type Props = {
@@ -55,28 +58,31 @@ type SwipeableCartItemProps = {
   onRemoveAll: () => void;
 };
 
-function SwipeableCartItem({ drink, qty, onAdd, onRemove, onRemoveAll }: SwipeableCartItemProps) {
+const SwipeableCartItem = memo(function SwipeableCartItem({ drink, qty, onAdd, onRemove, onRemoveAll }: SwipeableCartItemProps) {
   const [startX, setStartX] = useState(0);
   const [currentX, setCurrentX] = useState(0);
   const [swiping, setSwiping] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const isMouseDownRef = useRef(false);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setStartX(e.touches[0].clientX);
+  const handleStart = (clientX: number) => {
+    setStartX(clientX);
     setSwiping(true);
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleMove = (clientX: number) => {
     if (!swiping) return;
-    const diff = e.touches[0].clientX - startX;
-    if (diff > 0) { // only swipe to the right
+    const diff = clientX - startX;
+    if (diff > 0) {
       setCurrentX(diff);
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleEnd = () => {
+    if (!swiping) return;
     setSwiping(false);
-    if (currentX > 120) {
+    isMouseDownRef.current = false;
+    if (currentX > 100) {
       setIsRemoving(true);
       setTimeout(() => {
         onRemoveAll();
@@ -87,7 +93,7 @@ function SwipeableCartItem({ drink, qty, onAdd, onRemove, onRemoveAll }: Swipeab
   };
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-ink-950 shrink-0">
+    <div className="relative overflow-hidden rounded-xl bg-ink-950 shrink-0 select-none">
       {/* Background deletion reveal indicator */}
       <div 
         className="absolute inset-0 bg-danger/20 flex items-center pl-4 text-danger transition-opacity duration-150"
@@ -97,14 +103,23 @@ function SwipeableCartItem({ drink, qty, onAdd, onRemove, onRemoveAll }: Swipeab
       </div>
       {/* Foreground item card */}
       <div
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        onTouchStart={(e) => handleStart(e.touches[0].clientX)}
+        onTouchMove={(e) => handleMove(e.touches[0].clientX)}
+        onTouchEnd={handleEnd}
+        onMouseDown={(e) => {
+          isMouseDownRef.current = true;
+          handleStart(e.clientX);
+        }}
+        onMouseMove={(e) => {
+          if (isMouseDownRef.current) handleMove(e.clientX);
+        }}
+        onMouseUp={handleEnd}
+        onMouseLeave={handleEnd}
         style={{
           transform: `translateX(${isRemoving ? "100%" : `${currentX}px`})`,
           transition: swiping ? "none" : "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
         }}
-        className="bg-ink-900 border border-ink-800 rounded-xl p-3 flex flex-col gap-2 relative z-10 select-none touch-pan-y"
+        className="bg-ink-900 border border-ink-800 rounded-xl p-3 flex flex-col gap-2 relative z-10 select-none touch-pan-y cursor-grab active:cursor-grabbing"
       >
         <div className="flex items-start justify-between gap-2">
           <span className="text-[13px] font-bold text-ink-50 leading-tight line-clamp-2 flex-1">
@@ -118,7 +133,7 @@ function SwipeableCartItem({ drink, qty, onAdd, onRemove, onRemoveAll }: Swipeab
           <span className="text-[10px] text-ink-400 font-mono">
             ${drink.price.toLocaleString("es-AR")} c/u
           </span>
-          <div className="flex items-center gap-1 bg-ink-950 border border-ink-800 rounded-md">
+          <div className="flex items-center gap-1 bg-ink-950 border border-ink-800 rounded-md" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={onRemove}
               className="w-7 h-7 flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-white/5 rounded-l-md active:scale-90 transition-all cursor-pointer"
@@ -139,9 +154,9 @@ function SwipeableCartItem({ drink, qty, onAdd, onRemove, onRemoveAll }: Swipeab
       </div>
     </div>
   );
-}
+});
 
-function CompactDrinkCard({
+const CompactDrinkCard = memo(function CompactDrinkCard({
   drink,
   qty,
   focused,
@@ -241,7 +256,7 @@ function CompactDrinkCard({
       </div>
     </div>
   );
-}
+});
 
 function DrinkSkeleton() {
   return (
@@ -286,41 +301,6 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
 
   // Estados del carrito
   const [cart, setCart] = useState<Record<number, number>>({});
-  const [undoItem, setUndoItem] = useState<{ drinkId: number; qty: number; name: string } | null>(null);
-
-  useEffect(() => {
-    if (undoItem) {
-      const timer = setTimeout(() => {
-        setUndoItem(null);
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [undoItem]);
-
-  const removeAllFromCart = (id: number) => {
-    setCart((prev) => {
-      const next = { ...prev };
-      const qty = next[id];
-      if (qty) {
-        const d = drinks.find((x) => x.id === id);
-        if (d) {
-          setUndoItem({ drinkId: id, qty, name: d.name });
-        }
-        delete next[id];
-      }
-      return next;
-    });
-  };
-
-  const handleUndoDelete = () => {
-    if (undoItem) {
-      setCart((prev) => ({
-        ...prev,
-        [undoItem.drinkId]: (prev[undoItem.drinkId] || 0) + undoItem.qty
-      }));
-      setUndoItem(null);
-    }
-  };
 
   const [isCartOpen, setIsCartOpen] = useState(false);
 
@@ -389,15 +369,43 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
       .map(([key, g]) => ({ id: key, title: g.title, drinks: g.drinks }));
   }, [sortBy, filteredDrinks, groupOf]);
 
-  const clearCart = () => setCart({});
+  const [undoToast, setUndoToast] = useState<{ drinkName: string; restore: () => void } | null>(null);
 
-  const addToCart = (id: number) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  const removeFromCart = (id: number) => setCart((prev) => {
+  const clearCart = useCallback(() => {
+    const prevCart = { ...cart };
+    setCart({});
+    if (Object.keys(prevCart).length > 0) {
+      setUndoToast({
+        drinkName: "Pedido completo",
+        restore: () => setCart(prevCart),
+      });
+    }
+  }, [cart]);
+
+  const addToCart = useCallback((id: number) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 })), []);
+  const removeFromCart = useCallback((id: number) => setCart((prev) => {
     const next = { ...prev };
     if (next[id] > 1) next[id] -= 1;
     else delete next[id];
     return next;
-  });
+  }), []);
+
+  const removeAllFromCart = useCallback((id: number) => {
+    setCart((prev) => {
+      const qty = prev[id] || 0;
+      if (!qty) return prev;
+      const d = drinks.find((x) => x.id === id);
+      if (d) {
+        setUndoToast({
+          drinkName: d.name,
+          restore: () => setCart((old) => ({ ...old, [id]: (old[id] || 0) + qty })),
+        });
+      }
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, [drinks]);
 
   const cartEntries = useMemo(
     () => Object.entries(cart).map(([idStr, qty]) => {
@@ -570,7 +578,8 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
       onSelectMethod: (method) => {
         if (method === "efectivo") setPaymentMethod("efectivo");
         else if (method === "qr") startQrPayment();
-        else startPosnetPayment(method);
+        else if (method === "debito") startPosnetPayment("debito");
+        else setPaymentMethod(method);
       },
       onExactAmount: () => handleChangeCash(String(totalPrice)),
       onConfirmCash: confirmOrder,
@@ -749,7 +758,7 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
           </div>
 
           {/* Grid scrollable */}
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-5 bosko-scroll">
             {loadingProducts ? (
               <>
                 {/* Mobile Skeletons */}
@@ -1374,46 +1383,57 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 w-full mt-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full mt-2">
                       <button
                         disabled={submitting}
                         onClick={() => setPaymentMethod("efectivo")}
-                        className="h-32 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                       >
-                        <div className="w-12 h-12 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center shrink-0">
-                          <Banknote size={26} />
+                        <div className="w-10 h-10 rounded-xl bg-green-soft border border-green-line text-green flex items-center justify-center shrink-0">
+                          <Banknote size={22} />
                         </div>
-                        <span className="font-bold text-sm text-ink-50">Efectivo</span>
+                        <span className="font-bold text-xs text-ink-50">Efectivo</span>
                       </button>
 
                       <button
                         disabled={submitting}
                         onClick={() => startPosnetPayment("debito")}
-                        className="h-32 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                       >
-                        <div className="w-12 h-12 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center shrink-0">
-                          <CreditCard size={26} />
+                        <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center shrink-0">
+                          <CreditCard size={22} />
                         </div>
-                        <span className="font-bold text-sm text-ink-50">Tarjeta</span>
+                        <span className="font-bold text-xs text-ink-50">Tarjeta</span>
                       </button>
 
                       <button
                         disabled={submitting}
                         onClick={() => startQrPayment()}
-                        className="h-32 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                       >
-                        <div className="w-12 h-12 rounded-xl bg-accent/10 border border-accent/25 text-accent flex items-center justify-center shrink-0">
-                          <QrCode size={26} />
+                        <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/25 text-accent flex items-center justify-center shrink-0">
+                          <QrCode size={22} />
                         </div>
-                        <span className="font-bold text-sm text-ink-50">Código QR</span>
+                        <span className="font-bold text-xs text-ink-50">Código QR</span>
+                      </button>
+
+                      <button
+                        disabled={submitting}
+                        onClick={() => setPaymentMethod("cortesia")}
+                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-amber-soft border border-amber-line text-amber flex items-center justify-center shrink-0">
+                          <Gift size={22} />
+                        </div>
+                        <span className="font-bold text-xs text-ink-50">Cortesía / Regalo</span>
                       </button>
                     </div>
                   </div>
                 ) : (
                   // Confirmar Método Elegido
                   <div className="flex flex-col gap-5 overflow-y-auto pr-1">
-                    {/* Total genérico solo para débito/QR — en efectivo va en la fila Total+Exacto */}
-                    {paymentMethod !== "efectivo" && (
+                    {/* Total genérico solo para débito/QR — en efectivo/split/cortesia se maneja en su propio bloque */}
+                    {(paymentMethod === "debito" || paymentMethod === "qr") && (
                       <div className="flex justify-between items-center p-4 bg-[var(--bg-panel)] rounded-2xl border border-[var(--border-subtle)]">
                         <div className="flex items-center gap-2">
                           <Receipt size={15} className="text-[var(--text-tertiary)]" />
@@ -1566,6 +1586,147 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
                                 Enter
                               </kbd>
                             )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === "cortesia" && (
+                      <div className="flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-4 bg-amber-soft border border-amber-line rounded-2xl flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-amber font-bold text-sm">
+                            <Gift size={18} />
+                            <span>Cortesía / Regalo ($0)</span>
+                          </div>
+                          <p className="text-xs text-ink-300 leading-relaxed">
+                            Esta orden se emitirá con monto $0 sin sumar saldo a la caja. Se descontarán las unidades del inventario y quedará registrada en auditoría.
+                          </p>
+                        </div>
+
+                        <div className="mt-2 pt-4 border-t border-ink-800 shrink-0 flex flex-col gap-2.5">
+                          {saleError && (
+                            <div className="bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-sm">
+                              {saleError}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={confirmOrder}
+                            disabled={submitting}
+                            className="w-full h-14 rounded-full bg-amber-500 hover:bg-amber-600 text-ink-950 font-bold text-base uppercase tracking-wider shadow-lg disabled:opacity-40 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all"
+                          >
+                            {submitting && <Loader2 size={18} className="animate-spin" />}
+                            {submitting ? "Emitiendo..." : "Emitir Ticket de Cortesía"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === "split" && (
+                      <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+                        {/* Fila Total (sin botón de monto exacto) */}
+                        <div className="flex items-center justify-between px-4 h-14 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)]">
+                          <div className="flex items-center gap-2">
+                            <GitFork size={16} className="text-purple" />
+                            <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                              Pago Dividido (Efectivo + QR)
+                            </span>
+                          </div>
+                          <span className="text-[22px] font-bold tabular text-[var(--text-primary)] tracking-tight">
+                            <span className="text-[0.65em] text-[var(--text-tertiary)] mr-0.5 font-semibold">$</span>
+                            {totalPrice.toLocaleString("es-AR")}
+                          </span>
+                        </div>
+
+                        {/* Displays: Efectivo Recibido (Izq) | QR Remanente (Der) */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex flex-col justify-center gap-0.5 px-4 py-3 rounded-2xl bg-[var(--accent-surface)] border border-[var(--accent-line)] min-h-[72px]">
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--accent-text)]/80">
+                              Efectivo Recibido
+                            </span>
+                            <div className="flex items-baseline gap-0.5 min-w-0">
+                              <span className="text-[0.7em] font-semibold text-[var(--accent-text)]/70">$</span>
+                              <input
+                                type="text"
+                                readOnly
+                                inputMode="none"
+                                aria-label="Monto abonado en efectivo"
+                                value={displayCashValue}
+                                className="w-full bg-transparent font-bold text-[var(--accent-text)] text-[26px] leading-none outline-none pointer-events-none tabular tracking-tight truncate"
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col justify-center gap-0.5 px-4 py-3 rounded-2xl bg-purple-soft/60 border border-purple-border/60 min-h-[72px]">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-purple">
+                                QR Remanente
+                              </span>
+                              <QrCode size={13} className="text-purple" />
+                            </div>
+                            <span className="text-[26px] font-bold tabular leading-none tracking-tight text-purple">
+                              <span className="text-[0.7em] font-semibold mr-0.5">$</span>
+                              {Math.max(0, totalPrice - (receivedAmount ? Number(receivedAmount) : 0)).toLocaleString("es-AR")}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Numpad táctil */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                            <button
+                              key={digit}
+                              type="button"
+                              onClick={() => handleChangeCash((displayCashValue ? displayCashValue.replace(/\D/g, "") : "") + digit)}
+                              className="h-12 rounded-xl bg-ink-950 border border-ink-800 hover:bg-ink-850 hover:border-ink-750 text-ink-50 font-bold text-lg flex items-center justify-center active:scale-95 transition-all cursor-pointer select-none"
+                            >
+                              {digit}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => handleChangeCash("")}
+                            className="h-12 rounded-xl bg-ink-950 border border-ink-800 hover:bg-danger/20 hover:text-danger hover:border-danger/40 text-ink-400 font-bold text-xs flex items-center justify-center active:scale-95 transition-all cursor-pointer select-none"
+                            title="Limpiar monto"
+                          >
+                            C
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleChangeCash((displayCashValue ? displayCashValue.replace(/\D/g, "") : "") + "0")}
+                            className="h-12 rounded-xl bg-ink-950 border border-ink-800 hover:bg-ink-850 hover:border-ink-750 text-ink-50 font-bold text-lg flex items-center justify-center active:scale-95 transition-all cursor-pointer select-none"
+                          >
+                            0
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const clean = displayCashValue ? displayCashValue.replace(/\D/g, "") : "";
+                              handleChangeCash(clean.slice(0, -1));
+                            }}
+                            className="h-12 rounded-xl bg-ink-950 border border-ink-800 hover:bg-ink-850 hover:border-ink-750 text-ink-300 hover:text-ink-50 font-bold text-sm flex items-center justify-center active:scale-95 transition-all cursor-pointer select-none"
+                            title="Borrar último dígito"
+                          >
+                            ⌫
+                          </button>
+                        </div>
+
+                        {/* Botón Principal */}
+                        <div className="mt-1 pt-3 border-t border-ink-800 shrink-0 flex flex-col gap-2.5">
+                          {saleError && (
+                            <div className="bg-danger-soft border border-danger-line text-danger rounded-xl px-3 py-2.5 text-sm">
+                              {saleError}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={confirmOrder}
+                            disabled={submitting}
+                            className="w-full h-14 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-bold text-base uppercase tracking-wider shadow-lg disabled:opacity-40 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all"
+                          >
+                            {submitting && <Loader2 size={18} className="animate-spin" />}
+                            {submitting ? "Procesando..." : "Confirmar Pago Dividido"}
                           </button>
                         </div>
                       </div>
@@ -1842,19 +2003,22 @@ export default function VentaSection({ drinks, categories, printer }: Props) {
         </div>
       )}
 
-      {/* Undo Delete Toast */}
-      {undoItem && (
-        <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-top-5 fade-in duration-300">
-          <div className="flex items-center gap-3 px-4 py-3 bg-ink-900 border border-ink-800 rounded-2xl shadow-2xl text-xs font-bold text-ink-50">
-            <span className="text-ink-400">Eliminado:</span>
-            <span>{undoItem.name} x{undoItem.qty}</span>
-            <button
-              onClick={handleUndoDelete}
-              className="ml-2 px-2.5 py-1 bg-accent/15 hover:bg-accent/25 text-accent border border-accent/20 hover:border-accent/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
-            >
-              Deshacer
-            </button>
-          </div>
+      {/* Undo Delete Toast (Top Center para no tapar Numpad ni cobro) */}
+      {undoToast && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] w-full max-w-sm px-4 animate-in slide-in-from-top-5 duration-200">
+          <Toast
+            variant="success"
+            title="ÍTEM ELIMINADO"
+            message={`${undoToast.drinkName} se quitó del pedido.`}
+            action={{
+              label: "Deshacer",
+              onClick: () => {
+                undoToast.restore();
+                setUndoToast(null);
+              },
+            }}
+            onClose={() => setUndoToast(null)}
+          />
         </div>
       )}
     </>

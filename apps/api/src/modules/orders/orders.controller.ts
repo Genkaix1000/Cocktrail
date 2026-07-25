@@ -31,10 +31,10 @@ export function createOrdersController(
   // POST /api/orders — crear pedido (staff only: admin/caja)
   router.post("/", authMiddleware, requireRole("admin", "caja"), orderLimiter, validate(CreateOrderSchema), async (req, res, next) => {
     try {
-      const { items, paymentMethod, payment, idempotencyKey } = req.body;
+      const { items, paymentMethod, payment, idempotencyKey, isGift, isSplit, payments } = req.body;
       const createdBy = req.session?.username || "Caja";
 
-      const order = await service.createOrder({ items, paymentMethod, payment, idempotencyKey }, createdBy);
+      const order = await service.createOrder({ items, paymentMethod, payment, idempotencyKey, isGift, isSplit, payments }, createdBy);
       await logAction(
         "order.created",
         `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,

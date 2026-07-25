@@ -89,6 +89,8 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   efectivo: "Efectivo",
   debito: "Posnet",
   qr: "QR",
+  cortesia: "Cortesía",
+  split: "Dividido",
 };
 
 export function paymentLabel(method: PaymentMethod): string {

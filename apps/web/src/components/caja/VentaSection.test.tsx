@@ -564,4 +564,62 @@ describe("VentaSection", () => {
       expect(input.value).toBe("2.500");
     });
   });
+
+  describe("Split Payment & Cortesía (F3)", () => {
+    it("permite procesar un ticket de Cortesía / Regalo", async () => {
+      const order = makeOrder({ total: 0, paymentMethod: "cortesia" });
+      mockedOrdersService.create.mockResolvedValue(order);
+
+      render(<VentaSection drinks={[makeDrink()]} categories={[]} printer={printer} />);
+      const user = await addFirstDrinkToCart();
+
+      const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+      await user.click(cobrarButtons[0]);
+
+      const cortesiaButton = await screen.findByRole("button", { name: /cortesía/i });
+      await user.click(cortesiaButton);
+
+      expect(await screen.findByText(/Cortesía \/ Regalo \(\$0\)/i)).toBeInTheDocument();
+
+      const confirmBtn = screen.getByRole("button", { name: /emitir ticket de cortesía/i });
+      await user.click(confirmBtn);
+
+      await waitFor(() =>
+        expect(mockedOrdersService.create).toHaveBeenCalledWith({
+          items: [{ drinkId: 1, qty: 1 }],
+          paymentMethod: "cortesia",
+        }),
+      );
+
+      expect(await screen.findByText("¡Cobro Concretado!")).toBeInTheDocument();
+    });
+
+    it("permite procesar un Pago Dividido", async () => {
+      const order = makeOrder({ total: 2500, paymentMethod: "split" });
+      mockedOrdersService.create.mockResolvedValue(order);
+
+      render(<VentaSection drinks={[makeDrink({ price: 2500 })]} categories={[]} printer={printer} />);
+      const user = await addFirstDrinkToCart();
+
+      const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+      await user.click(cobrarButtons[0]);
+
+      const splitButton = await screen.findByRole("button", { name: /pago dividido/i });
+      await user.click(splitButton);
+
+      expect(await screen.findByText(/Pago Dividido \(Efectivo \+ QR\)/i)).toBeInTheDocument();
+
+      const confirmBtn = screen.getByRole("button", { name: /confirmar pago dividido/i });
+      await user.click(confirmBtn);
+
+      await waitFor(() =>
+        expect(mockedOrdersService.create).toHaveBeenCalledWith({
+          items: [{ drinkId: 1, qty: 1 }],
+          paymentMethod: "split",
+        }),
+      );
+
+      expect(await screen.findByText("¡Cobro Concretado!")).toBeInTheDocument();
+    });
+  });
 });

@@ -76,7 +76,7 @@ function apiErrorCode(err: unknown): string | undefined {
 
 /** Métodos que se cobran vía Posnet. Hoy solo "debito" — el Posnet físico no puede
  * diferenciar un cobro con QR del resto (ver docs/specs/mercadopago/cobro-posnet-mercadopago.md). */
-type PosnetMethod = Exclude<PaymentMethod, "efectivo" | "qr">;
+type PosnetMethod = "debito";
 
 type UseCheckoutArgs = {
   cart: Record<number, number>;
@@ -239,7 +239,7 @@ export function useCheckout({
     setSaleError(null);
     try {
       const items = Object.entries(cart).map(([idStr, qty]) => ({ drinkId: Number(idStr), qty }));
-      const order = await ordersService.create({ items, paymentMethod });
+      const order = await ordersService.create({ items, paymentMethod, isGift: paymentMethod === "cortesia" });
 
       setLatestOrder(order);
       clearCart();
