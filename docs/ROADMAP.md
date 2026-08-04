@@ -62,37 +62,40 @@ diseño de la PWA comandera, y el mecanismo de impresión Bluetooth — antes de
 
 ---
 
-## ⏳ Pendiente — traer y auditar `origin/develop` (commits del compañero) *(2026-08-03)*
+## ✅ Merge de `origin/develop` (commits del compañero) — hecho *(2026-08-03)*
 
-`develop` local está **19 commits atrás** de `origin/develop` (rango `8397f95..4fbae65`, autor
-Genkaix1000). Ya se auditó con 3 agentes (backend/seguridad, supabase-expert, react-frontend) el
-2026-07-26: **código de buena calidad** (507 tests web verdes, typecheck OK, cero deps nuevas,
-sería fast-forward), pero **NO se trajo todavía** porque hay 2 bloqueantes que son decisiones de
-producto camufladas en commits con mensajes engañosos — y ahora se cruzan con el pivot a cloud:
+Los 19 commits de Genkaix1000 (rango `8397f95..4fbae65`, ya auditados el 2026-07-26 con 3 agentes,
+ver observación #761 en Engram) se trajeron a `develop` (fast-forward). Decisiones y hallazgos:
 
-1. **`0ede779`** ("security"): mata el flujo cliente QR sin flag — `/carta` (588 líneas→404),
-   `/barra`, `/pedido/[token]` devuelven `notFound()` hardcodeado; `POST /api/orders` pasó a
-   staff-only. Convierte el sistema en un POS puro de caja. **Con el pivot a comandera esto puede
-   ser correcto** (ya no hay pedido de cliente por QR en el modelo nuevo) — pero es una decisión de
-   producto a confirmar explícitamente, no algo que se cuela en un commit de "security".
-2. **`38a5e63`** (mensaje engañoso "refactor(ui)"): **borró `apps/web/src/proxy.ts` sin
-   reemplazo** — viola la regla de oro del repo (guard de `/admin`/`/caja` quedó solo
-   client-side). Esto es más grave todavía en el modelo cloud: exponer la app a internet sin guard
-   de edge es exactamente lo que el hardening pre-cloud tiene que evitar. **Hay que restituirlo
-   antes de mergear**, no después.
+1. **`0ede779`** ("security", mata `/carta`/`/barra`/`/pedido` sin flag) → el dueño confirmó que
+   **queda como decisión definitiva**: con el modelo comandera no hay pedido de cliente por QR.
+2. **`38a5e63`** había borrado `apps/web/src/proxy.ts` sin reemplazo → **restituido** con
+   `export default function proxy(...)` (commit `a619237`).
+3. **Bug real encontrado al aplicar el catch-up completo de migraciones** (no introducido por el
+   merge, preexistente): el CHECK de `mp_orders.status` nunca incluyó `'rejected'`, pese a que el
+   código lo escribe activamente para pagos Point rechazados — 8 filas locales y datos en Cloud lo
+   violaban. Corregido en `20260721000200_mp_orders_status_y_replay.sql`.
+4. **Orden de migraciones**: el CHECK `orders_cobrado_requires_mp_order` (22/07) no contemplaba
+   `'cortesia'`, excepción que llegaba recién 3 días después (25/07) en otra migración — el
+   catch-up en un solo batch contra datos reales (4 filas cortesia legítimas en Cloud) chocaba.
+   Corregido fusionando la excepción en la migración original (nunca se había aplicado en ningún
+   ambiente, así que era seguro).
+5. **Incidente en Cloud durante el catch-up**: la migración `20260724150000_drink_categories.sql`
+   hace `DELETE FROM drinks` — al aplicar el catch-up completo (`supabase db push`, que por
+   default apunta al **proyecto Cloud linkeado**, no a local) esto vació la carta real en
+   Supabase Cloud. Se repuso con un script puntual (`drink_categories` + `drinks`, 40 productos,
+   ya borrado del repo) verificado por REST — Cloud quedó con las 40 bebidas otra vez. **Lección**:
+   `supabase db push` sin `--local`/`--linked` explícito es ambiguo — usar siempre uno de los dos
+   a propósito, nunca el default implícito.
 
-Otros hallazgos (no bloqueantes, quedan para revisar/limpiar al mergear): pago "split" a medio
-implementar (rechaza 422, no habilitar), migración que hace `DELETE FROM drinks` (la carta se
-re-siembra por seed — frágil, aplicar en Cloud antes del próximo cierre), ítems fantasma en el
-carrito tras "Recargar carta", `webusb-printer.ts` sin mutex, imágenes de 17MB sin optimizar, APK
-de 2.8MB re-commiteado en el historial. Detalle completo en Engram (`mem_search` proyecto
-`Cocktrail`, observación #761).
+Otros hallazgos de la auditoría original, no bloqueantes, quedan para revisar/limpiar más adelante:
+pago "split" a medio implementar (rechaza 422, no habilitar hasta tener persistencia+CHECK),
+ítems fantasma en el carrito tras "Recargar carta", `webusb-printer.ts` sin mutex, imágenes de
+17MB sin optimizar, APK de 2.8MB re-commiteado en el historial. Detalle completo en Engram
+(`mem_search` proyecto `Cocktrail`, observación #761).
 
-- [ ] Confirmar con el dueño si el POS-puro de `0ede779` queda como decisión definitiva (coherente
-  con comandera) o si hay que agregar un flag.
-- [ ] Restituir `proxy.ts` antes o durante el merge.
-- [ ] Mergear, aplicar las 7 migraciones nuevas, correr `pnpm typecheck` + suites.
-- [ ] Migrar el CHECK de `cortesia` en Cloud antes del próximo cierre (si no, `pushOrders` rechaza).
+`pnpm typecheck` + 952 tests API + 507 tests web, todo verde tras el merge y las migraciones
+aplicadas (local y Cloud).
 
 ---
 
