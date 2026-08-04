@@ -60,6 +60,48 @@ que recomendaba exactamente esto)**:
 hosting elegido, hardening de seguridad para exponer a internet (ver checklist en la evaluación),
 diseño de la PWA comandera, y el mecanismo de impresión Bluetooth — antes de tocar código.
 
+### 🖨️ Impresora Bluetooth — prueba en curso *(2026-08-03/04, sin cerrar)*
+
+Impresora real de Manuel: **Xiamen Lujiang "Mini Pocket Printer S1/S1 Pro"** (FCC ID `2A74AS1PRO`),
+app propietaria "Luck Jingle". Es una impresora de etiquetas/fotos, no pensada como POS, pero la
+comunidad ya la reverseó — hay un proyecto MIT
+([`ChiaraCannolee/thermal-pocket-printer-basic`](https://github.com/ChiaraCannolee/thermal-pocket-printer-basic))
+que soporta la familia "LuckPrinter" (a la que pertenece esta S1) e imprime **vía Web Bluetooth
+directo desde el navegador, sin la app del fabricante** — resuelve el requisito de "imprimir desde
+la PWA sin depender de una app externa".
+
+**Validado hasta ahora** (con una página de diagnóstico propia, ver abajo):
+- La S1 de Manuel se anuncia por BLE como **`PPS1_7EE6_BLE`** (no `C&Co...` como el modelo que
+  reverseó el repo de referencia — por eso la demo pública de ese repo, que filtra por nombre
+  `C&Co`, nunca la encontraba).
+- Expone el servicio `0000ff00-...` con las características `ff01`/`ff02`/`ff03` esperadas por el
+  protocolo documentado.
+- Conecta bien por Web Bluetooth desde **Chrome en Android** (funciona; iOS no sirve — ningún
+  navegador iOS soporta Web Bluetooth, ni con Bluefy se pudo levantar el selector con esta app de
+  referencia — no vale la pena insistir ahí, el target real es Android).
+
+**Bloqueado por batería, no por protocolo**: al mandar el comando de impresión, el motor hace
+ruido (intenta alimentar papel) pero no imprime nada y la impresora se apaga sola con luz roja —
+comportamiento típico de protección por batería baja, **no un error de protocolo o de la
+integración**. Pendiente: cargarla a batería llena y reintentar. Ojo con el dato de "8-10hs de
+batería" de la publicación de Mercado Libre — es casi seguro tiempo de standby, no de impresión
+continua; hay que medir cuántos tickets aguanta realmente con carga completa antes de asumir que
+cubre una noche entera de comandera (si el número sale bajo, evaluar power bank).
+
+**Herramienta de diagnóstico**: página HTML standalone (no forma parte de la app, es de un solo
+uso) copiada a `/home/manuel/dev/cocktrail-ble-test/` (fuera del repo, no versionada) — sirve por
+HTTPS en la LAN con un cert autofirmado (`node serve.mjs`, puerto 8443) porque Web Bluetooth exige
+origen seguro. Botones: escanear (acepta cualquier BLE, no filtra por nombre), listar servicios
+GATT, mandar ENABLE, y "probar imprimir texto simple" (manda wake de 12 bytes null + ENABLE +
+densidad + imagen raster 384px monocromo vía `GS v 0` + feed + stop). Para retomar mañana: correr
+`node /home/manuel/dev/cocktrail-ble-test/serve.mjs` en esta PC, y desde el Android entrar a
+`https://<ip-lan-de-esta-pc>:8443` (aceptando el aviso de certificado no confiable).
+
+**Próximo paso concreto**: cargar la S1 a batería llena, reintentar "probar imprimir texto
+simple" desde la herramienta de diagnóstico, y si imprime, portar la lógica (adaptada, con el
+ticket real en vez del texto de prueba) a la PWA de `/caja` para que dispare automáticamente al
+cobrar.
+
 ---
 
 ## ✅ Merge de `origin/develop` (commits del compañero) — hecho *(2026-08-03)*
