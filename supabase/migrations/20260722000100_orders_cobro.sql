@@ -31,9 +31,13 @@ ALTER TABLE orders ADD CONSTRAINT orders_payment_status_check
 
 -- La invariante que hace irrepetible el bug del 22-07. El escape del efectivo
 -- es irreductible: nadie puede verificar server-side que entraron billetes.
+-- 'cortesia' agregado el 2026-08-03 al aplicar el catch-up de migraciones:
+-- esta migración nunca se había aplicado a ningún ambiente y la excepción de
+-- cortesía (20260725050000) la sigue 3 días después — sin esto, el catch-up
+-- en un solo batch choca con filas cortesia reales ya existentes.
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_cobrado_requires_mp_order;
 ALTER TABLE orders ADD CONSTRAINT orders_cobrado_requires_mp_order
-  CHECK (payment_status <> 'cobrado' OR payment_method = 'efectivo' OR mp_order_id IS NOT NULL);
+  CHECK (payment_status <> 'cobrado' OR payment_method = 'efectivo' OR payment_method = 'cortesia' OR mp_order_id IS NOT NULL);
 
 -- Idempotencia (R20), dos agujeros distintos: la key cubre "reintento del mismo
 -- intento lógico" (incluido efectivo); mp_order_id cubre "key nueva, mismo cobro".

@@ -4,11 +4,14 @@
 -- el replay idempotente del create (misma key → misma respuesta sin tocar MP).
 
 -- Nombre real verificado en pg_constraint: mp_orders_status_check.
+-- 'rejected' agregado el 2026-08-03: MpOrderStatus (mp-orders.repository.ts) y
+-- point-payments.service.ts ya escribían este status para pagos Point
+-- rechazados; faltaba en la lista original y violaba el CHECK con datos reales.
 ALTER TABLE mp_orders DROP CONSTRAINT IF EXISTS mp_orders_status_check;
 ALTER TABLE mp_orders ADD CONSTRAINT mp_orders_status_check
   CHECK (status IN (
     'created', 'processed', 'canceled', 'refunded', 'expired',
-    'failed', 'action_required', 'unknown'
+    'failed', 'action_required', 'unknown', 'rejected'
   ));
 
 ALTER TABLE mp_orders

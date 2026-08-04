@@ -7,18 +7,103 @@
 > [`docs/specs/`](./specs/README.md), organizada por fase (`01-tickets-impresora/`,
 > `02-auditoria-api/`, …). Los planes técnicos correspondientes viven en `docs/plans/` con
 > las mismas subcarpetas. Cada sección de abajo linkea su carpeta y sus documentos.
-> Última actualización: 2026-07-24.
+> Última actualización: 2026-08-03.
 
 ---
 
-## 🧭 Dónde estamos y qué sigue *(2026-07-24)*
+## 🔀 PIVOT — de local-first a cloud + modelo "comandera" *(decidido 2026-08-03)*
+
+Tras 2 noches de prueba en el boliche (tickets, cobros MP con Posnet, admin, cierre de noche —
+todo funcionó), surgió un problema de **negocio**, no de software: el local tiene varias
+barras/cajeras pero una sola tablet+impresora, y no todas las ventas pasan por la caja central →
+el arqueo no cierra. Se decidió pivotar el modelo operativo y, con eso, la arquitectura de deploy.
+
+**Decisión (confirma y reemplaza el análisis de
+[`evaluacion-cloud-vs-local-comandera.md`](./evaluacion-cloud-vs-local-comandera.md), 2026-07-27,
+que recomendaba exactamente esto)**:
+
+1. **Deploy: nube en vez de mini-PC local.** Se elimina la Fase 6 tal como estaba planteada
+   (empaquetado Windows/Tauri/Electron + Postgres embebido + arranque desatendido de una PC en el
+   local). En su lugar: backend + frontend van a un hosting cloud (VPS/PaaS con proceso Node
+   persistente — el SSE en `EventEmitter` sigue exigiendo esto, **no serverless/edge**) + Supabase
+   Cloud como única base. El argumento local-first pierde sentido porque el cobro con Posnet **ya
+   dependía de internet** (API de MP), así que no había verdadero offline que proteger.
+2. **Modelo operativo: "comandera" en vez de caja central fija.** Una persona circula por la pista
+   con una tablet (PWA) + impresora térmica portátil Bluetooth, registra y cobra la venta ahí mismo.
+   Se cae el esquema de caja única fija.
+3. **Métodos de pago: solo efectivo y transferencia por Mercado Pago.** Se saca el cobro con
+   Posnet/tarjeta de este flujo — la idea explícita es que la persona con la comandera **no ande
+   con el lector físico en la mano**. Pendiente de decidir en la spec: si "transferencia MP" es el
+   QR dinámico ya existente (Orders API / checkout, ver R14) o una implementación nueva.
+4. **Impresión sin app intermediaria.** La impresora térmica Bluetooth portátil tiene que imprimir
+   el ticket directo desde la PWA al cerrarse la venta, sin depender de una app externa instalada en
+   la tablet (evaluar Web Bluetooth). Bloqueado por probar el modelo específico de impresora — en
+   curso.
+5. **Repo/servicios**: por ahora se mantiene el **monorepo pnpm** (`apps/api` + `apps/web` +
+   `packages/shared`) — los repositorios ya son agnósticos de dónde vive Postgres (cambiar a
+   Supabase Cloud es config, no código), así que no hay necesidad de splitear en microservicios para
+   este pivot. Si aparece una necesidad concreta (ej. un worker de impresión aparte, un servicio de
+   colas), se evalúa entonces — no de entrada.
+
+**Qué queda obsoleto de lo de abajo** (se deja documentado, no se borra, por trazabilidad):
+- La sección **"Fase 6 — Empaquetado y producto"** completa (empaquetado Windows, Postgres
+  embebido, topología PC-servidor+tablet-LAN, hostname mDNS) — ya no aplica al modelo cloud.
+- La nota de la fase actual sobre `/carta`/`/barra` "programados pero fuera de validación hasta la
+  Fase 7" — con el modelo comandera, el pedido de cliente por QR pasa a ser una decisión de producto
+  a re-evaluar (¿sigue teniendo sentido con una sola persona vendiendo por la pista?), no algo que
+  simplemente se retoma más adelante.
+- El flujo de cobro con Posnet en `/caja` dentro de la comandera (Fase 5, `gestion-posnets`) — el
+  código y el aprendizaje de la integración MP se conservan (sirven igual para transferencias), pero
+  la UX de caja fija con Posnet en mano no es el flujo objetivo.
+
+**Próximo paso**: escribir la spec (`docs/specs/deploy-cloud-comandera.md`, vía `/spec`) que fije
+hosting elegido, hardening de seguridad para exponer a internet (ver checklist en la evaluación),
+diseño de la PWA comandera, y el mecanismo de impresión Bluetooth — antes de tocar código.
+
+---
+
+## ⏳ Pendiente — traer y auditar `origin/develop` (commits del compañero) *(2026-08-03)*
+
+`develop` local está **19 commits atrás** de `origin/develop` (rango `8397f95..4fbae65`, autor
+Genkaix1000). Ya se auditó con 3 agentes (backend/seguridad, supabase-expert, react-frontend) el
+2026-07-26: **código de buena calidad** (507 tests web verdes, typecheck OK, cero deps nuevas,
+sería fast-forward), pero **NO se trajo todavía** porque hay 2 bloqueantes que son decisiones de
+producto camufladas en commits con mensajes engañosos — y ahora se cruzan con el pivot a cloud:
+
+1. **`0ede779`** ("security"): mata el flujo cliente QR sin flag — `/carta` (588 líneas→404),
+   `/barra`, `/pedido/[token]` devuelven `notFound()` hardcodeado; `POST /api/orders` pasó a
+   staff-only. Convierte el sistema en un POS puro de caja. **Con el pivot a comandera esto puede
+   ser correcto** (ya no hay pedido de cliente por QR en el modelo nuevo) — pero es una decisión de
+   producto a confirmar explícitamente, no algo que se cuela en un commit de "security".
+2. **`38a5e63`** (mensaje engañoso "refactor(ui)"): **borró `apps/web/src/proxy.ts` sin
+   reemplazo** — viola la regla de oro del repo (guard de `/admin`/`/caja` quedó solo
+   client-side). Esto es más grave todavía en el modelo cloud: exponer la app a internet sin guard
+   de edge es exactamente lo que el hardening pre-cloud tiene que evitar. **Hay que restituirlo
+   antes de mergear**, no después.
+
+Otros hallazgos (no bloqueantes, quedan para revisar/limpiar al mergear): pago "split" a medio
+implementar (rechaza 422, no habilitar), migración que hace `DELETE FROM drinks` (la carta se
+re-siembra por seed — frágil, aplicar en Cloud antes del próximo cierre), ítems fantasma en el
+carrito tras "Recargar carta", `webusb-printer.ts` sin mutex, imágenes de 17MB sin optimizar, APK
+de 2.8MB re-commiteado en el historial. Detalle completo en Engram (`mem_search` proyecto
+`Cocktrail`, observación #761).
+
+- [ ] Confirmar con el dueño si el POS-puro de `0ede779` queda como decisión definitiva (coherente
+  con comandera) o si hay que agregar un flag.
+- [ ] Restituir `proxy.ts` antes o durante el merge.
+- [ ] Mergear, aplicar las 7 migraciones nuevas, correr `pnpm typecheck` + suites.
+- [ ] Migrar el CHECK de `cortesia` en Cloud antes del próximo cierre (si no, `pushOrders` rechaza).
+
+---
+
+## 🧭 Dónde estamos y qué sigue *(2026-07-24, previo al pivot — ver sección de arriba)*
 
 **En una línea**: la **remediación de la integración Mercado Pago está COMPLETA** (`implementada`,
 PR 1-6 con sus gates físicos pasados): el cobro con Posnet funciona de punta a punta, la venta se
 concreta solo si MP confirmó el cobro, cobrar no depende de Supabase Cloud, el Posnet se gestiona
 desde `/admin`, y **los cobros MP suben a la nube al cerrar la noche y vuelven en el restore**
-(PR 5 cerrado el 2026-07-24). Lo que sigue: la **prueba en el boliche real (2026-07-25 a la
-noche, por LAN — NO requiere la Fase 6)** y después la **Fase 6** (empaquetado).
+(PR 5 cerrado el 2026-07-24). Esto sigue vigente y reutilizable en el modelo cloud+comandera (el
+cobro MP ya viaja por su API online); lo que cambia es el empaquetado/deploy (ver pivot arriba).
 
 ### Bloques cerrados (punteros — el detalle vive en cada spec)
 
@@ -310,9 +395,14 @@ del 25-07, que corre con la cuenta de prueba).
 
 ---
 
-## Fase 6 — Empaquetado y producto 📦
+## Fase 6 — Empaquetado y producto 📦 *(OBSOLETA — reemplazada por el pivot a cloud, ver arriba)*
 
-**Objetivo**: que la **PC del boliche arranque el sistema sola al prenderse** y la tablet entre por la
+> ⚠️ Todo lo de abajo asumía deploy local-first (mini-PC en el boliche). Con el **pivot a cloud +
+> comandera** (2026-08-03, ver sección al inicio del roadmap) esta fase entera queda sin efecto —
+> no se empaqueta un ejecutable de escritorio, se despliega a un hosting cloud. Se conserva el
+> contenido por trazabilidad de decisiones ya tomadas, no como plan vigente.
+
+**Objetivo (obsoleto)**: que la **PC del boliche arranque el sistema sola al prenderse** y la tablet entre por la
 red, sin que nadie instale Docker ni Node ni levante nada a mano (ver "Topología del deploy" más abajo).
 
 📁 Docs: [`specs/06-empaquetado/`](./specs/06-empaquetado/) —
