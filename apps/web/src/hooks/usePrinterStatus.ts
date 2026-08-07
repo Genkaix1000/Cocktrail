@@ -67,6 +67,18 @@ export function usePrinterStatus() {
     }
   }, []);
 
+  /** Despierta la impresora ya vinculada (la Bluetooth se apaga sola). */
+  const connectPrinter = useCallback(async () => {
+    setPrinterTestMessage(null);
+    try {
+      await printerManager.connect();
+    } catch (err) {
+      setPrinterTestMessage(
+        err instanceof Error ? err.message : "No se pudo conectar con la impresora.",
+      );
+    }
+  }, []);
+
   const printTicket = useCallback(async (result: PrintableOrder) => {
     setPrintError(null);
     const { ticketData, ticketContent } = result;
@@ -119,8 +131,10 @@ export function usePrinterStatus() {
 
   return {
     printerStatus,
+    printerPaired: snapshot.phase === "paired" || snapshot.phase === "connected",
     refreshPrinterStatus,
     pairPrinterDevice,
+    connectPrinter,
     printTicket,
     testPrint,
     printerTestMessage,

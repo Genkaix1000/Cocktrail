@@ -17,6 +17,12 @@ export type PrinterTransport = {
   isAvailable(): boolean;
   isConnected(): Promise<boolean>;
   pair(): Promise<void>;
+  /**
+   * Reconecta a un dispositivo YA vinculado, sin volver a pedirlo. La impresora
+   * Bluetooth se apaga sola por ahorro de energía y hay que despertarla; los
+   * transportes por cable no necesitan hacer nada.
+   */
+  connect?(): Promise<void>;
   print(payload: TransportPrintPayload): Promise<void>;
 };
 

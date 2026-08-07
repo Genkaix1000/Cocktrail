@@ -32,6 +32,8 @@ export type PrinterManager = {
   /** Recalcula transporte + estado de conexión. NO conecta la BLE. */
   refresh(): Promise<void>;
   pair(): Promise<void>;
+  /** Reconecta a la impresora ya vinculada (la Bluetooth se apaga sola). */
+  connect(): Promise<void>;
   print(payload: TransportPrintPayload, meta?: PrintMeta): Promise<void>;
 };
 
@@ -141,6 +143,27 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
     await refresh();
   }
 
+  /**
+   * Reconecta a la impresora ya vinculada. La Bluetooth se apaga sola por
+   * ahorro de energía, así que hace falta poder despertarla a mano antes de
+   * empezar a vender, sin pasar otra vez por el selector del navegador.
+   */
+  async function connect(): Promise<void> {
+    if (typeof window === "undefined") throw new Error(NO_SUPPORT_MESSAGE);
+    const transport = deps.selectTransport();
+    if (!transport) throw new Error(NO_SUPPORT_MESSAGE);
+    if (!transport.connect) {
+      await refresh();
+      return;
+    }
+    setSnapshot({ ...snapshot, message: "Conectando con la impresora…" });
+    try {
+      await transport.connect();
+    } finally {
+      await refresh();
+    }
+  }
+
   function print(payload: TransportPrintPayload, meta?: PrintMeta): Promise<void> {
     const transport = deps.selectTransport();
     if (!transport) {
@@ -180,6 +203,7 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
     },
     refresh,
     pair,
+    connect,
     print,
   };
 }

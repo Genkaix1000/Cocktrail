@@ -40,6 +40,9 @@ type Props = {
   printerStatus: { connected: boolean; message: string } | null;
   testPrint: () => void | Promise<void>;
   pairPrinterDevice: () => void | Promise<void>;
+  connectPrinter: () => void | Promise<void>;
+  /** Vinculada alguna vez: alcanza con reconectar, no hay que elegirla de nuevo. */
+  printerPaired: boolean;
   printerTestMessage: string | null;
   posnetLevel: PosnetLevel;
   posnetMessage: string | null;
@@ -93,6 +96,8 @@ export default function CajaSidebar({
   printerStatus,
   testPrint,
   pairPrinterDevice,
+  connectPrinter,
+  printerPaired,
   printerTestMessage,
   posnetLevel,
   posnetMessage,
@@ -303,6 +308,21 @@ export default function CajaSidebar({
                     <button type="button" onClick={testPrint} className={`${secondaryBtn} mt-2`}>
                       Imprimir ticket de prueba
                     </button>
+                  ) : printerPaired ? (
+                    // Ya vinculada: la Bluetooth se apaga sola por ahorro de
+                    // energía, así que alcanza con despertarla.
+                    <>
+                      <button type="button" onClick={connectPrinter} className={`${secondaryBtn} mt-2`}>
+                        Conectar impresora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={pairPrinterDevice}
+                        className="w-full mt-1.5 text-[10px] text-[var(--text-tertiary)] underline cursor-pointer"
+                      >
+                        Vincular otra
+                      </button>
+                    </>
                   ) : (
                     <button type="button" onClick={pairPrinterDevice} className={`${secondaryBtn} mt-2`}>
                       Vincular impresora

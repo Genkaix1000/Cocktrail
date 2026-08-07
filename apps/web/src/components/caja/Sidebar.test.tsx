@@ -46,6 +46,8 @@ const baseProps = {
   printerStatus: { connected: true, message: "ok" },
   testPrint: vi.fn(),
   pairPrinterDevice: vi.fn(),
+  connectPrinter: vi.fn(),
+  printerPaired: false,
   printerTestMessage: null as string | null,
   posnetLevel: "ok" as const,
   posnetMessage: "Posnet de la caja listo para cobrar (modo PDV).",

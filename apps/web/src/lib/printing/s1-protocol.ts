@@ -17,7 +17,13 @@ export const S1_NAME_PREFIX = "PPS1";
  * header GS v 0 — el firmware solo honra yL: un bloque de 360 filas (yH=1)
  * imprime garbage (confirmado con el aparato el 2026-08-07).
  */
-const STRIPE_MAX_ROWS = 240;
+/**
+ * Filas por bloque de imagen. 120 es el único valor validado con el aparato
+ * cuando el ticket ocupa VARIOS bloques: con 240 anda mientras entre en uno
+ * solo, pero un ticket de 4 tragos (dos bloques de 240) cuelga el firmware y
+ * apaga la impresora. No subirlo sin volver a probar en papel.
+ */
+const STRIPE_MAX_ROWS = 120;
 /**
  * Chunk BLE por defecto: 20 bytes = payload garantizado con el MTU mínimo
  * BLE (23). Gate físico 2026-08-07: en la tablet de producción los chunks de

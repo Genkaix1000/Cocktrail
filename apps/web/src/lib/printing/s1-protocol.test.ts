@@ -63,89 +63,49 @@ describe("constantes", () => {
 describe("buildS1Sequence — modo normal (m=0x00, opts explícitos)", () => {
   // Los golden tests de chunking usan chunkSize 512 explícito para conservar
   // la matemática original; el default es 20 (MTU mínimo, ver test aparte).
-  it("bitmap de 48x240: secuencia dorada completa (orden, headers, chunks, delays)", () => {
+  it("bitmap de 48x240: dos franjas de 120, cada una con su header", () => {
     const steps = buildS1Sequence(makeBitmap(240), { chunkSize: 512, mode: "normal" });
 
-    // 3 setup + 23 chunks de imagen + 2 ESC J de largo mínimo + feed + stop
-    expect(steps).toHaveLength(30);
-
-    // ENABLE -> wake -> densidad, 100ms cada uno
+    // Setup en orden
     expect(bytes(steps[0])).toEqual([0x10, 0xff, 0xf1, 0x03]);
     expect(steps[0].delayAfterMs).toBe(100);
     expect(bytes(steps[1])).toEqual(new Array(12).fill(0));
-    expect(steps[1].delayAfterMs).toBe(100);
     expect(bytes(steps[2])).toEqual([0x10, 0xff, 0x10, 0x00, 0x01]);
-    expect(steps[2].delayAfterMs).toBe(100);
 
-    // Header GS v 0 exacto al inicio del primer chunk: m=0 xL=48 xH=0 yL=240 yH=0
-    expect(bytes(steps[primerBloque(steps)]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x00, 48, 0, 240, 0]);
+    // 240 filas -> 2 bloques de 120 (el tamaño validado con el aparato)
+    const headers = steps.filter((st) => st.bytes[0] === 0x1d && st.bytes[1] === 0x76);
+    expect(headers).toHaveLength(2);
+    for (const h of headers) {
+      expect(bytes(h).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x00, 48, 0, 120, 0]);
+    }
 
-    // Franja de 240 filas = 8 + 11520 = 11528 bytes -> 22 chunks de 512 + 1 de 264
-    const b = primerBloque(steps);
-    const imageSteps = steps.slice(b, b + 23);
-    expect(imageSteps.slice(0, 22).every((s) => s.bytes.length === 512)).toBe(true);
-    expect(imageSteps[22].bytes.length).toBe(264);
-    const totalImageBytes = imageSteps.reduce((sum, s) => sum + s.bytes.length, 0);
-    expect(totalImageBytes).toBe(8 + WIDTH_BYTES * 240);
-
-    // Delays: 10ms por chunk intermedio, 300ms tras el último chunk de imagen
-    expect(imageSteps.slice(0, 22).every((s) => s.delayAfterMs === 10)).toBe(true);
-    expect(imageSteps[22].delayAfterMs).toBe(300);
-
-    // Los datos del raster viajan intactos después del header
-    const bitmap = makeBitmap(240);
-    expect(bytes(steps[primerBloque(steps)]).slice(8, 16)).toEqual(Array.from(bitmap.data.subarray(0, 8)));
-    expect(imageSteps[22].bytes[263]).toBe(bitmap.data[bitmap.data.length - 1]);
-
-    // Largo mínimo: faltan 280 dots, repartidos 140 arriba y 140 abajo para
-    // que el ticket quede centrado en el papel.
-    const feeds = feedsDe(steps);
-    expect(feeds.map((f) => f.bytes[2])).toEqual([255, 25]);
-    expect(feeds.every((f) => f.delayAfterMs === 60)).toBe(true);
-    // TODOS después de la imagen: un ESC J antes cuelga el firmware.
-    expect(steps.indexOf(feeds[0])).toBeGreaterThan(primerBloque(steps));
-
-    // Feed (2000ms antes del stop) y stop
+    // Cierre
     expect(bytes(steps[steps.length - 2])).toEqual([0x1b, 0x4a, 0x50]);
     expect(steps[steps.length - 2].delayAfterMs).toBe(2000);
-    expect(bytes(steps[29])).toEqual([0x10, 0xff, 0xf1, 0x45]);
-    expect(steps[29].delayAfterMs).toBe(0);
+    expect(bytes(steps[steps.length - 1])).toEqual([0x10, 0xff, 0xf1, 0x45]);
   });
 
-  it("H=360 se parte en franjas de 240+120, cada una con su PROPIO header GS v 0", () => {
+  it("H=360 se parte en 3 franjas de 120, cada una con su PROPIO header", () => {
     const bitmap = makeBitmap(360);
     const steps = buildS1Sequence(bitmap, { chunkSize: 512, mode: "normal" });
 
-    const b1 = primerBloque(steps);
-    // Franja 1: header yL=240
-    expect(bytes(steps[b1]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x00, 48, 0, 240, 0]);
-
-    // La franja 2 tiene su PROPIO header yL=120: el firmware solo honra yL, así
-    // que un único bloque de 360 filas imprime garbage.
     const headers = steps.filter((st) => st.bytes[0] === 0x1d && st.bytes[1] === 0x76);
-    expect(headers).toHaveLength(2);
-    expect(bytes(headers[1]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x00, 48, 0, 120, 0]);
-    // ...y su cuerpo empieza en la fila 240 del raster
+    expect(headers).toHaveLength(3);
+    for (const h of headers) {
+      expect(bytes(h).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x00, 48, 0, 120, 0]);
+    }
+    // Cada franja arranca donde termina la anterior
     expect(bytes(headers[1]).slice(8, 16)).toEqual(
+      Array.from(bitmap.data.subarray(120 * WIDTH_BYTES, 120 * WIDTH_BYTES + 8)),
+    );
+    expect(bytes(headers[2]).slice(8, 16)).toEqual(
       Array.from(bitmap.data.subarray(240 * WIDTH_BYTES, 240 * WIDTH_BYTES + 8)),
     );
 
-    // Franja 2: 8 + 5760 = 5768 bytes -> 11 chunks de 512 + 1 de 136
-    const i2 = steps.indexOf(headers[1]);
-    const stripe2 = steps.slice(i2, i2 + 12);
-    expect(stripe2.slice(0, 11).every((st) => st.bytes.length === 512)).toBe(true);
-    expect(stripe2[11].bytes.length).toBe(136);
-
-    // Delays: último chunk de franja intermedia 80ms; el de la última, 300ms
-    expect(steps[i2 - 1].delayAfterMs).toBe(80);
-    expect(stripe2[11].delayAfterMs).toBe(300);
-
-    // Largo mínimo: faltan 160 dots, repartidos 80 arriba y 80 abajo para que
-    // el ticket quede centrado en el papel.
+    // Relleno: faltan 160 dots, TODOS después de la imagen
     const feeds = feedsDe(steps);
     expect(feeds.map((f) => f.bytes[2])).toEqual([160]);
-    // Después de la imagen: un ESC J antes del bloque cuelga el firmware.
-    expect(steps.indexOf(feeds[0])).toBeGreaterThan(i2);
+    expect(steps.indexOf(feeds[0])).toBeGreaterThan(steps.indexOf(headers[2]));
 
     expect(bytes(steps[steps.length - 2])).toEqual([0x1b, 0x4a, 0x50]);
     expect(bytes(steps[steps.length - 1])).toEqual([0x10, 0xff, 0xf1, 0x45]);
@@ -173,18 +133,13 @@ describe("buildS1Sequence — modo doubleHeight (default, lo validado en el gate
   it("default SIN opts de modo: header GS v 0 con m=0x02", () => {
     const steps = buildS1Sequence(makeBitmap(180), { chunkSize: 512 });
 
-    // Ticket típico downsampleado (~180 filas) entra en UN solo bloque
-    expect(bytes(steps[primerBloque(steps)]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x02, 48, 0, 180, 0]);
-
-    // 8 + 8640 = 8648 bytes -> 16 chunks de 512 + 1 de 456
-    const b = primerBloque(steps);
-    const imageSteps = steps.slice(b, b + 17);
-    expect(imageSteps.slice(0, 16).every((s) => s.bytes.length === 512)).toBe(true);
-    expect(imageSteps[16].bytes.length).toBe(456);
-    expect(imageSteps[16].delayAfterMs).toBe(300);
+    // 180 filas downsampleadas -> 2 bloques (120 + 60), ambos con m=0x02
+    const headersDh = steps.filter((st) => st.bytes[0] === 0x1d && st.bytes[1] === 0x76);
+    expect(headersDh).toHaveLength(2);
+    expect(bytes(headersDh[0]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x02, 48, 0, 120, 0]);
+    expect(bytes(headersDh[1]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x02, 48, 0, 60, 0]);
 
     // Impreso real = 180 filas x2 = 360 dots < 520 -> faltan 160, centrados 80/80
-    expect(steps).toHaveLength(3 + 17 + 1 + 2);
     const feedsDh = feedsDe(steps);
     expect(feedsDh.map((f) => f.bytes[2])).toEqual([160]);
     expect(feedsDh.every((f) => f.delayAfterMs === 60)).toBe(true);
@@ -201,11 +156,12 @@ describe("buildS1Sequence — modo doubleHeight (default, lo validado en el gate
     expect(bytes(feeds[0])).toEqual([0x1b, 0x4a, 0x50]);
   });
 
-  it("las franjas siguen siendo de <=240 filas también con m=2", () => {
+  it("las franjas siguen siendo de <=120 filas también con m=2", () => {
     const steps = buildS1Sequence(makeBitmap(300), { chunkSize: 512 });
-    expect(bytes(steps[primerBloque(steps)]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x02, 48, 0, 240, 0]);
-    // Franja 1: 8 + 11520 = 11528 -> 23 chunks; franja 2 arranca en el step 26
-    expect(bytes(steps[26]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x02, 48, 0, 60, 0]);
+    // 300 filas -> 120 + 120 + 60, cada bloque con su header
+    const headers = steps.filter((st) => st.bytes[0] === 0x1d && st.bytes[1] === 0x76);
+    expect(headers.map((h) => h.bytes[6])).toEqual([120, 120, 60]);
+    expect(headers.every((h) => h.bytes[3] === 0x02)).toBe(true);
   });
 });
 

@@ -63,6 +63,8 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     reprintTicket,
     printTicket,
     pairPrinterDevice,
+    connectPrinter,
+    printerPaired,
     printError,
     reprinting,
   } = usePrinterStatus();
@@ -158,6 +160,8 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     printerStatus,
     testPrint,
     pairPrinterDevice,
+    connectPrinter,
+    printerPaired,
     printerTestMessage,
     posnetLevel,
     posnetMessage,

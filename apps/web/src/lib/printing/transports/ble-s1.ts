@@ -203,6 +203,11 @@ export const bleS1Transport: PrinterTransport = {
     adoptDevice(device);
   },
 
+  /** Despierta la impresora ya vinculada, sin volver a pedir el dispositivo. */
+  async connect(): Promise<void> {
+    await ensureConnected();
+  },
+
   async print(payload: TransportPrintPayload): Promise<void> {
     const characteristic = await ensureConnected();
     // Pipeline validado en el gate T1: render a resolución completa →
