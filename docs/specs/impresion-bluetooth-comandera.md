@@ -292,28 +292,42 @@ es un permiso del **navegador** (gesto de usuario + prompt de Chrome), no del ba
 >    impresión ilegible. Con chunks de **20 bytes** imprime perfecto. El MTU depende del
 >    dispositivo y Web Bluetooth no lo expone: el módulo usa 20 por defecto y permite subir por
 >    `localStorage["cocktrail.ble-chunk"]` tras probar en el dispositivo real.
-> 2. **Alto por bloque `GS v 0`**: un bloque de 360 filas imprime garbage (el firmware honra solo
->    `yL`) → la imagen va en franjas de ≤240 filas (se usan 120, el alto validado).
+> 2. ~~**Alto por bloque**: el firmware solo honra `yL`, hay que partir en franjas.~~
+>    **DIAGNÓSTICO ERRÓNEO, corregido el 2026-08-07** — ver el bloque de abajo.
 > 3. **Ancho 576 descartado**: cuelga el firmware (y desconecta) — el cabezal es de 384 puntos.
 > 4. La app oficial Luck Jingle no interfiere (se descartó); sirve como referencia de que el
 >    hardware imprime bien y para ver el % de batería (que BLE no expone).
 >
 > **Calibración final (cierre de T1, 2026-08-07, validada imprimiendo en papel):**
-> 5. **`GS v 0` con m=2 (doble alto) + downsample OR**: se renderiza a resolución completa y se
->    combinan las filas de a pares con OR (si cualquiera tiene tinta, la resultante lleva tinta —
->    conserva los trazos finos en vez de perderlos). Mitad de datos, misma legibilidad. Es el modo
->    default del módulo (`buildS1Sequence` con `mode: "doubleHeight"`).
-> 6. **Un solo bloque `GS v 0` siempre que se pueda**: los cortes entre bloques meten un hueco de
->    papel visible (firmware). Con m=2 el ticket típico (~180 filas downsampleadas) entra en UN
->    bloque; el límite sigue en ≤240 filas por bloque (el firmware banca ≤255 y solo honra `yL`).
-> 7. **Tipografía final** (en `RASTER_LAYOUT`): ítems 38px bold con "doble pasada" (fillText ×3
->    con 1px de corrimiento — trazo más grueso, imprime más negro), brand 46px, fecha de la noche
->    30px, texto 22px, sans-serif; clave + código fusionados en un solo renglón `clave · cod`.
-> 8. **Densidad queda en 1** (subirla quema sin mejorar la legibilidad).
-> 9. **Largo mínimo del ticket: 520 dots (~65mm)** — si lo impreso es más corto se completa con
->    `ESC J n` antes del feed final (una venta de 1 trago no sale como mini-ticket).
-> 10. **Blank-skip descartado**: intercalar `ESC J` entre bloques de imagen para saltear filas en
->     blanco cuelga el firmware. No insistir.
+> 5. **~~m=2 (doble alto) + downsample~~ → DESCARTADO: era la causa de los tickets cortados.**
+>    Con m=0x02 el firmware espera `ancho × alto de salida` bytes de raster: se quedaba esperando
+>    el doble, se comía el header del bloque siguiente como si fueran píxeles (la línea de basura
+>    visible en el papel) y dejaba el resto en blanco (el hueco de ~2cm). Con UN trago no se notaba
+>    porque no había bloque siguiente. **Ahora: resolución completa, UN bloque, m=0x00**, que es lo
+>    que hace la app del fabricante —se la capturó mandando 831 filas de una— y lo que fijan las
+>    tres implementaciones de referencia de esta familia (`lsongdev/luckjingle-d1-printer`,
+>    `Dejniel/TiMini-Print`, `ChiaraCannolee/thermal-pocket-printer-basic`). Verificado en
+>    producción con 4 y 8 tragos. Cuesta el doble de datos: ~9s (1 trago), 17s (4), 28s (8).
+> 6. **`ESC J` antes del bloque de imagen CUELGA el firmware** y apaga la impresora. Se intentó
+>    para centrar el ticket verticalmente (repartir el relleno arriba y abajo) y falló con "GATT
+>    operation failed". El relleno de largo mínimo va SIEMPRE después de la imagen: **el ticket no
+>    se puede centrar en el papel**. Es la misma limitación por la que se descartó saltear las
+>    filas en blanco.
+> 7. **Contenido y tipografía finales** (validados en papel con el dueño): el ticket NO lleva
+>    marca, ni fecha de la venta (ya está la de la noche arriba), ni código de retiro (lo canjeaba
+>    la pantalla de barra, que no existe con el modelo comandera), ni líneas separadoras. Tamaños
+>    en `RASTER_LAYOUT`: ítems 50px (lo más grande, es lo que lee el barman), clave 36px, número de
+>    venta 32px, fecha de la noche 28px; los tres primeros con "doble pasada" (fillText ×3 con 1px
+>    de corrimiento) para que impriman más negro. Densidad 1, sans-serif, largo mínimo 520 dots.
+> 8. **La impresora se apaga sola** por ahorro de energía (hardware). El sidebar ofrece "Conectar
+>    impresora" cuando ya está vinculada, para despertarla sin pasar por el selector del navegador.
+> 9. **La S1 es una impresora de FOTOS usada como impresora de tickets**: por eso hacen falta
+>    30.000 bytes para imprimir cuatro renglones. Reemplazo identificado: **Goojprt MPT-II**
+>    (ESC/POS sobre BLE, servicio `18F0`, con canal de estado), que está mapeada en
+>    `NielsLeenheer/WebBluetoothReceiptPrinter`. Con ESC/POS el ticket son ~500 bytes en vez de
+>    30.000 → prácticamente instantáneo. Verificar antes de comprar con `chrome://bluetooth-internals`
+>    que el aparato anuncie `18F0`.
+
 
 ### Bloque 0 — Validaciones tempranas (gates físicos, ANTES de construir el resto)
 
