@@ -44,7 +44,6 @@ export default function RootLayout({
                   var path = window.location.pathname;
                   if (path.indexOf('/admin') === 0) role = 'admin';
                   else if (path.indexOf('/caja') === 0) role = 'caja';
-                  else if (path.indexOf('/barra') === 0) role = 'barra';
                   var key = 'cocktrail_is_dark_' + role;
                   var isDark = localStorage.getItem(key) !== 'false';
                   

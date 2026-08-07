@@ -6,8 +6,6 @@ export const config = {
     "/admin/:path*",
     "/caja",
     "/caja/:path*",
-    "/barra",
-    "/barra/:path*",
     "/login",
   ],
 };
@@ -94,18 +92,6 @@ export default async function proxy(request: NextRequest) {
       }
       if (session.role !== "caja") {
         const home = session.role === "admin" ? "/admin" : "/login";
-        return NextResponse.redirect(new URL(home, request.url));
-      }
-      return NextResponse.next();
-    }
-
-    // /barra → requiere admin (canje manual, ya no hay rol "barman" dedicado)
-    if (pathname === "/barra" || pathname.startsWith("/barra/")) {
-      if (!session) {
-        return NextResponse.redirect(new URL("/login", request.url));
-      }
-      if (session.role !== "admin") {
-        const home = session.role === "caja" ? "/caja" : "/login";
         return NextResponse.redirect(new URL(home, request.url));
       }
       return NextResponse.next();

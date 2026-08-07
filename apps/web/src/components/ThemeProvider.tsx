@@ -41,7 +41,6 @@ const getIsDarkKey = () => {
     const path = window.location.pathname;
     if (path.startsWith("/admin")) role = "admin";
     else if (path.startsWith("/caja")) role = "caja";
-    else if (path.startsWith("/barra")) role = "barra";
   }
   return `cocktrail_is_dark_${role}`;
 };
