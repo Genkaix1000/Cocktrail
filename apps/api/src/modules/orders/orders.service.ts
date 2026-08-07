@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { NewOrderInput, Order, OrderStatus, NightEvent } from "@cocktrail/shared";
+import type { CreateOrderResult, NewOrderInput, Order, OrderStatus, NightEvent, TicketContent } from "@cocktrail/shared";
 import type { OrdersRepository } from "./orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { VerifyPaymentFn, PaymentVerdict } from "./payment-verification.port.js";
@@ -16,12 +16,7 @@ function shortToken(): string {
   return randomBytes(4).toString("hex");
 }
 
-export type CreateOrderResult = Order & {
-  /** Siempre false en server: la tablet de caja imprime por WebUSB. */
-  printed: boolean;
-  /** ESC/POS en base64 para que el cliente imprima (solo ventas de caja). */
-  ticketData?: string;
-};
+export type { CreateOrderResult } from "@cocktrail/shared";
 
 export type OrdersServiceDeps = {
   ordersRepo: OrdersRepository;
@@ -31,8 +26,8 @@ export type OrdersServiceDeps = {
   emit: EmitFn;
   generateTicketCodeString?: (orderId: string) => string;
   saveTicket?: (orderId: string, code: string) => Promise<void>;
-  /** Arma bytes ESC/POS (base64). La impresión física es en el navegador. */
-  renderTicket?: (order: Order, nightEvent: NightEvent) => Promise<string>;
+  /** Arma bytes ESC/POS (base64) + content estructurado. La impresión física es en el device de caja. */
+  renderTicketPayload?: (order: Order, nightEvent: NightEvent) => Promise<{ ticketData: string; ticketContent: TicketContent }>;
   /** Puerto de verificación de pago — el adaptador (MP) lo cablea app.ts. */
   verifyPayment?: VerifyPaymentFn;
   /**
@@ -181,19 +176,22 @@ export class OrdersService {
     }
 
     let ticketData: string | undefined;
+    let ticketContent: TicketContent | undefined;
     // El payload cuelga del veredicto (no_aplica = efectivo; confirmado = MP
     // verificado) — a esta altura los otros veredictos ya abortaron.
-    // La tablet imprime por WebUSB; el server solo arma los bytes.
-    if (this.deps.renderTicket && esVentaDeCaja && (verdict.result === "no_aplica" || verdict.result === "confirmado")) {
+    // El device de caja imprime (USB o Bluetooth); el server solo arma el ticket.
+    if (this.deps.renderTicketPayload && esVentaDeCaja && (verdict.result === "no_aplica" || verdict.result === "confirmado")) {
       try {
-        ticketData = await this.deps.renderTicket(order, event);
+        ({ ticketData, ticketContent } = await this.deps.renderTicketPayload(order, event));
       } catch {
+        // Si el render falla, la venta NO se cae: sale sin ticket, igual que siempre.
         ticketData = undefined;
+        ticketContent = undefined;
       }
     }
 
     this.deps.emit({ type: "order.created", order });
-    return { ...order, printed: false, ticketData };
+    return { ...order, printed: false, ticketData, ticketContent };
   }
 
   async updateOrderStatus(

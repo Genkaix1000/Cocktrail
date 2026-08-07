@@ -3,7 +3,7 @@ import { OrdersService, type OrdersServiceDeps } from "./orders.service.js";
 import type { OrdersRepository } from "./orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { PaymentVerdict } from "./payment-verification.port.js";
-import type { Drink, NightEvent, Order } from "@cocktrail/shared";
+import type { Drink, NightEvent, Order, TicketContent } from "@cocktrail/shared";
 
 function makeOrdersRepo(overrides?: Partial<OrdersRepository>): OrdersRepository {
   return {
@@ -76,6 +76,16 @@ function makeService(overrides: Partial<OrdersServiceDeps> = {}): OrdersService 
   });
 }
 
+const TICKET_CONTENT: TicketContent = {
+  nightDateText: "NOCHE VIE 07/08/2026",
+  brand: "BOSKO",
+  saleText: "Venta #1",
+  dateText: "7/8/2026, 21:00:00",
+  items: [{ qty: 1, name: "Fernet" }],
+  keywordText: "Clave noche: luna",
+};
+const TICKET_PAYLOAD = { ticketData: "Yml0ZXM=", ticketContent: TICKET_CONTENT };
+
 const PROOF = { provider: "mercadopago", kind: "point_intent", id: "intent-1" } as const;
 const CONFIRMADO: PaymentVerdict = {
   result: "confirmado",
@@ -122,36 +132,39 @@ describe("OrdersService.createOrder", () => {
     expect(result.printed).toBe(false);
   });
 
-  it("no arma ticketData para pedidos de 'Cliente' aunque haya callback de render", async () => {
-    const renderTicket = vi.fn().mockResolvedValue("YQ==");
-    const service = makeService({ renderTicket });
+  it("no arma ticket para pedidos de 'Cliente' aunque haya callback de render", async () => {
+    const renderTicketPayload = vi.fn().mockResolvedValue(TICKET_PAYLOAD);
+    const service = makeService({ renderTicketPayload });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" });
 
-    expect(renderTicket).not.toHaveBeenCalled();
+    expect(renderTicketPayload).not.toHaveBeenCalled();
     expect(result.printed).toBe(false);
     expect(result.ticketData).toBeUndefined();
+    expect(result.ticketContent).toBeUndefined();
   });
 
-  it("arma ticketData para pedidos de staff (impresión en el cliente)", async () => {
-    const renderTicket = vi.fn().mockResolvedValue("Yml0ZXM=");
-    const service = makeService({ renderTicket });
+  it("arma ticketData + ticketContent para pedidos de staff (impresión en el cliente)", async () => {
+    const renderTicketPayload = vi.fn().mockResolvedValue(TICKET_PAYLOAD);
+    const service = makeService({ renderTicketPayload });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
-    expect(renderTicket).toHaveBeenCalledTimes(1);
+    expect(renderTicketPayload).toHaveBeenCalledTimes(1);
     expect(result.ticketData).toBe("Yml0ZXM=");
+    expect(result.ticketContent?.nightDateText).toBe("NOCHE VIE 07/08/2026");
     expect(result.printed).toBe(false);
   });
 
-  it("si el render falla, la venta sigue sin ticketData", async () => {
-    const renderTicket = vi.fn().mockRejectedValue(new Error("boom"));
-    const service = makeService({ renderTicket });
+  it("si el render falla, la venta sigue sin ticket", async () => {
+    const renderTicketPayload = vi.fn().mockRejectedValue(new Error("boom"));
+    const service = makeService({ renderTicketPayload });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
     expect(result.printed).toBe(false);
     expect(result.ticketData).toBeUndefined();
+    expect(result.ticketContent).toBeUndefined();
     expect(result.id).toBeTruthy();
   });
 });
@@ -172,13 +185,13 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
   it("proof rechazada → Conflict PAYMENT_REJECTED, sin Order, sin ticket, sin order.created", async () => {
     const ordersRepo = makeOrdersRepo();
     const emit = vi.fn();
-    const renderTicket = vi.fn();
+    const renderTicketPayload = vi.fn();
     const verifyPayment = vi.fn().mockResolvedValue({
       result: "rechazado",
       reason: "Pago rechazado por Mercado Pago.",
       detail: "cc_rejected_insufficient_amount",
     } satisfies PaymentVerdict);
-    const service = makeService({ ordersRepo, emit, renderTicket, verifyPayment });
+    const service = makeService({ ordersRepo, emit, renderTicketPayload, verifyPayment });
 
     await expect(
       service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "debito", payment: PROOF }, "cajera1"),
@@ -188,7 +201,7 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
       message: expect.stringContaining("cc_rejected_insufficient_amount"),
     });
     expect(ordersRepo.create).not.toHaveBeenCalled();
-    expect(renderTicket).not.toHaveBeenCalled();
+    expect(renderTicketPayload).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -206,12 +219,12 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
     expect(ordersRepo.create).not.toHaveBeenCalled();
   });
 
-  it("proof confirmada → Order 'cobrado' ligada al cobro, ticketData y order.created", async () => {
+  it("proof confirmada → Order 'cobrado' ligada al cobro, ticket y order.created", async () => {
     const ordersRepo = makeOrdersRepo();
     const emit = vi.fn();
-    const renderTicket = vi.fn().mockResolvedValue("Yml0ZXM=");
+    const renderTicketPayload = vi.fn().mockResolvedValue(TICKET_PAYLOAD);
     const verifyPayment = vi.fn().mockResolvedValue(CONFIRMADO);
-    const service = makeService({ ordersRepo, emit, renderTicket, verifyPayment });
+    const service = makeService({ ordersRepo, emit, renderTicketPayload, verifyPayment });
 
     const result = await service.createOrder(
       { items: [{ drinkId: 1, qty: 1 }], paymentMethod: "debito", payment: PROOF, idempotencyKey: "attempt-1111-2222-3333" },
@@ -224,20 +237,22 @@ describe("OrdersService.createOrder — verificación de pago (cobro-verificado)
     expect(result.paymentRecordId).toBe("mp-row-uuid");
     expect(result.idempotencyKey).toBe("attempt-1111-2222-3333");
     expect(result.ticketData).toBe("Yml0ZXM=");
+    expect(result.ticketContent?.nightDateText).toBe("NOCHE VIE 07/08/2026");
     expect(result.printed).toBe(false);
     expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: "order.created" }));
   });
 
-  it("el efectivo pasa por el mismo camino: no_aplica → ticketData y queda 'cobrado'", async () => {
-    const renderTicket = vi.fn().mockResolvedValue("Yml0ZXM=");
+  it("el efectivo pasa por el mismo camino: no_aplica → ticket y queda 'cobrado'", async () => {
+    const renderTicketPayload = vi.fn().mockResolvedValue(TICKET_PAYLOAD);
     const verifyPayment = vi.fn().mockResolvedValue({ result: "no_aplica" } satisfies PaymentVerdict);
-    const service = makeService({ renderTicket, verifyPayment });
+    const service = makeService({ renderTicketPayload, verifyPayment });
 
     const result = await service.createOrder({ items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" }, "cajera1");
 
     expect(verifyPayment).toHaveBeenCalledWith({ expectedAmount: 2000, method: "efectivo" });
     expect(result.paymentStatus).toBe("cobrado");
     expect(result.ticketData).toBe("Yml0ZXM=");
+    expect(result.ticketContent?.nightDateText).toBe("NOCHE VIE 07/08/2026");
     expect(result.printed).toBe(false);
   });
 

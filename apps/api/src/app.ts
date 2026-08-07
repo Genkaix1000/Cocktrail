@@ -195,9 +195,7 @@ const ordersService = new OrdersService({
   emit,
   generateTicketCodeString: (orderId: string): string => ticketsService.generateCodeString(orderId),
   saveTicket: async (orderId: string, code: string): Promise<void> => ticketsService.saveTicketForOrder(orderId, code),
-  renderTicket: async (order, nightEvent): Promise<string> => {
-    return printerService.renderTicket(order, nightEvent);
-  },
+  renderTicketPayload: async (order, nightEvent) => printerService.renderTicketPayload(order, nightEvent),
   verifyPayment,
   isPaymentSchemaReady,
 });

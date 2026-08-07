@@ -1,4 +1,6 @@
-import type { NightEvent, Order } from "@cocktrail/shared";
+import type { NightEvent, Order, PrintPayload, TicketContent } from "@cocktrail/shared";
+
+export type { PrintPayload } from "@cocktrail/shared";
 
 const UTF8_TO_CP437: Record<string, number> = {
   á: 0xa0,
@@ -47,16 +49,10 @@ export type PrinterStatus = {
   message: string;
 };
 
-export type PrintPayload = {
-  success: true;
-  message: string;
-  /** Bytes ESC/POS en base64 — el dispositivo de caja los manda por WebUSB. */
-  data: string;
-};
-
 /**
- * Arma tickets ESC/POS. No toca hardware: la impresión vive en el navegador
- * de la tablet de caja (WebUSB), porque la ticketera está enchufada ahí.
+ * Arma tickets. No toca hardware: el server es dueño del CONTENIDO del ticket
+ * (`TicketContent`, valores listos para mostrar); el device de caja es dueño de
+ * la representación física (ESC/POS texto por USB o raster por Bluetooth).
  */
 export class PrinterService {
   getStatus(): PrinterStatus {
@@ -67,21 +63,55 @@ export class PrinterService {
     };
   }
 
-  private buildTicketBytes(order: Order, nightEvent: NightEvent): Buffer {
-    const parts: Buffer[] = [INIT, ALIGN_CENTER, DOUBLE_ON, toCP437("BOSKO\n"), DOUBLE_OFF, ALIGN_LEFT];
+  /** Único lugar que sabe QUÉ dice un ticket; los transportes deciden CÓMO se ve. */
+  buildTicketContent(order: Order, nightEvent: NightEvent): TicketContent {
+    return {
+      nightDateText:
+        "NOCHE " +
+        new Date(nightEvent.startedAt)
+          .toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })
+          .toUpperCase(),
+      brand: "BOSKO",
+      saleText: `Venta #${order.displayNumber}`,
+      dateText: new Date(order.createdAt).toLocaleString("es-AR"),
+      items: order.items.map((item) => ({ qty: item.qty, name: item.name })),
+      keywordText: `Clave noche: ${nightEvent.keyword ?? "(sin clave)"}`,
+      codeText: order.ticketCode ? `cod: ${order.ticketCode.slice(0, 4)}` : undefined,
+    };
+  }
 
-    parts.push(toCP437(`Venta #${order.displayNumber}\n`));
-    parts.push(toCP437(`${new Date(order.createdAt).toLocaleString("es-AR")}\n`));
+  buildTestContent(): TicketContent {
+    return {
+      brand: "--- TICKET DE PRUEBA ---",
+      dateText: new Date().toLocaleString("es-AR"),
+      items: [],
+    };
+  }
+
+  private buildTicketBytes(content: TicketContent): Buffer {
+    const parts: Buffer[] = [INIT, ALIGN_CENTER];
+
+    if (content.nightDateText) {
+      parts.push(toCP437(`${content.nightDateText}\n`));
+    }
+    parts.push(DOUBLE_ON, toCP437(`${content.brand}\n`), DOUBLE_OFF, ALIGN_LEFT);
+
+    if (content.saleText) {
+      parts.push(toCP437(`${content.saleText}\n`));
+    }
+    parts.push(toCP437(`${content.dateText}\n`));
     parts.push(toCP437("--------------------------------\n"));
 
-    for (const item of order.items) {
+    for (const item of content.items) {
       parts.push(DOUBLE_ON, toCP437(`${item.qty}x ${item.name}\n`), DOUBLE_OFF);
     }
 
     parts.push(toCP437("--------------------------------\n"));
-    parts.push(toCP437(`Clave noche: ${nightEvent.keyword ?? "(sin clave)"}\n`));
-    if (order.ticketCode) {
-      parts.push(toCP437(`cod: ${order.ticketCode.slice(0, 4)}\n`));
+    if (content.keywordText) {
+      parts.push(toCP437(`${content.keywordText}\n`));
+    }
+    if (content.codeText) {
+      parts.push(toCP437(`${content.codeText}\n`));
     }
     parts.push(FEED);
 
@@ -101,7 +131,16 @@ export class PrinterService {
 
   /** Base64 ESC/POS del ticket de una venta (para auto-print o reprint en el cliente). */
   renderTicket(order: Order, nightEvent: NightEvent): string {
-    return this.buildTicketBytes(order, nightEvent).toString("base64");
+    return this.buildTicketBytes(this.buildTicketContent(order, nightEvent)).toString("base64");
+  }
+
+  /** Par bytes + content de un mismo ticket: cada transporte consume el que le sirve. */
+  renderTicketPayload(order: Order, nightEvent: NightEvent): { ticketData: string; ticketContent: TicketContent } {
+    const ticketContent = this.buildTicketContent(order, nightEvent);
+    return {
+      ticketData: this.buildTicketBytes(ticketContent).toString("base64"),
+      ticketContent,
+    };
   }
 
   renderTest(): string {
@@ -109,10 +148,12 @@ export class PrinterService {
   }
 
   async printTicket(order: Order, nightEvent: NightEvent): Promise<PrintPayload> {
+    const { ticketData, ticketContent } = this.renderTicketPayload(order, nightEvent);
     return {
       success: true,
       message: "Ticket listo para imprimir en el dispositivo",
-      data: this.renderTicket(order, nightEvent),
+      data: ticketData,
+      ticketContent,
     };
   }
 
@@ -121,6 +162,7 @@ export class PrinterService {
       success: true,
       message: "Prueba lista para imprimir en el dispositivo",
       data: this.renderTest(),
+      ticketContent: this.buildTestContent(),
     };
   }
 }

@@ -123,6 +123,42 @@ export type NewOrderInput = {
   payments?: OrderPaymentDetail[];
 };
 
+/**
+ * Contenido de un ticket, ya formateado para mostrar (el server es dueño del
+ * contenido; el device de caja lo convierte a su representación física:
+ * ESC/POS texto en la ticketera USB, raster 384px en la impresora BLE).
+ */
+export type TicketContent = {
+  /** Fecha de la noche, arriba del todo (ej: "NOCHE VIE 07/08/2026"). */
+  nightDateText?: string;
+  brand: string;
+  saleText?: string;
+  /** Fecha/hora de la venta, ya formateada es-AR. */
+  dateText: string;
+  items: { qty: number; name: string }[];
+  keywordText?: string;
+  /** Código de retiro ya recortado (ej: "cod: A7F3"). */
+  codeText?: string;
+};
+
+export type PrintPayload = {
+  success: boolean;
+  message: string;
+  /** Bytes ESC/POS texto en base64 — transportes USB. */
+  data: string;
+  /** Contenido estructurado — el transporte Bluetooth lo rasteriza. */
+  ticketContent: TicketContent;
+};
+
+export type CreateOrderResult = Order & {
+  /** Siempre false en server: la impresión física vive en el device de caja. */
+  printed: boolean;
+  /** ESC/POS texto en base64 (solo ventas de caja con pago resuelto). */
+  ticketData?: string;
+  /** Contenido estructurado del mismo ticket (para el transporte Bluetooth). */
+  ticketContent?: TicketContent;
+};
+
 export function computeTotals(orders: Order[]): EventTotals {
   let webTotal = 0;
   let webCount = 0;

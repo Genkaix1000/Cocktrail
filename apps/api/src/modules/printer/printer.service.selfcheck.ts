@@ -30,9 +30,20 @@ const b64 = svc.renderTicket(order, event);
 const bytes = Buffer.from(b64, "base64");
 
 if (!b64 || bytes.length < 20) throw new Error("ticket vacío o demasiado corto");
+if (!bytes.includes(Buffer.from("NOCHE"))) throw new Error("falta la línea de fecha de la noche");
 if (!bytes.includes(Buffer.from("BOSKO"))) throw new Error("falta marca BOSKO");
 if (!bytes.includes(Buffer.from("Fernet"))) throw new Error("falta ítem");
 if (!bytes.includes(Buffer.from("luna"))) throw new Error("falta keyword");
+
+const content = svc.buildTicketContent(order, event);
+if (content.brand !== "BOSKO") throw new Error(`content.brand roto: ${content.brand}`);
+if (content.saleText !== "Venta #7") throw new Error(`content.saleText roto: ${content.saleText}`);
+if (content.codeText !== "cod: ABCD") throw new Error(`content.codeText roto: ${content.codeText}`);
+if (!content.keywordText?.includes("luna")) throw new Error(`content.keywordText roto: ${content.keywordText}`);
+if (!content.nightDateText?.startsWith("NOCHE")) throw new Error(`content.nightDateText roto: ${content.nightDateText}`);
+if (content.items.length !== 1 || content.items[0]?.name !== "Fernet" || content.items[0]?.qty !== 2) {
+  throw new Error(`content.items roto: ${JSON.stringify(content.items)}`);
+}
 
 const test = Buffer.from(svc.renderTest(), "base64");
 if (!test.includes(Buffer.from("TICKET DE PRUEBA"))) throw new Error("test payload roto");
