@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -11,13 +11,30 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Bosko - Menú Digital",
-  description: "Pedí tus tragos favoritos desde tu mesa",
-  icons: {
-    icon: "/navicon.png",
-    shortcut: "/navicon.png",
-    apple: "/navicon.png",
+  title: "Bosko — Caja",
+  description: "Ventas, cobros y cierre de noche del boliche",
+  manifest: "/manifest.webmanifest",
+  // Instalada en la tablet abre sin barra del navegador, como una app.
+  appleWebApp: {
+    capable: true,
+    title: "Bosko",
+    statusBarStyle: "black-translucent",
   },
+  icons: {
+    icon: "/icon-192.png",
+    shortcut: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#111315",
+  width: "device-width",
+  initialScale: 1,
+  // La caja se opera con los dedos y a los apurones: sin zoom accidental al
+  // tocar dos veces un botón.
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
