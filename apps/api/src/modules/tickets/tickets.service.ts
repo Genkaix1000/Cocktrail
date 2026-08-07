@@ -4,6 +4,7 @@ import { generateTicketCode, verifyTicketIntegrity } from "./tickets.crypto.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
 import { randomUUID } from "node:crypto";
 import type { Order } from "@cocktrail/shared";
+import { formatearHora } from "../../shared/utils/fechas.js";
 
 // Max hours a ticket is valid (e.g. 6 hours)
 const MAX_TICKET_AGE_MS = 6 * 60 * 60 * 1000;
@@ -75,11 +76,7 @@ export class TicketsService {
     // en el UPDATE condicional de orders.updateStatus más abajo — ver
     // docs/specs/deuda-pre-fase-6/atomicidad-canje-ticket.md.
     if (ticket.redeemedAt) {
-      const timeStr = new Date(ticket.redeemedAt).toLocaleTimeString("es-AR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
+      const timeStr = formatearHora(ticket.redeemedAt, { conSegundos: true });
       throw new Conflict(`Ticket ya canjeado a las ${timeStr}`);
     }
 

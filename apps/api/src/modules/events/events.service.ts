@@ -13,6 +13,7 @@ import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
 import { computeTotals } from "@cocktrail/shared";
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
 import { toSafeConfig } from "../config/config.repository.js";
+import { claveDiaArgentina } from "../../shared/utils/fechas.js";
 
 export class EventsService {
   private event: NightEvent | null = null;
@@ -63,8 +64,12 @@ export class EventsService {
         
         if (active) {
           // Check if active event is from a previous calendar day
-          const eventDate = new Date(active.startedAt).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
-          const todayDate = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+          // Día calendario argentino: una noche que arrancó el viernes 23:00 y sigue
+          // abierta al reiniciar el server a las 02:00 del sábado se auto-cierra. Es el
+          // comportamiento que ya había; lo importante es que el "día" sea el de acá y
+          // no el de UTC (que cambia a las 21:00 hora local).
+          const eventDate = claveDiaArgentina(active.startedAt);
+          const todayDate = claveDiaArgentina();
           if (eventDate !== todayDate && active.startedAt < Date.now()) {
             console.log(`[EventsService] Active event ${active.id} is from a past day (${eventDate}). Auto-closing on startup...`);
             const closedAt = Date.now();

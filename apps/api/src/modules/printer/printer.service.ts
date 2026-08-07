@@ -1,4 +1,5 @@
 import type { NightEvent, Order, PrintPayload, TicketContent } from "@cocktrail/shared";
+import { formatearFecha, formatearFechaHora } from "../../shared/utils/fechas.js";
 
 export type { PrintPayload } from "@cocktrail/shared";
 
@@ -42,35 +43,6 @@ const ALIGN_LEFT = Buffer.from([ESC, 0x61, 0x00]);
 const DOUBLE_ON = Buffer.from([GS, 0x21, 0x11]); // doble alto + doble ancho
 const DOUBLE_OFF = Buffer.from([GS, 0x21, 0x00]);
 const FEED = Buffer.from([0x0a, 0x0a, 0x0a, 0x0a]); // sin comando de corte: la impresora no tiene cuchilla
-
-/**
- * El servidor corre en UTC, así que sin huso explícito un ticket de las 16:27
- * de Argentina sale con las 19:27. Se fija acá y no se confía en la variable TZ
- * del entorno, que puede faltar en cualquier hosting.
- */
-const HUSO = "America/Argentina/Buenos_Aires";
-
-function formatearFecha(epochMs: number): string {
-  return new Date(epochMs).toLocaleDateString("es-AR", {
-    timeZone: HUSO,
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function formatearFechaHora(epochMs: number): string {
-  return new Date(epochMs).toLocaleString("es-AR", {
-    timeZone: HUSO,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false, // sin esto puede salir "07:27" para las 19:27
-  });
-}
 
 export type PrinterStatus = {
   connected: boolean;
@@ -149,7 +121,7 @@ export class PrinterService {
       ALIGN_CENTER,
       toCP437("--- TICKET DE PRUEBA ---\n"),
       ALIGN_LEFT,
-      toCP437(`${new Date().toLocaleString("es-AR")}\n`),
+      toCP437(`${formatearFechaHora(Date.now())}\n`),
       FEED,
     ]);
   }
