@@ -131,14 +131,13 @@ export type NewOrderInput = {
 export type TicketContent = {
   /** Fecha de la noche, arriba del todo (ej: "NOCHE VIE 07/08/2026"). */
   nightDateText?: string;
-  brand: string;
+  /** Solo el ticket de prueba lo usa; el de venta no lleva marca. */
+  brand?: string;
   saleText?: string;
-  /** Fecha/hora de la venta, ya formateada es-AR. */
-  dateText: string;
+  /** Fecha/hora ya formateada es-AR (solo el ticket de prueba). */
+  dateText?: string;
   items: { qty: number; name: string }[];
   keywordText?: string;
-  /** Código de retiro ya recortado (ej: "cod: A7F3"). */
-  codeText?: string;
 };
 
 export type PrintPayload = {

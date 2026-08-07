@@ -15,9 +15,12 @@ export const RASTER_LAYOUT = {
   PADDING: 4,
   TOP_PADDING: 10,
   FONT_FAMILY: "sans-serif",
-  NIGHT_PX: 30,
+  NIGHT_PX: 28,
   BRAND_PX: 46,
-  ITEM_PX: 38,
+  /** Los tragos son lo que el barman lee: el tamaño más grande del ticket. */
+  ITEM_PX: 50,
+  SALE_PX: 32,
+  KEYWORD_PX: 30,
   TEXT_PX: 22,
   SEPARATOR_HEIGHT: 2,
   /** Alto de fila del separador: 2px de tinta + 1 de aire arriba. */
@@ -98,10 +101,18 @@ export function buildTicketLines(
   if (content.nightDateText) {
     text(content.nightDateText, L.NIGHT_PX, { bold: true, center: true, gapAfter: L.GAP_HEADER });
   }
-  text(content.brand, L.BRAND_PX, { bold: true, center: true, gapAfter: L.GAP_HEADER });
-  if (content.saleText) text(content.saleText, L.TEXT_PX);
-  text(content.dateText, L.TEXT_PX, { gapAfter: L.GAP_DATE });
-  separator();
+  // La marca solo aparece en el ticket de prueba: en el de venta ocupa papel
+  // sin aportar (el cliente ya está en el boliche).
+  if (content.brand) {
+    text(content.brand, L.BRAND_PX, { bold: true, center: true, gapAfter: L.GAP_HEADER });
+  }
+  if (content.saleText) {
+    text(content.saleText, L.SALE_PX, { bold: true, thick: true, gapAfter: L.GAP_HEADER });
+  }
+  if (content.dateText) text(content.dateText, L.TEXT_PX, { gapAfter: L.GAP_DATE });
+
+  // Lo que el barman tiene que leer de un vistazo: va grande y sin líneas que
+  // le compitan.
   for (const item of content.items) {
     const pieces = wrapLine(`${item.qty}x ${item.name}`, maxWidth, (t) =>
       measure(t, L.ITEM_PX, true),
@@ -110,10 +121,10 @@ export function buildTicketLines(
       text(piece, L.ITEM_PX, { bold: true, thick: true, gapAfter: L.GAP_ITEM });
     }
   }
-  separator();
-  // Clave + código en un solo renglón: mismo contenido, una línea menos de papel.
-  const footer = [content.keywordText, content.codeText].filter(Boolean).join(" · ");
-  if (footer) text(footer, L.TEXT_PX, { gapAfter: L.GAP_FINAL });
+
+  if (content.keywordText) {
+    text(content.keywordText, L.KEYWORD_PX, { bold: true, thick: true, gapAfter: L.GAP_FINAL });
+  }
 
   return lines;
 }

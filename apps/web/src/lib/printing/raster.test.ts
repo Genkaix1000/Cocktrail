@@ -63,56 +63,47 @@ describe("buildTicketLines", () => {
 
   const fullContent: TicketContent = {
     nightDateText: "NOCHE VIE 07/08/2026",
-    brand: "BOSKO",
     saleText: "Venta #123",
-    dateText: "07/08/2026 23:45",
     items: [
       { qty: 2, name: "Fernet con Coca" },
       { qty: 1, name: "Gin Tonic Premium con Pepino y mucho hielo picado" },
     ],
-    keywordText: "Clave noche: PERRITO",
-    codeText: "cod: A7F3",
+    keywordText: "Clave: PERRITO",
   };
 
-  it("arma el layout completo en orden: noche → brand → venta → fecha → sep → ítems → sep → clave·código", () => {
+  it("arma el layout del ticket de venta: noche → venta → ítems → clave, sin separadores", () => {
     const lines = buildTicketLines(fullContent, measure);
     const texts = lines.map((l) => (l.kind === "text" ? l.text : "---"));
 
     expect(texts[0]).toBe("NOCHE VIE 07/08/2026");
-    expect(texts[1]).toBe("BOSKO");
-    expect(texts[2]).toBe("Venta #123");
-    expect(texts[3]).toBe("07/08/2026 23:45");
-    expect(texts[4]).toBe("---");
-    expect(texts[5]).toBe("2x Fernet con Coca");
-    // el ítem largo (49 chars > 37 que entran en 376px con el measure fake) se parte
-    expect(texts[6].startsWith("1x Gin Tonic")).toBe(true);
-    expect(texts[texts.length - 2]).toBe("---");
-    // clave + código fusionados en UN renglón (una línea menos de papel)
-    expect(texts[texts.length - 1]).toBe("Clave noche: PERRITO · cod: A7F3");
+    expect(texts[1]).toBe("Venta #123");
+    expect(texts[2]).toBe("2x Fernet con Coca");
+    // el ítem largo se parte en varias líneas
+    expect(texts[3].startsWith("1x Gin Tonic")).toBe(true);
+    expect(texts[texts.length - 1]).toBe("Clave: PERRITO");
+    // sin marca, sin fecha de la venta y sin líneas separadoras
+    expect(texts).not.toContain("---");
+    expect(texts.some((t) => t.includes("BOSKO"))).toBe(false);
+    expect(texts.some((t) => t.includes("cod:"))).toBe(false);
   });
 
-  it("sin codeText el renglón final es solo la clave (sin el separador ·)", () => {
-    const lines = buildTicketLines({ ...fullContent, codeText: undefined }, measure);
-    const last = lines[lines.length - 1];
-    expect(last.kind === "text" && last.text).toBe("Clave noche: PERRITO");
-  });
-
-  it("usa la tipografía calibrada en el gate T1 (noche 30, brand 46, ítems 38 thick, texto 22)", () => {
+  it("los tragos son lo más grande del ticket", () => {
     const lines = buildTicketLines(fullContent, measure);
     const night = lines[0];
-    const brand = lines[1];
-    const item = lines[5];
-    const date = lines[3];
+    const venta = lines[1];
+    const item = lines[2];
+    const clave = lines[lines.length - 1];
     expect(night.kind === "text" && night.px).toBe(RASTER_LAYOUT.NIGHT_PX);
     expect(night.kind === "text" && night.center).toBe(true);
-    expect(brand.kind === "text" && brand.px).toBe(RASTER_LAYOUT.BRAND_PX);
-    expect(brand.kind === "text" && brand.center).toBe(true);
+    expect(venta.kind === "text" && venta.px).toBe(RASTER_LAYOUT.SALE_PX);
     expect(item.kind === "text" && item.px).toBe(RASTER_LAYOUT.ITEM_PX);
-    expect(item.kind === "text" && item.bold).toBe(true);
-    // doble pasada solo en los ítems (lo que se lee de lejos)
+    expect(clave.kind === "text" && clave.px).toBe(RASTER_LAYOUT.KEYWORD_PX);
+    // el trago le gana a todo lo demás
+    expect(RASTER_LAYOUT.ITEM_PX).toBeGreaterThan(RASTER_LAYOUT.SALE_PX);
+    expect(RASTER_LAYOUT.ITEM_PX).toBeGreaterThan(RASTER_LAYOUT.KEYWORD_PX);
+    // trazo grueso en lo que se lee de lejos: trago, venta y clave
     expect(item.kind === "text" && item.thick).toBe(true);
-    expect(brand.kind === "text" && brand.thick).toBe(false);
-    expect(date.kind === "text" && date.px).toBe(RASTER_LAYOUT.TEXT_PX);
+    expect(clave.kind === "text" && clave.thick).toBe(true);
   });
 
   it("los valores calibrados quedan clavados en RASTER_LAYOUT", () => {
@@ -120,9 +111,10 @@ describe("buildTicketLines", () => {
       WIDTH: 384,
       TOP_PADDING: 10,
       PADDING: 4,
-      NIGHT_PX: 30,
-      BRAND_PX: 46,
-      ITEM_PX: 38,
+      NIGHT_PX: 28,
+      ITEM_PX: 50,
+      SALE_PX: 32,
+      KEYWORD_PX: 30,
       TEXT_PX: 22,
       FONT_FAMILY: "sans-serif",
     });
@@ -136,7 +128,7 @@ describe("buildTicketLines", () => {
     };
     const lines = buildTicketLines(testContent, measure);
     const texts = lines.map((l) => (l.kind === "text" ? l.text : "---"));
-    expect(texts).toEqual(["--- TICKET DE PRUEBA ---", "07/08/2026 23:45", "---", "---"]);
+    expect(texts).toEqual(["--- TICKET DE PRUEBA ---", "07/08/2026 23:45"]);
   });
 });
 

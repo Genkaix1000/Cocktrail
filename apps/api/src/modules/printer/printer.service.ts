@@ -43,6 +43,35 @@ const DOUBLE_ON = Buffer.from([GS, 0x21, 0x11]); // doble alto + doble ancho
 const DOUBLE_OFF = Buffer.from([GS, 0x21, 0x00]);
 const FEED = Buffer.from([0x0a, 0x0a, 0x0a, 0x0a]); // sin comando de corte: la impresora no tiene cuchilla
 
+/**
+ * El servidor corre en UTC, así que sin huso explícito un ticket de las 16:27
+ * de Argentina sale con las 19:27. Se fija acá y no se confía en la variable TZ
+ * del entorno, que puede faltar en cualquier hosting.
+ */
+const HUSO = "America/Argentina/Buenos_Aires";
+
+function formatearFecha(epochMs: number): string {
+  return new Date(epochMs).toLocaleDateString("es-AR", {
+    timeZone: HUSO,
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatearFechaHora(epochMs: number): string {
+  return new Date(epochMs).toLocaleString("es-AR", {
+    timeZone: HUSO,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false, // sin esto puede salir "07:27" para las 19:27
+  });
+}
+
 export type PrinterStatus = {
   connected: boolean;
   configured: true;
@@ -66,24 +95,20 @@ export class PrinterService {
   /** Único lugar que sabe QUÉ dice un ticket; los transportes deciden CÓMO se ve. */
   buildTicketContent(order: Order, nightEvent: NightEvent): TicketContent {
     return {
-      nightDateText:
-        "NOCHE " +
-        new Date(nightEvent.startedAt)
-          .toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })
-          .toUpperCase(),
-      brand: "BOSKO",
+      nightDateText: "NOCHE " + formatearFecha(nightEvent.startedAt).toUpperCase(),
+      // Sin marca ni fecha de la venta: el ticket es para retirar el trago, y
+      // la fecha ya está arriba. Sin código de retiro: lo canjeaba la pantalla
+      // de barra, que dejó de existir con el modelo comandera.
       saleText: `Venta #${order.displayNumber}`,
-      dateText: new Date(order.createdAt).toLocaleString("es-AR"),
       items: order.items.map((item) => ({ qty: item.qty, name: item.name })),
-      keywordText: `Clave noche: ${nightEvent.keyword ?? "(sin clave)"}`,
-      codeText: order.ticketCode ? `cod: ${order.ticketCode.slice(0, 4)}` : undefined,
+      keywordText: `Clave: ${nightEvent.keyword ?? "(sin clave)"}`,
     };
   }
 
   buildTestContent(): TicketContent {
     return {
       brand: "--- TICKET DE PRUEBA ---",
-      dateText: new Date().toLocaleString("es-AR"),
+      dateText: formatearFechaHora(Date.now()),
       items: [],
     };
   }
@@ -94,24 +119,24 @@ export class PrinterService {
     if (content.nightDateText) {
       parts.push(toCP437(`${content.nightDateText}\n`));
     }
-    parts.push(DOUBLE_ON, toCP437(`${content.brand}\n`), DOUBLE_OFF, ALIGN_LEFT);
+    if (content.brand) {
+      parts.push(DOUBLE_ON, toCP437(`${content.brand}\n`), DOUBLE_OFF);
+    }
+    parts.push(ALIGN_LEFT);
 
     if (content.saleText) {
-      parts.push(toCP437(`${content.saleText}\n`));
+      parts.push(DOUBLE_ON, toCP437(`${content.saleText}\n`), DOUBLE_OFF);
     }
-    parts.push(toCP437(`${content.dateText}\n`));
-    parts.push(toCP437("--------------------------------\n"));
+    if (content.dateText) {
+      parts.push(toCP437(`${content.dateText}\n`));
+    }
 
     for (const item of content.items) {
       parts.push(DOUBLE_ON, toCP437(`${item.qty}x ${item.name}\n`), DOUBLE_OFF);
     }
 
-    parts.push(toCP437("--------------------------------\n"));
     if (content.keywordText) {
-      parts.push(toCP437(`${content.keywordText}\n`));
-    }
-    if (content.codeText) {
-      parts.push(toCP437(`${content.codeText}\n`));
+      parts.push(DOUBLE_ON, toCP437(`${content.keywordText}\n`), DOUBLE_OFF);
     }
     parts.push(FEED);
 
