@@ -48,6 +48,11 @@ List y los subdominios no comparten cookies; se descartó Vercel porque su plan 
 comercial y el tiempo real se cortaría por timeout. Pasar a plan pago (USD 7/mes, elimina el
 "sleep" tras 15 min sin tráfico) y agregar dominio propio son cambios de configuración, no de código.
 
+**El plan gratuito no vence**: es indefinido para servicios web (la base de datos *de Render* sí
+caduca a los 30 días, pero no aplica: la base es Supabase). El único límite es **750 horas de
+servicio despierto por mes** — dormido no consume. Un mes tiene ~730 horas, así que mantenerlo
+despierto todo el tiempo agota la cuota sin margen; ver el ping programado en Pendientes.
+
 **Hallazgos del camino** (detalle en la spec):
 - La base en la nube tenía los datos reales pero **no la tabla de control de migraciones**: un
   primer arranque las habría aplicado todas como baseline, y dos de ellas borran la carta. Resuelto
@@ -103,9 +108,31 @@ y llevó al modelo comandera.
   sí misma. Hoy sin internet no se puede vender.
 - **Varias comanderas a la vez**: `BAR_CODE` sale del entorno y `bar_sessions` tiene un
   `UNIQUE(bar_id)`. Con una alcanza; varias en paralelo necesitan diseño.
-- **Impresión más rápida por Bluetooth clásico (SPP) en el APK**: hoy el ticket tarda ~10s en la
-  tablet actual por el límite de paquete de su Bluetooth. Solo vale la pena si molesta en la
-  operación real.
+- **Cambiar la impresora por una Goojprt MPT-II** *(comprada / a probar)*. La S1 actual es una
+  impresora de **fotos** usada como impresora de tickets: solo acepta imágenes, así que hacen falta
+  ~30.000 bytes para imprimir cuatro renglones (9s con un trago, 28s con ocho). La MPT-II entiende
+  **ESC/POS por Bluetooth de bajo consumo**, o sea que se le manda **texto**: ~500 bytes, casi
+  instantáneo, y además expone un canal para preguntarle si está lista.
+  - Está mapeada en [`NielsLeenheer/WebBluetoothReceiptPrinter`](https://github.com/NielsLeenheer/WebBluetoothReceiptPrinter):
+    `filters: [{ name: 'MPT-II', services: ['000018f0-…'] }]`, escritura `00002af1-…`,
+    estado `00002af0-…`, lenguaje `esc-pos`.
+  - **Antes de escribir código**: en Chrome de la tablet, `chrome://bluetooth-internals` → Devices
+    → Scan, y confirmar que el aparato anuncie el servicio **`18F0`**. Los clones cambian el nombre
+    pero suelen mantener el servicio; si el nombre difiere, se ajusta el filtro y listo.
+  - Implementación: es **un transporte más** en `apps/web/src/lib/printing/transports/`, al lado de
+    los que ya hay. El contenido del ticket ya está separado del cómo se imprime, así que no toca
+    la pantalla de caja. La S1 se conserva como alternativa.
+- **Mantener el servicio despierto en horario de boliche** (ping programado). El plan gratuito de
+  Render duerme el servicio tras 15 minutos sin tráfico y tarda ~1 minuto en despertar: la primera
+  carga de la noche se hace esperar. **Importante hacerlo acotado al horario de operación**: la
+  cuota gratuita son 750 horas de servicio despierto por mes y un mes tiene ~730, así que un ping
+  24/7 la consume entera y sin margen (si se agota, Render suspende el servicio hasta el mes
+  siguiente). Despertándolo solo viernes y sábados de 20h a 6h son ~90 horas al mes. Un ping cada
+  10-15 minutos alcanza; Render puede suspender servicios gratuitos que generen tráfico inusual.
+  Opciones sin costo: UptimeRobot, cron-job.org, o una GitHub Action con `schedule`.
+- **Impresión más rápida por Bluetooth clásico (SPP) en el APK**: alternativa si el camino MPT-II
+  no prosperara. El Bluetooth clásico es inaccesible desde el navegador, así que exigiría volver al
+  APK para la comandera.
 - **Pedido del cliente por QR**: se desactivó y se borró. Si vuelve, vuelve como feature nueva.
 - **Migrar el Posnet a la cuenta MP del dueño**: procedimiento manual (MP no expone API para
   transferir hardware entre cuentas); relevante solo si se retoma el cobro con lector.
