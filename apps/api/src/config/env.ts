@@ -84,6 +84,36 @@ function loadEnv() {
     process.exit(1);
   }
 
+  // Las credenciales tienen defaults cómodos para desarrollo; en producción
+  // dejarlos sería publicar el sistema con admin/admin.
+  if (result.data.NODE_ENV === "production") {
+    const inseguras = [
+      ["ADMIN_USER", result.data.ADMIN_USER, "admin"],
+      ["ADMIN_PASS", result.data.ADMIN_PASS, "admin"],
+      ["CAJA_USER", result.data.CAJA_USER, "caja"],
+      ["CAJA_PASS", result.data.CAJA_PASS, "caja"],
+      ["SUPABASE_SERVICE_ROLE_KEY", result.data.SUPABASE_SERVICE_ROLE_KEY, "service-role-key-placeholder"],
+    ].filter(([, valor, porDefecto]) => valor === porDefecto);
+
+    const debiles = (
+      [
+        ["ADMIN_PASS", result.data.ADMIN_PASS],
+        ["CAJA_PASS", result.data.CAJA_PASS],
+      ] as const
+    ).filter(([, valor]) => valor.length < 8);
+
+    if (inseguras.length > 0 || debiles.length > 0) {
+      console.error(
+        "❌ Configuración insegura para producción:",
+        [
+          ...inseguras.map(([k]) => `${k} tiene el valor por defecto`),
+          ...debiles.map(([k]) => `${k} tiene menos de 8 caracteres`),
+        ].join(" · "),
+      );
+      process.exit(1);
+    }
+  }
+
   return result.data;
 }
 

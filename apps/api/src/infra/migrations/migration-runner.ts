@@ -7,7 +7,7 @@ import {
   setMigrationsStatus,
   type MigrationDrift,
   type MigrationsStatus,
-} from "./migrations-status";
+} from "./migrations-status.js";
 import type { PgMigrationsRepository } from "./pg-migrations.repository";
 
 export type MigrationFile = {

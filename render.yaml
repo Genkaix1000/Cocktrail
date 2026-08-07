@@ -1,0 +1,73 @@
+# Deploy de BarQR en Render. Un solo servicio Docker con los dos procesos
+# (API + web); ver el Dockerfile para el porqué.
+#
+# Las variables marcadas `sync: false` NO se versionan: se cargan a mano en el
+# dashboard (Environment) o con el MCP/API de Render. Lista completa abajo.
+services:
+  - type: web
+    name: barqr
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon # Render no tiene región en Sudamérica; Oregon es la de menor latencia disponible para AR
+    branch: develop
+    autoDeploy: true
+
+    # Pega al puerto público (Next) y se reenvía a la API: prueba los dos procesos.
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # --- Base de datos (Supabase Cloud) ---
+      # DATABASE_URL: usar el "Session pooler" (host *.pooler.supabase.com, puerto
+      # 5432). NO el transaction pooler: el runner de migraciones toma un advisory
+      # lock de sesión que ese modo no sostiene. La conexión directa tampoco sirve:
+      # es IPv6-only.
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # --- Sesión ---
+      # AUTH_SECRET: >=32 caracteres. Lo usan la API (firma) y la web (validación
+      # en el proxy); al vivir los dos en el mismo contenedor, con una alcanza.
+      - key: AUTH_SECRET
+        generateValue: true
+
+      # --- Credenciales de la app ---
+      # Sin defaults: si faltan, el arranque falla (a propósito).
+      - key: ADMIN_USER
+        sync: false
+      - key: ADMIN_PASS
+        sync: false
+      - key: CAJA_USER
+        sync: false
+      - key: CAJA_PASS
+        sync: false
+
+      # --- URL pública ---
+      # FRONTEND_URL: la URL del servicio (https://barqr.onrender.com). Se usa para
+      # CORS y para armar links. Render la expone en RENDER_EXTERNAL_URL, pero se
+      # deja explícita para poder apuntar a un dominio propio sin tocar código.
+      - key: FRONTEND_URL
+        sync: false
+
+      # --- Mercado Pago (opcional: si faltan, la integración queda inactiva) ---
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_CLIENT_ID
+        sync: false
+      - key: MP_CLIENT_SECRET
+        sync: false
+      - key: MP_HANDOFF_KEY
+        sync: false
+      - key: MP_ENCRYPTION_KEY
+        sync: false
+
+      # --- Identificación del puesto ---
+      - key: BAR_CODE
+        sync: false

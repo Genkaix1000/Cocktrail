@@ -34,10 +34,15 @@ async function verifySessionEdge(
   const expiresAt = Number(expRaw);
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
 
+  // Sin secreto no se valida nada: cae cerrado. Un fallback acá significaría
+  // que un despliegue mal configurado acepta cookies firmadas con un secreto
+  // público.
   const secret =
-    process.env.COCKTRAIL_AUTH_SECRET?.trim() ||
-    process.env.AUTH_SECRET?.trim() ||
-    "dev-secret-change-me-in-production-longer-than-32-chars";
+    process.env.COCKTRAIL_AUTH_SECRET?.trim() || process.env.AUTH_SECRET?.trim();
+  if (!secret) {
+    console.error("[proxy] Falta AUTH_SECRET — se rechazan todas las sesiones.");
+    return null;
+  }
 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -59,8 +64,12 @@ async function verifySessionEdge(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
+  // Comparación en tiempo constante: `!==` corta en el primer byte distinto y
+  // filtra por temporización cuánto del prefijo acertó quien pruebe firmas.
   if (sig.length !== expected.length) return null;
-  if (sig !== expected) return null;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
+  if (diff !== 0) return null;
 
   return { role, username, expiresAt };
 }

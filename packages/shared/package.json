@@ -4,5 +4,6 @@
   "private": true,
   "exports": {
     ".": "./src/domain.ts"
-  }
+  },
+  "type": "module"
 }

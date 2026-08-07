@@ -227,6 +227,12 @@ const systemService = new SystemService(
 
 const app = express();
 
+// Detrás del proxy del hosting: sin esto, req.ip es la IP del proxy y el
+// rate-limit trata a todos los clientes como uno solo (o bloquea a todos).
+if (env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 // Middlewares globales de seguridad
 
 // 1. Helmet para endurecimiento de cabeceras HTTP y políticas CSP
@@ -237,17 +243,27 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https://images.unsplash.com"],
-      connectSrc: ["'self'", env.FRONTEND_URL, "ws:", "wss:", "http://localhost:*", "http://127.0.0.1:*", "http://192.168.*", "http://10.*", "http://172.*"],
+      // En producción, solo el propio origen; los rangos de red local son para
+      // el dev server accedido desde otro dispositivo.
+      connectSrc: env.NODE_ENV === "production"
+        ? ["'self'", env.FRONTEND_URL, "wss:"]
+        : ["'self'", env.FRONTEND_URL, "ws:", "wss:", "http://localhost:*", "http://127.0.0.1:*", "http://192.168.*", "http://10.*", "http://172.*"],
     },
   },
   crossOriginEmbedderPolicy: false, // Para permitir Server-Sent Events (SSE)
 }));
 
-// 2. CORS con soporte para origen dinámico de red local (LAN)
+// 2. CORS. En producción solo FRONTEND_URL (o sin origin, que son las llamadas
+// server→server del rewrite de Next). Los rangos de red local valen solo en
+// desarrollo, donde la tablet entra por IP.
 app.use(cors({
   origin: (origin, callback) => {
-    // Si no hay origin (ej. llamadas de servidor), si es dev, o coincide con FRONTEND_URL, o es IP local
-    if (!origin || env.NODE_ENV === "development" || origin === env.FRONTEND_URL || /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+    if (!origin || origin === env.FRONTEND_URL) {
+      callback(null, true);
+      return;
+    }
+    const esRedLocal = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin);
+    if (env.NODE_ENV !== "production" && esRedLocal) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));

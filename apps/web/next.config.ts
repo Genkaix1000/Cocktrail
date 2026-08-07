@@ -2,23 +2,15 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Imagen de Docker: server.js autocontenido, sin node_modules del monorepo.
+  output: "standalone",
+  outputFileTracingRoot: path.resolve(__dirname, "../../"),
   // Deshabilitar la insignia/botón de desarrollo de Next.js de la esquina inferior izquierda
   devIndicators: false,
   // Fijar la raíz del monorepo para Turbopack y silenciar advertencias por otros lockfiles en $HOME
   turbopack: {
     root: path.resolve(__dirname, "../../"),
   },
-  // Permite que el celular del cliente acceda al dev server por LAN durante la demo.
-  // Si tu IP local cambia, agregala acá.
-  allowedDevOrigins: [
-    "192.168.0.*",
-    "192.168.1.*",
-    "10.0.0.*",
-    "172.16.0.*",
-    "192.168.42.*",  // Android USB tethering
-    "192.168.43.*",  // Android WiFi hotspot
-    "172.20.10.*",   // iPhone hotspot (USB o WiFi)
-  ],
   images: {
     remotePatterns: [
       {
@@ -32,11 +24,20 @@ const nextConfig: NextConfig = {
     // cookie de sesión quede en el mismo host que la app. Este rewrite reenvía
     // esas requests al backend (server→server, mismo host). Configurable por
     // API_PROXY_TARGET para no hardcodear el puerto; default 3001 (convención).
-    const apiTarget = process.env.API_PROXY_TARGET || "http://localhost:3001";
+    // 127.0.0.1 y no localhost: en el contenedor, localhost puede resolver a
+    // ::1 mientras la API escucha en IPv4.
+    const apiTarget = process.env.API_PROXY_TARGET || "http://127.0.0.1:3001";
     return [
       {
         source: "/api/:path*",
         destination: `${apiTarget}/api/:path*`,
+      },
+      // Health check del hosting: pega al puerto público (Next) y se reenvía a
+      // la API, así un 200 prueba que los DOS procesos están vivos. Si la API
+      // se cae, esto falla y el orquestador reinicia el contenedor.
+      {
+        source: "/health",
+        destination: `${apiTarget}/health`,
       },
     ];
   },
