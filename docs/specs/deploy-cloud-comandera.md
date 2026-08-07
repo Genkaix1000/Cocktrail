@@ -169,7 +169,7 @@ deploya — sobre un baseline de migraciones hecho a mano para no tocar los dato
 **Baseline de migraciones** (paso 1, antes que nada):
 - `apps/api/src/infra/migrations/` — el runner ya existe y es correcto. Lo que falta es un script
   nuevo, `apps/api/src/scripts/baseline-cloud.ts`: crea `schema_migrations` en Cloud e inserta las
-  42 versiones de `supabase/migrations/*.sql` con `applied_by='baseline'` y su checksum, **sin
+  40 versiones de `supabase/migrations/*.sql` con `applied_by='baseline'` y su checksum, **sin
   ejecutar el SQL**. Debe (a) verificar antes que el schema real ya tenga las tablas y datos,
   (b) negarse si `schema_migrations` ya existe con filas, (c) imprimir qué va a hacer y pedir
   confirmación explícita (`--yes`), (d) ser idempotente.
@@ -308,16 +308,23 @@ no se toca el modelo de usuarios en este deploy.
 
 ## Tareas
 
-### Bloque 0 — Salvaguarda de datos (BLOQUEANTE, antes de todo)
+### Bloque 0 — Salvaguarda de datos (BLOQUEANTE, antes de todo) ✅ *(hecho 2026-08-07)*
 
-- [ ] **T1 — Backup completo de Supabase Cloud**: export a JSON de `drinks`, `drink_categories`,
+> **Resultado**: backup de 16 tablas en `~/dev/cocktrail-backups/` (fuera del repo: son datos de
+> producción). Baseline aplicado desde el SQL Editor de Supabase — el `TARGET_DATABASE_URL` para
+> el script quedó pendiente, así que se generó el SQL equivalente y se corrió a mano dentro de una
+> transacción. Verificado después contra la nube: `schema_migrations` con **40 filas, todas
+> `baseline`**, y los datos intactos (41 drinks, 6 noches, 260 orders, 260 tickets, 1 user).
+> Son 40 y no 42: el runner ignora `schema.sql` (dump acumulativo) por su patrón de nombre.
+
+- [x] **T1 — Backup completo de Supabase Cloud**: export a JSON de `drinks`, `drink_categories`,
   `night_events`, `orders`, `tickets`, `users`, `audit_logs`, `app_config` y tablas `mercadopago_*`
   a `docs/runbooks/2026-08-XX-backup-pre-cloud.json` (o fuera del repo si pesa). Verificar conteos:
   41 drinks, 6 night_events, 260 orders, 1 user.
-- [ ] **T2 — Script de baseline** `apps/api/src/scripts/baseline-cloud.ts`: crea `schema_migrations`
-  e inserta las 42 versiones con checksum y `applied_by='baseline'`, SIN ejecutar SQL. Con
+- [x] **T2 — Script de baseline** `apps/api/src/scripts/baseline-cloud.ts`: crea `schema_migrations`
+  e inserta las 40 versiones con checksum y `applied_by='baseline'`, SIN ejecutar SQL. Con
   verificaciones previas, `--dry-run` por defecto y `--yes` para confirmar. *(subagent `supabase-expert`)*
-- [ ] **T3 — Correr el baseline contra Cloud** y verificar: `schema_migrations` con 42 filas,
+- [x] **T3 — Correr el baseline contra Cloud** y verificar: `schema_migrations` con 40 filas,
   conteos de datos **idénticos** a T1. Gate: si algún conteo cambió, revertir del backup.
 
 ### Bloque A — Limpieza

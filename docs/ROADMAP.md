@@ -80,7 +80,7 @@ Es la última pieza del pivot (la impresión Bluetooth ya está hecha). Decision
 
 🔴 **Riesgo #1, verificado el 2026-08-07**: Supabase Cloud tiene los datos reales (41 drinks,
 6 noches, 260 pedidos) pero **no tiene la tabla `schema_migrations`**. Si la API arranca contra
-Cloud tal cual, el runner aplica las 42 migraciones como baseline y dos de ellas
+Cloud tal cual, el runner aplica las 40 migraciones como baseline y dos de ellas
 (`20260724150000_drink_categories.sql:32` y `20260725060000_delete_mojito_drinks.sql`) hacen
 `DELETE FROM drinks` — **vaciaría la carta real, el mismo incidente de más abajo**. Por eso el
 Bloque 0 de la spec (backup + baseline manual) es bloqueante.
