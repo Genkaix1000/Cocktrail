@@ -90,6 +90,13 @@ const STEPS: Step[] = [
             FOREIGN KEY (mp_order_id) REFERENCES public.mp_orders(id);`,
   },
   {
+    // Columna que dejó el sync viejo (ahí guardaba los totales de la noche) y
+    // que no existe en las migraciones. Quedó NOT NULL sin default, así que
+    // cualquier INSERT de una noche nueva fallaba: el código ya no la escribe.
+    label: "night_events.totals deja de ser obligatoria (resto del sync viejo)",
+    sql: `ALTER TABLE public.night_events ALTER COLUMN totals DROP NOT NULL;`,
+  },
+  {
     label: "Índice faltante",
     sql: `CREATE INDEX IF NOT EXISTS idx_bar_sessions_last_seen_at
             ON public.bar_sessions USING btree (last_seen_at);`,
