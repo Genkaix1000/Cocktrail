@@ -16,7 +16,7 @@ services:
     region: oregon # Render no tiene región en Sudamérica; Oregon es la de menor latencia disponible para AR
     branch: develop # explícito: sin esto tomaría la rama por defecto del repo
     autoDeploy: true
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build:cloud
+    buildCommand: pnpm install --frozen-lockfile && pnpm build:cloud
     startCommand: node scripts/start-cloud.mjs
 
     # Pega al puerto público (Next) y se reenvía a la API: prueba los dos procesos.
