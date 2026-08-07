@@ -87,10 +87,9 @@ function loadEnv() {
   // Las credenciales tienen defaults cómodos para desarrollo; en producción
   // dejarlos sería publicar el sistema con admin/admin.
   if (result.data.NODE_ENV === "production") {
+    // Los nombres de usuario pueden quedar como están: no son secretos.
     const inseguras = [
-      ["ADMIN_USER", result.data.ADMIN_USER, "admin"],
       ["ADMIN_PASS", result.data.ADMIN_PASS, "admin"],
-      ["CAJA_USER", result.data.CAJA_USER, "caja"],
       ["CAJA_PASS", result.data.CAJA_PASS, "caja"],
       ["SUPABASE_SERVICE_ROLE_KEY", result.data.SUPABASE_SERVICE_ROLE_KEY, "service-role-key-placeholder"],
     ].filter(([, valor, porDefecto]) => valor === porDefecto);

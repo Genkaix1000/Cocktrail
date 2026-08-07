@@ -394,6 +394,21 @@ no se toca el modelo de usuarios en este deploy.
   y la conexión sobrevive >5 minutos. Criterio 4.
 - [ ] **T27 — Verificar seguridad en vivo**: `GET /api/events` sin cookie → 401; `admin/admin` no
   entra; headers de seguridad correctos. Criterios 7-12. *(skill `security-review`)*
+- [ ] **T27b — Auditoría de seguridad del sistema expuesto** *(skill `security-review` + agente)*,
+  como último paso antes de dar el deploy por bueno. Qué revisar, más allá de los 6 puntos ya
+  cerrados:
+  - **Rate limiting**: que los límites tengan sentido contra internet, no contra una LAN
+    (el de login estaba en 1000 intentos por ventana: ~96.000 pruebas de contraseña por día).
+    Revisar también los de creación de pedido y de escaneo.
+  - **Fugas de datos en respuestas**: que ningún endpoint devuelva tokens, claves, hashes ni
+    datos de otras barras; revisar en particular los de Mercado Pago y `/api/system/*`.
+  - **Mensajes de error**: que no filtren stack traces, SQL ni rutas del servidor.
+  - **Autorización por endpoint**: que cada ruta exija el rol correcto (no alcanza con estar
+    logueado) y que no haya forma de operar sobre datos de otra barra cambiando un id.
+  - **Cabeceras**: CSP, HSTS, `X-Frame-Options`, y que la cookie viaje `Secure`+`HttpOnly`.
+  - **Dependencias**: `pnpm audit` y revisar lo que aparezca con severidad alta.
+  - **Superficie**: que no queden endpoints de diagnóstico, `?demo=true` ni scripts de
+    mantenimiento alcanzables desde afuera.
 - [ ] **T28 — Verificar webhook de MP** ahora que hay IP pública (R26).
 
 ### Bloque E — PWA
