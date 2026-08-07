@@ -13,17 +13,19 @@ export const S1_WRITE_CHARACTERISTIC = 0xff02;
 export const S1_NAME_PREFIX = "PPS1";
 
 /**
- * CRÍTICO: la imagen va en franjas de ≤240 filas, cada una con su PROPIO
- * header GS v 0 — el firmware solo honra yL: un bloque de 360 filas (yH=1)
- * imprime garbage (confirmado con el aparato el 2026-08-07).
+ * La imagen va en UN SOLO bloque GS v 0, con la altura completa en yL+yH.
+ *
+ * Antes se partía en franjas porque un bloque alto "imprimía garbage", pero la
+ * causa real era el modo doble alto (m=0x02): el firmware espera
+ * `widthBytes × alturaDeSalida` bytes de raster, así que con m=2 se quedaba
+ * esperando el doble de datos, se comía el header del bloque siguiente como si
+ * fueran píxeles —la línea de basura— y dejaba el resto en blanco.
+ *
+ * La app oficial manda 831 filas en un bloque con m=0x00 (capturado por
+ * ingeniería inversa: lsongdev/luckjingle-d1-printer), y las tres
+ * implementaciones de referencia de esta familia fijan m=0x00.
  */
-/**
- * Filas por bloque de imagen. 120 es el único valor validado con el aparato
- * cuando el ticket ocupa VARIOS bloques: con 240 anda mientras entre en uno
- * solo, pero un ticket de 4 tragos (dos bloques de 240) cuelga el firmware y
- * apaga la impresora. No subirlo sin volver a probar en papel.
- */
-const STRIPE_MAX_ROWS = 120;
+const STRIPE_MAX_ROWS = 0xffff;
 /**
  * Chunk BLE por defecto: 20 bytes = payload garantizado con el MTU mínimo
  * BLE (23). Gate físico 2026-08-07: en la tablet de producción los chunks de
@@ -95,10 +97,10 @@ function stripeHeader(widthBytes: number, rows: number, m: number): number[] {
  * ENABLE → wake → densidad → imagen (franjas chunked) → relleno de largo
  * mínimo (ESC J) → feed → stop.
  *
- * `mode` default "doubleHeight" (lo validado en el gate T1): las filas del
- * bitmap ya vienen downsampleadas m=2 (ver downsampleRowPairs) y el firmware
- * las estira 2x — mitad de datos, y el ticket típico entra en UN solo bloque
- * GS v 0 (los cortes entre bloques meten un hueco de papel visible).
+ * `mode` default "normal" (m=0x00), que es lo que usan la app oficial y todas
+ * las implementaciones de referencia de esta familia. "doubleHeight" (m=0x02)
+ * manda la mitad de datos pero rompe los tickets de más de un trago: el
+ * firmware espera el doble de bytes de raster y se desincroniza.
  *
  * `chunkSize` inválido (no entero o fuera de [20, 512]) cae al default.
  */
@@ -107,7 +109,7 @@ export function buildS1Sequence(
   opts?: { chunkSize?: number; mode?: S1Mode },
 ): S1Step[] {
   const { widthBytes, height, data } = bitmap;
-  const mode: S1Mode = opts?.mode ?? "doubleHeight";
+  const mode: S1Mode = opts?.mode ?? "normal";
   const requested = opts?.chunkSize;
   const chunkBytes =
     requested !== undefined &&

@@ -4,7 +4,7 @@
  * (ver s1-protocol.ts) — la S1 no imprime ESC/POS texto por BLE.
  */
 
-import { downsampleRowPairs, renderTicketBitmap } from "../raster";
+import { renderTicketBitmap } from "../raster";
 import {
   buildS1Sequence,
   MAX_CHUNK_BYTES,
@@ -210,13 +210,11 @@ export const bleS1Transport: PrinterTransport = {
 
   async print(payload: TransportPrintPayload): Promise<void> {
     const characteristic = await ensureConnected();
-    // Pipeline validado en el gate T1: render a resolución completa →
-    // downsample m=2 con OR → GS v 0 doble alto (mitad de datos, un bloque).
-    const bitmap = downsampleRowPairs(renderTicketBitmap(payload.ticketContent));
-    const steps = buildS1Sequence(bitmap, {
-      chunkSize: getBleChunkSizeOverride(),
-      mode: "doubleHeight",
-    });
+    // Resolución completa y un solo bloque GS v 0 con m=0x00, igual que la app
+    // oficial. El modo doble alto ahorraba la mitad de los datos pero rompía
+    // los tickets de más de un trago (ver s1-protocol).
+    const bitmap = renderTicketBitmap(payload.ticketContent);
+    const steps = buildS1Sequence(bitmap, { chunkSize: getBleChunkSizeOverride() });
     for (const step of steps) {
       await characteristic.writeValueWithoutResponse(step.bytes);
       if (step.delayAfterMs > 0) await sleep(step.delayAfterMs);
