@@ -7,7 +7,7 @@
 > [`docs/specs/`](./specs/README.md), organizada por fase (`01-tickets-impresora/`,
 > `02-auditoria-api/`, …). Los planes técnicos correspondientes viven en `docs/plans/` con
 > las mismas subcarpetas. Cada sección de abajo linkea su carpeta y sus documentos.
-> Última actualización: 2026-08-03.
+> Última actualización: 2026-08-07.
 
 ---
 
@@ -35,10 +35,14 @@ que recomendaba exactamente esto)**:
    Posnet/tarjeta de este flujo — la idea explícita es que la persona con la comandera **no ande
    con el lector físico en la mano**. Pendiente de decidir en la spec: si "transferencia MP" es el
    QR dinámico ya existente (Orders API / checkout, ver R14) o una implementación nueva.
-4. **Impresión sin app intermediaria.** La impresora térmica Bluetooth portátil tiene que imprimir
-   el ticket directo desde la PWA al cerrarse la venta, sin depender de una app externa instalada en
-   la tablet (evaluar Web Bluetooth). Bloqueado por probar el modelo específico de impresora — en
-   curso.
+4. ✅ **Impresión sin app intermediaria — HECHO** *(2026-08-07)*. La S1 imprime el ticket directo
+   desde `/caja` en Chrome (Web Bluetooth) al cerrarse la venta: vinculación desde el sidebar,
+   auto-print, reimpresión, cola con fallo en cascada y reconexión. Feature completa con gates
+   físicos pasados en la tablet real (Lenovo Tab P11): spec
+   [`specs/impresion-bluetooth-comandera.md`](./specs/impresion-bluetooth-comandera.md) (ahí están
+   la calibración final y los hallazgos de hardware: MTU 20 bytes, modo m=2, ~10s por ticket en
+   esta tablet). Si los ~10s molestan en una noche real, la mejora identificada es SPP nativo en
+   el APK (Bluetooth clásico, ~1-2s) — sería una spec nueva.
 5. **Repo/servicios**: por ahora se mantiene el **monorepo pnpm** (`apps/api` + `apps/web` +
    `packages/shared`) — los repositorios ya son agnósticos de dónde vive Postgres (cambiar a
    Supabase Cloud es config, no código), así que no hay necesidad de splitear en microservicios para
@@ -56,9 +60,30 @@ que recomendaba exactamente esto)**:
   código y el aprendizaje de la integración MP se conservan (sirven igual para transferencias), pero
   la UX de caja fija con Posnet en mano no es el flujo objetivo.
 
-**Próximo paso**: escribir la spec (`docs/specs/deploy-cloud-comandera.md`, vía `/spec`) que fije
-hosting elegido, hardening de seguridad para exponer a internet (ver checklist en la evaluación),
-diseño de la PWA comandera, y el mecanismo de impresión Bluetooth — antes de tocar código.
+### 🚀 Deploy en la nube — spec escrita, EN CURSO *(2026-08-07)*
+
+Spec + plan + tareas en [`specs/deploy-cloud-comandera.md`](./specs/deploy-cloud-comandera.md).
+Es la última pieza del pivot (la impresión Bluetooth ya está hecha). Decisiones tomadas:
+
+- **Todo en Render, free tier para arrancar** (un solo servicio Docker con los dos procesos: API
+  en el puerto interno + Next con el rewrite same-origin a `localhost`, la misma topología que en
+  dev). Se descartó separar en dos servicios porque `*.onrender.com` está en la Public Suffix List
+  y las cookies no se comparten; y se descartó Vercel porque su plan gratis prohíbe uso comercial
+  y el SSE se cortaría por timeout. Pasar a plan pago (USD 7/mes, saca el "sleep" a los 15 min) y
+  agregar dominio propio son un click, sin tocar código.
+- **Supabase Cloud como única base** → muere el módulo `sync` completo (~1.900 líneas).
+- **Limpieza agresiva antes de deployar**: ~5.750 líneas de producción + ~2.200 de tests sin uso
+  (rutas `/carta` `/barra` `/pedido` huérfanas, sync, boot autocurativo, scripts LAN, el APK de
+  2,7 MB versionado).
+- **Los 6 agujeros de seguridad se tapan antes de exponer** (SSE sin auth, secreto de dev en
+  `proxy.ts`, CORS/CSP con rangos LAN, credenciales `admin/admin` por defecto, `trust proxy`).
+
+🔴 **Riesgo #1, verificado el 2026-08-07**: Supabase Cloud tiene los datos reales (41 drinks,
+6 noches, 260 pedidos) pero **no tiene la tabla `schema_migrations`**. Si la API arranca contra
+Cloud tal cual, el runner aplica las 42 migraciones como baseline y dos de ellas
+(`20260724150000_drink_categories.sql:32` y `20260725060000_delete_mojito_drinks.sql`) hacen
+`DELETE FROM drinks` — **vaciaría la carta real, el mismo incidente de más abajo**. Por eso el
+Bloque 0 de la spec (backup + baseline manual) es bloqueante.
 
 ### 🖨️ Impresora Bluetooth — PROBADO Y FUNCIONA ✅ *(2026-08-04)*
 
