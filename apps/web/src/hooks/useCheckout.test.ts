@@ -10,7 +10,7 @@ import {
   type PosIntentVerdict,
 } from "@/services/mercadopago.service";
 import { ordersService } from "@/services/orders.service";
-import type { Drink, Order } from "@cocktrail/shared";
+import type { Drink, Order, TicketContent } from "@cocktrail/shared";
 
 vi.mock("@/services/mercadopago.service", () => ({
   mercadopagoService: {
@@ -65,7 +65,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order & { printed: boolean }
   };
 }
 
-function setupHook() {
+function setupHook(printTicket?: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>) {
   const drink = makeDrink();
   return renderHook(() =>
     useCheckout({
@@ -74,8 +74,18 @@ function setupHook() {
       totalPrice: 2500,
       totalItems: 1,
       clearCart: vi.fn(),
+      printTicket,
     }),
   );
+}
+
+function makeTicketContent(overrides: Partial<TicketContent> = {}): TicketContent {
+  return {
+    brand: "BOSKO",
+    dateText: "07/08/2026 23:15",
+    items: [{ qty: 1, name: "Fernet con Coca" }],
+    ...overrides,
+  };
 }
 
 /** Response del create QR con expiración a futuro (15 min, como el backend). */
@@ -794,6 +804,83 @@ describe("useCheckout — cobro QR (integridad)", () => {
 
     expect(result.current.pendingSales).toEqual([]);
     expect(listPendingSales()).toEqual([]);
+  });
+});
+
+describe("useCheckout — impresión del ticket", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function openCashCheckoutWithPrinter(
+    printTicket: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>,
+  ) {
+    const hook = setupHook(printTicket);
+    await act(async () => {
+      hook.result.current.handleOpenCheckout();
+      hook.result.current.setPaymentMethod("efectivo");
+      hook.result.current.handleChangeCash("2500");
+    });
+    return hook;
+  }
+
+  it("venta con ticketData + ticketContent llama printTicket con la order entera", async () => {
+    const ticketContent = makeTicketContent();
+    const order = { ...makeOrder({ paymentMethod: "efectivo" }), ticketData: "YQ==", ticketContent };
+    mockedOrdersService.create.mockResolvedValue(order);
+    const printTicket = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = await openCashCheckoutWithPrinter(printTicket);
+
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+
+    expect(printTicket).toHaveBeenCalledTimes(1);
+    expect(printTicket).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "order-1", ticketData: "YQ==", ticketContent }),
+    );
+    expect(result.current.latestOrder).not.toBeNull();
+    expect(result.current.saleError).toBeNull();
+  });
+
+  it("sin ticketData no intenta imprimir", async () => {
+    mockedOrdersService.create.mockResolvedValue(makeOrder({ paymentMethod: "efectivo" }));
+    const printTicket = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = await openCashCheckoutWithPrinter(printTicket);
+
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+
+    expect(printTicket).not.toHaveBeenCalled();
+    expect(result.current.latestOrder).not.toBeNull();
+  });
+
+  it("si printTicket rechaza, la venta igual se resuelve sin error (reprint desde la UI)", async () => {
+    const order = {
+      ...makeOrder({ paymentMethod: "efectivo" }),
+      ticketData: "YQ==",
+      ticketContent: makeTicketContent(),
+    };
+    mockedOrdersService.create.mockResolvedValue(order);
+    const printTicket = vi.fn().mockRejectedValue(new Error("Bluetooth desconectado"));
+
+    const { result } = await openCashCheckoutWithPrinter(printTicket);
+
+    await act(async () => {
+      await result.current.confirmOrder();
+    });
+
+    expect(printTicket).toHaveBeenCalledTimes(1);
+    // La venta NUNCA se cae por impresión: quedó registrada y sin saleError.
+    expect(result.current.latestOrder).not.toBeNull();
+    expect(result.current.saleError).toBeNull();
   });
 });
 

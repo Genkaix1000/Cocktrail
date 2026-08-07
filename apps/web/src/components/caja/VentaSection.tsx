@@ -34,6 +34,7 @@ import { drinkIcon } from "@/lib/icons";
 import { ApiError } from "@/services/api-client";
 import { mercadopagoService } from "@/services/mercadopago.service";
 import { useCheckout } from "@/hooks/useCheckout";
+import type { TicketContent } from "@cocktrail/shared";
 import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
@@ -47,7 +48,7 @@ type Props = {
   onReloadCarta?: () => Promise<void>;
   printer: {
     reprintTicket: (orderId: string) => Promise<void>;
-    printTicketData: (base64: string) => Promise<void>;
+    printTicket: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>;
     printError: string | null;
     reprinting: boolean;
   };
@@ -504,7 +505,7 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
     totalPrice,
     totalItems,
     clearCart,
-    printTicketData: printer.printTicketData,
+    printTicket: printer.printTicket,
   });
 
   const { reprintTicket, printError, reprinting } = printer;

@@ -61,7 +61,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     testPrint,
     printerTestMessage,
     reprintTicket,
-    printTicketData,
+    printTicket,
     pairPrinterDevice,
     printError,
     reprinting,
@@ -70,8 +70,8 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
   const { posnetLevel, posnetMessage, testPosnet, posnetTestMessage, testingPosnet } =
     usePosnetStatus();
   const ventaPrinter = useMemo(
-    () => ({ reprintTicket, printTicketData, printError, reprinting }),
-    [reprintTicket, printTicketData, printError, reprinting],
+    () => ({ reprintTicket, printTicket, printError, reprinting }),
+    [reprintTicket, printTicket, printError, reprinting],
   );
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);

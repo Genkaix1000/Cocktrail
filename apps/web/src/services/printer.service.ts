@@ -1,11 +1,7 @@
 import { apiFetch } from "./api-client";
+import type { PrintPayload } from "@cocktrail/shared";
 
-export type PrintPayload = {
-  success: boolean;
-  message: string;
-  /** Bytes ESC/POS en base64 para WebUSB en el dispositivo. */
-  data: string;
-};
+export type { PrintPayload };
 
 export const printerService = {
   test() {

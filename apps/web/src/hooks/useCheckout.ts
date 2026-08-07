@@ -18,7 +18,7 @@ import {
   type PosIntentVerdict,
 } from "@/services/mercadopago.service";
 import { ordersService } from "@/services/orders.service";
-import type { Drink, Order, PaymentMethod } from "@cocktrail/shared";
+import type { Drink, Order, PaymentMethod, TicketContent } from "@cocktrail/shared";
 
 type CartEntry = { drink: Drink; qty: number };
 
@@ -84,8 +84,8 @@ type UseCheckoutArgs = {
   totalPrice: number;
   totalItems: number;
   clearCart: () => void;
-  /** Imprime ESC/POS (base64) en la tablet vía WebUSB. Opcional en tests. */
-  printTicketData?: (base64: string) => Promise<void>;
+  /** Imprime el ticket de la venta en la impresora del device. Opcional en tests. */
+  printTicket?: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>;
 };
 
 /**
@@ -100,7 +100,7 @@ export function useCheckout({
   totalPrice,
   totalItems,
   clearCart,
-  printTicketData,
+  printTicket,
 }: UseCheckoutArgs) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
@@ -251,9 +251,9 @@ export function useCheckout({
       resetPaymentAttempt();
       setLatestOrder(order);
       clearCart();
-      if (order.ticketData && printTicketData) {
+      if (order.ticketData && printTicket) {
         try {
-          await printTicketData(order.ticketData);
+          await printTicket(order);
         } catch {
           // La venta ya quedó; reprint desde la UI de éxito.
         }
@@ -265,7 +265,7 @@ export function useCheckout({
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
-  }, [cart, canConfirmCash, clearCart, paymentMethod, printTicketData, resetPaymentAttempt, submitting, totalItems]);
+  }, [cart, canConfirmCash, clearCart, paymentMethod, printTicket, resetPaymentAttempt, submitting, totalItems]);
 
   const buildPendingSale = useCallback(
     (method: "qr" | "debito", mpRef: string, idempotencyKey?: string): PendingSale => ({
@@ -309,9 +309,9 @@ export function useCheckout({
           setPosnetErrorMessage(null);
           setQrImage(null);
         }
-        if (order.ticketData && printTicketData) {
+        if (order.ticketData && printTicket) {
           try {
-            await printTicketData(order.ticketData);
+            await printTicket(order);
           } catch {
             // reprint desde la UI
           }
@@ -354,7 +354,7 @@ export function useCheckout({
         return false;
       }
     },
-    [clearCart, printTicketData],
+    [clearCart, printTicket],
   );
 
   /** Reintenta desde el banner el registro de una venta cobrada sin registrar. */

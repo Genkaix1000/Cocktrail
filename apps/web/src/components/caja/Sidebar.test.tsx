@@ -155,7 +155,7 @@ describe("CajaSidebar", () => {
 
     render(<CajaSidebar {...baseProps} testPrint={testPrint} />);
 
-    expect(screen.getByText("Impresora vinculada")).toBeInTheDocument();
+    expect(screen.getByText("Impresora conectada")).toBeInTheDocument();
 
     await user.click(screen.getByText("Imprimir ticket de prueba"));
     expect(testPrint).toHaveBeenCalled();
@@ -173,7 +173,9 @@ describe("CajaSidebar", () => {
       />,
     );
 
-    expect(screen.getByText("Impresora no vinculada")).toBeInTheDocument();
+    expect(screen.getByText("Impresora sin conectar")).toBeInTheDocument();
+    // El mensaje del manager (printerStatus.message) se muestra como detalle.
+    expect(screen.getByText("sin conexión")).toBeInTheDocument();
     expect(screen.getByText("Error al imprimir la prueba.")).toBeInTheDocument();
     await user.click(screen.getByText("Vincular impresora"));
     expect(pairPrinterDevice).toHaveBeenCalled();

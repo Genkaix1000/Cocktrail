@@ -1,76 +1,86 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
-import {
-  isPrinterBackendAvailable,
-  isPrinterConnected,
-  pairPrinter,
-  printEscPos,
-} from "@/lib/webusb-printer";
+import { printerManager } from "@/lib/printing/manager";
+import type { PrinterSnapshot } from "@/lib/printing/types";
 import { printerService } from "@/services/printer.service";
+import type { TicketContent } from "@cocktrail/shared";
+
+/** Lo mínimo que necesita el hook de una venta para imprimirla. */
+export type PrintableOrder = {
+  id?: string;
+  ticketData?: string;
+  ticketContent?: TicketContent;
+};
+
+// Estable para SSR: useSyncExternalStore exige la MISMA referencia en cada
+// llamada del server snapshot (si no, re-renderiza infinito en hidratación).
+const SERVER_SNAPSHOT: PrinterSnapshot = { phase: "none", connected: false, message: "" };
+const getServerSnapshot = (): PrinterSnapshot => SERVER_SNAPSHOT;
+
+const INCOMPLETE_TICKET_MSG =
+  "La venta se registró pero el ticket vino incompleto — reimprimí desde el historial.";
 
 /**
- * Estado de la impresora térmica de caja: vínculo USB en ESTE dispositivo
- * (app Android nativa o WebUSB), impresión de prueba y reimpresión.
- * El server solo arma bytes ESC/POS.
+ * Adaptador React del printerManager (transportes nativo / Bluetooth S1 /
+ * WebUSB con cola secuencial). El estado vive en el manager; acá solo se
+ * expone la misma superficie que consumen Sidebar/VentaSection/Historial.
  */
 export function usePrinterStatus() {
-  const [printerStatus, setPrinterStatus] = useState<{ connected: boolean; message: string } | null>(
-    null,
+  const snapshot = useSyncExternalStore(
+    printerManager.subscribe,
+    printerManager.getSnapshot,
+    getServerSnapshot,
   );
   const [printerTestMessage, setPrinterTestMessage] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [reprinting, setReprinting] = useState(false);
 
+  // Contrato del hook viejo: null hasta el primer refresh (mensaje vacío =
+  // el manager todavía no consultó nada).
+  const printerStatus =
+    snapshot.message === ""
+      ? null
+      : { connected: snapshot.connected, message: snapshot.message };
+
   const refreshPrinterStatus = useCallback(async () => {
-    if (!isPrinterBackendAvailable()) {
-      setPrinterStatus({
-        connected: false,
-        message: "Abrí la app miBoliche Caja (o Chrome con WebUSB/HTTPS).",
-      });
-      return;
-    }
-    try {
-      const connected = await isPrinterConnected();
-      setPrinterStatus(
-        connected
-          ? { connected: true, message: "Impresora vinculada en este dispositivo" }
-          : { connected: false, message: "Sin impresora vinculada en este dispositivo" },
-      );
-    } catch {
-      setPrinterStatus({ connected: false, message: "No se pudo consultar la impresora USB." });
-    }
+    await printerManager.refresh();
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshPrinterStatus();
-    const interval = setInterval(refreshPrinterStatus, 30000);
+    void refreshPrinterStatus();
+    // Solo reporta estado (el manager no conecta la BLE al refrescar).
+    const interval = setInterval(() => void refreshPrinterStatus(), 30000);
     return () => clearInterval(interval);
   }, [refreshPrinterStatus]);
 
   const pairPrinterDevice = useCallback(async () => {
     setPrinterTestMessage(null);
     try {
-      await pairPrinter();
-      // El diálogo nativo es async; refrescar un poco después.
-      setTimeout(() => refreshPrinterStatus(), 800);
-      setPrinterTestMessage("Pedí permiso USB — aceptá «Usar siempre» si aparece.");
+      await printerManager.pair();
     } catch (err) {
-      setPrinterTestMessage(err instanceof Error ? err.message : "No se pudo vincular la impresora.");
-    } finally {
-      refreshPrinterStatus();
+      // Incluye el entorno sin soporte: el mensaje del manager dice qué usar.
+      setPrinterTestMessage(
+        err instanceof Error ? err.message : "No se pudo vincular la impresora.",
+      );
     }
-  }, [refreshPrinterStatus]);
+  }, []);
 
-  const printTicketData = useCallback(async (base64: string) => {
+  const printTicket = useCallback(async (result: PrintableOrder) => {
     setPrintError(null);
+    const { ticketData, ticketContent } = result;
+    if (!ticketData || !ticketContent) {
+      setPrintError(INCOMPLETE_TICKET_MSG);
+      throw new Error(INCOMPLETE_TICKET_MSG);
+    }
     try {
-      await printEscPos(base64);
+      await printerManager.print(
+        { escposBase64: ticketData, ticketContent },
+        { orderId: result.id },
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error al imprimir.";
-      setPrintError(message);
+      setPrintError(err instanceof Error ? err.message : "Error al imprimir.");
       throw err;
     }
   }, []);
@@ -79,21 +89,27 @@ export function usePrinterStatus() {
     setPrinterTestMessage(null);
     try {
       const payload = await printerService.test();
-      await printEscPos(payload.data);
+      await printerManager.print(
+        { escposBase64: payload.data, ticketContent: payload.ticketContent },
+        { label: "ticket de prueba" },
+      );
       setPrinterTestMessage(payload.message);
     } catch (err) {
-      setPrinterTestMessage(err instanceof Error ? err.message : "Error al imprimir la prueba.");
-    } finally {
-      refreshPrinterStatus();
+      setPrinterTestMessage(
+        err instanceof Error ? err.message : "Error al imprimir la prueba.",
+      );
     }
-  }, [refreshPrinterStatus]);
+  }, []);
 
   const reprintTicket = useCallback(async (orderId: string) => {
     setReprinting(true);
     setPrintError(null);
     try {
       const payload = await printerService.reprint(orderId);
-      await printEscPos(payload.data);
+      await printerManager.print(
+        { escposBase64: payload.data, ticketContent: payload.ticketContent },
+        { orderId },
+      );
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : "Error al reimprimir.");
     } finally {
@@ -105,7 +121,7 @@ export function usePrinterStatus() {
     printerStatus,
     refreshPrinterStatus,
     pairPrinterDevice,
-    printTicketData,
+    printTicket,
     testPrint,
     printerTestMessage,
     reprintTicket,

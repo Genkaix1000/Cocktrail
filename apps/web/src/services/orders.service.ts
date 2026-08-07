@@ -1,7 +1,7 @@
 import { apiFetch } from "./api-client";
-import type { NewOrderInput, Order, OrderStatus } from "@cocktrail/shared";
+import type { CreateOrderResult, NewOrderInput, Order, OrderStatus } from "@cocktrail/shared";
 
-export type CreateOrderResult = Order & { printed: boolean; ticketData?: string };
+export type { CreateOrderResult };
 
 export const ordersService = {
   create(input: NewOrderInput) {
