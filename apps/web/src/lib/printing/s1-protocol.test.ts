@@ -100,9 +100,10 @@ describe("buildS1Sequence — modo normal (m=0x00, opts explícitos)", () => {
     // Largo mínimo: faltan 280 dots, repartidos 140 arriba y 140 abajo para
     // que el ticket quede centrado en el papel.
     const feeds = feedsDe(steps);
-    expect(feeds.map((f) => f.bytes[2])).toEqual([140, 140]);
+    expect(feeds.map((f) => f.bytes[2])).toEqual([255, 25]);
     expect(feeds.every((f) => f.delayAfterMs === 60)).toBe(true);
-    expect(steps.indexOf(feeds[0])).toBeLessThan(primerBloque(steps));
+    // TODOS después de la imagen: un ESC J antes cuelga el firmware.
+    expect(steps.indexOf(feeds[0])).toBeGreaterThan(primerBloque(steps));
 
     // Feed (2000ms antes del stop) y stop
     expect(bytes(steps[steps.length - 2])).toEqual([0x1b, 0x4a, 0x50]);
@@ -142,28 +143,26 @@ describe("buildS1Sequence — modo normal (m=0x00, opts explícitos)", () => {
     // Largo mínimo: faltan 160 dots, repartidos 80 arriba y 80 abajo para que
     // el ticket quede centrado en el papel.
     const feeds = feedsDe(steps);
-    expect(feeds.map((f) => f.bytes[2])).toEqual([80, 80]);
-    expect(steps.indexOf(feeds[0])).toBeLessThan(b1); // el de arriba va ANTES de la imagen
-    expect(steps.indexOf(feeds[1])).toBeGreaterThan(i2); // el de abajo, después
+    expect(feeds.map((f) => f.bytes[2])).toEqual([160]);
+    // Después de la imagen: un ESC J antes del bloque cuelga el firmware.
+    expect(steps.indexOf(feeds[0])).toBeGreaterThan(i2);
 
     expect(bytes(steps[steps.length - 2])).toEqual([0x1b, 0x4a, 0x50]);
     expect(bytes(steps[steps.length - 1])).toEqual([0x10, 0xff, 0xf1, 0x45]);
   });
 
-  it("bitmap chico (8 filas) con chunk 512: relleno centrado hasta 520 dots", () => {
+  it("bitmap chico (8 filas) con chunk 512: relleno hasta 520 dots, todo después de la imagen", () => {
     const steps = buildS1Sequence(makeBitmap(8), { chunkSize: 512, mode: "normal" });
 
     const b1 = primerBloque(steps);
     expect(steps[b1].bytes.length).toBe(8 + WIDTH_BYTES * 8);
     expect(steps[b1].delayAfterMs).toBe(300);
 
-    // Faltan 512 dots: 256 arriba y 256 abajo, cada mitad partida en ESC J de ≤255.
+    // Faltan 512 dots, todos DESPUÉS de la imagen y en tramos de ≤255.
     const feeds = feedsDe(steps);
-    const arriba = feeds.filter((f) => steps.indexOf(f) < b1);
-    const abajo = feeds.filter((f) => steps.indexOf(f) > b1);
-    expect(arriba.reduce((a, f) => a + f.bytes[2], 0)).toBe(256);
-    expect(abajo.reduce((a, f) => a + f.bytes[2], 0)).toBe(256);
+    expect(feeds.reduce((a, f) => a + f.bytes[2], 0)).toBe(512);
     expect(feeds.every((f) => f.bytes[2] <= 255)).toBe(true);
+    expect(feeds.every((f) => steps.indexOf(f) > b1)).toBe(true);
 
     expect(bytes(steps[steps.length - 2])).toEqual([0x1b, 0x4a, 0x50]);
     expect(bytes(steps[steps.length - 1])).toEqual([0x10, 0xff, 0xf1, 0x45]);
@@ -185,10 +184,11 @@ describe("buildS1Sequence — modo doubleHeight (default, lo validado en el gate
     expect(imageSteps[16].delayAfterMs).toBe(300);
 
     // Impreso real = 180 filas x2 = 360 dots < 520 -> faltan 160, centrados 80/80
-    expect(steps).toHaveLength(3 + 1 + 17 + 1 + 2);
+    expect(steps).toHaveLength(3 + 17 + 1 + 2);
     const feedsDh = feedsDe(steps);
-    expect(feedsDh.map((f) => f.bytes[2])).toEqual([80, 80]);
+    expect(feedsDh.map((f) => f.bytes[2])).toEqual([160]);
     expect(feedsDh.every((f) => f.delayAfterMs === 60)).toBe(true);
+    expect(steps.indexOf(feedsDh[0])).toBeGreaterThan(primerBloque(steps));
     expect(bytes(steps[steps.length - 2])).toEqual([0x1b, 0x4a, 0x50]);
     expect(bytes(steps[steps.length - 1])).toEqual([0x10, 0xff, 0xf1, 0x45]);
   });

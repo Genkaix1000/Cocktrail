@@ -118,16 +118,6 @@ export function buildS1Sequence(
 
   const m = mode === "doubleHeight" ? 0x02 : 0x00;
 
-  // El papel que falta para llegar al largo mínimo se reparte antes y después
-  // del texto, en vez de dejarlo todo abajo: el ticket queda centrado. Avanzar
-  // papel son comandos de 3 bytes, así que no cuesta tiempo de impresión.
-  const printedDots = mode === "doubleHeight" ? height * 2 : height;
-  const relleno = Math.max(0, MIN_TICKET_DOTS - printedDots);
-  const rellenoArriba = Math.floor(relleno / 2);
-  const rellenoAbajo = relleno - rellenoArriba;
-
-  for (const step of feedSteps(rellenoArriba)) steps.push(step);
-
   // Cada franja: header propio + sus filas, partido en chunks de ≤chunkBytes.
   // ≤240 filas por bloque (el firmware banca hasta 255 y solo honra yL).
   for (let y0 = 0; y0 < height; y0 += STRIPE_MAX_ROWS) {
@@ -152,7 +142,14 @@ export function buildS1Sequence(
     }
   }
 
-  for (const step of feedSteps(rellenoAbajo)) steps.push(step);
+  // Relleno hasta el largo mínimo, SIEMPRE después de la imagen: probado con el
+  // aparato, un ESC J antes del bloque cuelga el firmware y apaga la impresora
+  // (el mismo motivo por el que se descartó saltear las filas en blanco). Por
+  // eso el ticket no se puede centrar en el papel.
+  const printedDots = mode === "doubleHeight" ? height * 2 : height;
+  for (const step of feedSteps(Math.max(0, MIN_TICKET_DOTS - printedDots))) {
+    steps.push(step);
+  }
 
   steps.push({ bytes: new Uint8Array(FEED), delayAfterMs: DELAY_BEFORE_STOP_MS });
   steps.push({ bytes: new Uint8Array(STOP), delayAfterMs: 0 });
