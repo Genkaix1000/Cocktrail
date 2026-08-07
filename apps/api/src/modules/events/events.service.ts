@@ -9,7 +9,6 @@ import type { EventsRepository } from "./events.repository.js";
 import type { OrdersRepository } from "../orders/orders.repository.js";
 import type { DrinksRepository } from "../drinks/drinks.repository.js";
 import type { ConfigRepository } from "../config/config.repository.js";
-import type { SyncService } from "../sync/sync.service.js";
 import { BadRequest, Conflict } from "../../shared/errors/http-errors.js";
 import { computeTotals } from "@cocktrail/shared";
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
@@ -26,7 +25,6 @@ export class EventsService {
     private ordersRepo: OrdersRepository,
     private drinksRepo: DrinksRepository,
     private emit: EmitFn,
-    private syncService: SyncService,
     private configRepo?: ConfigRepository,
   ) {}
 
@@ -81,11 +79,6 @@ export class EventsService {
               closedBy: "sistema",
             });
 
-            // No se dispara el push acá: el auto-sync de eventos pendientes que corre
-            // más abajo en este mismo initialize() (syncAllPendingEvents) ya va a
-            // encontrar este evento recién cerrado y subirlo — llamarlo también acá
-            // duplicaba el push en paralelo para el mismo evento en cada arranque.
-
             // Force a new event creation
             active = null;
           }
@@ -101,15 +94,6 @@ export class EventsService {
           this.activeTheme = config.theme;
         }
         this.isInitialized = true;
-
-        // Trigger automatic sync of all pending events in the background on startup
-        this.syncService.syncAllPendingEvents()
-          .then((res) => {
-            if (res.successCount > 0 || res.failedCount > 0) {
-              console.log(`[EventsService] Auto-sync completed: ${res.successCount} succeeded, ${res.failedCount} failed.`);
-            }
-          })
-          .catch((err) => console.error("[EventsService] Auto-sync failed:", err));
       } catch (err) {
         this.initPromise = null;
         throw err;
@@ -210,18 +194,14 @@ export class EventsService {
     this.emit({ type: "event.closed", summary });
 
     if (totals.total === 0) {
-      // Noche cerrada sin ventas: se elimina en vez de archivarse, y NO se sincroniza
-      // a Cloud (así no seguimos fabricando noches vacías en la nube que después
-      // vuelven con cada restore). orders/tickets cascadean por ON DELETE CASCADE.
+      // Noche cerrada sin ventas: se elimina en vez de archivarse, así no se acumulan
+      // noches vacías en el historial. orders/tickets cascadean por ON DELETE CASCADE.
       console.log(`[EventsService] Noche ${closedEvent.id} cerrada sin ventas — se elimina en vez de archivarse.`);
       try {
         await this.eventsRepo.delete(closedEvent.id);
       } catch (dbErr) {
         console.error(`[EventsService] No se pudo eliminar la noche vacía ${closedEvent.id}:`, dbErr);
       }
-    } else {
-      // Perform cloud sync in the background
-      this.syncEventToCloudBackground(closedEvent, totals);
     }
 
     // Ya no se crea la noche siguiente automáticamente: queda sin noche activa
@@ -314,14 +294,6 @@ export class EventsService {
       totals,
       activeTheme: this.activeTheme,
     };
-  }
-
-  private async syncEventToCloudBackground(event: NightEvent, totals: EventTotals) {
-    this.syncService.pushEventData(event.id, event, totals).catch(console.error);
-    // Auditoría también respaldada en cloud, para que sea recuperable ante un desastre
-    // local (ver docs/specs/deuda-pre-fase-6/restaurar-backup-desde-cloud.md) — fire-and-forget, un fallo
-    // acá nunca debe impedir que la noche cierre.
-    this.syncService.pushAuditLogsIfConfigured().catch(console.error);
   }
 
 }

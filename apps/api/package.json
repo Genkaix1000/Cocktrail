@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "db:reset": "tsx src/scripts/reset-data.ts",
     "db:migrate": "tsx src/scripts/migrate.ts",
-    "verify-sync": "tsx src/scripts/verify-sync.ts",
+    "db:seed": "tsx src/scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "pnpm test:unit && pnpm test:integration",
     "test:unit": "vitest run --exclude '**/tests/integration/**'",

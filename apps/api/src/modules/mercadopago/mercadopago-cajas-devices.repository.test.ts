@@ -50,7 +50,6 @@ const h = vi.hoisted(() => {
 
 vi.mock("../../shared/supabase.js", () => ({
   supabase: h.supabase,
-  supabaseCloud: null,
 }));
 
 type Row = Record<string, unknown>;

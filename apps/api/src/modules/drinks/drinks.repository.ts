@@ -9,7 +9,7 @@ export interface DrinksRepository {
   nextId(): Promise<number>;
 }
 
-import { supabase, supabaseCloud } from "../../shared/supabase.js";
+import { supabase } from "../../shared/supabase.js";
 
 type DrinkRow = {
   id: number;
@@ -102,19 +102,6 @@ export class SupabaseDrinksRepository implements DrinksRepository {
       throw error;
     }
 
-    if (supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud.from("drinks").insert(payload);
-        if (cloudError) {
-          console.error("[SupabaseDrinksRepository] Error creating drink in cloud:", cloudError);
-        } else {
-          console.log(`[SupabaseDrinksRepository] Drink ${drink.id} synced to cloud.`);
-        }
-      } catch (err) {
-        console.error("[SupabaseDrinksRepository] Exception syncing drink to cloud:", err);
-      }
-    }
-
     return mapRowToDrink(data);
   }
 
@@ -145,19 +132,6 @@ export class SupabaseDrinksRepository implements DrinksRepository {
       throw error;
     }
 
-    if (data && supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud.from("drinks").update(updates).eq("id", id);
-        if (cloudError) {
-          console.error("[SupabaseDrinksRepository] Error updating drink in cloud:", cloudError);
-        } else {
-          console.log(`[SupabaseDrinksRepository] Drink ${id} update synced to cloud.`);
-        }
-      } catch (err) {
-        console.error("[SupabaseDrinksRepository] Exception updating drink in cloud:", err);
-      }
-    }
-
     return data ? mapRowToDrink(data) : undefined;
   }
 
@@ -167,19 +141,6 @@ export class SupabaseDrinksRepository implements DrinksRepository {
     if (error) {
       console.error("[SupabaseDrinksRepository] Error deleting drink locally:", error);
       return false;
-    }
-
-    if (supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud.from("drinks").delete().eq("id", id);
-        if (cloudError) {
-          console.error("[SupabaseDrinksRepository] Error deleting drink in cloud:", cloudError);
-        } else {
-          console.log(`[SupabaseDrinksRepository] Drink ${id} deletion synced to cloud.`);
-        }
-      } catch (err) {
-        console.error("[SupabaseDrinksRepository] Exception deleting drink in cloud:", err);
-      }
     }
 
     return true;

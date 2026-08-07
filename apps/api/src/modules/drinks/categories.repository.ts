@@ -1,5 +1,5 @@
 import type { DrinkCategory } from "@cocktrail/shared";
-import { supabase, supabaseCloud } from "../../shared/supabase.js";
+import { supabase } from "../../shared/supabase.js";
 
 export interface DrinkCategoriesRepository {
   list(): Promise<DrinkCategory[]>;
@@ -70,17 +70,6 @@ export class SupabaseDrinkCategoriesRepository implements DrinkCategoriesReposit
       throw error;
     }
 
-    if (supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud.from("drink_categories").insert(payload);
-        if (cloudError) {
-          console.error("[SupabaseDrinkCategoriesRepository] Error creating in cloud:", cloudError);
-        }
-      } catch (err) {
-        console.error("[SupabaseDrinkCategoriesRepository] Exception syncing create:", err);
-      }
-    }
-
     return mapRow(data);
   }
 
@@ -105,20 +94,6 @@ export class SupabaseDrinkCategoriesRepository implements DrinkCategoriesReposit
       throw error;
     }
 
-    if (data && supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud
-          .from("drink_categories")
-          .update(updates)
-          .eq("id", id);
-        if (cloudError) {
-          console.error("[SupabaseDrinkCategoriesRepository] Error updating in cloud:", cloudError);
-        }
-      } catch (err) {
-        console.error("[SupabaseDrinkCategoriesRepository] Exception syncing update:", err);
-      }
-    }
-
     return data ? mapRow(data) : undefined;
   }
 
@@ -127,17 +102,6 @@ export class SupabaseDrinkCategoriesRepository implements DrinkCategoriesReposit
     if (error) {
       console.error("[SupabaseDrinkCategoriesRepository] Error deleting locally:", error);
       return false;
-    }
-
-    if (supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud.from("drink_categories").delete().eq("id", id);
-        if (cloudError) {
-          console.error("[SupabaseDrinkCategoriesRepository] Error deleting in cloud:", cloudError);
-        }
-      } catch (err) {
-        console.error("[SupabaseDrinkCategoriesRepository] Exception syncing delete:", err);
-      }
     }
 
     return true;

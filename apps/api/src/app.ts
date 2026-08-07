@@ -60,10 +60,8 @@ import { BarSessionsService } from "./modules/bar-sessions/bar-sessions.service.
 import { SupabaseBarSessionsRepository } from "./modules/bar-sessions/bar-sessions.repository.js";
 import { PrinterService } from "./modules/printer/printer.service.js";
 import { emit } from "./shared/sse/sse-manager.js";
-import { SupabaseCloudSyncRepository } from "./modules/sync/cloud-sync.repository.js";
-import { SyncService } from "./modules/sync/sync.service.js";
 import { SystemService } from "./modules/system/system.service.js";
-import { supabase, supabaseCloud } from "./shared/supabase.js";
+import { supabase } from "./shared/supabase.js";
 
 // Middleware
 import { errorHandler } from "./shared/middleware/error-handler.js";
@@ -82,10 +80,7 @@ const drinksService = new DrinksService(drinksRepo);
 const drinkCategoriesService = new DrinkCategoriesService(drinkCategoriesRepo);
 const usersService = new UsersService(usersRepo);
 
-const cloudSyncRepo = new SupabaseCloudSyncRepository();
-const syncService = new SyncService(usersRepo, drinksRepo, ordersRepo, ticketsRepo, eventsRepo, cloudSyncRepo);
-
-const eventsService = new EventsService(eventsRepo, ordersRepo, drinksRepo, emit, syncService, configRepo);
+const eventsService = new EventsService(eventsRepo, ordersRepo, drinksRepo, emit, configRepo);
 
 const printerService = new PrinterService();
 
@@ -103,7 +98,9 @@ const mpOAuthService = new MercadoPagoOAuthService(
     redirectUri: env.MP_REDIRECT_URI,
     refreshMarginDays: env.MP_REFRESH_MARGIN_DAYS,
   },
-  supabaseCloud, // buzón de handoff + limpieza de metadata al desvincular
+  // Buzón de handoff: lo escribe la Edge Function `mp-auth-callback`. Con una sola base,
+  // ese proyecto es el mismo que `supabase` — antes iba el cliente cloud aparte.
+  supabase,
 );
 
 // Fase 2 — resuelve el access_token del único seller vinculado (single-seller).
@@ -223,7 +220,6 @@ const systemService = new SystemService(
   mpService,
   printerService,
   supabase,
-  supabaseCloud,
   async () => posnetResolver.peek((await resolveInstallationBarId()) ?? env.BAR_CODE),
 );
 
@@ -306,7 +302,7 @@ app.use(
 );
 app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
-app.use("/api/system", createSystemController(usersRepo, systemService, syncService));
+app.use("/api/system", createSystemController(usersRepo, systemService));
 app.use("/api", createEventsController(eventsService, usersRepo));
 
 // Error handler global (ÚLTIMO)
@@ -314,4 +310,4 @@ app.use(errorHandler);
 
 // mpSellersRepo y mpOAuthService se exportan para el boot de server.ts
 // (backfill de cifrado + pull del seller — fail-open).
-export { app, eventsService, syncService, mpWebhooksService, mpSellersRepo, mpOAuthService };
+export { app, eventsService, mpWebhooksService, mpSellersRepo, mpOAuthService };

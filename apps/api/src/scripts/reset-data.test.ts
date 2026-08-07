@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { countRows, parseArgs, resetData, TABLES_TO_RESET } from "./reset-data.js";
+import { countRows, resetData, TABLES_TO_RESET } from "./reset-data.js";
 
 type TableConfig = {
   count?: number;
@@ -199,31 +199,5 @@ describe("resetData", () => {
     expect(deleted).toEqual({ night_events: 3, audit_logs: null });
     // acá el delete sí se intentó: el count había pasado
     expect(calls).toContainEqual({ table: "audit_logs", op: "delete" });
-  });
-});
-
-describe("parseArgs", () => {
-  it("acepta --target=local", () => {
-    expect(parseArgs(["--target=local"])).toEqual({ target: "local", yes: false });
-  });
-
-  it("acepta --target=cloud", () => {
-    expect(parseArgs(["--target=cloud"])).toEqual({ target: "cloud", yes: false });
-  });
-
-  it("acepta --yes con local", () => {
-    expect(parseArgs(["--target=local", "--yes"])).toEqual({ target: "local", yes: true });
-  });
-
-  it("rechaza la falta de --target", () => {
-    expect(() => parseArgs([])).toThrow(/--target/);
-  });
-
-  it("rechaza un --target inválido", () => {
-    expect(() => parseArgs(["--target=produccion"])).toThrow(/--target/);
-  });
-
-  it("rechaza --yes combinado con --target=cloud", () => {
-    expect(() => parseArgs(["--target=cloud", "--yes"])).toThrow(/--yes.*cloud/);
   });
 });

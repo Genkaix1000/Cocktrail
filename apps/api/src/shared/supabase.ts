@@ -8,22 +8,9 @@ export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE
   },
 });
 
-export const supabaseCloud = env.SUPABASE_CLOUD_URL && env.SUPABASE_CLOUD_SERVICE_ROLE_KEY
-  ? createClient(env.SUPABASE_CLOUD_URL, env.SUPABASE_CLOUD_SERVICE_ROLE_KEY, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
-  : null;
-
 /**
- * Cliente SOLO para `oauth_states`: la Edge Function `mp-auth-callback` (Cloud)
- * consume el state, así que el backend debe escribirlo en el MISMO proyecto.
- * Si no hay Cloud configurado (dev), cae a la DB local, que tiene la misma
- * tabla/RPC (migraciones de Fase 0).
- *
- * ⚠ Los SELLERS ya NO van por acá (PR 4): viven en la base local con tokens
- * cifrados; Cloud solo guarda metadata + el buzón `mercadopago_seller_handoff`.
+ * Alias histórico de `supabase` para `oauth_states`: la Edge Function `mp-auth-callback`
+ * consume el state, así que backend y Edge Function tienen que escribir en el MISMO
+ * proyecto. Con una sola base (Supabase Cloud) eso ya se cumple siempre.
  */
-export const oauthDb = supabaseCloud ?? supabase;
+export const oauthDb = supabase;

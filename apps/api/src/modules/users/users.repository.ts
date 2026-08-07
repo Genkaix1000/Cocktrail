@@ -35,7 +35,7 @@ export { hashPassword };
 
 // ── Implementación Supabase (fase 4 — Edge Sync) ──
 
-import { supabase, supabaseCloud } from "../../shared/supabase.js";
+import { supabase } from "../../shared/supabase.js";
 
 type UserRow = {
   id: string;
@@ -125,28 +125,6 @@ export class SupabaseUsersRepository implements UsersRepository {
       throw error;
     }
 
-    if (supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud
-          .from("users")
-          .insert({
-            id: user.id,
-            username: user.username,
-            password_hash: user.passwordHash,
-            role: user.role,
-            permissions: {},
-            created_at: new Date(user.createdAt).toISOString(),
-          });
-        if (cloudError) {
-          console.error("[SupabaseUsersRepository] Error creating user in cloud:", cloudError);
-        } else {
-          console.log(`[SupabaseUsersRepository] User ${user.id} synced to cloud.`);
-        }
-      } catch (err) {
-        console.error("[SupabaseUsersRepository] Exception syncing user to cloud:", err);
-      }
-    }
-
     return mapRowToUser(data);
   }
 
@@ -168,27 +146,6 @@ export class SupabaseUsersRepository implements UsersRepository {
       throw error;
     }
 
-    if (supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud
-          .from("users")
-          .update({
-            username: user.username,
-            password_hash: user.passwordHash,
-            role: user.role,
-            permissions: {},
-          })
-          .eq("id", user.id);
-        if (cloudError) {
-          console.error("[SupabaseUsersRepository] Error updating user in cloud:", cloudError);
-        } else {
-          console.log(`[SupabaseUsersRepository] User ${user.id} update synced to cloud.`);
-        }
-      } catch (err) {
-        console.error("[SupabaseUsersRepository] Exception updating user in cloud:", err);
-      }
-    }
-
     return mapRowToUser(data);
   }
 
@@ -201,22 +158,6 @@ export class SupabaseUsersRepository implements UsersRepository {
     if (error) {
       console.error("[SupabaseUsersRepository] Error deleting user locally:", error);
       return false;
-    }
-
-    if (supabaseCloud) {
-      try {
-        const { error: cloudError } = await supabaseCloud
-          .from("users")
-          .delete()
-          .eq("id", id);
-        if (cloudError) {
-          console.error("[SupabaseUsersRepository] Error deleting user in cloud:", cloudError);
-        } else {
-          console.log(`[SupabaseUsersRepository] User ${id} deletion synced to cloud.`);
-        }
-      } catch (err) {
-        console.error("[SupabaseUsersRepository] Exception deleting user in cloud:", err);
-      }
     }
 
     return true;

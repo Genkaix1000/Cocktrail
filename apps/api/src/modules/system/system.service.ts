@@ -28,7 +28,6 @@ export type SystemHealth = {
 export type SystemStatus = {
   internet: { connected: boolean };
   localDb: { connected: boolean };
-  cloudDb: { connected: boolean; configured: boolean };
   posnet: {
     connected: boolean;
     configured: boolean;
@@ -55,7 +54,6 @@ export class SystemService {
     private mpService: MercadoPagoService,
     private printerService: PrinterService,
     private localDb: SupabaseClient,
-    private cloudDb: SupabaseClient | null,
     /**
      * T18 (gestion-posnets): el device del bloque `posnet` sale del
      * PosnetResolver — la MISMA verdad que el cobro (caja → device activo, env
@@ -118,26 +116,10 @@ export class SystemService {
       localDbConnected = !error;
     } catch {}
 
-    // Cloud Database Check (with 2s timeout)
-    let cloudDbConnected = false;
-    const cloudDbConfigured = !!this.cloudDb;
-    if (this.cloudDb) {
-      try {
-        const checkPromise = this.cloudDb.from("app_config").select("id").limit(1);
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000));
-
-        const result: any = await Promise.race([checkPromise, timeoutPromise]);
-        cloudDbConnected = !result?.error;
-      } catch {
-        cloudDbConnected = false;
-      }
-    }
-
     // Sync status check — cuenta CUALQUIER night_event con sync_status != "synced",
     // sin filtrar por status (a propósito: incluye la noche activa todavía sin cerrar,
     // que nace con sync_status "pending" — mismo comportamiento que el endpoint tenía
-    // antes de esta refactor. eventsRepo.getPendingSync() no sirve acá porque ESE sí
-    // filtra por status="cerrado" para syncAllPendingEvents, semántica distinta).
+    // antes de esta refactor).
     let synced = true;
     let pendingEvents = 0;
     try {
@@ -200,7 +182,6 @@ export class SystemService {
     return {
       internet: { connected: internetConnected },
       localDb: { connected: localDbConnected },
-      cloudDb: { connected: cloudDbConnected, configured: cloudDbConfigured },
       posnet: {
         connected: posnetConnected,
         configured: posnetConfigured,

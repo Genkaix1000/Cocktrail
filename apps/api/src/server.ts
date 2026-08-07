@@ -1,5 +1,5 @@
 import { env } from "./config/env.js";
-import { app, eventsService, syncService, mpWebhooksService, mpSellersRepo, mpOAuthService } from "./app.js";
+import { app, eventsService, mpWebhooksService, mpSellersRepo, mpOAuthService } from "./app.js";
 import { supabase } from "./shared/supabase.js";
 import { runMpFallbackPreflight } from "./modules/mercadopago/mp-fallback-preflight.js";
 import { runMigrations } from "./infra/migrations/migration-runner.js";
@@ -156,11 +156,6 @@ async function boot() {
 
     await eventsService.initialize();
     console.log("[boot] EventsService initialized");
-
-    // Ensure local master data is seeded in the background (no Cloud Pull on boot)
-    console.log("[boot] Ensuring local master data is seeded...");
-    await syncService.ensureLocalMasterDataSeeded();
-    console.log("[boot] Local master data check completed.");
 
     dbInitialized = true;
   }

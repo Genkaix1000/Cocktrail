@@ -41,24 +41,14 @@ function makeDrinksRepo(): DrinksRepository {
   };
 }
 
-function makeSyncService() {
-  return {
-    syncAllPendingEvents: vi.fn().mockResolvedValue({ successCount: 0, failedCount: 0 }),
-    pushEventData: vi.fn().mockResolvedValue(true),
-    pushAuditLogsIfConfigured: vi.fn().mockResolvedValue(undefined),
-  } as any;
-}
-
 function makeService(overrides?: {
   eventsRepo?: EventsRepository;
   ordersRepo?: OrdersRepository;
-  syncService?: ReturnType<typeof makeSyncService>;
 }) {
   const eventsRepo = overrides?.eventsRepo ?? makeEventsRepo();
   const ordersRepo = overrides?.ordersRepo ?? makeOrdersRepo();
   const drinksRepo = makeDrinksRepo();
-  const syncService = overrides?.syncService ?? makeSyncService();
-  return new EventsService(eventsRepo, ordersRepo, drinksRepo, vi.fn(), syncService);
+  return new EventsService(eventsRepo, ordersRepo, drinksRepo, vi.fn());
 }
 
 /** Pedido cobrado en efectivo por $1000, para simular una noche con ventas. */
@@ -147,11 +137,10 @@ describe("EventsService.openEvent / setKeyword / closeEvent", () => {
     expect(await service.getCurrentEvent()).toBeNull();
   });
 
-  it("closeEvent con total $0 elimina la noche y NO la sincroniza a Cloud", async () => {
+  it("closeEvent con total $0 elimina la noche", async () => {
     const eventsRepo = makeEventsRepo();
-    const syncService = makeSyncService();
     // Sin pedidos → totals.total === 0 → la noche se elimina en vez de archivarse
-    const service = makeService({ eventsRepo, syncService });
+    const service = makeService({ eventsRepo });
     await service.initialize();
     const event = await service.openEvent("clave");
 
@@ -161,29 +150,22 @@ describe("EventsService.openEvent / setKeyword / closeEvent", () => {
     expect(summary.status).toBe("cerrado");
     expect(summary.totals.total).toBe(0);
     expect(eventsRepo.delete).toHaveBeenCalledWith(event.id);
-    expect(syncService.pushEventData).not.toHaveBeenCalled();
     expect(await service.getCurrentEvent()).toBeNull();
   });
 
-  it("closeEvent con total > 0 no borra la noche y sí la sincroniza", async () => {
+  it("closeEvent con total > 0 no borra la noche", async () => {
     const eventsRepo = makeEventsRepo();
-    const syncService = makeSyncService();
     const ordersRepo = makeOrdersRepo({
       listForEvent: vi.fn().mockResolvedValue([makePaidOrder()]),
     });
-    const service = makeService({ eventsRepo, ordersRepo, syncService });
+    const service = makeService({ eventsRepo, ordersRepo });
     await service.initialize();
-    const event = await service.openEvent("clave");
+    await service.openEvent("clave");
 
     const summary = await service.closeEvent("admin1");
 
     expect(summary.totals.total).toBe(1000);
     expect(eventsRepo.delete).not.toHaveBeenCalled();
-    expect(syncService.pushEventData).toHaveBeenCalledWith(
-      event.id,
-      expect.objectContaining({ id: event.id, status: "cerrado" }),
-      expect.objectContaining({ total: 1000 }),
-    );
     expect(await service.getCurrentEvent()).toBeNull();
   });
 });

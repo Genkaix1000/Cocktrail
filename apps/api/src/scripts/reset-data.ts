@@ -8,9 +8,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * El ORDEN importa: `mp_orders.event_id` referencia `night_events(id)`
  * SIN cascade, así que `mp_orders` va ANTES que `night_events` (si no,
- * el delete de las noches falla por FK). `mp_webhook_events` es
- * local-only (no se sincroniza a Cloud): en cloud no existe y el reset
- * la saltea con un aviso.
+ * el delete de las noches falla por FK). Si alguna tabla no existe en la
+ * base, el reset la saltea con un aviso.
  *
  * La CONFIG operativa queda afuera a propósito — es lo que permite
  * seguir cobrando después del reset: `mercadopago_sellers`,
@@ -25,8 +24,6 @@ export const TABLES_TO_RESET = [
   "users",
   "audit_logs",
 ] as const;
-
-export type Target = "local" | "cloud";
 
 function isMissingTableError(error: { code?: string; message: string }): boolean {
   return error.code === "PGRST205" || error.message.includes("Could not find the table");
@@ -83,72 +80,42 @@ export async function resetData(
   return deleted;
 }
 
-export type ParsedArgs = {
-  target: Target;
-  yes: boolean;
-};
-
-export function parseArgs(argv: string[]): ParsedArgs {
-  const targetArg = argv.find((a) => a.startsWith("--target="));
-  const target = targetArg?.slice("--target=".length);
-
-  if (target !== "local" && target !== "cloud") {
-    throw new Error('Falta o es inválido --target. Uso: --target=local o --target=cloud (obligatorio, sin default).');
-  }
-
-  const yes = argv.includes("--yes");
-  if (yes && target === "cloud") {
-    throw new Error("--yes no está permitido con --target=cloud: el reset de producción siempre pide confirmación tipeada.");
-  }
-
-  return { target, yes };
-}
-
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 
 if (isMainModule) {
   const { env } = await import("../config/env.js");
-  const { supabase, supabaseCloud } = await import("../shared/supabase.js");
+  const { supabase } = await import("../shared/supabase.js");
   const { createInterface } = await import("node:readline/promises");
 
-  const { target, yes } = parseArgs(process.argv.slice(2));
-
-  const client = target === "local" ? supabase : supabaseCloud;
-  if (!client) {
-    console.error("❌ Supabase Cloud no está configurado (faltan SUPABASE_CLOUD_URL / SUPABASE_CLOUD_SERVICE_ROLE_KEY).");
-    process.exit(1);
-  }
-
-  const label = target === "local" ? `local (${env.SUPABASE_URL})` : `CLOUD / PRODUCCIÓN (${env.SUPABASE_CLOUD_URL})`;
-  console.log(`\n⚠️  Vas a vaciar la base ${label}.`);
+  // Una sola base (Supabase Cloud): el reset SIEMPRE pide confirmación tipeada,
+  // no hay más un target "local" descartable donde saltearla con --yes.
+  console.log(`\n⚠️  Vas a vaciar la base ${env.SUPABASE_URL}.`);
   console.log(`   Tablas: ${TABLES_TO_RESET.join(", ")} (orders/tickets/cash_sales caen por CASCADE de night_events).`);
   console.log(
     "   NO se toca la config operativa: mercadopago_sellers, mercadopago_cajas, " +
       "mercadopago_cajas_devices, drinks, bars, app_config — se puede seguir cobrando después del reset.\n",
   );
 
-  // null = la tabla no existe en este entorno (ej. mp_webhook_events en Cloud)
+  // null = la tabla no existe en esta base
   const counts: Record<string, number | null> = {};
   for (const table of TABLES_TO_RESET) {
-    counts[table] = await countRows(client, table);
+    counts[table] = await countRows(supabase, table);
   }
   console.log("   Filas actuales:", counts, "\n");
 
-  if (!(target === "local" && yes)) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const answer = await rl.question(`Escribí BORRAR para confirmar (${target}): `);
-    rl.close();
-    if (answer.trim() !== "BORRAR") {
-      console.log("Cancelado — no se borró nada.");
-      process.exit(0);
-    }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await rl.question("Escribí BORRAR para confirmar: ");
+  rl.close();
+  if (answer.trim() !== "BORRAR") {
+    console.log("Cancelado — no se borró nada.");
+    process.exit(0);
   }
 
-  const deleted = await resetData(client, TABLES_TO_RESET);
+  const deleted = await resetData(supabase, TABLES_TO_RESET);
   console.log("\n✅ Listo. Filas borradas:", deleted);
   console.log(
-    '   La tabla "users" se re-siembra sola con el admin default en el próximo boot del server ' +
-      "(ensureLocalMasterDataSeeded). Los logins de fallback por env (ADMIN_USER/CAJA_USER) siguen andando.\n" +
+    '   La tabla "users" queda vacía: volvé a sembrar el admin con ' +
+      "`pnpm --filter cocktrail-api db:seed`.\n" +
       '   ⚠️  El usuario de "caja" creado desde /admin NO se re-siembra: hay que volver a crearlo a mano.',
   );
 }

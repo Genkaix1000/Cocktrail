@@ -248,9 +248,11 @@ deploya — sobre un baseline de migraciones hecho a mano para no tocar los dato
   beneficio).
 - Se elimina la tabla/flujo `mercadopago_seller_handoff` del código (el buzón de traspaso existía
   para pasar el token de la nube a una instalación local nueva); la tabla queda en la base.
-- `DATABASE_URL` pasa a apuntar al connection string de Supabase Cloud. **Usar el pooler
-  (puerto 6543, modo transaction) con `sslmode=require`**; el runner de migraciones usa advisory
-  locks, así que si el pooler los rechaza, cae a conexión directa (puerto 5432).
+- `DATABASE_URL` pasa a apuntar al connection string de Supabase Cloud. **Usar el "Session
+  pooler"** (puerto 5432 del host `*.pooler.supabase.com`), no el transaction pooler ni la
+  conexión directa: el runner toma un advisory lock de sesión (`pg_try_advisory_lock`,
+  `pg-migrations.repository.ts:58`) que el modo transaction no sostiene, y la conexión directa de
+  Supabase hoy es IPv6-only, que Render no garantiza.
 
 ### Real-time
 

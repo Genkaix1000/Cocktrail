@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { deleteEmptyNights, findEmptyNightIds, parseArgs } from "./cleanup-empty-nights.js";
+import { deleteEmptyNights, findEmptyNightIds } from "./cleanup-empty-nights.js";
 
 type FindResult = { data?: { id: string }[]; error?: { message: string } };
 
@@ -38,35 +38,26 @@ function makeFakeClient(opts: { find?: FindResult; deleteError?: { message: stri
 }
 
 describe("findEmptyNightIds", () => {
-  it("filtra por order_counter = 0 y status = cerrado en local", async () => {
+  it("filtra por order_counter = 0 y status = cerrado", async () => {
     const { client, calls } = makeFakeClient({ find: { data: [{ id: "a" }, { id: "b" }] } });
 
-    const ids = await findEmptyNightIds(client, "local");
+    const ids = await findEmptyNightIds(client);
 
     expect(ids).toEqual(["a", "b"]);
     expect(calls).toContainEqual({ op: "eq", args: ["order_counter", 0] });
     expect(calls).toContainEqual({ op: "eq", args: ["status", "cerrado"] });
   });
 
-  it("en cloud NO filtra por status (esa columna no existe ahí)", async () => {
-    const { client, calls } = makeFakeClient({ find: { data: [{ id: "a" }] } });
-
-    await findEmptyNightIds(client, "cloud");
-
-    expect(calls).toContainEqual({ op: "eq", args: ["order_counter", 0] });
-    expect(calls.some((c) => c.op === "eq" && c.args[0] === "status")).toBe(false);
-  });
-
   it("devuelve [] si no hay datos", async () => {
     const { client } = makeFakeClient({ find: {} });
 
-    await expect(findEmptyNightIds(client, "local")).resolves.toEqual([]);
+    await expect(findEmptyNightIds(client)).resolves.toEqual([]);
   });
 
   it("lanza si supabase devuelve error", async () => {
     const { client } = makeFakeClient({ find: { error: { message: "boom" } } });
 
-    await expect(findEmptyNightIds(client, "local")).rejects.toThrow(/boom/);
+    await expect(findEmptyNightIds(client)).rejects.toThrow(/boom/);
   });
 });
 
@@ -94,31 +85,5 @@ describe("deleteEmptyNights", () => {
     const { client } = makeFakeClient({ deleteError: { message: "permission denied" } });
 
     await expect(deleteEmptyNights(client, ["a"])).rejects.toThrow(/permission denied/);
-  });
-});
-
-describe("parseArgs", () => {
-  it("acepta --target=local", () => {
-    expect(parseArgs(["--target=local"])).toEqual({ target: "local", yes: false });
-  });
-
-  it("acepta --target=cloud", () => {
-    expect(parseArgs(["--target=cloud"])).toEqual({ target: "cloud", yes: false });
-  });
-
-  it("acepta --yes con local", () => {
-    expect(parseArgs(["--target=local", "--yes"])).toEqual({ target: "local", yes: true });
-  });
-
-  it("rechaza la falta de --target", () => {
-    expect(() => parseArgs([])).toThrow(/--target/);
-  });
-
-  it("rechaza un --target inválido", () => {
-    expect(() => parseArgs(["--target=produccion"])).toThrow(/--target/);
-  });
-
-  it("rechaza --yes combinado con --target=cloud", () => {
-    expect(() => parseArgs(["--target=cloud", "--yes"])).toThrow(/--yes.*cloud/);
   });
 });

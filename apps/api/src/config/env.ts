@@ -23,8 +23,6 @@ const EnvSchema = z.object({
   BAR_CODE: z.string().min(1).max(20).default("BARRA-01"),
   SUPABASE_URL: z.string().url().default("http://127.0.0.1:54321"),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).default("service-role-key-placeholder"),
-  SUPABASE_CLOUD_URL: z.string().url().optional(),
-  SUPABASE_CLOUD_SERVICE_ROLE_KEY: z.string().optional(),
 
   // Postgres directo — SOLO lo usa el runner de migraciones (infra/migrations).
   // Default = compose local: puerto host 54322, password "postgres"

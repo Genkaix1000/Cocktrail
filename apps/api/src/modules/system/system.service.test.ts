@@ -87,13 +87,13 @@ describe("SystemService.checkInternet", () => {
 
   it("true si el primer fetch (1.1.1.1) responde ok", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true }) as any;
-    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), null, makeResolvePosnet());
+    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), makeResolvePosnet());
     expect(await service.checkInternet()).toBe(true);
   });
 
   it("false si ambos fetch fallan", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("sin red")) as any;
-    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), null, makeResolvePosnet());
+    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), makeResolvePosnet());
     expect(await service.checkInternet()).toBe(false);
   });
 });
@@ -107,13 +107,12 @@ describe("SystemService.getStatus", () => {
     global.fetch = originalFetch;
   });
 
-  it("cloudDb.configured es false si no hay cloudDb inyectada", async () => {
+  it("localDb.connected es true si la base responde", async () => {
     const localDb = makeSupabaseClient({ users: { data: [{ id: "u1" }], error: null } });
-    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), localDb, null, makeResolvePosnet());
+    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), localDb, makeResolvePosnet());
 
     const status = await service.getStatus();
 
-    expect(status.cloudDb).toEqual({ connected: false, configured: false });
     expect(status.localDb.connected).toBe(true);
   });
 
@@ -122,7 +121,7 @@ describe("SystemService.getStatus", () => {
       users: { data: [{ id: "u1" }], error: null },
       night_events: { data: [{ id: "e1" }, { id: "e2" }], error: null },
     });
-    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), localDb, null, makeResolvePosnet());
+    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), localDb, makeResolvePosnet());
 
     const status = await service.getStatus();
 
@@ -132,7 +131,7 @@ describe("SystemService.getStatus", () => {
   it("eventDetails viene de eventsRepo.getActive(), null si no hay noche activa", async () => {
     const eventsRepo = makeEventsRepo({ getActive: vi.fn().mockResolvedValue(null) });
     const localDb = makeSupabaseClient({});
-    const service = new SystemService(eventsRepo, makeMpService(), makePrinterService(), localDb, null, makeResolvePosnet());
+    const service = new SystemService(eventsRepo, makeMpService(), makePrinterService(), localDb, makeResolvePosnet());
 
     const status = await service.getStatus();
 
@@ -142,7 +141,7 @@ describe("SystemService.getStatus", () => {
   it("eventDetails refleja la noche activa cuando hay una", async () => {
     const eventsRepo = makeEventsRepo({ getActive: vi.fn().mockResolvedValue(ACTIVE_EVENT) });
     const localDb = makeSupabaseClient({});
-    const service = new SystemService(eventsRepo, makeMpService(), makePrinterService(), localDb, null, makeResolvePosnet());
+    const service = new SystemService(eventsRepo, makeMpService(), makePrinterService(), localDb, makeResolvePosnet());
 
     const status = await service.getStatus();
 
@@ -152,7 +151,7 @@ describe("SystemService.getStatus", () => {
   it("posnet: caja sin Posnet vinculado (409 del resolver) → estado 'no configurado' con el mensaje, sin llamar a checkDeviceConnection", async () => {
     const mpService = makeMpService();
     const service = new SystemService(
-      makeEventsRepo(), mpService, makePrinterService(), makeSupabaseClient({}), null,
+      makeEventsRepo(), mpService, makePrinterService(), makeSupabaseClient({}),
       makeResolvePosnet(NOT_LINKED),
     );
 
@@ -174,7 +173,7 @@ describe("SystemService.getStatus", () => {
       }),
     } as Partial<MercadoPagoService>);
     const service = new SystemService(
-      makeEventsRepo(), mpService, makePrinterService(), makeSupabaseClient({}), null,
+      makeEventsRepo(), mpService, makePrinterService(), makeSupabaseClient({}),
       makeResolvePosnet({ deviceId: "PAX_A910__SMARTPOS1493600985", source: "caja", cajaId: "caja-1" }),
     );
 
@@ -192,7 +191,7 @@ describe("SystemService.getStatus", () => {
 
   it("posnet: resuelto por la env (último recurso) → el mensaje lo dice (D2: visible, nunca silencioso)", async () => {
     const service = new SystemService(
-      makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), null,
+      makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}),
       makeResolvePosnet({ deviceId: "env-device", source: "env", cajaId: null }),
     );
 
@@ -208,7 +207,7 @@ describe("SystemService.getStatus", () => {
       checkDeviceConnection: vi.fn().mockRejectedValue(new Error("MP no respondió")),
     } as Partial<MercadoPagoService>);
     const service = new SystemService(
-      makeEventsRepo(), mpService, makePrinterService(), makeSupabaseClient({}), null,
+      makeEventsRepo(), mpService, makePrinterService(), makeSupabaseClient({}),
       makeResolvePosnet({ deviceId: "device-1", source: "caja", cajaId: "caja-1" }),
     );
 
@@ -222,7 +221,7 @@ describe("SystemService.getStatus", () => {
   it("incluye el estado de la impresora tal cual lo devuelve printerService.getStatus()", async () => {
     const printerService = makePrinterService();
     const localDb = makeSupabaseClient({});
-    const service = new SystemService(makeEventsRepo(), makeMpService(), printerService, localDb, null, makeResolvePosnet());
+    const service = new SystemService(makeEventsRepo(), makeMpService(), printerService, localDb, makeResolvePosnet());
 
     const status = await service.getStatus();
 
@@ -240,7 +239,7 @@ describe("SystemService.getHealth", () => {
   });
 
   function makeService() {
-    return new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), null, makeResolvePosnet());
+    return new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), makeSupabaseClient({}), makeResolvePosnet());
   }
 
   it("status ok cuando las migraciones están limpias", () => {
