@@ -114,7 +114,7 @@ describe("buildTicketLines", () => {
       NIGHT_PX: 28,
       ITEM_PX: 50,
       SALE_PX: 32,
-      KEYWORD_PX: 30,
+      KEYWORD_PX: 36,
       TEXT_PX: 22,
       FONT_FAMILY: "sans-serif",
     });

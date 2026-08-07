@@ -35,6 +35,18 @@ export const MAX_CHUNK_BYTES = 512;
  */
 export const MIN_TICKET_DOTS = 520;
 
+/** ESC J avanza papel sin mandar datos: n puntos por comando, hasta 255. */
+function feedSteps(dots: number): S1Step[] {
+  const steps: S1Step[] = [];
+  let restante = dots;
+  while (restante > 0) {
+    const n = Math.min(restante, 255);
+    steps.push({ bytes: new Uint8Array([0x1b, 0x4a, n]), delayAfterMs: DELAY_MIN_FEED_MS });
+    restante -= n;
+  }
+  return steps;
+}
+
 const DELAY_SETUP_MS = 100;
 const DELAY_CHUNK_MS = 10;
 /** Respiro tras la última escritura de cada franja, para que drene el buffer. */
@@ -106,6 +118,16 @@ export function buildS1Sequence(
 
   const m = mode === "doubleHeight" ? 0x02 : 0x00;
 
+  // El papel que falta para llegar al largo mínimo se reparte antes y después
+  // del texto, en vez de dejarlo todo abajo: el ticket queda centrado. Avanzar
+  // papel son comandos de 3 bytes, así que no cuesta tiempo de impresión.
+  const printedDots = mode === "doubleHeight" ? height * 2 : height;
+  const relleno = Math.max(0, MIN_TICKET_DOTS - printedDots);
+  const rellenoArriba = Math.floor(relleno / 2);
+  const rellenoAbajo = relleno - rellenoArriba;
+
+  for (const step of feedSteps(rellenoArriba)) steps.push(step);
+
   // Cada franja: header propio + sus filas, partido en chunks de ≤chunkBytes.
   // ≤240 filas por bloque (el firmware banca hasta 255 y solo honra yL).
   for (let y0 = 0; y0 < height; y0 += STRIPE_MAX_ROWS) {
@@ -130,15 +152,7 @@ export function buildS1Sequence(
     }
   }
 
-  // Relleno de largo mínimo: en doubleHeight lo impreso mide height×2 puntos
-  // reales. ESC J avanza sin datos (1 comando por tramo, tiempo casi nulo).
-  const printedDots = mode === "doubleHeight" ? height * 2 : height;
-  let extra = Math.max(0, MIN_TICKET_DOTS - printedDots);
-  while (extra > 0) {
-    const n = Math.min(extra, 255);
-    steps.push({ bytes: new Uint8Array([0x1b, 0x4a, n]), delayAfterMs: DELAY_MIN_FEED_MS });
-    extra -= n;
-  }
+  for (const step of feedSteps(rellenoAbajo)) steps.push(step);
 
   steps.push({ bytes: new Uint8Array(FEED), delayAfterMs: DELAY_BEFORE_STOP_MS });
   steps.push({ bytes: new Uint8Array(STOP), delayAfterMs: 0 });

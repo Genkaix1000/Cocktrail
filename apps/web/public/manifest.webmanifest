@@ -5,7 +5,6 @@
   "start_url": "/caja",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
   "background_color": "#111315",
   "theme_color": "#111315",
   "lang": "es-AR",

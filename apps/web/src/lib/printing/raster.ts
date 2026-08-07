@@ -20,7 +20,7 @@ export const RASTER_LAYOUT = {
   /** Los tragos son lo que el barman lee: el tamaño más grande del ticket. */
   ITEM_PX: 50,
   SALE_PX: 32,
-  KEYWORD_PX: 30,
+  KEYWORD_PX: 36,
   TEXT_PX: 22,
   SEPARATOR_HEIGHT: 2,
   /** Alto de fila del separador: 2px de tinta + 1 de aire arriba. */
