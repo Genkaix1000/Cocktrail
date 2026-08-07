@@ -120,6 +120,7 @@ Express 5 + TypeScript. Patrón por capas **Controller → Service → Repositor
 | **config** | `GET /api/config` (tokens enmascarados), `POST /api/config` | admin |
 | **mercadopago** | `POST /api/mercadopago/pos/intent`, `GET /pos/intent/:id`, `DELETE /pos/intent/:id` | admin/caja |
 | **printer** | `GET /api/printer/status`, `POST /api/printer/test`, `POST /api/printer/reprint/:orderId` | admin/caja |
+| | *Regla de impresión: el server es dueño del **contenido** del ticket (`TicketContent` en shared, representación única de la que derivan los bytes ESC/POS y el raster); el device de caja es dueño de la **representación física** — ESC/POS texto por USB (APK/WebUSB) o raster 384px por Web Bluetooth (impresora S1, módulo `apps/web/src/lib/printing/`). El server nunca toca hardware. Ver [`specs/impresion-bluetooth-comandera.md`](./specs/impresion-bluetooth-comandera.md).* | |
 | **system** | `GET /api/system/status`, `/logs`, `POST /sync`, `POST /shutdown` | staff |
 | **sync** | (sin controller; disparado por `system` y `events`) | — |
 | **audit-logs** | (sin controller; `AuditLogsService` usado inline por otros módulos) | — |
