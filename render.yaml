@@ -1,17 +1,23 @@
-# Deploy de BarQR en Render. Un solo servicio Docker con los dos procesos
-# (API + web); ver el Dockerfile para el porqué.
+# Deploy de BarQR en Render: un solo servicio con los dos procesos (API + web).
+# El porqué de no separarlos está en el Dockerfile.
 #
-# Las variables marcadas `sync: false` NO se versionan: se cargan a mano en el
-# dashboard (Environment) o con el MCP/API de Render. Lista completa abajo.
+# Se usa el runtime de Node y no el Dockerfile: sobre el repo completo, el
+# paquete compartido y las migraciones quedan donde el código los espera, sin
+# los ajustes que sí necesita la imagen. El Dockerfile queda como alternativa
+# (otro hosting, o reproducir el entorno localmente).
+#
+# Las variables marcadas `sync: false` NO se versionan: se cargan en el
+# dashboard (Environment) o por la API. Lista completa abajo.
 services:
   - type: web
-    name: barqr
-    runtime: docker
-    dockerfilePath: ./Dockerfile
+    name: bosko
+    runtime: node
     plan: free
     region: oregon # Render no tiene región en Sudamérica; Oregon es la de menor latencia disponible para AR
-    branch: develop
+    branch: develop # explícito: sin esto tomaría la rama por defecto del repo
     autoDeploy: true
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build:cloud
+    startCommand: node scripts/start-cloud.mjs
 
     # Pega al puerto público (Next) y se reenvía a la API: prueba los dos procesos.
     healthCheckPath: /health

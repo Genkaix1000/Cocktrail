@@ -12,6 +12,7 @@
     "build:api": "pnpm --filter cocktrail-api build",
     "build:web": "pnpm --filter cocktrail-app build",
     "build": "pnpm build:api && pnpm build:web",
-    "typecheck": "pnpm --filter cocktrail-api typecheck && pnpm --filter cocktrail-app exec tsc --noEmit"
+    "typecheck": "pnpm --filter cocktrail-api typecheck && pnpm --filter cocktrail-app exec tsc --noEmit",
+    "build:cloud": "pnpm --filter cocktrail-api build && pnpm --filter cocktrail-app build && node scripts/prepare-standalone.mjs"
   }
 }
