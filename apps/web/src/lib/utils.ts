@@ -8,6 +8,11 @@ export function formatHm(ts: number): string {
   return `${h}:${m}`;
 }
 
+/** "1 noche" / "3 noches" — evita el clásico "1 noches". */
+export function plural(n: number, singular: string, plural: string): string {
+  return `${n} ${Math.abs(n) === 1 ? singular : plural}`;
+}
+
 /** $12.500 */
 export function formatMoney(n: number): string {
   return `$${n.toLocaleString("es-AR")}`;

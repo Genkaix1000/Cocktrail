@@ -69,10 +69,16 @@ export default function DashboardSection({
     peakHour,
   } = analytics;
 
-  const lastNightName = historyEvents.length > 0 ? "Última Noche" : "Noche Anterior";
-  const lastNightLabel = historyEvents.length > 0
+  const hasHistory = historyEvents.length > 0;
+  const lastNightName = hasHistory ? "Última Noche" : "Noche Anterior";
+  // Se muestra cuando la tarjeta no tiene delta. Sin historial no hay contra
+  // qué comparar, pero el número que muestra la tarjeta puede ser real (noche
+  // en curso): el copy tiene que decir eso y no "Sin noches registradas".
+  const lastNightLabel = hasHistory
     ? `Noche del ${formatNightDateLong(historyEvents[0]!.closedAt ?? historyEvents[0]!.startedAt)}`
-    : "Sin noches registradas";
+    : isNightOpen
+      ? "Noche en curso — sin noches previas"
+      : "Sin noches registradas";
 
   const peakSales = Math.max(0, ...hourlyData.map((s) => s.totalSales));
 
@@ -127,7 +133,11 @@ export default function DashboardSection({
                 Dashboard General
               </h1>
               <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
-                {isNightOpen ? "Resumen en tiempo real de tu negocio" : "Resumen de la última noche registrada"}
+                {isNightOpen
+                  ? "Resumen en tiempo real de tu negocio"
+                  : startedAtStr
+                    ? "Resumen de la última noche registrada"
+                    : "Todavía no hay noches para resumir"}
               </p>
             </div>
             <div className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)] font-medium">
@@ -252,9 +262,9 @@ export default function DashboardSection({
                     <span className="w-1.5 h-1.5 rounded-full bg-[var(--success-base)] shadow-[0_0_0_3px_color-mix(in_oklab,var(--success-base)_25%,transparent)] animate-pulse" />
                     Monitoreo Activo
                   </span>
-                  <span>Iniciado a las {startedAtStr} hs</span>
+                  {startedAtStr && <span>Iniciado a las {startedAtStr} hs</span>}
                 </>
-              ) : (
+              ) : startedAtStr ? (
                 <>
                   <span className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-strong)]" />
@@ -262,6 +272,11 @@ export default function DashboardSection({
                   </span>
                   <span>Iniciada a las {startedAtStr} hs</span>
                 </>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-strong)]" />
+                  Sin noches registradas
+                </span>
               )}
             </div>
             <span className="hidden md:inline">

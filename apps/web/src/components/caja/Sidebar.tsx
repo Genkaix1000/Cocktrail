@@ -178,7 +178,7 @@ export default function CajaSidebar({
         }`}
       >
         <div className="flex flex-col">
-          {!collapsed && <p className={sectionLabelClass}>Menu</p>}
+          {!collapsed && <p className={sectionLabelClass}>Menú</p>}
 
           <button
             type="button"

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import CloseNightModal from "./CloseNightModal";
@@ -143,6 +143,21 @@ describe("CloseNightModal", () => {
     expect(closeButton).toBeInTheDocument();
   });
 
+  it("en una noche de prueba avisa que se descarta todo, en vez de hablar de archivar", () => {
+    render(<CloseNightModal {...baseProps({ isTest: true })} />);
+    expect(screen.getByText(/se descarta todo/i)).toBeInTheDocument();
+    expect(screen.getByText(/se descartan los pedidos y los totales/i)).toBeInTheDocument();
+    expect(screen.queryByText(/vas a archivar/i)).not.toBeInTheDocument();
+  });
+
+  it("el comprobante de una noche de prueba no dice arqueo ni cierre exitoso", () => {
+    render(<CloseNightModal {...baseProps({ summary: { ...summary, isTest: true } })} />);
+    expect(screen.getByText("Noche de prueba cerrada")).toBeInTheDocument();
+    expect(screen.getByText(/no hay arqueo ni historial/i)).toBeInTheDocument();
+    expect(screen.queryByText("Cierre de Noche Exitoso")).not.toBeInTheDocument();
+    expect(screen.queryByText(/comprobante electrónico de arqueo/i)).not.toBeInTheDocument();
+  });
+
   it("llama a onClose al confirmar el resumen final", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
@@ -169,5 +184,87 @@ describe("CloseNightModal", () => {
     // No debe lanzar (React logueria un warning de setState post-unmount si
     // el guard `isMounted` faltara).
     expect(() => resolveConfirm()).not.toThrow();
+  });
+
+  // El confetti vive en un canvas colgado de document.body con z-index 9999:
+  // si sobrevive al modal queda flotando sobre el Historial y por delante de
+  // cualquier modal que se abra después.
+  describe("confetti", () => {
+    function countConfettiCanvases() {
+      return document.body.querySelectorAll("canvas").length;
+    }
+
+    // jsdom no trae contexto 2D y su RAF corre solo: stubeamos ambos para
+    // dejar la animación "en curso" y poder observar el ciclo de vida del
+    // canvas sin depender de cuántos frames tarden en apagarse las partículas.
+    function setupConfettiEnv() {
+      vi.useFakeTimers();
+      const ctxStub = new Proxy({}, { get: () => () => {} }) as CanvasRenderingContext2D;
+      const getContext = vi
+        .spyOn(HTMLCanvasElement.prototype, "getContext")
+        .mockReturnValue(ctxStub as never);
+      const cancelRaf = vi.fn();
+      vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+      vi.stubGlobal("cancelAnimationFrame", cancelRaf);
+
+      return {
+        cancelRaf,
+        restore: () => {
+          getContext.mockRestore();
+          vi.unstubAllGlobals();
+          vi.useRealTimers();
+        },
+      };
+    }
+
+    it("saca el canvas del DOM al desmontar el modal y corta la animación", () => {
+      const env = setupConfettiEnv();
+      try {
+        const { unmount } = render(<CloseNightModal {...baseProps({ summary })} />);
+
+        // El confetti arranca 150ms después de que aparece el resumen.
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+        expect(countConfettiCanvases()).toBe(1);
+
+        unmount();
+        expect(countConfettiCanvases()).toBe(0);
+        expect(env.cancelRaf).toHaveBeenCalled();
+      } finally {
+        env.restore();
+      }
+    });
+
+    it("mantiene el canvas mientras el modal sigue montado (no lo corta el fin del wiggle)", () => {
+      const env = setupConfettiEnv();
+      try {
+        render(<CloseNightModal {...baseProps({ summary })} />);
+
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+        // El wiggle se apaga a los 700ms: eso no debe llevarse el confetti.
+        act(() => {
+          vi.advanceTimersByTime(600);
+        });
+        expect(countConfettiCanvases()).toBe(1);
+      } finally {
+        env.restore();
+      }
+    });
+
+    it("no crea canvas en una noche de prueba", () => {
+      const env = setupConfettiEnv();
+      try {
+        render(<CloseNightModal {...baseProps({ summary: { ...summary, isTest: true } })} />);
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+        expect(countConfettiCanvases()).toBe(0);
+      } finally {
+        env.restore();
+      }
+    });
   });
 });

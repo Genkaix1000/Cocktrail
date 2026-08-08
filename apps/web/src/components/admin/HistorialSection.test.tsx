@@ -6,8 +6,9 @@ import HistorialSection from "./HistorialSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 import { useTheme } from "@/components/ThemeProvider";
 import { exportHistorialPdf } from "@/lib/pdfExport";
+import { eventsService } from "@/services/events.service";
 
-import type { EventSummary, EventTotals } from "@cocktrail/shared";
+import type { EventSummary, EventTotals, Role } from "@cocktrail/shared";
 
 vi.mock("@/components/ThemeProvider", () => ({
   useTheme: vi.fn(),
@@ -15,6 +16,13 @@ vi.mock("@/components/ThemeProvider", () => ({
 
 vi.mock("@/lib/pdfExport", () => ({
   exportHistorialPdf: vi.fn(),
+}));
+
+vi.mock("@/services/events.service", () => ({
+  eventsService: {
+    getDeletionPreview: vi.fn(),
+    deleteNight: vi.fn(),
+  },
 }));
 
 vi.mocked(useTheme).mockReturnValue({
@@ -84,6 +92,8 @@ function makeProps(overrides: Partial<Parameters<typeof HistorialSection>[0]> = 
     historyLoaded: true,
     isTabTransitioning: false,
     isBosko: false,
+    role: "admin" as Role,
+    onNightDeleted: vi.fn(),
     onRedirectToLogs: vi.fn(),
     ...overrides,
   };
@@ -101,6 +111,18 @@ describe("HistorialSection", () => {
     expect(screen.getByText("Este Mes")).toBeInTheDocument();
     expect(screen.getByText("Total Archivado")).toBeInTheDocument();
     expect(screen.queryByText("Promedio Noche")).not.toBeInTheDocument();
+  });
+
+  it("'Total Archivado' pluraliza bien la cantidad de noches", () => {
+    render(<HistorialSection {...makeProps({ historyEvents: [makeNight()] })} />);
+    expect(screen.getByText(/1 noche$/)).toBeInTheDocument();
+    expect(screen.queryByText(/1 noches/)).not.toBeInTheDocument();
+  });
+
+  it("'Total Archivado' usa el plural con más de una noche", () => {
+    const nights = [makeNight(), makeNight({ id: "evt-2", closedAt: Date.now() - 86400000 })];
+    render(<HistorialSection {...makeProps({ historyEvents: nights })} />);
+    expect(screen.getByText(/2 noches/)).toBeInTheDocument();
   });
 
   it("sin noches archivadas, el selector único muestra su propio estado vacío", () => {
@@ -154,6 +176,55 @@ describe("HistorialSection", () => {
       logoUrl: "/bosko.webp",
       useLogoUrl: true,
       textLogoValue: "Bosko",
+    });
+  });
+
+  describe("eliminar noche (D1)", () => {
+    it("el rol admin ve la acción de eliminar en cada noche cerrada", () => {
+      const night = makeNight();
+      render(<HistorialSection {...makeProps({ historyEvents: [night], role: "admin" })} />);
+
+      expect(screen.getByText("Eliminar noches")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Eliminar la noche del/i })).toBeInTheDocument();
+    });
+
+    it("el rol caja no ve la acción de eliminar", () => {
+      const night = makeNight();
+      render(<HistorialSection {...makeProps({ historyEvents: [night], role: "caja" })} />);
+
+      expect(screen.queryByText("Eliminar noches")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /Eliminar la noche del/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("al tocar eliminar abre la confirmación de esa noche", async () => {
+      const user = userEvent.setup();
+      const night = makeNight({ id: "evt-42" });
+      vi.mocked(eventsService.getDeletionPreview).mockResolvedValue({
+        eventId: "evt-42",
+        status: "cerrado",
+        fechaAr: "2026-08-07",
+        keyword: "TEQUILA",
+        startedAt: "2026-08-07T23:00:00.000Z",
+        closedAt: "2026-08-08T06:00:00.000Z",
+        pedidos: 5,
+        pedidosCancelados: 0,
+        totalFacturado: 15000,
+        tickets: 5,
+        cashSales: 0,
+        cashSalesMonto: 0,
+        mpOrders: 0,
+        mpOrdersCobrados: 0,
+        mpMontoCobrado: 0,
+        mpSinEventId: 0,
+      });
+
+      render(<HistorialSection {...makeProps({ historyEvents: [night], role: "admin" })} />);
+      await user.click(screen.getByRole("button", { name: /Eliminar la noche del/i }));
+
+      expect(await screen.findByRole("dialog", { name: /Eliminar noche/i })).toBeInTheDocument();
+      expect(eventsService.getDeletionPreview).toHaveBeenCalledWith("evt-42");
     });
   });
 

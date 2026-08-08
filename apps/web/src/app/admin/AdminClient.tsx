@@ -38,6 +38,7 @@ import SistemaSection from "@/components/settings/SistemaSection";
 import DashboardSection from "@/components/admin/DashboardSection";
 import { MigrationsBanner } from "@/components/admin/MigrationsBanner";
 import { MpFallbackBanner } from "@/components/admin/MpFallbackBanner";
+import { TestNightBanner } from "@/components/shared/TestNightBanner";
 import HistorialSection from "@/components/admin/HistorialSection";
 import LogsSection from "@/components/admin/LogsSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
@@ -46,6 +47,7 @@ import {
   MOCK_DEMO_ORDERS,
   MOCK_DEMO_HISTORY,
 } from "@/lib/mockDashboard";
+import { formatHm } from "@/lib/utils";
 
 import type {
   EventSummary,
@@ -322,12 +324,7 @@ export default function AdminClient({
 
   const isBosko = theme === "bosko";
 
-  const nightSubtitle = event?.startedAt
-    ? `Desde ${new Date(event.startedAt).toLocaleTimeString("es-AR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`
-    : undefined;
+  const nightSubtitle = event?.startedAt ? `Desde ${formatHm(event.startedAt)} hs` : undefined;
 
   const menuItems: NavItem[] = [
     { id: "monitoreo", label: "Dashboard", icon: LayoutDashboard },
@@ -434,7 +431,7 @@ export default function AdminClient({
           }`}
         >
           <div className="flex flex-col">
-            {!collapsed && <p className={sectionLabelClass}>Menu</p>}
+            {!collapsed && <p className={sectionLabelClass}>Menú</p>}
             {menuItems.map((item) => renderNavButton(item, collapsed))}
           </div>
 
@@ -521,6 +518,7 @@ export default function AdminClient({
             pendingDeliveries={pendingDeliveries}
             startedAt={event?.startedAt ?? summary?.startedAt ?? 0}
             summary={summary}
+            isTest={event?.isTest ?? false}
             onConfirm={handleCloseConfirm}
             onClose={handleModalClose}
           />
@@ -562,6 +560,7 @@ export default function AdminClient({
             <div className="flex-1 bg-[var(--bg-panel)] md:rounded-[24px] shadow-card p-5 md:p-6">
               <MigrationsBanner />
               <MpFallbackBanner />
+              {event?.isTest && <TestNightBanner />}
 
               {activeTab === "monitoreo" && (
                 <DashboardSection
@@ -583,6 +582,8 @@ export default function AdminClient({
                   historyLoaded={historyLoaded}
                   isTabTransitioning={isTabTransitioning}
                   isBosko={isBosko}
+                  role={currentUser.role}
+                  onNightDeleted={() => setHistoryLoaded(false)}
                   onRedirectToLogs={onRedirectToLogs}
                 />
               )}

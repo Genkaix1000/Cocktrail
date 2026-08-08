@@ -8,6 +8,7 @@ import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
 import CloseNightModal from "@/components/shared/CloseNightModal";
 import { AppTopbar } from "@/components/shared/AppTopbar";
+import { TestNightBanner } from "@/components/shared/TestNightBanner";
 import { computeTotals } from "@cocktrail/shared";
 import { usePrinterStatus } from "@/hooks/usePrinterStatus";
 import { usePosnetStatus } from "@/hooks/usePosnetStatus";
@@ -180,6 +181,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
             pendingDeliveries={pendingDeliveries}
             startedAt={event?.startedAt ?? summary?.startedAt ?? 0}
             summary={summary}
+            isTest={event?.isTest ?? false}
             onConfirm={handleCloseConfirm}
             onClose={handleCloseModalClose}
           />
@@ -203,6 +205,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
 
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
           <div className="flex flex-col gap-3 md:gap-4 p-3 md:p-0 min-h-0 flex-1">
+            {event?.isTest && <TestNightBanner />}
             <header className="h-14 md:h-16 px-4 md:px-5 shrink-0 print:hidden flex items-center gap-3 bg-[var(--bg-panel)] md:rounded-[20px] shadow-card">
               <AppTopbar
                 breadcrumbs={breadcrumbs}
@@ -280,6 +283,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
                       printer={ventaPrinter}
                       orders={activeNightOrders}
                       onReloadCarta={onReloadCarta}
+                      isTestNight={event.isTest === true}
                     />
                   </div>
 

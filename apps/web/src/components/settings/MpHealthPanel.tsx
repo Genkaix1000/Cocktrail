@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { mercadopagoService, type MpHealth, type MpHealthCheck } from "@/services/mercadopago.service";
+import { formatHm } from "@/lib/utils";
 
 const CHECK_LABELS: Record<keyof MpHealth["checks"], string> = {
   singleSeller: "Cuenta de Mercado Pago única",
@@ -21,7 +22,7 @@ const CHECK_ORDER: (keyof MpHealth["checks"])[] = [
 function formatCheckedAt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return formatHm(d.getTime());
 }
 
 /** Punto de estado: verde (ok) / rojo (falla) / gris (desconocido — nunca rojo). */

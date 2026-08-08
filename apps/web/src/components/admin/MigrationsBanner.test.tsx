@@ -68,7 +68,7 @@ describe("MigrationsBanner", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Actualización de base de datos incompleta");
     expect(alert).toHaveTextContent("20260101000000_boom.sql");
-    expect(alert).toHaveTextContent("1 pendientes");
+    expect(alert).toHaveTextContent("1 pendiente");
   });
 
   it("muestra el texto de drift cuando solo hay drift", async () => {

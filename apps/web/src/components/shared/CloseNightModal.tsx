@@ -21,13 +21,20 @@ type Props = {
   pendingDeliveries: number;
   startedAt: number;
   summary: EventSummary | null;
+  /** Noche de prueba: no se archiva nada, así que el copy no puede hablar de arqueo. */
+  isTest?: boolean;
   onConfirm: (password: string) => Promise<void>;
   onClose: () => void;
 };
 
 // ── Native Canvas Confetti Emitter ──
-function triggerConfetti() {
-  if (typeof window === "undefined") return;
+/**
+ * Devuelve una función para abortar: el canvas vive en `document.body` con
+ * z-index 9999, así que si el modal se cierra antes de que termine la
+ * animación hay que sacarlo a mano o queda flotando sobre el resto del panel.
+ */
+function triggerConfetti(): () => void {
+  if (typeof window === "undefined") return () => {};
   const canvas = document.createElement("canvas");
   canvas.style.position = "fixed";
   canvas.style.top = "0";
@@ -38,8 +45,20 @@ function triggerConfetti() {
   canvas.style.zIndex = "9999";
   document.body.appendChild(canvas);
 
+  let rafId: number | null = null;
+  const removeCanvas = () => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    canvas.remove();
+  };
+
   const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+  if (!ctx) {
+    removeCanvas();
+    return () => {};
+  }
 
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -102,15 +121,15 @@ function triggerConfetti() {
     });
 
     if (active) {
-      requestAnimationFrame(update);
+      rafId = requestAnimationFrame(update);
     } else {
-      if (canvas.parentNode) {
-        document.body.removeChild(canvas);
-      }
+      removeCanvas();
     }
   }
 
   update();
+
+  return removeCanvas;
 }
 
 export default function CloseNightModal({
@@ -118,9 +137,12 @@ export default function CloseNightModal({
   pendingDeliveries,
   startedAt,
   summary,
+  isTest,
   onConfirm,
   onClose,
 }: Props) {
+  // El resumen manda: al cerrar, el backend devuelve la noche con su marca.
+  const esPrueba = summary?.isTest ?? isTest ?? false;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,10 +155,17 @@ export default function CloseNightModal({
   // un componente ya desmontado.
   const isMounted = useRef(true);
 
+  // El canvas del confetti cuelga de document.body con z-index 9999: si el
+  // modal se desmonta antes de que termine la animación, hay que barrerlo o
+  // queda flotando sobre lo que venga después (Historial, otros modales).
+  const stopConfetti = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
+      stopConfetti.current?.();
+      stopConfetti.current = null;
     };
   }, []);
 
@@ -156,12 +185,17 @@ export default function CloseNightModal({
   useEffect(() => {
     if (!wiggle) return;
     const wTimer = setTimeout(() => setWiggle(false), 700);
-    const cTimer = setTimeout(() => triggerConfetti(), 150);
+    // Sin confetti en una noche de prueba: no hay nada que festejar, no se facturó nada.
+    const cTimer = esPrueba
+      ? null
+      : setTimeout(() => {
+          stopConfetti.current = triggerConfetti();
+        }, 150);
     return () => {
       clearTimeout(wTimer);
-      clearTimeout(cTimer);
+      if (cTimer) clearTimeout(cTimer);
     };
-  }, [wiggle]);
+  }, [wiggle, esPrueba]);
 
   const isSummary = hasSummary;
 
@@ -215,7 +249,13 @@ export default function CloseNightModal({
                 {isSummary ? "Noche cerrada" : "Cerrar noche"}
               </h2>
               <p className="text-[12px] text-[var(--text-secondary)] mt-1.5">
-                {isSummary ? "Resumen archivado" : "Acción irreversible"}
+                {esPrueba
+                  ? isSummary
+                    ? "Noche de prueba — no se guardó nada"
+                    : "Noche de prueba — se descarta todo"
+                  : isSummary
+                    ? "Resumen archivado"
+                    : "Acción irreversible"}
               </p>
             </div>
           </div>
@@ -235,6 +275,7 @@ export default function CloseNightModal({
             summary={summary!}
             onClose={onClose}
             startedAt={startedAt}
+            esPrueba={esPrueba}
           />
         ) : (
           <ConfirmView
@@ -243,6 +284,7 @@ export default function CloseNightModal({
             startedAt={startedAt}
             submitting={submitting}
             error={error}
+            esPrueba={esPrueba}
             onCancel={onClose}
             onConfirm={handleConfirm}
           />
@@ -260,6 +302,7 @@ function ConfirmView({
   startedAt,
   submitting,
   error,
+  esPrueba,
   onCancel,
   onConfirm,
 }: {
@@ -268,6 +311,7 @@ function ConfirmView({
   startedAt: number;
   submitting: boolean;
   error: string | null;
+  esPrueba: boolean;
   onCancel: () => void;
   onConfirm: (password: string) => void;
 }) {
@@ -283,11 +327,13 @@ function ConfirmView({
   return (
     <>
       <p className="text-sm text-[var(--text-secondary)] mb-4 leading-relaxed">
-        Vas a archivar el evento iniciado a las{" "}
+        {esPrueba ? "Vas a cerrar la noche de prueba iniciada a las " : "Vas a archivar el evento iniciado a las "}
         <span className="text-[var(--text-primary)] font-mono tabular font-bold">
           {formatHm(startedAt)}
         </span>
-        {" "}hs. Esta acción es definitiva.
+        {esPrueba
+          ? " hs. No se guardó nada: al cerrarla se descartan los pedidos y los totales."
+          : " hs. Esta acción es definitiva."}
       </p>
 
       {/* Details Box */}
@@ -374,10 +420,12 @@ function SummaryView({
   summary,
   onClose,
   startedAt,
+  esPrueba,
 }: {
   summary: EventSummary;
   onClose: () => void;
   startedAt: number;
+  esPrueba: boolean;
 }) {
   const duration =
     summary.closedAt && summary.startedAt
@@ -390,13 +438,29 @@ function SummaryView({
 
   return (
     <div className="flex flex-col">
-      <div className="flex flex-col items-center text-center mb-5 mt-1 bg-[var(--success-soft)] border border-[var(--success-line)] rounded-2xl py-4 px-2 select-none">
-        <CheckCircle2 size={36} className="text-[var(--success-base)] mb-2" />
-        <h3 className="text-sm font-semibold tracking-wide text-[var(--success-base)]">
-          Cierre de Noche Exitoso
+      <div
+        className={`flex flex-col items-center text-center mb-5 mt-1 border rounded-2xl py-4 px-2 select-none ${
+          esPrueba
+            ? "bg-[var(--warning-soft,rgba(245,158,11,0.12))] border-[var(--warning-line,rgba(245,158,11,0.35))]"
+            : "bg-[var(--success-soft)] border-[var(--success-line)]"
+        }`}
+      >
+        {esPrueba ? (
+          <AlertTriangle size={36} className="text-amber mb-2" />
+        ) : (
+          <CheckCircle2 size={36} className="text-[var(--success-base)] mb-2" />
+        )}
+        <h3
+          className={`text-sm font-semibold tracking-wide ${
+            esPrueba ? "text-amber" : "text-[var(--success-base)]"
+          }`}
+        >
+          {esPrueba ? "Noche de prueba cerrada" : "Cierre de Noche Exitoso"}
         </h3>
         <p className="text-[11px] text-[var(--text-secondary)] mt-1">
-          Comprobante Electrónico de Arqueo
+          {esPrueba
+            ? "Estos números no se guardaron: no hay arqueo ni historial"
+            : "Comprobante Electrónico de Arqueo"}
         </p>
       </div>
 

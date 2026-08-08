@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { systemService, type SystemHealth } from "@/services/system.service";
+import { plural } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -43,7 +44,7 @@ export function MigrationsBanner() {
 
   const message = failed
     ? `Actualización de base de datos incompleta: falló «${failed.version}»${
-        pending.length > 0 ? ` (${pending.length} pendientes)` : ""
+        pending.length > 0 ? ` (${plural(pending.length, "pendiente", "pendientes")})` : ""
       }. El sistema opera con el esquema anterior — no cierres la noche sin avisar a soporte.`
     : `El contenido de ${drift.length} migración(es) ya aplicadas cambió respecto de lo registrado. Verificá supabase/migrations antes de la próxima actualización.`;
 

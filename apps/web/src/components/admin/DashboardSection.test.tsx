@@ -185,5 +185,53 @@ describe("DashboardSection", () => {
       expect(screen.queryByText(/^↑|^↓/)).not.toBeInTheDocument();
       expect(screen.getAllByText(/Noche del/).length).toBeGreaterThan(0);
     });
+
+    it("muestra la hora real de inicio de la última noche archivada", () => {
+      const prevEvent: NightEvent = {
+        id: "evt-prev",
+        status: "cerrado",
+        startedAt: historyEvents[0]!.startedAt,
+        orderCounter: 2,
+      };
+      render(
+        <DashboardSection
+          {...makeProps({
+            event: prevEvent,
+            isNightOpen: false,
+            historyEvents,
+            totals: historyEvents[0]!.totals,
+          })}
+        />,
+      );
+      expect(screen.getByText(/Iniciada a las \d{2}:\d{2} hs/)).toBeInTheDocument();
+    });
+  });
+
+  // B1/B2: el subtítulo de las tarjetas y el pie del dashboard mentían cuando
+  // no había historial — decían "Sin noches registradas" con una noche activa
+  // vendiendo, e inventaban un "21:00" (epoch 0 formateado) sin ninguna noche.
+  describe("sin historial de noches", () => {
+    it("con noche en curso, las tarjetas no dicen 'Sin noches registradas'", () => {
+      render(<DashboardSection {...makeProps({ historyEvents: [] })} />);
+
+      expect(screen.queryByText("Sin noches registradas")).not.toBeInTheDocument();
+      expect(screen.getAllByText("Noche en curso — sin noches previas").length).toBe(3);
+    });
+
+    it("con noche en curso muestra su hora de inicio real, no un 21:00 inventado", () => {
+      render(<DashboardSection {...makeProps({ historyEvents: [] })} />);
+
+      expect(screen.getByText(/Iniciado a las \d{2}:\d{2} hs/)).toBeInTheDocument();
+      expect(screen.queryByText(/Iniciada a las/)).not.toBeInTheDocument();
+    });
+
+    it("sin noche activa ni historial no inventa una hora de inicio", () => {
+      render(<DashboardSection {...makeProps({ event: null, isNightOpen: false, historyEvents: [] })} />);
+
+      expect(screen.queryByText(/Iniciad[oa] a las/)).not.toBeInTheDocument();
+      expect(screen.queryByText("Última Noche Registrada")).not.toBeInTheDocument();
+      // Acá sí corresponde el estado vacío honesto.
+      expect(screen.getAllByText("Sin noches registradas").length).toBeGreaterThan(0);
+    });
   });
 });

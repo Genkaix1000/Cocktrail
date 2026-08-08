@@ -5,6 +5,8 @@
  * No dependen de estado de React ni del DOM.
  */
 
+import { plural } from "@/lib/utils";
+
 import type {
   Order,
   EventSummary,
@@ -291,7 +293,7 @@ export function computeNightRecords(
       type: "star_drink",
       label: "Trago Estrella",
       value: star.name,
-      sub: `${star.qty} unidades vendidas (${windowLabel})`,
+      sub: `${plural(star.qty, "unidad vendida", "unidades vendidas")} (${windowLabel})`,
     });
   }
 

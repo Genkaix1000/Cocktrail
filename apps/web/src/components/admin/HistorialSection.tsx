@@ -6,21 +6,24 @@ import {
   TrendingUp,
   CalendarDays,
   Download,
+  Trash2,
+  ShieldAlert,
 } from "lucide-react";
 
 import MetricCard from "@/components/shared/MetricCard";
 import NightRecords from "@/components/analytics/NightRecords";
 import NightComparator from "@/components/analytics/NightComparator";
 import Toast from "@/components/shared/Toast";
+import DeleteNightModal from "@/components/admin/DeleteNightModal";
 
-import { groupNightsByDay } from "@/lib/analytics";
+import { groupNightsByDay, formatNightDateLong } from "@/lib/analytics";
 import { exportHistorialPdf } from "@/lib/pdfExport";
 import { useTheme } from "@/components/ThemeProvider";
-import { formatShortDate } from "@/lib/utils";
+import { formatShortDate, formatHm, plural } from "@/lib/utils";
 
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
 import type { UnifiedNightDay } from "@/lib/analytics";
-import type { EventSummary } from "@cocktrail/shared";
+import type { EventSummary, Role } from "@cocktrail/shared";
 
 type Props = {
   analytics: AdminAnalytics;
@@ -28,6 +31,10 @@ type Props = {
   historyLoaded: boolean;
   isTabTransitioning: boolean;
   isBosko: boolean;
+  /** Solo `admin` ve la acción de eliminar noches (D1). */
+  role: Role;
+  /** Refresca el historial después de un borrado. */
+  onNightDeleted: () => void;
   // Puente Historial → Logs: AdminClient decide qué hacer con el timestamp
   // (setea filtros/activeTab de la vista Logs, que sigue inline). Esta
   // sección no conoce nada de LogsSection, solo invoca el callback.
@@ -61,12 +68,15 @@ export default function HistorialSection({
   historyLoaded,
   isTabTransitioning,
   isBosko,
+  role,
+  onNightDeleted,
   onRedirectToLogs,
 }: Props) {
   const { weeklyDelta, monthlyDelta, allTotal, nightRecords } = analytics;
   const { logoUrl, useLogoUrl, textLogoValue } = useTheme();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [nightToDelete, setNightToDelete] = useState<EventSummary | null>(null);
 
   // `Date.now()` es impuro: se fija una sola vez al montar para calcular los
   // rangos de fecha de "Esta Semana"/"Este Mes" sin variar en renders
@@ -158,7 +168,7 @@ export default function HistorialSection({
               label="Total Archivado"
               value={allTotal}
               isCurrency
-              delta={{ label: `${historyEvents.length} noches`, direction: "up", value: 0, pct: 0 }}
+              delta={{ label: plural(historyEvents.length, "noche", "noches"), direction: "up", value: 0, pct: 0 }}
               icon={History}
               subtitle="acumulado"
             />
@@ -173,8 +183,93 @@ export default function HistorialSection({
               onRedirectToLogs={onRedirectToLogs}
             />
           </div>
+
+          {role === "admin" && historyEvents.length > 0 && (
+            <DangerZone nights={historyEvents} onDelete={setNightToDelete} />
+          )}
         </div>
       )}
+
+      {nightToDelete && (
+        <DeleteNightModal
+          eventId={nightToDelete.id}
+          onClose={() => setNightToDelete(null)}
+          onDeleted={onNightDeleted}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Borrado de noches (D1). Vive apartado y con estética de peligro a propósito:
+ * el caso de uso real es "me olvidé de tildar prueba", no algo que se haga
+ * seguido. Cada fila es una sesión cerrada — el borrado es de a una noche.
+ */
+function DangerZone({
+  nights,
+  onDelete,
+}: {
+  nights: EventSummary[];
+  onDelete: (night: EventSummary) => void;
+}) {
+  const closedNights = useMemo(
+    () =>
+      [...nights]
+        .filter((n) => n.status === "cerrado")
+        .sort((a, b) => (b.closedAt ?? b.startedAt) - (a.closedAt ?? a.startedAt)),
+    [nights],
+  );
+
+  if (closedNights.length === 0) return null;
+
+  return (
+    <section className="bg-[var(--bg-surface)] border border-[var(--danger-line)] rounded-2xl shadow-card p-5">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-9 h-9 rounded-full border border-[var(--danger-line)] bg-[var(--danger-soft)] flex items-center justify-center text-[var(--danger-base)]">
+          <ShieldAlert size={15} strokeWidth={1.8} />
+        </div>
+        <div>
+          <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">
+            Eliminar noches
+          </h3>
+          <p className="text-[12px] text-[var(--text-tertiary)] mt-0.5">
+            Borra la noche con sus pedidos, tickets y cobros. No se puede deshacer.
+          </p>
+        </div>
+      </div>
+
+      <ul className="flex flex-col divide-y divide-[var(--border-subtle)]">
+        {closedNights.map((night) => (
+          <li
+            key={night.id}
+            className="flex items-center justify-between gap-3 py-2.5 min-w-0"
+          >
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
+                {formatNightDateLong(night.closedAt ?? night.startedAt)}
+              </p>
+              <p className="text-[11px] font-mono text-[var(--text-tertiary)] tabular">
+                {formatHm(night.startedAt)} hs
+                {night.closedAt ? ` → ${formatHm(night.closedAt)} hs` : ""} ·{" "}
+                {night.orderCounter} {night.orderCounter === 1 ? "pedido" : "pedidos"} · $
+                {night.totals.total.toLocaleString("es-AR")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onDelete(night)}
+              aria-label={`Eliminar la noche del ${formatNightDateLong(
+                night.closedAt ?? night.startedAt,
+              )}`}
+              className="h-9 px-3 shrink-0 rounded-full bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] text-[12px] font-semibold flex items-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Trash2 size={13} strokeWidth={1.8} />
+              <span>Eliminar</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

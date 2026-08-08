@@ -39,7 +39,9 @@ export function useAdminAnalytics(
       totals.qrCount +
       totals.debitoCount;
 
-    const _startedAtStr = formatHm(eventStartedAt ?? 0);
+    // Sin noche (ni activa ni archivada) no hay hora que mostrar: formatear el
+    // epoch 0 pintaba un "21:00" inventado en el dashboard.
+    const _startedAtStr = eventStartedAt ? formatHm(eventStartedAt) : null;
 
     // 2. New Analytics (A)
     const prevTotals = getLastNightTotals(historyEvents);

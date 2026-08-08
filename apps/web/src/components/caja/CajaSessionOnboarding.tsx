@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import type { BarSessionOption } from "@/services/bar-sessions.service";
+import { formatHm, plural } from "@/lib/utils";
 
 type Props = {
   username: string;
@@ -24,10 +25,7 @@ type Props = {
 function connectedSince(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Sesión activa";
-  return `En uso desde ${date.toLocaleTimeString("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
+  return `En uso desde ${formatHm(date.getTime())} hs`;
 }
 
 export default function CajaSessionOnboarding({
@@ -71,7 +69,7 @@ export default function CajaSessionOnboarding({
 
         <div className="mt-9 flex items-center justify-between gap-4">
           <p className="text-xs font-bold text-ink-500">
-            {boxes.length === 1 ? "1 caja configurada" : `${boxes.length} cajas configuradas`}
+            {plural(boxes.length, "caja configurada", "cajas configuradas")}
           </p>
           <button
             type="button"
