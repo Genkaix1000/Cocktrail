@@ -70,6 +70,12 @@ despierto todo el tiempo agota la cuota sin margen; ver el ping programado en Pe
 **Producto**
 - **Venta y cobro en `/caja`** con impresión de ticket, historial y cierre de noche.
   → [`specs/05-ui-caja/`](./specs/05-ui-caja/), [`specs/01-tickets-impresora/`](./specs/01-tickets-impresora/)
+- **Servicio despierto en horario de boliche** ✅ *(2026-08-08)* — ping cada 10 min desde
+  **cron-job.org** contra `/api/theme` (público y liviano), acotado a viernes, sábados y domingos
+  de 20 a 6 (hora argentina, configurada en el propio job). Son ~121 h/mes contra un tope de 750:
+  **el ping NO puede correr 24/7**, la cuota son 750 h de servicio despierto por mes y un mes tiene
+  ~730, así que se consumiría entera y sin margen (y al agotarse Render suspende el servicio hasta
+  el mes siguiente). Avisa por mail tras 3 fallos seguidos, lo que además sirve de monitoreo.
 - **Impresión Bluetooth (comandera)** ✅ *(2026-08-07)* — la impresora S1 imprime desde `/caja` en
   Chrome vía Web Bluetooth, sin app del fabricante: vinculación, impresión automática al cobrar,
   reimpresión, cola y reconexión. Gates físicos pasados con la tablet real.
@@ -127,14 +133,12 @@ y llevó al modelo comandera.
   - Implementación: es **un transporte más** en `apps/web/src/lib/printing/transports/`, al lado de
     los que ya hay. El contenido del ticket ya está separado del cómo se imprime, así que no toca
     la pantalla de caja. La S1 se conserva como alternativa.
-- **Mantener el servicio despierto en horario de boliche** (ping programado). El plan gratuito de
-  Render duerme el servicio tras 15 minutos sin tráfico y tarda ~1 minuto en despertar: la primera
-  carga de la noche se hace esperar. **Importante hacerlo acotado al horario de operación**: la
-  cuota gratuita son 750 horas de servicio despierto por mes y un mes tiene ~730, así que un ping
-  24/7 la consume entera y sin margen (si se agota, Render suspende el servicio hasta el mes
-  siguiente). Despertándolo solo viernes y sábados de 20h a 6h son ~90 horas al mes. Un ping cada
-  10-15 minutos alcanza; Render puede suspender servicios gratuitos que generen tráfico inusual.
-  Opciones sin costo: UptimeRobot, cron-job.org, o una GitHub Action con `schedule`.
+- **El interruptor "sandbox" de Mercado Pago no hace nada**: `app_config.mercado_pago.sandbox` se
+  guarda, se valida y se muestra como toggle en la pantalla de Pagos de `/admin`, pero **ningún
+  módulo de `modules/mercadopago/` lo lee** — el cobro sale por la cuenta real esté como esté.
+  Hoy figura en `true` en producción sin ninguna consecuencia. Es una trampa: alguien puede tocarlo
+  creyendo que entra en modo prueba y cobrar de verdad. Decidir: sacarlo del panel, o que
+  efectivamente cambie el entorno de MP.
 - **Impresión más rápida por Bluetooth clásico (SPP) en el APK**: alternativa si el camino MPT-II
   no prosperara. El Bluetooth clásico es inaccesible desde el navegador, así que exigiría volver al
   APK para la comandera.
