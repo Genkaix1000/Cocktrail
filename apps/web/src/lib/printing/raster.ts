@@ -13,24 +13,23 @@ import type { TicketContent } from "@cocktrail/shared";
 export const RASTER_LAYOUT = {
   WIDTH: 384,
   PADDING: 4,
-  TOP_PADDING: 10,
+  TOP_PADDING: 4,
   FONT_FAMILY: "sans-serif",
   NIGHT_PX: 28,
   BRAND_PX: 46,
   /** Los tragos son lo que el barman lee: el tamaño más grande del ticket. */
   ITEM_PX: 50,
-  SALE_PX: 32,
   KEYWORD_PX: 36,
   TEXT_PX: 22,
   SEPARATOR_HEIGHT: 2,
   /** Alto de fila del separador: 2px de tinta + 1 de aire arriba. */
   SEPARATOR_ROW: 3,
   GAP_DEFAULT: 4,
-  GAP_HEADER: 8,
-  GAP_DATE: 10,
-  GAP_ITEM: 8,
+  GAP_HEADER: 4,
+  GAP_DATE: 6,
+  GAP_ITEM: 4,
   GAP_SEPARATOR: 12,
-  GAP_FINAL: 12,
+  GAP_FINAL: 0,
 } as const;
 
 export type TicketLine =
@@ -96,23 +95,15 @@ export function buildTicketLines(
       thick: !!opts.thick,
       gapAfter: opts.gapAfter ?? L.GAP_DEFAULT,
     });
-  const separator = () => lines.push({ kind: "separator", gapAfter: L.GAP_SEPARATOR });
 
   if (content.nightDateText) {
     text(content.nightDateText, L.NIGHT_PX, { bold: true, center: true, gapAfter: L.GAP_HEADER });
   }
-  // La marca solo aparece en el ticket de prueba: en el de venta ocupa papel
-  // sin aportar (el cliente ya está en el boliche).
   if (content.brand) {
     text(content.brand, L.BRAND_PX, { bold: true, center: true, gapAfter: L.GAP_HEADER });
   }
-  if (content.saleText) {
-    text(content.saleText, L.SALE_PX, { bold: true, thick: true, gapAfter: L.GAP_HEADER });
-  }
   if (content.dateText) text(content.dateText, L.TEXT_PX, { gapAfter: L.GAP_DATE });
 
-  // Lo que el barman tiene que leer de un vistazo: va grande y sin líneas que
-  // le compitan.
   for (const item of content.items) {
     const pieces = wrapLine(`${item.qty}x ${item.name}`, maxWidth, (t) =>
       measure(t, L.ITEM_PX, true),
@@ -165,26 +156,6 @@ export type TicketBitmap = {
   height: number;
   data: Uint8Array;
 };
-
-/**
- * Downsample vertical m=2: combina filas de a pares con OR — si cualquiera de
- * las dos tiene tinta, la resultante lleva tinta (conserva los trazos finos,
- * los engrosa en vez de perderlos). El resultado se manda con GS v 0 m=2 y la
- * impresora estira 2x: mismo alto físico con la mitad de datos.
- */
-export function downsampleRowPairs(bitmap: TicketBitmap): TicketBitmap {
-  const { widthBytes, height, data } = bitmap;
-  const halfHeight = Math.ceil(height / 2);
-  const half = new Uint8Array(widthBytes * halfHeight);
-  for (let y = 0; y < halfHeight; y++) {
-    const a = y * 2 * widthBytes;
-    const b = Math.min(y * 2 + 1, height - 1) * widthBytes;
-    for (let i = 0; i < widthBytes; i++) {
-      half[y * widthBytes + i] = data[a + i] | data[b + i];
-    }
-  }
-  return { widthBytes, height: halfHeight, data: half };
-}
 
 /** Dibuja el ticket en un canvas y lo binariza (threshold 128 sobre gris promedio). */
 export function renderTicketBitmap(content: TicketContent): TicketBitmap {

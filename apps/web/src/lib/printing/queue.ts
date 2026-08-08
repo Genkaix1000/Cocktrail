@@ -59,6 +59,8 @@ export function createPrintQueue(): PrintQueue {
         // Fallo en cascada: si este job no imprimió (típicamente se cayó la
         // conexión), los pendientes tampoco van a salir — se descartan todos
         // y se reporta UN solo error resumido, no una catarata.
+        // Los jobs dropeados reciben solo el conteo de tickets perdidos, no
+        // el error raíz (evita repetir el mismo error de BLE en cada Promise).
         const jobError = err instanceof Error ? err : new Error(String(err));
         const dropped = pending.splice(0, pending.length);
         const message =

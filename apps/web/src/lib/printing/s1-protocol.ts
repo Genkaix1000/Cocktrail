@@ -13,35 +13,27 @@ export const S1_WRITE_CHARACTERISTIC = 0xff02;
 export const S1_NAME_PREFIX = "PPS1";
 
 /**
- * La imagen va en UN SOLO bloque GS v 0, con la altura completa en yL+yH.
- *
- * Antes se partía en franjas porque un bloque alto "imprimía garbage", pero la
- * causa real era el modo doble alto (m=0x02): el firmware espera
- * `widthBytes × alturaDeSalida` bytes de raster, así que con m=2 se quedaba
- * esperando el doble de datos, se comía el header del bloque siguiente como si
- * fueran píxeles —la línea de basura— y dejaba el resto en blanco.
- *
- * La app oficial manda 831 filas en un bloque con m=0x00 (capturado por
- * ingeniería inversa: lsongdev/luckjingle-d1-printer), y las tres
- * implementaciones de referencia de esta familia fijan m=0x00.
+ * La imagen va en UN SOLO bloque GS v 0 con m=0x00, igual que la app oficial
+ * y todas las implementaciones de referencia de esta familia. El modo doble
+ * alto (m=0x02) rompe tickets de más de un trago: el firmware espera el doble
+ * de bytes de raster y se desincroniza.
  */
-const STRIPE_MAX_ROWS = 0xffff;
 /**
- * Chunk BLE por defecto: 20 bytes = payload garantizado con el MTU mínimo
- * BLE (23). Gate físico 2026-08-07: en la tablet de producción los chunks de
- * 512 se truncan EN SILENCIO (MTU chico de Android) → raster incompleto e
- * impresión ilegible. Con 20 imprime perfecto.
+ * Chunk BLE por defecto: 64 bytes. Gate físico 2026-08-08: 128 apaga la
+ * impresora (buffer overflow corrompe comandos), 96 también falla. 64 es
+ * el máximo estable comprobado en la S1 con Lenovo P11. Si en otro
+ * dispositivo se trunca, bajar a 20 vía localStorage.
  */
-export const DEFAULT_CHUNK_BYTES = 20;
+export const DEFAULT_CHUNK_BYTES = 64;
 export const MIN_CHUNK_BYTES = 20;
 export const MAX_CHUNK_BYTES = 512;
 
 /**
- * Largo mínimo del ticket en puntos (203dpi -> 8 puntos = 1mm; 520 ≈ 65mm).
+ * Largo mínimo del ticket en puntos (203dpi -> 8 puntos = 1mm; 350 ≈ 44mm).
  * Si lo impreso es más corto se completa con avances de papel (ESC J) para
  * que una venta de 1 trago no salga como mini-ticket imposible de cortar.
  */
-export const MIN_TICKET_DOTS = 520;
+const MIN_TICKET_DOTS = 350;
 
 /** ESC J avanza papel sin mandar datos: n puntos por comando, hasta 255. */
 function feedSteps(dots: number): S1Step[] {
@@ -57,8 +49,6 @@ function feedSteps(dots: number): S1Step[] {
 
 const DELAY_SETUP_MS = 100;
 const DELAY_CHUNK_MS = 10;
-/** Respiro tras la última escritura de cada franja, para que drene el buffer. */
-const DELAY_STRIPE_MS = 80;
 /** Antes del feed: el último chunk de imagen lleva 300 en vez de 80. */
 const DELAY_BEFORE_FEED_MS = 300;
 /** Entre avances ESC J del relleno de largo mínimo. */
@@ -76,15 +66,10 @@ export type S1Step = {
   delayAfterMs: number;
 };
 
-export type S1Mode = "normal" | "doubleHeight";
-
-/** GS v 0: 1D 76 30 m xL xH yL yH — m=0x02 estira 2x vertical (doble alto). */
-function stripeHeader(widthBytes: number, rows: number, m: number): number[] {
+/** GS v 0: 1D 76 30 m=0x00 xL xH yL yH. */
+function stripeHeader(widthBytes: number, rows: number): number[] {
   return [
-    0x1d,
-    0x76,
-    0x30,
-    m,
+    0x1d, 0x76, 0x30, 0x00,
     widthBytes & 0xff,
     (widthBytes >> 8) & 0xff,
     rows & 0xff,
@@ -94,22 +79,16 @@ function stripeHeader(widthBytes: number, rows: number, m: number): number[] {
 
 /**
  * Secuencia completa para imprimir un bitmap:
- * ENABLE → wake → densidad → imagen (franjas chunked) → relleno de largo
+ * ENABLE → wake → densidad → imagen (GS v 0, chunked) → relleno de largo
  * mínimo (ESC J) → feed → stop.
- *
- * `mode` default "normal" (m=0x00), que es lo que usan la app oficial y todas
- * las implementaciones de referencia de esta familia. "doubleHeight" (m=0x02)
- * manda la mitad de datos pero rompe los tickets de más de un trago: el
- * firmware espera el doble de bytes de raster y se desincroniza.
  *
  * `chunkSize` inválido (no entero o fuera de [20, 512]) cae al default.
  */
 export function buildS1Sequence(
   bitmap: TicketBitmap,
-  opts?: { chunkSize?: number; mode?: S1Mode },
+  opts?: { chunkSize?: number },
 ): S1Step[] {
   const { widthBytes, height, data } = bitmap;
-  const mode: S1Mode = opts?.mode ?? "normal";
   const requested = opts?.chunkSize;
   const chunkBytes =
     requested !== undefined &&
@@ -124,38 +103,20 @@ export function buildS1Sequence(
     { bytes: new Uint8Array(DENSITY), delayAfterMs: DELAY_SETUP_MS },
   ];
 
-  const m = mode === "doubleHeight" ? 0x02 : 0x00;
+  const packet = new Uint8Array(8 + data.length);
+  packet.set(stripeHeader(widthBytes, height), 0);
+  packet.set(data, 8);
 
-  // Cada franja: header propio + sus filas, partido en chunks de ≤chunkBytes.
-  // ≤240 filas por bloque (el firmware banca hasta 255 y solo honra yL).
-  for (let y0 = 0; y0 < height; y0 += STRIPE_MAX_ROWS) {
-    const rows = Math.min(STRIPE_MAX_ROWS, height - y0);
-    const body = data.subarray(y0 * widthBytes, (y0 + rows) * widthBytes);
-    const packet = new Uint8Array(8 + body.length);
-    packet.set(stripeHeader(widthBytes, rows, m), 0);
-    packet.set(body, 8);
-
-    const isLastStripe = y0 + rows >= height;
-    for (let i = 0; i < packet.length; i += chunkBytes) {
-      const chunk = packet.subarray(i, i + chunkBytes);
-      const isLastChunk = i + chunkBytes >= packet.length;
-      steps.push({
-        bytes: chunk,
-        delayAfterMs: !isLastChunk
-          ? DELAY_CHUNK_MS
-          : isLastStripe
-            ? DELAY_BEFORE_FEED_MS
-            : DELAY_STRIPE_MS,
-      });
-    }
+  for (let i = 0; i < packet.length; i += chunkBytes) {
+    const chunk = packet.subarray(i, i + chunkBytes);
+    const isLastChunk = i + chunkBytes >= packet.length;
+    steps.push({
+      bytes: chunk,
+      delayAfterMs: isLastChunk ? DELAY_BEFORE_FEED_MS : DELAY_CHUNK_MS,
+    });
   }
 
-  // Relleno hasta el largo mínimo, SIEMPRE después de la imagen: probado con el
-  // aparato, un ESC J antes del bloque cuelga el firmware y apaga la impresora
-  // (el mismo motivo por el que se descartó saltear las filas en blanco). Por
-  // eso el ticket no se puede centrar en el papel.
-  const printedDots = mode === "doubleHeight" ? height * 2 : height;
-  for (const step of feedSteps(Math.max(0, MIN_TICKET_DOTS - printedDots))) {
+  for (const step of feedSteps(Math.max(0, MIN_TICKET_DOTS - height))) {
     steps.push(step);
   }
 

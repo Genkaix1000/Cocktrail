@@ -45,7 +45,6 @@ const DOUBLE_OFF = Buffer.from([GS, 0x21, 0x00]);
 const FEED = Buffer.from([0x0a, 0x0a, 0x0a, 0x0a]); // sin comando de corte: la impresora no tiene cuchilla
 
 export type PrinterStatus = {
-  connected: boolean;
   configured: true;
   message: string;
 };
@@ -58,7 +57,6 @@ export type PrinterStatus = {
 export class PrinterService {
   getStatus(): PrinterStatus {
     return {
-      connected: false,
       configured: true,
       message: "La impresora se vincula en el dispositivo de caja (WebUSB)",
     };
@@ -68,15 +66,11 @@ export class PrinterService {
   buildTicketContent(order: Order, nightEvent: NightEvent): TicketContent {
     return {
       nightDateText: "NOCHE " + formatearFecha(nightEvent.startedAt).toUpperCase(),
-      // Sin marca ni fecha de la venta: el ticket es para retirar el trago, y
-      // la fecha ya está arriba. Sin código de retiro: lo canjeaba la pantalla
-      // de barra, que dejó de existir con el modelo comandera.
-      // Noche de prueba: la leyenda va en `brand`, que se imprime centrado y en doble
-      // tamaño, para que el papel no se pueda confundir con un comprobante real (B4).
-      // Guion ASCII y no em dash: el camino ESC/POS pasa por CP437, que no tiene "—"
-      // y lo imprimiría como "?".
+      // Sin marca, fecha de venta, ni código de retiro: el ticket es solo para
+      // que el barman vea qué servir. Noche de prueba: la leyenda va en `brand`,
+      // centrada y en doble tamaño, para que el papel no se confunda con un
+      // comprobante real (B4).
       ...(nightEvent?.isTest ? { brand: "*** PRUEBA - SIN VALOR ***" } : {}),
-      saleText: `Venta #${order.displayNumber}`,
       items: order.items.map((item) => ({ qty: item.qty, name: item.name })),
       keywordText: `Clave: ${nightEvent.keyword ?? "(sin clave)"}`,
     };
@@ -120,22 +114,6 @@ export class PrinterService {
     return Buffer.concat(parts);
   }
 
-  private buildTestBytes(): Buffer {
-    return Buffer.concat([
-      INIT,
-      ALIGN_CENTER,
-      toCP437("--- TICKET DE PRUEBA ---\n"),
-      ALIGN_LEFT,
-      toCP437(`${formatearFechaHora(Date.now())}\n`),
-      FEED,
-    ]);
-  }
-
-  /** Base64 ESC/POS del ticket de una venta (para auto-print o reprint en el cliente). */
-  renderTicket(order: Order, nightEvent: NightEvent): string {
-    return this.buildTicketBytes(this.buildTicketContent(order, nightEvent)).toString("base64");
-  }
-
   /** Par bytes + content de un mismo ticket: cada transporte consume el que le sirve. */
   renderTicketPayload(order: Order, nightEvent: NightEvent): { ticketData: string; ticketContent: TicketContent } {
     const ticketContent = this.buildTicketContent(order, nightEvent);
@@ -146,7 +124,7 @@ export class PrinterService {
   }
 
   renderTest(): string {
-    return this.buildTestBytes().toString("base64");
+    return this.buildTicketBytes(this.buildTestContent()).toString("base64");
   }
 
   async printTicket(order: Order, nightEvent: NightEvent): Promise<PrintPayload> {

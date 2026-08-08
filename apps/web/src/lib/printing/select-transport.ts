@@ -14,8 +14,6 @@ import type { PrinterTransport } from "./types";
 export { getStoredBleDeviceId };
 
 export function selectTransport(): PrinterTransport | null {
-  // Seam futuro: una preferencia explícita (ej. localStorage
-  // "cocktrail.printer-transport") se leería acá, antes de la prioridad fija.
   if (nativeBridgeTransport.isAvailable()) return nativeBridgeTransport;
   if (bleS1Transport.isAvailable() && getStoredBleDeviceId() !== null) return bleS1Transport;
   if (webUsbTransport.isAvailable()) return webUsbTransport;

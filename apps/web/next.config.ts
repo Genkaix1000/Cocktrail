@@ -58,6 +58,7 @@ const nextConfig: NextConfig = {
     }
     return [{ source: "/:path*", headers: seguridad }];
   },
+  allowedDevOrigins: ["192.168.0.11", "localhost:3000", "*.local"],
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildS1Sequence,
-  MIN_TICKET_DOTS,
   S1_NAME_PREFIX,
   S1_SERVICE,
   S1_WRITE_CHARACTERISTIC,
@@ -51,10 +50,6 @@ describe("constantes", () => {
     expect(S1_WRITE_CHARACTERISTIC).toBe(0xff02);
     expect(S1_NAME_PREFIX).toBe("PPS1");
   });
-
-  it("largo mínimo del ticket: 520 dots (~65mm a 203dpi)", () => {
-    expect(MIN_TICKET_DOTS).toBe(520);
-  });
 });
 
 describe("buildS1Sequence — un solo bloque GS v 0 (como la app oficial)", () => {
@@ -101,11 +96,11 @@ describe("buildS1Sequence — un solo bloque GS v 0 (como la app oficial)", () =
 });
 
 describe("buildS1Sequence — largo mínimo", () => {
-  it("completa hasta 520 dots con avances de papel, todos DESPUÉS de la imagen", () => {
+  it("completa hasta 350 dots con avances de papel, todos DESPUÉS de la imagen", () => {
     const steps = buildS1Sequence(makeBitmap(240), { chunkSize: 512 });
     const feeds = feedsDe(steps);
-    // Faltan 280 dots; ESC J admite hasta 255 por comando.
-    expect(feeds.reduce((a, f) => a + f.bytes[2], 0)).toBe(280);
+    // Faltan 110 dots; ESC J admite hasta 255 por comando.
+    expect(feeds.reduce((a, f) => a + f.bytes[2], 0)).toBe(110);
     expect(feeds.every((f) => f.bytes[2] <= 255)).toBe(true);
     expect(feeds.every((f) => f.delayAfterMs === 60)).toBe(true);
     // Un ESC J ANTES de la imagen cuelga el firmware: nunca debe pasar.
@@ -113,34 +108,24 @@ describe("buildS1Sequence — largo mínimo", () => {
     expect(feeds.every((f) => steps.indexOf(f) > b)).toBe(true);
   });
 
-  it("si el ticket ya llega a 520 dots no agrega relleno", () => {
-    const steps = buildS1Sequence(makeBitmap(520), { chunkSize: 512 });
+  it("si el ticket ya llega a 350 dots no agrega relleno", () => {
+    const steps = buildS1Sequence(makeBitmap(350), { chunkSize: 512 });
     expect(feedsDe(steps)).toHaveLength(0);
-    // Queda solo el feed de cierre.
     expect(escJSteps(steps)).toHaveLength(1);
   });
 });
 
-describe("buildS1Sequence — modo doubleHeight (NO se usa: rompe tickets largos)", () => {
-  it("con m=0x02 explícito el header lo refleja y el relleno cuenta el doble", () => {
-    const steps = buildS1Sequence(makeBitmap(100), { chunkSize: 512, mode: "doubleHeight" });
-    expect(bytes(steps[primerBloque(steps)]).slice(0, 8)).toEqual([0x1d, 0x76, 0x30, 0x02, 48, 0, 100, 0]);
-    // 100 filas estiradas = 200 dots impresos -> faltan 320 para el mínimo
-    expect(feedsDe(steps).reduce((a, f) => a + f.bytes[2], 0)).toBe(320);
-  });
-});
-
 describe("buildS1Sequence — chunk size", () => {
-  it("default SIN opts: chunks de 20 bytes (payload seguro con MTU mínimo BLE) y m=0x00", () => {
-    // Bloque de 8 filas: 8 + 384 = 392 bytes -> 19 chunks de 20 + 1 de 12
+  it("default SIN opts: chunks de 64 bytes y m=0x00", () => {
+    // Bloque de 8 filas: 8 + 384 = 392 bytes -> 6 chunks de 64 + 1 de 8
     const steps = buildS1Sequence(makeBitmap(8));
     const b = primerBloque(steps);
-    const imageSteps = steps.slice(b, b + 20);
-    expect(imageSteps.slice(0, 19).every((s) => s.bytes.length === 20)).toBe(true);
-    expect(imageSteps[19].bytes.length).toBe(12);
-    expect(imageSteps.slice(0, 19).every((s) => s.delayAfterMs === 10)).toBe(true);
-    expect(imageSteps[19].delayAfterMs).toBe(300);
-    expect(steps[b].bytes[3]).toBe(0x00); // modo default: sin doble alto
+    const imageSteps = steps.slice(b, b + 7);
+    expect(imageSteps.slice(0, 6).every((s) => s.bytes.length === 64)).toBe(true);
+    expect(imageSteps[6].bytes.length).toBe(8);
+    expect(imageSteps.slice(0, 6).every((s) => s.delayAfterMs === 10)).toBe(true);
+    expect(imageSteps[6].delayAfterMs).toBe(300);
+    expect(steps[b].bytes[3]).toBe(0x00); // m=0x00 hardcodeado
 
     // Los bytes reensamblados son idénticos a la corrida con chunk 512
     const reassembled = imageSteps.flatMap((s) => Array.from(s.bytes));
@@ -148,10 +133,10 @@ describe("buildS1Sequence — chunk size", () => {
     expect(reassembled).toEqual(Array.from(golden[primerBloque(golden)].bytes));
   });
 
-  it("chunkSize inválido (no entero o fuera de [20, 512]) cae al default 20", () => {
+  it("chunkSize inválido (no entero o fuera de [20, 512]) cae al default 64", () => {
     for (const invalido of [8, 19, 513, 512.5, NaN, -1]) {
       const steps = buildS1Sequence(makeBitmap(8), { chunkSize: invalido });
-      expect(steps[primerBloque(steps)].bytes.length).toBe(20);
+      expect(steps[primerBloque(steps)].bytes.length).toBe(64);
     }
   });
 });

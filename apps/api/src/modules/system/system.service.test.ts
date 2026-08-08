@@ -66,7 +66,7 @@ function makeMpService(overrides?: Partial<MercadoPagoService>): MercadoPagoServ
 
 function makePrinterService(): PrinterService {
   return {
-    getStatus: vi.fn().mockReturnValue({ connected: false, configured: true, message: "Impresora no encontrada o sin permisos" }),
+    getStatus: vi.fn().mockReturnValue({ configured: true, message: "Impresora no encontrada o sin permisos" }),
   } as unknown as PrinterService;
 }
 
@@ -211,7 +211,7 @@ describe("SystemService.getStatus", () => {
 
     const status = await service.getStatus();
 
-    expect(status.printer).toEqual({ connected: false, configured: true, message: "Impresora no encontrada o sin permisos" });
+    expect(status.printer).toEqual({ configured: true, message: "Impresora no encontrada o sin permisos" });
   });
 });
 
