@@ -4,7 +4,7 @@
 > El detalle de cada feature cerrada vive en su spec bajo [`docs/specs/`](./specs/README.md); acá va
 > el resumen y los punteros.
 > Convención: `[x]` hecho · `[~]` parcial/a verificar · `[ ]` pendiente.
-> Última actualización: 2026-08-07.
+> Última actualización: 2026-08-08.
 
 ---
 
@@ -77,6 +77,11 @@ despierto todo el tiempo agota la cuota sin margen; ver el ping programado en Pe
   (ahí están los hallazgos de hardware, que son lo caro de reconstruir).
 - **`/admin`**: dashboard, historial de noches, gestión de carta, export a PDF.
 - **Impresión USB** (ticketera fija) por WebUSB y por el shell Android `apps/caja-android`.
+- **Noches de prueba y borrado de noches** ✅ *(2026-08-08)* — el admin puede abrir una noche
+  marcada como prueba: vende, imprime y cierra igual, pero **no persiste nada** (vive en memoria
+  del proceso; Mercado Pago queda bloqueado y el ticket sale con leyenda). Y puede **borrar una
+  noche registrada** desde `/admin` o por CLI, de forma atómica y auditada.
+  → [`specs/noches-de-prueba-y-borrado.md`](./specs/noches-de-prueba-y-borrado.md)
 
 **Mercado Pago** (integración real, con gates físicos pasados)
 - **Cobro verificado** — la venta se concreta solo si MP confirmó el cobro, con la invariante como
@@ -136,6 +141,14 @@ y llevó al modelo comandera.
 - **Pedido del cliente por QR**: se desactivó y se borró. Si vuelve, vuelve como feature nueva.
 - **Migrar el Posnet a la cuenta MP del dueño**: procedimiento manual (MP no expone API para
   transferir hardware entre cuentas); relevante solo si se retoma el cobro con lector.
+- **Conectar el webhook de GitHub en Render**: el servicio declara `autoDeploy: yes` sobre
+  `develop`, pero **el push no dispara nada** — todos los deploys históricos son `trigger: "api"`.
+  Hasta arreglarlo, cada deploy hay que lanzarlo a mano desde el dashboard o por API.
+- **Dropear las columnas muertas del sync**: `night_events.sync_status` (ojo: tiene `DEFAULT` y el
+  CHECK `night_events_sync_status_check`, hay que tirar el constraint en el mismo movimiento),
+  `night_events.synced_at` y `mercadopago_sellers.cloud_synced_at`. Ya no se leen desde TypeScript.
+  El DROP tiene que ir junto con sacar los pasos que las **crean** en `repair-cloud-schema.ts`, y
+  verificado contra la nube antes (mismo riesgo que la columna `totals`, commit `9c81f82`).
 - **Limpieza de lint a nivel repo**: `eslint` sobre todo `apps/web` reporta errores preexistentes.
 
 ---
@@ -144,10 +157,10 @@ y llevó al modelo comandera.
 
 | # | Riesgo | Impacto | Estado |
 |---|---|---|---|
-| R16 | **Los tests de integración pegan contra la misma base que la aplicación.** Ya borró datos reales dos veces. Con una única base en la nube, "la base de test" **es producción**. | Alto: una corrida distraída puede borrar la noche en curso. | **Abierto, prioritario.** Mitigación inmediata: no correr la suite de integración apuntando a la nube. Solución: proyecto Supabase aparte para tests. |
+| R16 | **Los tests de integración pegan contra la misma base que la aplicación.** Ya borró datos reales dos veces. Con una única base en la nube, "la base de test" **es producción**. Desde el 2026-08-08 pesa más: existe la función `delete_night`, así que el daño posible de una corrida distraída creció. | Alto: una corrida distraída puede borrar la noche en curso. | **Abierto, prioritario.** Mitigaciones: no correr la suite de integración apuntando a la nube, y los tests del borrado son unit con la RPC mockeada. Solución de fondo: proyecto Supabase aparte para tests. |
 | R29 | Un seller de Mercado Pago de otro desarrollador figura activo en la base de la nube (algo lo reactivó después de expirarlo). | No afecta el cobro, pero ensucia el archivo y se cruza con el modelo de un solo seller activo. | Abierto — re-expirar y verificar que ningún entorno viejo siga escribiendo. |
 | R8 | **Ninguna impresora reporta "sin papel"**: ni la USB ni la Bluetooth exponen estado confiable. El sistema confirma que aceptó la escritura, no que haya salido papel. | La cajera puede creer que el ticket se imprimió. | Abierto — mitigación operativa: revisar el rollo antes del turno. |
-| — | **Modo demo accesible en producción**: `/admin?demo=true` muestra datos de facturación inventados sin ningún cartel que lo aclare. | Confusión: un link o bookmark con esa query muestra números falsos como reales. | Abierto — decidir: borrarlo, o limitarlo a desarrollo con un banner visible. |
+| — | **Modo demo accesible en producción**: `/admin?demo=true` muestra datos de facturación inventados sin ningún cartel que lo aclare. | Confusión: un link o bookmark con esa query muestra números falsos como reales. | Abierto — decidir: borrarlo, o limitarlo a desarrollo con un banner visible. Verificado el 2026-08-08: el mock **no se filtra** al camino normal, está bien gateado por la query. |
 | R14 | El QR de cobro está asociado a la caja y se provisiona desde `/admin`, pero no hay pantalla que lo muestre en la tablet al cerrar la venta. | La comandera depende de llevar el QR impreso. | Abierto — ver Pendientes. |
 | R15 | `modules/mercadopago` usa la Payment Intents API (legacy), no la Orders API que MP recomienda. | Ninguno hoy; riesgo si MP deprecara la legacy. | Abierto — migración no justificada por ahora. |
 | R17 | Los controllers de Mercado Pago validan a mano con `typeof` en vez del helper con zod que ya existe. | Inconsistencia y validación más débil en endpoints de cobro. | Abierto — refactor diferido. |
