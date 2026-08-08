@@ -256,6 +256,17 @@ describe("MercadoPagoOrdersService", () => {
       expect(mpOrdersRepo.create).not.toHaveBeenCalled();
     });
 
+    it("409 sin tocar MP si la noche es de prueba: solo efectivo", async () => {
+      getActiveEvent.mockResolvedValue(makeEvent({ isTest: true }));
+      await expect(service.createQrOrder({ amount: 100 })).rejects.toMatchObject({
+        name: "Conflict",
+        code: "TEST_NIGHT",
+        message: "Noche de prueba: solo efectivo.",
+      });
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mpOrdersRepo.create).not.toHaveBeenCalled();
+    });
+
     it("409 si la noche existe pero está cerrada", async () => {
       getActiveEvent.mockResolvedValue(makeEvent({ status: "cerrado" }));
       await expect(service.createQrOrder({ amount: 100 })).rejects.toBeInstanceOf(Conflict);

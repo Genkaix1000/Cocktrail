@@ -14,6 +14,8 @@ import { computeTotals } from "@cocktrail/shared";
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
 import { toSafeConfig } from "../config/config.repository.js";
 import { claveDiaArgentina } from "../../shared/utils/fechas.js";
+import type { TestNightContext } from "./test-night/test-night-context.js";
+import type { TestNightStore } from "./test-night/test-night-store.js";
 
 export class EventsService {
   private event: NightEvent | null = null;
@@ -27,7 +29,18 @@ export class EventsService {
     private drinksRepo: DrinksRepository,
     private emit: EmitFn,
     private configRepo?: ConfigRepository,
+    /**
+     * Noche de prueba: el service no decide nada de "prueba vs real" (eso vive en los
+     * decoradores de repositorio), solo administra el ciclo de vida del contexto —
+     * lo limpia al cerrar y al arrancar.
+     */
+    private testNight?: { context: TestNightContext; store: TestNightStore },
   ) {}
+
+  private endTestNight(): void {
+    this.testNight?.context.clear();
+    this.testNight?.store.reset();
+  }
 
   async ensureInitialized(): Promise<void> {
     if (this.isInitialized) return;
@@ -59,6 +72,11 @@ export class EventsService {
     }
     this.initPromise = (async () => {
       try {
+        // Tras un reinicio no hay noche de prueba: vivía en memoria y se fue con el proceso
+        // (criterio A6). Se limpia ANTES de leer la noche activa para que el decorador no
+        // enrute a un store fantasma.
+        this.endTestNight();
+
         // 1. Get or create active event from database
         let active = await this.eventsRepo.getActive();
         
@@ -133,7 +151,7 @@ export class EventsService {
     return computeTotals(orders);
   }
 
-  async openEvent(keyword: string): Promise<NightEvent> {
+  async openEvent(keyword: string, isTest = false): Promise<NightEvent> {
     await this.ensureInitialized();
     if (this.event && this.event.status === "activo") {
       throw new Conflict("Ya hay una noche activa. Cerrala antes de abrir una nueva.");
@@ -148,7 +166,12 @@ export class EventsService {
       startedAt: Date.now(),
       orderCounter: 0,
       keyword: trimmed,
+      // Solo se setea cuando es prueba: una noche real no lleva la propiedad, igual que
+      // las que vuelven de la base.
+      ...(isTest ? { isTest: true } : {}),
     };
+    // El contexto de prueba lo setea el decorador del repo al crear — el service no sabe
+    // de esa rama.
     await this.eventsRepo.create(newEvent);
     this.event = newEvent;
     this.emit({ type: "event.opened", event: newEvent });
@@ -198,7 +221,11 @@ export class EventsService {
 
     this.emit({ type: "event.closed", summary });
 
-    if (totals.total === 0) {
+    if (closedEvent.isTest) {
+      // Nada que borrar: no se escribió una sola fila. Se libera el contexto para que la
+      // próxima noche vuelva a escribir en la base.
+      this.endTestNight();
+    } else if (totals.total === 0) {
       // Noche cerrada sin ventas: se elimina en vez de archivarse, así no se acumulan
       // noches vacías en el historial. orders/tickets cascadean por ON DELETE CASCADE.
       console.log(`[EventsService] Noche ${closedEvent.id} cerrada sin ventas — se elimina en vez de archivarse.`);

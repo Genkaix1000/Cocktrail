@@ -147,6 +147,31 @@ describe("OpenNightModal", () => {
       expect(() => fireEvent.keyDown(window, { key: "Escape" })).not.toThrow();
     });
 
+    it("ofrece la casilla de noche de prueba, desmarcada por defecto (A1)", () => {
+      render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
+
+      const checkbox = screen.getByRole("checkbox", { name: /Noche de prueba/i });
+      expect(checkbox).not.toBeChecked();
+      // La advertencia de qué implica va junto a la casilla, no escondida.
+      expect(screen.getByText(/No se guarda nada/i)).toBeInTheDocument();
+    });
+
+    it("con la casilla tildada abre la noche marcada como prueba", async () => {
+      const user = userEvent.setup();
+      const event = makeNightEvent({ keyword: "MOJITO", isTest: true });
+      mockedEventsService.openEvent.mockResolvedValue(event);
+
+      render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
+
+      await user.type(screen.getByPlaceholderText("ej. TEQUILA"), "MOJITO");
+      await user.click(screen.getByRole("checkbox", { name: /Noche de prueba/i }));
+      await user.click(screen.getByRole("button", { name: /Abrir noche/i }));
+
+      await waitFor(() =>
+        expect(mockedEventsService.openEvent).toHaveBeenCalledWith("MOJITO", true),
+      );
+    });
+
     it("después de generar una palabra, el submit sigue funcionando igual", async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();
@@ -167,6 +192,14 @@ describe("OpenNightModal", () => {
   });
 
   describe("modo edit", () => {
+    it("no ofrece la casilla de noche de prueba: la marca se decide al abrir (A2)", () => {
+      render(
+        <OpenNightModal mode="edit" onClose={vi.fn()} onSubmit={vi.fn()} currentKeyword="TEQUILA" />,
+      );
+
+      expect(screen.queryByRole("checkbox", { name: /Noche de prueba/i })).not.toBeInTheDocument();
+    });
+
     it("no muestra el botón Generar palabra (solo tiene sentido al abrir, no al editar)", () => {
       render(
         <OpenNightModal mode="edit" onClose={vi.fn()} onSubmit={vi.fn()} currentKeyword="TEQUILA" />,

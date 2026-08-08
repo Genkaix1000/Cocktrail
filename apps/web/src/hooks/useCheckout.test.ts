@@ -79,6 +79,20 @@ function setupHook(printTicket?: (order: { ticketData?: string; ticketContent?: 
   );
 }
 
+function setupHookNocheDePrueba(isTestNight: boolean) {
+  const drink = makeDrink();
+  return renderHook(() =>
+    useCheckout({
+      cart: { 1: 1 },
+      cartEntries: [{ drink, qty: 1 }],
+      totalPrice: 2500,
+      totalItems: 1,
+      clearCart: vi.fn(),
+      isTestNight,
+    }),
+  );
+}
+
 function makeTicketContent(overrides: Partial<TicketContent> = {}): TicketContent {
   return {
     brand: "BOSKO",
@@ -964,5 +978,42 @@ describe("useCheckout — confirmOrder (efectivo / cortesía)", () => {
     const keySecond = mockedOrdersService.create.mock.calls[1][0].idempotencyKey;
     expect(keySecond).toBeTruthy();
     expect(keySecond).not.toBe(keyFirst);
+  });
+});
+
+// Noche de prueba (criterio C1 de docs/specs/noches-de-prueba-y-borrado.md): el
+// bloqueo real vive en el backend (409 TEST_NIGHT). Esto es defensa en
+// profundidad para que la caja ni llegue a intentar el cobro.
+describe("useCheckout — noche de prueba", () => {
+  it("en una noche normal los métodos de Mercado Pago están disponibles", () => {
+    const { result } = setupHookNocheDePrueba(false);
+    expect(result.current.mpDisabledReason).toBeNull();
+  });
+
+  it("en una noche de prueba expone el motivo visible del bloqueo", () => {
+    const { result } = setupHookNocheDePrueba(true);
+    expect(result.current.mpDisabledReason).toBe("Noche de prueba: solo efectivo.");
+  });
+
+  it("no crea la order QR y muestra el motivo", async () => {
+    const { result } = setupHookNocheDePrueba(true);
+
+    await act(async () => {
+      await result.current.startQrPayment();
+    });
+
+    expect(mockedMercadopagoService.createQrOrder).not.toHaveBeenCalled();
+    expect(result.current.posnetErrorMessage).toBe("Noche de prueba: solo efectivo.");
+  });
+
+  it("no crea la intención de Posnet y muestra el motivo", async () => {
+    const { result } = setupHookNocheDePrueba(true);
+
+    await act(async () => {
+      await result.current.startPosnetPayment("debito");
+    });
+
+    expect(mockedMercadopagoService.createPosIntent).not.toHaveBeenCalled();
+    expect(result.current.posnetErrorMessage).toBe("Noche de prueba: solo efectivo.");
   });
 });

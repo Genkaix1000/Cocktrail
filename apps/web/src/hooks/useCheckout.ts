@@ -54,6 +54,9 @@ const POSNET_RECHAZO_POR_DETALLE: Record<string, string> = {
 };
 
 /** La caja no tiene Posnet activo vinculado (409 POSNET_NOT_LINKED del resolver). */
+/** Noche de prueba: MP queda bloqueado (C1). Defensa en profundidad — el server rechaza con 409. */
+export const NOCHE_PRUEBA_SOLO_EFECTIVO_MSG = "Noche de prueba: solo efectivo.";
+
 const POSNET_NOT_LINKED_MSG =
   "Esta caja no tiene Posnet vinculado — vinculá un lector desde /admin → PDV y Posnets " +
   "antes de cobrar con débito.";
@@ -86,6 +89,8 @@ type UseCheckoutArgs = {
   clearCart: () => void;
   /** Imprime el ticket de la venta en la impresora del device. Opcional en tests. */
   printTicket?: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>;
+  /** Noche de prueba: inhabilita los cobros por Mercado Pago (C1). */
+  isTestNight?: boolean;
 };
 
 /**
@@ -101,7 +106,10 @@ export function useCheckout({
   totalItems,
   clearCart,
   printTicket,
+  isTestNight = false,
 }: UseCheckoutArgs) {
+  /** Motivo por el que los métodos de MP están inhabilitados, o `null` si están disponibles. */
+  const mpDisabledReason = isTestNight ? NOCHE_PRUEBA_SOLO_EFECTIVO_MSG : null;
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [receivedAmount, setReceivedAmount] = useState<string>("");
@@ -562,6 +570,11 @@ export function useCheckout({
 
   const startPosnetPayment = useCallback(async (method: PosnetMethod, opts?: { isAutoRetry?: boolean }) => {
     if (isSubmittingRef.current || submitting || totalItems === 0) return;
+    if (isTestNight) {
+      setPosnetStatus("error");
+      setPosnetErrorMessage(NOCHE_PRUEBA_SOLO_EFECTIVO_MSG);
+      return;
+    }
     if (!opts?.isAutoRetry) {
       // Intento "fresco" (botón inicial o "Reintentar" manual): arrancar contador de nuevo.
       stopPosnetRetry();
@@ -664,10 +677,16 @@ export function useCheckout({
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
-  }, [cartEntries, startPolling, stopPosnetRetry, submitting, totalItems, totalPrice]);
+  }, [cartEntries, isTestNight, startPolling, stopPosnetRetry, submitting, totalItems, totalPrice]);
 
   const startQrPayment = useCallback(async () => {
     if (isSubmittingRef.current || submitting || totalItems === 0) return;
+    if (isTestNight) {
+      setPaymentMethod(null);
+      setPosnetStatus("error");
+      setPosnetErrorMessage(NOCHE_PRUEBA_SOLO_EFECTIVO_MSG);
+      return;
+    }
     // Semilla de idempotencia: si ya hay una viva (doble click, reintento tras
     // corte de red) se REUSA — el backend devuelve la misma order en vez de
     // crear un segundo cobro. Nace una nueva recién después de un reset.
@@ -708,9 +727,10 @@ export function useCheckout({
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
-  }, [cartEntries, startQrPolling, submitting, totalItems, totalPrice]);
+  }, [cartEntries, isTestNight, startQrPolling, submitting, totalItems, totalPrice]);
 
   return {
+    mpDisabledReason,
     isCheckoutOpen,
     setIsCheckoutOpen,
     paymentMethod,

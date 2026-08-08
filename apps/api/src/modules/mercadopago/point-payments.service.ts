@@ -103,6 +103,11 @@ export class PointPaymentsService {
 
     // No exige noche abierta (el registro de la venta sí la exige) — solo la liga si hay.
     const event = await this.getActiveEvent();
+    // El intent se persiste en mp_orders ligado a la noche, y una noche de prueba no está
+    // en la base: se rechaza antes de tocar Mercado Pago (C1/C3).
+    if (event?.isTest) {
+      throw new Conflict("Noche de prueba: solo efectivo.", "TEST_NIGHT");
+    }
 
     // La key NO se ata al attemptId del cliente: el retry del 2205 crea un 2º
     // intent legítimo para el mismo attempt y la key es UNIQUE en mp_orders.

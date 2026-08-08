@@ -1,14 +1,17 @@
 import { Router } from "express";
 import type { EventsService } from "./events.service.js";
+import type { NightDeletionService } from "./night-deletion.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, ThemeSchema } from "../../shared/middleware/validate.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import { authenticate } from "../auth/credentials.js";
+import { logAction } from "../audit-logs/audit-logs.service.js";
 import { BadRequest, Forbidden, Unauthorized } from "../../shared/errors/http-errors.js";
 
 export function createEventsController(
   service: EventsService,
   usersRepo: UsersRepository,
+  nightDeletion: NightDeletionService,
 ): Router {
   const router = Router();
 
@@ -59,6 +62,16 @@ export function createEventsController(
         }
 
         const summary = await service.closeEvent(username);
+
+        // Una noche de prueba no deja rastro en ningún lado, tampoco en la auditoría.
+        if (!summary.isTest) {
+          await logAction(
+            "event.closed",
+            `Noche cerrada — $${summary.totals.total.toLocaleString("es-AR")} en ${summary.orders.length} pedidos`,
+            username,
+          );
+        }
+
         res.json(summary);
       } catch (err) {
         next(err);
@@ -73,16 +86,74 @@ export function createEventsController(
     requireRole("admin", "caja"),
     async (req, res, next) => {
       try {
-        const { keyword } = req.body;
+        const { keyword, isTest } = req.body;
         if (typeof keyword !== "string") throw new BadRequest("keyword requerida.");
+        if (isTest !== undefined && typeof isTest !== "boolean") {
+          throw new BadRequest("isTest tiene que ser booleano.");
+        }
 
         // Abrir la noche está permitido para cualquier staff autenticado
-        // (admin/caja) — no es un permiso configurable por usuario.
-        res.status(201).json(await service.openEvent(keyword));
+        // (admin/caja) — no es un permiso configurable por usuario. Marcarla como
+        // DE PRUEBA sí es admin-only: una noche de prueba no factura, así que si
+        // alguien la abre por error se pierde la venta de todo el turno.
+        if (isTest && req.session?.role === "caja") {
+          throw new Forbidden("Solo el admin puede abrir una noche de prueba.");
+        }
+
+        const event = await service.openEvent(keyword, isTest === true);
+
+        if (!event.isTest) {
+          await logAction("event.opened", `Noche abierta — clave "${event.keyword}"`, req.session?.username ?? "desconocido");
+        }
+
+        res.status(201).json(event);
       } catch (err) {
         next(err);
       }
     }
+  );
+
+  // GET /api/events/:id/deletion-preview — qué se pierde si se borra esa noche (admin only)
+  router.get(
+    "/events/:id/deletion-preview",
+    authMiddleware,
+    requireRole("admin"),
+    async (req, res, next) => {
+      try {
+        res.json(await nightDeletion.preview(String(req.params.id)));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // DELETE /api/events/:id — borrar una noche registrada (admin only). Irreversible.
+  router.delete(
+    "/events/:id",
+    authMiddleware,
+    requireRole("admin"),
+    async (req, res, next) => {
+      try {
+        const { password, fecha } = req.body;
+        if (!password) throw new BadRequest("Contraseña requerida para confirmar el borrado.");
+        if (typeof fecha !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+          throw new BadRequest("Escribí la fecha de la noche (AAAA-MM-DD) para confirmar.");
+        }
+
+        const username = req.session?.username;
+        if (!username) throw new Unauthorized();
+
+        const verified = await authenticate(username, password, usersRepo);
+        if (!verified) throw new BadRequest("Contraseña incorrecta.");
+
+        // `fecha` va como guarda al servidor: si no coincide con el día argentino real
+        // de la noche, la función aborta sin tocar nada. La confirmación tipeada de la
+        // UI no alcanza — el chequeo tiene que estar de este lado.
+        res.json(await nightDeletion.delete(String(req.params.id), fecha, username));
+      } catch (err) {
+        next(err);
+      }
+    },
   );
 
   // PATCH /api/events/current/keyword — corregir la clave de la noche activa (admin only)

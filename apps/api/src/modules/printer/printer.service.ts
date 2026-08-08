@@ -71,6 +71,11 @@ export class PrinterService {
       // Sin marca ni fecha de la venta: el ticket es para retirar el trago, y
       // la fecha ya está arriba. Sin código de retiro: lo canjeaba la pantalla
       // de barra, que dejó de existir con el modelo comandera.
+      // Noche de prueba: la leyenda va en `brand`, que se imprime centrado y en doble
+      // tamaño, para que el papel no se pueda confundir con un comprobante real (B4).
+      // Guion ASCII y no em dash: el camino ESC/POS pasa por CP437, que no tiene "—"
+      // y lo imprimiría como "?".
+      ...(nightEvent?.isTest ? { brand: "*** PRUEBA - SIN VALOR ***" } : {}),
       saleText: `Venta #${order.displayNumber}`,
       items: order.items.map((item) => ({ qty: item.qty, name: item.name })),
       keywordText: `Clave: ${nightEvent.keyword ?? "(sin clave)"}`,

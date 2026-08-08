@@ -1,6 +1,6 @@
 "use client";
 
-import { Dices, KeyRound, Loader2, X } from "lucide-react";
+import { Dices, FlaskConical, KeyRound, Loader2, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import type { NightEvent } from "@cocktrail/shared";
 import { eventsService } from "@/services/events.service";
@@ -15,6 +15,9 @@ type Props = {
 
 export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword }: Props) {
   const [keyword, setKeyword] = useState(mode === "edit" ? currentKeyword ?? "" : "");
+  // La marca de prueba se decide al abrir y no se puede cambiar después (A2),
+  // por eso el checkbox solo existe en mode="open" y arranca desmarcado.
+  const [isTest, setIsTest] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +33,9 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
       }
       const event =
         mode === "open"
-          ? await eventsService.openEvent(trimmed)
+          ? // Sin el flag cuando es una noche normal: el backend distingue
+            // "no lo mandó" de "lo mandó en false" para el guard de rol.
+            await (isTest ? eventsService.openEvent(trimmed, true) : eventsService.openEvent(trimmed))
           : await eventsService.setKeyword(trimmed);
       setKeyword("");
       onSubmit(event);
@@ -122,6 +127,41 @@ export default function OpenNightModal({ mode, onClose, onSubmit, currentKeyword
               Se imprime en cada ticket físico vendido en caja durante esta noche. Comunicásela al
               staff de palabra para que sepan distinguir tickets de la noche vigente.
             </p>
+          )}
+
+          {!isEdit && (
+            <div
+              className={`rounded-xl border px-3.5 py-3 transition-colors ${
+                isTest
+                  ? "bg-amber-500/10 border-amber-500/40"
+                  : "bg-[var(--bg-panel)] border-[var(--border-subtle)]"
+              }`}
+            >
+              <label
+                htmlFor="night-is-test"
+                className="flex items-start gap-2.5 cursor-pointer select-none"
+              >
+                <input
+                  id="night-is-test"
+                  type="checkbox"
+                  checked={isTest}
+                  onChange={(e) => setIsTest(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 shrink-0 accent-amber-500 cursor-pointer"
+                />
+                <span className="flex flex-col gap-1">
+                  <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--text-primary)]">
+                    <FlaskConical size={13} strokeWidth={2} aria-hidden="true" />
+                    Noche de prueba
+                  </span>
+                  <span className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                    Para probar la impresora o el flujo de venta sin ensuciar el arqueo. No se
+                    guarda nada: no entra al historial ni a los totales, solo se puede cobrar en
+                    efectivo y se pierde si el servidor se reinicia. No se puede cambiar después
+                    de abrir la noche.
+                  </span>
+                </span>
+              </label>
+            </div>
           )}
 
           {error && (

@@ -62,3 +62,6 @@ docs/design/reference/*.png
 
 # Capturas/snapshots del MCP de Playwright
 .playwright-mcp/
+
+# Volcados de db:delete-night — datos reales de una noche, nunca al repo
+backups/

@@ -85,6 +85,12 @@ export type NightEvent = {
   orderCounter: number;
   closedBy?: string;
   keyword?: string;
+  /**
+   * Noche de prueba: no se persiste nada (ni la noche, ni sus pedidos, ni sus tickets).
+   * Opcional a propósito — las filas de la base lo dejan `undefined`, porque nada
+   * persistido puede ser de prueba.
+   */
+  isTest?: boolean;
 };
 
 export type DrinkSold = {

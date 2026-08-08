@@ -9,6 +9,11 @@ import type { OrderStatus } from "@cocktrail/shared";
 
 export function createOrdersController(
   service: OrdersService,
+  /**
+   * Noche de prueba: `logAction` es una función libre (no inyectada), así que la única
+   * forma de no auditar una venta de prueba es chequearlo en el call-site.
+   */
+  isTestNight: () => boolean = () => false,
 ): Router {
   const router = Router();
 
@@ -35,11 +40,13 @@ export function createOrdersController(
       const createdBy = req.session?.username || "Caja";
 
       const order = await service.createOrder({ items, paymentMethod, payment, idempotencyKey, isGift, isSplit, payments }, createdBy);
-      await logAction(
-        "order.created",
-        `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,
-        createdBy
-      );
+      if (!isTestNight()) {
+        await logAction(
+          "order.created",
+          `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,
+          createdBy
+        );
+      }
       res.status(201).json(order);
     } catch (err) {
       next(err);
@@ -101,7 +108,7 @@ export function createOrdersController(
       const order = await service.updateOrderStatus(req.params.id as string, status, username);
 
       const auditAction = STATUS_AUDIT_ACTION[status as OrderStatus];
-      if (auditAction) {
+      if (auditAction && !isTestNight()) {
         await logAction(auditAction, statusAuditMessage(status as OrderStatus, order), username);
       }
 

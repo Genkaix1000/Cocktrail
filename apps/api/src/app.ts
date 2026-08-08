@@ -11,6 +11,7 @@ import { createDrinksController } from "./modules/drinks/drinks.controller.js";
 import { createDrinkCategoriesController } from "./modules/drinks/categories.controller.js";
 import { createOrdersController } from "./modules/orders/orders.controller.js";
 import { createEventsController } from "./modules/events/events.controller.js";
+import { NightDeletionService } from "./modules/events/night-deletion.service.js";
 import { createSSEController } from "./modules/sse/sse.controller.js";
 import { createTicketsController } from "./modules/tickets/tickets.controller.js";
 import { createUsersController } from "./modules/users/users.controller.js";
@@ -35,6 +36,11 @@ import { SupabaseTicketsRepository } from "./modules/tickets/tickets.repository.
 import { TicketsService } from "./modules/tickets/tickets.service.js";
 import { SupabaseEventsRepository } from "./modules/events/events.repository.js";
 import { EventsService } from "./modules/events/events.service.js";
+import { TestNightContext } from "./modules/events/test-night/test-night-context.js";
+import { TestNightStore } from "./modules/events/test-night/test-night-store.js";
+import { TestAwareEventsRepository } from "./modules/events/test-night/test-aware-events.repository.js";
+import { TestAwareOrdersRepository } from "./modules/events/test-night/test-aware-orders.repository.js";
+import { TestAwareTicketsRepository } from "./modules/events/test-night/test-aware-tickets.repository.js";
 import { SupabaseUsersRepository } from "./modules/users/users.repository.js";
 import { UsersService } from "./modules/users/users.service.js";
 import { SupabaseConfigRepository } from "./modules/config/config.repository.js";
@@ -70,17 +76,42 @@ import { errorHandler } from "./shared/middleware/error-handler.js";
 
 const drinksRepo = new SupabaseDrinksRepository();
 const drinkCategoriesRepo = new SupabaseDrinkCategoriesRepository();
-const eventsRepo = new SupabaseEventsRepository();
-const ordersRepo = new SupabaseOrdersRepository();
-const ticketsRepo = new SupabaseTicketsRepository();
 const usersRepo = new SupabaseUsersRepository();
 const configRepo = new SupabaseConfigRepository();
+
+// Noche de prueba: la rama "prueba vs real" vive acá, envolviendo los repos, y NO adentro
+// de los services — así no hay `if (esPrueba)` desparramados por la lógica de venta. El
+// contexto guarda el ID de la noche de prueba (no un booleano): una noche nueva jamás
+// matchea ese id, así que si el contexto quedara pegado se escribe en la base igual.
+const testNightContext = new TestNightContext();
+const testNightStore = new TestNightStore();
+const testNight = { context: testNightContext, store: testNightStore };
+
+const eventsRepo = new TestAwareEventsRepository(
+  new SupabaseEventsRepository(),
+  testNightContext,
+  testNightStore,
+);
+const ordersRepo = new TestAwareOrdersRepository(
+  new SupabaseOrdersRepository(),
+  testNightContext,
+  testNightStore,
+);
+const ticketsRepo = new TestAwareTicketsRepository(
+  new SupabaseTicketsRepository(),
+  testNightContext,
+  testNightStore,
+);
 
 const drinksService = new DrinksService(drinksRepo);
 const drinkCategoriesService = new DrinkCategoriesService(drinkCategoriesRepo);
 const usersService = new UsersService(usersRepo);
 
-const eventsService = new EventsService(eventsRepo, ordersRepo, drinksRepo, emit, configRepo);
+const eventsService = new EventsService(eventsRepo, ordersRepo, drinksRepo, emit, configRepo, testNight);
+
+// Borrado de noches: todo el trabajo vive en funciones de Postgres (una sola transacción),
+// así que no pasa por los repositorios ni por los decoradores de noche de prueba.
+const nightDeletionService = new NightDeletionService();
 
 const printerService = new PrinterService();
 
@@ -301,7 +332,7 @@ app.use(
 );
 app.use("/api/drinks", createDrinksController(drinksService));
 app.use("/api/drink-categories", createDrinkCategoriesController(drinkCategoriesService));
-app.use("/api/orders", createOrdersController(ordersService));
+app.use("/api/orders", createOrdersController(ordersService, () => testNightContext.isTestNight()));
 app.use("/api/events", createSSEController());
 app.use("/api/tickets", createTicketsController(ticketsService));
 app.use("/api/users", createUsersController(usersService));
@@ -319,11 +350,12 @@ app.use(
 app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
 app.use("/api/system", createSystemController(usersRepo, systemService));
-app.use("/api", createEventsController(eventsService, usersRepo));
+app.use("/api", createEventsController(eventsService, usersRepo, nightDeletionService));
 
 // Error handler global (ÚLTIMO)
 app.use(errorHandler);
 
 // mpSellersRepo y mpOAuthService se exportan para el boot de server.ts
 // (backfill de cifrado + pull del seller — fail-open).
-export { app, eventsService, mpWebhooksService, mpSellersRepo, mpOAuthService };
+// testNightContext se exporta para el cableado HTTP del flag `isTest` en events.controller.
+export { app, eventsService, mpWebhooksService, mpSellersRepo, mpOAuthService, testNightContext };

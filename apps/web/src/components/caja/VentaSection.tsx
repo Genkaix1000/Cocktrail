@@ -39,6 +39,7 @@ import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
 import Toast from "@/components/shared/Toast";
+import { formatHm, plural } from "@/lib/utils";
 import type { Drink, DrinkCategory, Order } from "@cocktrail/shared";
 
 type Props = {
@@ -46,6 +47,8 @@ type Props = {
   categories: DrinkCategory[];
   orders?: Order[];
   onReloadCarta?: () => Promise<void>;
+  /** Noche de prueba: solo efectivo (C1). */
+  isTestNight?: boolean;
   printer: {
     reprintTicket: (orderId: string) => Promise<void>;
     printTicket: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>;
@@ -299,7 +302,7 @@ function CompactDrinkSkeleton() {
  * prop desde `usePrinterStatus` en el shell, porque ese mismo hook también
  * lo usa el popup de detalle de Historial (que todavía vive en CajaClient).
  */
-export default function VentaSection({ drinks, categories, orders = [], onReloadCarta, printer }: Props) {
+export default function VentaSection({ drinks, categories, orders = [], onReloadCarta, printer, isTestNight = false }: Props) {
   const loadingProducts = false;
   const shoppingBagRef = useRef<HTMLDivElement>(null);
 
@@ -499,6 +502,7 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
     startPosnetPayment,
     startQrPayment,
     stopPosnetRetry,
+    mpDisabledReason,
   } = useCheckout({
     cart,
     cartEntries,
@@ -506,6 +510,7 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
     totalItems,
     clearCart,
     printTicket: printer.printTicket,
+    isTestNight,
   });
 
   const { reprintTicket, printError, reprinting } = printer;
@@ -646,9 +651,7 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
           <div className="flex items-center gap-2">
             <AlertTriangle size={16} className="text-danger shrink-0" />
             <p className="text-sm font-black text-danger">
-              {pendingSales.length === 1
-                ? "Hay 1 venta cobrada sin registrar"
-                : `Hay ${pendingSales.length} ventas cobradas sin registrar`}
+              {`Hay ${plural(pendingSales.length, "venta cobrada", "ventas cobradas")} sin registrar`}
             </p>
           </div>
           <p className="text-xs text-ink-300 leading-relaxed">
@@ -666,7 +669,7 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                     ${sale.amount.toLocaleString("es-AR")}
                   </span>
                   <span className="text-ink-400">
-                    {new Date(sale.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs
+                    {formatHm(new Date(sale.createdAt).getTime())} hs
                   </span>
                   <span className="text-[10px] font-black uppercase tracking-wider text-ink-300 px-1.5 py-0.5 bg-ink-850 border border-ink-800 rounded">
                     {sale.paymentMethod === "qr" ? "QR" : "Débito"}
@@ -1469,9 +1472,10 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                       </button>
 
                       <button
-                        disabled={submitting}
+                        disabled={submitting || mpDisabledReason !== null}
+                        title={mpDisabledReason ?? undefined}
                         onClick={() => startPosnetPayment("debito")}
-                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center shrink-0">
                           <CreditCard size={22} />
@@ -1480,9 +1484,10 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                       </button>
 
                       <button
-                        disabled={submitting}
+                        disabled={submitting || mpDisabledReason !== null}
+                        title={mpDisabledReason ?? undefined}
                         onClick={() => startQrPayment()}
-                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/25 text-accent flex items-center justify-center shrink-0">
                           <QrCode size={22} />
@@ -1505,6 +1510,15 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                           (QR del remanente + prueba de pago) no está cableado — oculto
                           del selector hasta que se implemente. */}
                     </div>
+
+                    {mpDisabledReason && (
+                      <p
+                        role="note"
+                        className="w-full text-[12px] font-semibold text-amber bg-amber-soft border border-amber-line rounded-xl px-3 py-2.5 text-left"
+                      >
+                        {mpDisabledReason}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   // Confirmar Método Elegido

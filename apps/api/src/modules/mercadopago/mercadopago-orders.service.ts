@@ -110,6 +110,11 @@ export class MercadoPagoOrdersService {
         "NO_ACTIVE_EVENT",
       );
     }
+    // Un cobro de MP se registra contra la noche en la base, y una noche de prueba no
+    // existe ahí. Se rechaza de entrada en vez de fallar de forma confusa después.
+    if (event.isTest) {
+      throw new Conflict("Noche de prueba: solo efectivo.", "TEST_NIGHT");
+    }
 
     const barIdOrCode = (input.barId?.trim() || env.BAR_CODE).trim();
     const bar = await this.resolveBar(barIdOrCode);

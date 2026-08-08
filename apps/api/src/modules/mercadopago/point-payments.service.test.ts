@@ -117,6 +117,24 @@ describe("PointPaymentsService", () => {
       expect(result.id).toBe("intent-1");
     });
 
+    it("409 sin tocar MP ni mp_orders si la noche es de prueba: solo efectivo", async () => {
+      const enPrueba = new PointPaymentsService(
+        mpService as unknown as MercadoPagoService,
+        repo,
+        async () => ({ ...EVENT, id: "night-test", isTest: true }),
+        resolvePosnet,
+        emit as unknown as import("../../shared/sse/sse-manager.js").EmitFn,
+      );
+
+      await expect(enPrueba.createIntent({ amount: 1500, barId: "bar-uuid-1" })).rejects.toMatchObject({
+        name: "Conflict",
+        code: "TEST_NIGHT",
+        message: "Noche de prueba: solo efectivo.",
+      });
+      expect(mpService.createPaymentIntent).not.toHaveBeenCalled();
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
     it("crea el intent en MP contra el device RESUELTO (nunca uno del cliente)", async () => {
       await service.createIntent({ amount: 1500, barId: "bar-uuid-1" });
 

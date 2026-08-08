@@ -102,6 +102,12 @@ Plan: [`plans/06-empaquetado/2026-07-13-empaquetado-windows-design.md`](../plans
 | [`acceso-admin-sin-noche.md`](./features/acceso-admin-sin-noche.md) | `done` | Entrar a `/admin` sin noche activa (hoy el gate "Abrir Noche" tapa todo el panel) |
 | [`refactor-ui-bosko/`](./features/refactor-ui-bosko/) | `draft` | Refactor visual skin Bosko (light/dark, tokens, bento); admin shell primero |
 
+### Raíz — specs abiertas todavía sin archivar
+
+| Spec | Estado | De qué va |
+|---|---|---|
+| [`noches-de-prueba-y-borrado.md`](./noches-de-prueba-y-borrado.md) | `approved` | Abrir noches de prueba que no persisten nada + borrar una noche registrada desde `/admin` y por CLI |
+
 Design system: [`docs/design/`](../design/README.md) —
 [`design.md`](../design/design.md),
 referencias [light](../design/reference/bosko-light.png) /
