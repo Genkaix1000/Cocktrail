@@ -29,32 +29,37 @@ Tres operadores + el cliente:
 
 ---
 
-## 2. Decisión arquitectónica central: **local-first + cloud diferida**
+## 2. Decisión arquitectónica central: **una sola base en la nube** (pivot 2026-08-03)
 
-El sistema corre **en una máquina local en el boliche** (mini-PC o laptop) y **no necesita internet** para operar. La nube es **opcional y diferida**: solo se usa para reconciliar la información cuando se cierra la noche.
+El sistema **ya no es local-first**. Tras el pivot del 2026-08-03 (modelo "comandera", ver
+[`ROADMAP.md`](./ROADMAP.md) §PIVOT) hay **una única base Supabase Cloud** y el backend le
+escribe **directo y en tiempo real**. No hay base local, ni outbox, ni reconciliación diferida,
+ni módulo `sync`.
 
 ```
-  ┌─────────────────────── BOLICHE (LAN, sin internet) ───────────────────────┐
-  │                                                                            │
-  │   [celu cliente] ──HTTP/SSE─┐                                              │
-  │   [tablet barra] ──HTTP/SSE─┤                                              │
-  │   [tablet caja]  ──HTTP/SSE─┼──► apps/web (Next.js 16) ──► apps/api        │
-  │   [laptop admin] ──HTTP/SSE─┘         (proxy edge)         (Express 5)     │
-  │                                                              │             │
-  │                                              ┌───────────────┴──────────┐  │
-  │                                              │  Supabase LOCAL (Postgres)│  │ ◄── fuente de verdad
-  │                                              └───────────────┬──────────┘  │
-  └──────────────────────────────────────────────────────────────┼───────────┘
-                                                                  │
-                                  (solo al "Cerrar Noche" o al rebootear, si hay internet)
-                                                                  ▼
-                                              ┌──────────────────────────────┐
-                                              │  Supabase CLOUD (opcional)    │ ◄── reconciliación / backup
-                                              └──────────────────────────────┘
+  ┌──────────── DISPOSITIVOS (internet) ────────────┐
+  │   [celu cliente]  ──HTTP/SSE─┐                  │
+  │   [tablet comandera] ─HTTP/SSE┤                 │
+  │   [tablet caja]   ──HTTP/SSE─┼──► apps/web (Next.js 16, proxy edge)
+  │   [laptop admin]  ──HTTP/SSE─┘         │
+  └────────────────────────────────────────┼───────┘
+                                           ▼
+                           apps/api (Express 5, proceso Node persistente)
+                                           │  escritura directa
+                                           ▼
+                           ┌───────────────────────────┐
+                           │  Supabase CLOUD (Postgres) │ ◄── única fuente de verdad
+                           └───────────────────────────┘
 ```
 
-- **Si no hay nube configurada** (`SUPABASE_CLOUD_*` vacías), el sync se saltea con un log y **la operación sigue normal**. La caja nunca depende de internet.
-- **El pedido online "en la web" (accesible por internet, fuera de la LAN) es Phase 2** — hoy `/carta` y `/pedido/[token]` se sirven desde el mismo backend local y se acceden por la WiFi/LAN del local. Ver [`ROADMAP.md`](./ROADMAP.md).
+- **El backend NO puede correr en serverless/edge**: el real-time es SSE con un `EventEmitter`
+  en proceso (§7). El deploy objetivo es un VPS/PaaS con proceso Node persistente.
+- **Requiere internet.** Es una consecuencia aceptada del pivot: el modelo anterior
+  (caja offline que reconciliaba al cerrar) se descartó porque el problema real era de negocio,
+  no de conectividad.
+- **El "flag" que decide a qué base se apunta son solo tres env**: `SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY` (cliente supabase-js) y `DATABASE_URL` (runner de migraciones).
+  Apuntar a Supabase local para desarrollo es cambiar esos valores, nada más.
 
 ---
 
@@ -69,13 +74,13 @@ Cocktrail/
 │   │   │   ├── app.ts          # Composición / DI manual de todos los módulos
 │   │   │   ├── config/env.ts   # Validación de env con Zod
 │   │   │   ├── shared/
-│   │   │   │   ├── supabase.ts  # Clientes supabase (local) y supabaseCloud (opcional)
+│   │   │   │   ├── supabase.ts  # Cliente único de Supabase (+ alias oauthDb)
 │   │   │   │   ├── sse/         # sse-manager.ts (EventEmitter, bus de real-time)
 │   │   │   │   ├── middleware/  # auth, rate-limit, validate
 │   │   │   │   └── utils/       # totals, etc.
-│   │   │   ├── modules/         # auth, drinks, orders, cash-sales, events, sse,
+│   │   │   ├── modules/         # auth, drinks, orders, events, sse, bar-sessions,
 │   │   │   │                    #   tickets, users, config, mercadopago, system,
-│   │   │   │                    #   sync, audit-logs
+│   │   │   │                    #   printer, audit-logs
 │   │   │   └── data/*.json      # ⚠️ CÓDIGO MUERTO (legacy fase 3.5, no se usa)
 │   │   └── .env.example
 │   └── web/                    # Frontend — Next.js 16 (App Router) + React 19.2
@@ -121,8 +126,7 @@ Express 5 + TypeScript. Patrón por capas **Controller → Service → Repositor
 | **mercadopago** | `POST /api/mercadopago/pos/intent`, `GET /pos/intent/:id`, `DELETE /pos/intent/:id` | admin/caja |
 | **printer** | `GET /api/printer/status`, `POST /api/printer/test`, `POST /api/printer/reprint/:orderId` | admin/caja |
 | | *Regla de impresión: el server es dueño del **contenido** del ticket (`TicketContent` en shared, representación única de la que derivan los bytes ESC/POS y el raster); el device de caja es dueño de la **representación física** — ESC/POS texto por USB (APK/WebUSB) o raster 384px por Web Bluetooth (impresora S1, módulo `apps/web/src/lib/printing/`). El server nunca toca hardware. Ver [`specs/impresion-bluetooth-comandera.md`](./specs/impresion-bluetooth-comandera.md).* | |
-| **system** | `GET /api/system/status`, `/logs`, `POST /sync`, `POST /shutdown` | staff |
-| **sync** | (sin controller; disparado por `system` y `events`) | — |
+| **system** | `GET /api/system/status`, `/health`, `/logs`, `POST /shutdown` | staff |
 | **audit-logs** | (sin controller; `AuditLogsService` usado inline por otros módulos) | — |
 
 ### Boot autocurativo (`server.ts`)
@@ -134,49 +138,45 @@ Al arrancar, el server **abre el puerto HTTP primero** y luego intenta conectar 
 
 > El `CLAUDE.md` viejo decía "sin base de datos / in-memory". **Eso ya no es cierto.**
 
-`apps/api/src/shared/supabase.ts` exporta dos clientes:
+`apps/api/src/shared/supabase.ts` exporta **un solo cliente**:
 
-- **`supabase`** → instancia **LOCAL** (`SUPABASE_URL`, default `http://127.0.0.1:54321`). **Fuente de verdad operativa.** Todos los repositorios cableados (`Supabase*Repository`) usan este cliente.
-- **`supabaseCloud`** → instancia **NUBE**, solo existe si están seteadas `SUPABASE_CLOUD_URL` + `SUPABASE_CLOUD_SERVICE_ROLE_KEY`. Si no, es `null` y todo el sync cloud se saltea.
-
-El "flag" que decide *single backend* vs *local+cloud* es simplemente **la presencia de las env `SUPABASE_CLOUD_*`**.
+- **`supabase`** → la única instancia, apuntada por `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
+  (default de desarrollo: `http://127.0.0.1:54321`). **Todos** los repositorios cableados
+  (`Supabase*Repository`) usan este cliente. No hay `supabaseCloud` ni cliente secundario.
+- **`oauthDb`** → alias histórico de `supabase` para `oauth_states`: la Edge Function
+  `mp-auth-callback` consume el state, así que backend y Edge Function tienen que escribir en el
+  mismo proyecto — con una sola base eso se cumple siempre.
 
 ### Esquema (`supabase/migrations/`)
-- `20240101000000_schema.sql` — `night_events` (status, `order_counter`, `sync_status`, `synced_at`), `orders` (items JSONB, total, payment_method, status, ticket_code, campos de cancelación/entrega), `tickets` (code único, redención), `cash_sales` (tabla sin uso — la feature de "venta manual de barra" nunca se conectó a una UI y se retiró del código el 2026-07-13; la tabla queda sin tocar en DB, no se migra).
+- `20240101000000_schema.sql` — `night_events` (status, `order_counter`, y las columnas muertas `sync_status`/`synced_at` que quedaron del sync viejo — ver §6), `orders` (items JSONB, total, payment_method, status, ticket_code, campos de cancelación/entrega), `tickets` (code único, redención), `cash_sales` (tabla sin uso — la feature de "venta manual de barra" nunca se conectó a una UI y se retiró del código el 2026-07-13; la tabla queda sin tocar en DB, no se migra).
 - `20240102000000_edge_sync.sql` — datos maestros: `users` (password_hash, role, permissions JSONB), `drinks`, `app_config` (theme, branding, `mercado_pago` JSONB, club, logo).
 - `20260626175947_add_closed_by.sql` — `night_events.closed_by`.
 - `20260629201500_create_audit_logs.sql` — `audit_logs` (action, description, operator, created_at).
 - `20260701000000_add_keyword.sql` — `night_events.keyword` (palabra clave de la noche, la define la
   admin al abrirla, se imprime en cada ticket físico).
 
-> ⚠️ La columna `night_events.totals` que usa el sync **no está en las migraciones locales** — se asume solo en el esquema cloud. Ver riesgos en [`ROADMAP.md`](./ROADMAP.md).
+> ⚠️ La base de la nube tiene historia propia (no la creó el runner de migraciones sino el sync viejo): puede divergir de lo que producen las migraciones. `apps/api/src/scripts/repair-cloud-schema.ts` es el one-shot que se usó para emparejarlas. Ver riesgos en [`ROADMAP.md`](./ROADMAP.md).
 
 ---
 
-## 6. Sincronización local ↔ nube (`modules/sync/sync.service.ts`)
+## 6. Sincronización local ↔ nube: **no existe** (eliminada en el pivot)
 
-Implementa el modelo "**caja offline, reconcilia al cerrar**". `SyncService` recibe los
-repositorios locales ya auditados (`Users`/`Drinks`/`Orders`/`Tickets`/
-`EventsRepository`) y un `CloudSyncRepository` (`modules/sync/cloud-sync.repository.ts`) por
-constructor — no pega directo a `supabase`/`supabaseCloud`, salvo el seed local-only de datos
-demo (a propósito: evita el dual-write a cloud que hacen `UsersRepository.create()`/
-`DrinksRepository.create()` para escrituras normales). `CloudSyncRepository` es el único lugar
-que concentra el acceso crudo a `supabaseCloud` (pull cloud→local, push local→cloud bulk).
+**No hay módulo `sync`, ni `SyncService`, ni `CloudSyncRepository`, ni endpoints
+`POST /api/system/sync` / `POST /api/system/restore`, ni env `SUPABASE_CLOUD_*`.** Todo eso
+pertenecía al modelo local-first y se eliminó con el pivot del 2026-08-03. Si encontrás una spec
+vieja en `docs/specs/` que los describe (`pushEventData`, `pullMasterData`,
+`syncAllPendingEvents`, `restoreFromCloud`, `pushSellerMetadata`), es historia: documenta cómo
+funcionaba, no cómo funciona.
 
-- **`pullMasterData()`** — **Cloud → Local**. Baja `users` y `drinks` y hace `upsert` en local. Si no hay nada en ningún lado, siembra admin + drinks por defecto.
-- **`pushEventData(eventId)`** — **Local → Cloud**. Sube un `night_event` cerrado + sus `orders` + `tickets`. Marca `sync_status` `pending → synced/failed` en la tabla local. Calcula totales con `computeTotals` y los guarda en `night_events.totals` (cloud).
-- **`syncAllPendingEvents()`** — recorre noches cerradas locales con `sync_status != 'synced'` y las reintenta.
-- **`ensureLocalMasterDataSeeded()`** — siembra admin/drinks en local en cada boot (sin tocar la nube).
-- **`pushAuditLogsIfConfigured()`** — **Local → Cloud**, fire-and-forget. Sube `audit_logs` completo a cloud vía upsert; nunca lanza (se llama junto al push de cada cierre de noche, `events.service.ts`).
-- **`restoreFromCloud()`** — **Cloud → Local, merge/upsert (gana cloud en conflicto, no borra nada local)**. Restore de emergencia para cuando una tabla local se vació o corrompió (motivado por un incidente real: `drinks` se vació en silencio por un bug de sync ya arreglado). Trae `night_events` (forzando `status: "cerrado"`, descartando `totals` que es cloud-only) → `orders` → `tickets` → `audit_logs`, en ese orden, cada tabla en su propio try/catch para que una falla no aborte el resto. Devuelve un `RestoreResult` con `{ok, failed, error?}` por tabla — nunca un booleano (lección directa del incidente de `drinks`). Expuesto en `POST /api/system/restore` (rol `admin` únicamente, re-pide contraseña) y en `/admin` → Configuración → Sistema.
+Hoy el flujo es trivial: **el repositorio escribe en la única base y listo.** Cerrar la noche
+solo cambia el `status` del `night_event`; no dispara ningún push. El backup es
+responsabilidad de Supabase Cloud (PITR / snapshots del proyecto), no de código de la app.
 
-**Cuándo corre:**
-- Al **cerrar la noche** (`events.service.closeEvent` → sync en background).
-- Al **arrancar** (`eventsService.initialize` → `syncAllPendingEvents` en background).
-- **Auto-cierre**: si al bootear hay un evento `activo` de un día calendario anterior (zona `America/Argentina/Buenos_Aires`), lo cierra automáticamente y lo empuja.
-- **Manual**: `POST /api/system/sync` (local→cloud) y `POST /api/system/restore` (cloud→local, botón "Restaurar desde backup" en `/admin`).
+**Restos en el esquema** (columnas inertes, sin ninguna referencia en TypeScript; el DROP queda
+para una migración futura porque la base de la nube tiene historia propia):
 
----
+- `night_events.sync_status`, `night_events.synced_at` (`20240101000000_schema.sql:14-15`).
+- `mercadopago_sellers.cloud_synced_at` (`20260723000000_sellers_encrypted_tokens.sql:13`).
 
 ## 7. Real-time (SSE)
 
@@ -184,7 +184,7 @@ que concentra el acceso crudo a `supabaseCloud` (pull cloud→local, push local�
 - **Eventos** (`DomainEvent`): `order.created`, `order.updated`, `cash_sale.added`, `event.closed`, `event.opened`, `theme.changed`.
 - **Cliente**: hook `apps/web/src/lib/useSSE.ts` abre `EventSource(${API_URL}/api/events, {withCredentials:true})`. El stream es **global** y se filtra del lado del cliente (por token para el cliente, por rol para staff).
 
-> Implicancia: como el estado real-time vive en el `EventEmitter` del proceso Node, el backend **no puede correr en serverless/edge** (Vercel functions). Debe ser un proceso Node persistente — coherente con el modelo local-first.
+> Implicancia: como el estado real-time vive en el `EventEmitter` del proceso Node, el backend **no puede correr en serverless/edge** (Vercel functions). Debe ser un proceso Node persistente (VPS/PaaS), nunca Vercel functions.
 
 ---
 
@@ -364,8 +364,8 @@ Ver `apps/api/.env.example` y `apps/web/.env.example`. Las críticas:
 | Variable | Dónde | Para qué |
 |---|---|---|
 | `AUTH_SECRET` / `COCKTRAIL_AUTH_SECRET` | api + web | HMAC de cookies (≥32 chars; **debe coincidir** entre api y web) |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | api | DB local (fuente de verdad) |
-| `SUPABASE_CLOUD_URL`, `SUPABASE_CLOUD_SERVICE_ROLE_KEY` | api | Nube (opcional; activa el sync) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | api | **La** base (única fuente de verdad). Deciden a qué proyecto Supabase se apunta |
+| `DATABASE_URL` | api | Postgres directo — **solo** el runner de migraciones (`infra/migrations`). Tiene que apuntar a la misma base que `SUPABASE_URL` |
 | `MP_ACCESS_TOKEN` | api | Mercado Pago Point — token de fallback de emergencia (opcional). Para servir con Posnet tiene que ser de la **misma cuenta** que el lector y verlo en el listado de devices (R24) |
 | `MP_POS_DEVICE_ID` | api | **Último recurso**, ya **no es la fuente primaria** del device de cobro: el device se resuelve server-side desde la caja (§11). Solo se usa si no hay caja provisionada, y su uso queda logueado + visible en el panel de salud (`usingEnvDevice`) |
 | `NEXT_PUBLIC_API_URL` | web | URL del Express |

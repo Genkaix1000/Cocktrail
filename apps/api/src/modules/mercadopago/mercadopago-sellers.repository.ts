@@ -112,8 +112,6 @@ export class SupabaseMercadoPagoSellersRepository implements MercadoPagoSellersR
       user_id: seller.userId,
       status: seller.status ?? "active",
       updated_at: new Date().toISOString(),
-      // Cualquier escritura deja la metadata pendiente de push a Cloud (PR 5).
-      cloud_synced_at: null,
     };
     // Tokens: se escribe SOLO la columna _enc; la columna en claro queda NULL.
     if (seller.accessToken !== undefined) {
@@ -189,7 +187,6 @@ export class SupabaseMercadoPagoSellersRepository implements MercadoPagoSellersR
     // updated_at se actualiza manualmente (no hay trigger en la DB).
     const row: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
-      cloud_synced_at: null,
     };
     if (patch.accessToken !== undefined) {
       row.access_token_enc = patch.accessToken ? encryptToken(patch.accessToken) : null;
@@ -231,7 +228,6 @@ export class SupabaseMercadoPagoSellersRepository implements MercadoPagoSellersR
         key_version: null,
         status: "expired",
         updated_at: new Date().toISOString(),
-        cloud_synced_at: null,
       })
       .neq("user_id", "")
       .select("user_id");
@@ -280,7 +276,6 @@ export class SupabaseMercadoPagoSellersRepository implements MercadoPagoSellersR
             access_token: null,
             refresh_token: null,
             key_version: access.plaintext || refresh.plaintext ? MP_TOKEN_KEY_VERSION : null,
-            cloud_synced_at: null,
           })
           .eq("user_id", row.user_id);
         if (upErr) throw upErr;

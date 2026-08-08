@@ -52,8 +52,6 @@ function makeEventsRepo(overrides?: Partial<EventsRepository>): EventsRepository
     update: vi.fn(),
     findById: vi.fn(),
     listClosed: vi.fn(),
-    updateSyncStatus: vi.fn(),
-    getPendingSync: vi.fn().mockResolvedValue([]),
     delete: vi.fn(),
     ...overrides,
   };
@@ -114,18 +112,6 @@ describe("SystemService.getStatus", () => {
     const status = await service.getStatus();
 
     expect(status.localDb.connected).toBe(true);
-  });
-
-  it("sync.pendingEvents cuenta cualquier night_event con sync_status != synced (sin filtrar por status)", async () => {
-    const localDb = makeSupabaseClient({
-      users: { data: [{ id: "u1" }], error: null },
-      night_events: { data: [{ id: "e1" }, { id: "e2" }], error: null },
-    });
-    const service = new SystemService(makeEventsRepo(), makeMpService(), makePrinterService(), localDb, makeResolvePosnet());
-
-    const status = await service.getStatus();
-
-    expect(status.sync).toEqual({ synced: false, pendingEvents: 2 });
   });
 
   it("eventDetails viene de eventsRepo.getActive(), null si no hay noche activa", async () => {

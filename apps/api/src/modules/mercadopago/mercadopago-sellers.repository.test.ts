@@ -76,7 +76,7 @@ describe("SupabaseMercadoPagoSellersRepository", () => {
   });
 
   describe("upsert", () => {
-    it("escribe SOLO _enc (claro en NULL), key_version=1 y cloud_synced_at=NULL", async () => {
+    it("escribe SOLO _enc (claro en NULL) y key_version=1", async () => {
       h.state.results.push({ data: makeRow(), error: null });
 
       await repo.upsert({
@@ -92,7 +92,6 @@ describe("SupabaseMercadoPagoSellersRepository", () => {
       expect(row.access_token).toBeNull();
       expect(row.refresh_token).toBeNull();
       expect(row.key_version).toBe(1);
-      expect(row.cloud_synced_at).toBeNull();
       expect(String(row.access_token_enc).startsWith("v1.")).toBe(true);
       // El blob escrito descifra al token original (cifrado real, no placeholder).
       expect(decryptTokenTolerant(row.access_token_enc as string, 1, "seller-1")).toBe("AT-nuevo");
@@ -108,7 +107,6 @@ describe("SupabaseMercadoPagoSellersRepository", () => {
       expect(row).not.toHaveProperty("access_token_enc");
       expect(row).not.toHaveProperty("access_token");
       expect(row).not.toHaveProperty("key_version");
-      expect(row.cloud_synced_at).toBeNull();
     });
   });
 
@@ -166,7 +164,7 @@ describe("SupabaseMercadoPagoSellersRepository", () => {
   });
 
   describe("update", () => {
-    it("cifra los tokens nuevos y marca cloud_synced_at=NULL", async () => {
+    it("cifra los tokens nuevos", async () => {
       h.state.results.push({ data: makeRow(), error: null });
 
       await repo.update("seller-1", { accessToken: "AT-refrescado", status: "active" });
@@ -174,7 +172,6 @@ describe("SupabaseMercadoPagoSellersRepository", () => {
       const op = h.state.ops[0];
       expect(op.method).toBe("update");
       const row = op.payload as Row;
-      expect(row.cloud_synced_at).toBeNull();
       expect(row.access_token).toBeNull();
       expect(decryptTokenTolerant(row.access_token_enc as string, 1, "seller-1")).toBe("AT-refrescado");
     });

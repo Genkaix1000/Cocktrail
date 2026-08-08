@@ -7,8 +7,6 @@ export interface EventsRepository {
   update(id: string, updates: Partial<NightEvent>): Promise<NightEvent>;
   findById(id: string): Promise<NightEvent | null>;
   listClosed(): Promise<NightEvent[]>;
-  updateSyncStatus(id: string, syncStatus: "pending" | "synced" | "failed", syncedAt?: number): Promise<void>;
-  getPendingSync(): Promise<(NightEvent & { sync_status: string })[]>;
   /** Borra la night_event — cascadea a orders/tickets/cash_sales (ON DELETE CASCADE). */
   delete(id: string): Promise<void>;
 }
@@ -21,7 +19,6 @@ type NightEventRow = {
   order_counter: number;
   closed_by: string | null;
   keyword: string | null;
-  sync_status?: string;
 };
 
 function mapRowToEvent(row: NightEventRow): NightEvent {
@@ -63,7 +60,6 @@ export class SupabaseEventsRepository implements EventsRepository {
         order_counter: event.orderCounter,
         closed_by: event.closedBy || null,
         keyword: event.keyword || null,
-        sync_status: "pending",
       })
       .select()
       .single();
@@ -138,43 +134,6 @@ export class SupabaseEventsRepository implements EventsRepository {
     }
 
     return data.map(mapRowToEvent);
-  }
-
-  async updateSyncStatus(id: string, syncStatus: "pending" | "synced" | "failed", syncedAt?: number): Promise<void> {
-    const { error } = await supabase
-      .from("night_events")
-      .update({
-        sync_status: syncStatus,
-        synced_at: syncedAt ? new Date(syncedAt).toISOString() : null,
-      })
-      .eq("id", id);
-
-    if (error) {
-      console.error("[SupabaseEventsRepository] Error updating sync status:", error);
-      throw error;
-    }
-  }
-
-  async getPendingSync(): Promise<(NightEvent & { sync_status: string })[]> {
-    // neq("synced"), no eq("pending"): también reintenta eventos que quedaron en "failed"
-    // de un intento de sync anterior — mismo criterio que syncAllPendingEvents usaba antes
-    // de esta refactor (SyncService pegándole directo a supabase.from). No tenía otro
-    // caller hasta ahora, así que ajustar el filtro acá es seguro.
-    const { data, error } = await supabase
-      .from("night_events")
-      .select("*")
-      .neq("sync_status", "synced")
-      .eq("status", "cerrado");
-
-    if (error) {
-      console.error("[SupabaseEventsRepository] Error getting pending syncs:", error);
-      throw error;
-    }
-
-    return data.map((item: NightEventRow) => ({
-      ...mapRowToEvent(item),
-      sync_status: item.sync_status as string,
-    }));
   }
 
   async delete(id: string): Promise<void> {

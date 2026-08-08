@@ -152,10 +152,8 @@ export class MercadoPagoOAuthService {
    * ⚠ El `refresh_token` es rotativo y de un solo uso: el nuevo se persiste ANTES
    * de devolver el access_token. Ante `invalid_grant`, marca el seller como expired.
    *
-   * Post-PR 4 el repo persiste en la base LOCAL con el token cifrado y marca
-   * `cloud_synced_at = NULL` (push diferido de metadata, PR 5). Este método es
-   * el ÚNICO escritor del refresh (cierra A8 por construcción); los tokens
-   * jamás se pushean a Cloud (D3).
+   * El repo persiste el token cifrado en la única base (Supabase Cloud). Este
+   * método es el ÚNICO escritor del refresh (cierra A8 por construcción).
    *
    * NOTA de concurrencia: el plan pide `SELECT ... FOR UPDATE` para serializar
    * refreshes concurrentes, pero el backend usa supabase-js/PostgREST (sin pool pg

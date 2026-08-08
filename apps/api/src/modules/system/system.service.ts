@@ -37,7 +37,6 @@ export type SystemStatus = {
     details: unknown;
   };
   printer: ReturnType<PrinterService["getStatus"]>;
-  sync: { synced: boolean; pendingEvents: number };
   eventDetails: { id: string; status: string; orderCounter: number } | null;
   serverStartedAt: number;
   migrations: MigrationsStatus;
@@ -116,20 +115,6 @@ export class SystemService {
       localDbConnected = !error;
     } catch {}
 
-    // Sync status check — cuenta CUALQUIER night_event con sync_status != "synced",
-    // sin filtrar por status (a propósito: incluye la noche activa todavía sin cerrar,
-    // que nace con sync_status "pending" — mismo comportamiento que el endpoint tenía
-    // antes de esta refactor).
-    let synced = true;
-    let pendingEvents = 0;
-    try {
-      const { data, error } = await this.localDb.from("night_events").select("id").neq("sync_status", "synced");
-      if (!error && data) {
-        pendingEvents = data.length;
-        synced = pendingEvents === 0;
-      }
-    } catch {}
-
     // Posnet Check — vía PosnetResolver (T18): el mismo device que usaría el
     // cobro. `configured` = hay un device resoluble (caja o env-fallback);
     // "caja sin Posnet vinculado" llega como estado con el mensaje del 409 del
@@ -191,7 +176,6 @@ export class SystemService {
         details: posnetDetails,
       },
       printer: this.printerService.getStatus(),
-      sync: { synced, pendingEvents },
       eventDetails,
       serverStartedAt,
       migrations: getMigrationsStatus(),
