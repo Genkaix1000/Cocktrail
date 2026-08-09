@@ -36,11 +36,29 @@ export class PgMigrationsRepository {
   constructor(private readonly databaseUrl: string) {}
 
   async connect(): Promise<void> {
-    this.client = new Client({
-      connectionString: this.databaseUrl,
-      connectionTimeoutMillis: 5000,
-    });
-    await this.client.connect();
+    // ponytail: retry-loop, el container arranca asíncrono.
+    const maxRetries = 5;
+    let lastErr: unknown;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        this.client = new Client({
+          connectionString: this.databaseUrl,
+          connectionTimeoutMillis: 5000,
+        });
+        await this.client.connect();
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        if (i < maxRetries - 1) {
+          const delay = 3000 * (i + 1);
+          console.warn(
+            `[migrations] DB connect attempt ${i + 1}/${maxRetries} failed, retrying in ${delay}ms: ${err.message}`,
+          );
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+    }
+    throw lastErr;
   }
 
   async disconnect(): Promise<void> {

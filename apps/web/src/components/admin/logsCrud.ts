@@ -9,9 +9,6 @@ export type LogsColId =
   | "creator"
   | "method"
   | "total"
-  | "status"
-  | "delivery"
-  | "cancellation"
   | "token"
   | "actions";
 
@@ -27,14 +24,11 @@ const ALL: LogsColId[] = [
   "creator",
   "method",
   "total",
-  "status",
-  "delivery",
-  "cancellation",
   "token",
   "actions",
 ];
 
-/** Todo a la vista por default: el detalle del ticket ya no vive en un popup. */
+/** Todo a la vista por default. */
 export const LOGS_COLS_DEFAULT: LogsColId[] = [...ALL];
 
 export const LOGS_COL_LABELS: Record<LogsColId, string> = {
@@ -44,9 +38,6 @@ export const LOGS_COL_LABELS: Record<LogsColId, string> = {
   creator: "Creador",
   method: "Medio de Pago",
   total: "Total",
-  status: "Estado",
-  delivery: "Entrega",
-  cancellation: "Cancelación",
   token: "Token",
   actions: "Acciones",
 };
@@ -71,14 +62,11 @@ export function orderLogsCols(cols: LogsColId[]): LogsColId[] {
 export function logsGridTemplate(cols: LogsColId[]): string {
   const sizes: Record<LogsColId, string> = {
     time: "96px",
-    ticket: "92px",
+    ticket: "116px",
     items: "minmax(200px, 1fr)",
     creator: "132px",
     method: "124px",
     total: "108px",
-    status: "116px",
-    delivery: "220px",
-    cancellation: "190px",
     token: "156px",
     actions: "112px",
   };

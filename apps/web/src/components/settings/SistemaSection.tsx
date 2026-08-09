@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
+import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 
 const CAJA_APK_HREF = "/miboliche-caja.apk";
 
@@ -26,27 +26,24 @@ const STEPS = [
  * (WebView + impresión USB nativa).
  */
 export default function SistemaSection() {
-  // La dirección real del server es el origen desde el que se sirve esta página.
-  const [serverAddress, setServerAddress] = useState<string | null>(null);
-
-  useEffect(() => {
-    setServerAddress(window.location.origin);
-  }, []);
-
   return (
-    <div className="max-w-5xl flex flex-col gap-8">
-      <div>
-        <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
-          Sistema
-        </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
-          La app de caja para la tablet
-        </p>
+    <div data-tour="sistema-section" className="max-w-5xl flex flex-col gap-8">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+            Sistema
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+            La app de caja para la tablet
+          </p>
+        </div>
+        <SectionHelpButton category="sistema" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         {/* App de caja — fondo sobrio, mismo idioma que la night card */}
         <div
+          data-tour="pwa-install"
           className="relative overflow-hidden rounded-2xl p-5 text-white flex flex-col shadow-card"
           style={{
             background: "linear-gradient(160deg, #16321F 0%, #131719 55%, #1A1D21 100%)",
@@ -96,17 +93,6 @@ export default function SistemaSection() {
               </li>
             ))}
           </ol>
-
-          <div className="relative mt-auto pt-4">
-            <div className="rounded-xl bg-black/25 border border-white/10 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                Si la app pide la dirección
-              </p>
-              <p className="text-[14px] font-mono text-white mt-1 break-all select-all">
-                {serverAddress ?? "—"}
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

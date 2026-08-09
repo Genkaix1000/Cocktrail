@@ -15,6 +15,8 @@ import { formatHm } from "@/lib/utils";
 import type { Order } from "@cocktrail/shared";
 import { displayOrderRevenue } from "@cocktrail/shared";
 
+import CancelledTicketModal from "@/components/shared/CancelledTicketModal";
+
 type CurrentUser = {
   role: string;
   permissions: {
@@ -36,11 +38,7 @@ type Props = {
 const PAGE_SIZE = 12;
 const CANCEL_UNDO_MS = 5000;
 
-const pillBase =
-  "inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full leading-none";
-
-const GRID =
-  "88px 92px minmax(160px, 1fr) 108px 100px 110px 100px";
+const GRID = "88px 116px minmax(160px, 1fr) 108px 100px 100px";
 
 const formatDayMonth = (ts: number) => {
   const d = new Date(ts);
@@ -73,6 +71,7 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [cancelUndo, setCancelUndo] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedCancelledOrder, setSelectedCancelledOrder] = useState<Order | null>(null);
 
   const pendingCancelRef = useRef<{
     previous: Order;
@@ -184,14 +183,17 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto flex flex-col gap-6">
-      <section className="flex flex-col gap-1">
-        <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-none">
-          Historial de Ventas
-        </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-          Tickets de la noche, solo lectura.
-        </p>
+    <div data-tour="order-list" className="w-full max-w-6xl mx-auto flex flex-col gap-6">
+      <section className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-none">
+            Historial de Ventas
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            Tickets de la noche, solo lectura.
+          </p>
+        </div>
+
       </section>
 
       {days.length === 0 ? (
@@ -247,7 +249,7 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
                   className="grid border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/60"
                   style={{ gridTemplateColumns: GRID }}
                 >
-                  {["Hora", "Ticket", "Detalle", "Medio", "Total", "Estado", "Acciones"].map(
+                  {["Hora", "Ticket", "Detalle", "Medio", "Total", "Acciones"].map(
                     (label) => (
                       <div
                         key={label}
@@ -280,10 +282,21 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
                           {formatHm(o.createdAt)} hs
                         </div>
 
-                        <div className="px-3 py-2 flex items-center">
-                          <span className="w-12 h-9 flex items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] font-mono font-bold text-[13px] text-[var(--text-primary)]">
+                        <div className="px-3 py-2 flex items-center gap-1.5">
+                          <span className="w-12 h-9 flex items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] font-mono font-bold text-[13px] text-[var(--text-primary)] shrink-0">
                             #{String(o.displayNumber).padStart(3, "0")}
                           </span>
+                          {muted && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCancelledOrder(o)}
+                              title="Ticket cancelado — Ver detalles"
+                              aria-label={`Ver detalles de cancelación del ticket #${o.displayNumber}`}
+                              className="w-7 h-7 rounded-lg bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shrink-0"
+                            >
+                              <TriangleAlert size={14} strokeWidth={2.2} />
+                            </button>
+                          )}
                         </div>
 
                         <div className="px-3 py-2.5 min-w-0 flex items-center gap-1.5">
@@ -322,25 +335,12 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
                           )}
                         </div>
 
-                        <div className="px-3 py-2.5">
-                          {o.status === "cancelado" ? (
-                            <span
-                              className={`${pillBase} bg-[var(--danger-soft)] text-[var(--danger-base)] inline-flex items-center gap-1`}
-                              title="Anulado — no suma al arqueo"
-                            >
-                              <TriangleAlert size={11} strokeWidth={2.2} aria-hidden />
-                              Cancelado
-                            </span>
-                          ) : (
-                            <span className="text-[12px] text-[var(--text-tertiary)]">—</span>
-                          )}
-                        </div>
-
                         <div className="px-3 py-2 flex items-center gap-1.5">
                           <button
                             type="button"
                             title="Reimprimir"
                             aria-label={`Reimprimir ticket ${o.displayNumber}`}
+                            data-tour={i === 0 ? "order-print" : undefined}
                             disabled={reprinting}
                             onClick={() => void reprintTicket(o.id)}
                             className={`${actionBtn} hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]`}
@@ -362,11 +362,7 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
                             <button
                               type="button"
                               disabled
-                              title={
-                                o.status === "cancelado"
-                                  ? "El ticket ya está cancelado"
-                                  : "El ticket ya fue entregado"
-                              }
+                              title="El ticket ya está cancelado"
                               className={`${actionBtn} opacity-40`}
                             >
                               <Trash2 size={11} />
@@ -440,6 +436,13 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
             onClose={() => setCancelUndo(false)}
           />
         </div>
+      )}
+
+      {selectedCancelledOrder && (
+        <CancelledTicketModal
+          order={selectedCancelledOrder}
+          onClose={() => setSelectedCancelledOrder(null)}
+        />
       )}
     </div>
   );

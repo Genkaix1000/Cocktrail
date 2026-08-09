@@ -15,6 +15,7 @@ import NightRecords from "@/components/analytics/NightRecords";
 import NightComparator from "@/components/analytics/NightComparator";
 import Toast from "@/components/shared/Toast";
 import DeleteNightModal from "@/components/admin/DeleteNightModal";
+import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 
 import { groupNightsByDay, formatNightDateLong } from "@/lib/analytics";
 import { exportHistorialPdf } from "@/lib/pdfExport";
@@ -111,7 +112,7 @@ export default function HistorialSection({
         </div>
       ) : (
         <div key="historial" className="flex flex-col gap-8">
-          <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
+          <div data-tour="historial-header" className="flex flex-col md:flex-row justify-between md:items-end gap-4">
             <div>
               <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
                 Historial de Noches
@@ -120,33 +121,36 @@ export default function HistorialSection({
                 Cada noche cerrada se archiva acá con sus totales, pedidos y ventas
               </p>
             </div>
-            {historyEvents.length > 0 && (
-              <button
-                type="button"
-                disabled={isExporting}
-                onClick={async () => {
-                  setIsExporting(true);
-                  try {
-                    await exportHistorialPdf({ historyEvents, isBosko, logoUrl, useLogoUrl, textLogoValue });
-                  } catch {
-                    setExportError("No se pudo generar el PDF. Intentá de nuevo.");
-                  } finally {
-                    setIsExporting(false);
-                  }
-                }}
-                className="h-10 px-4 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)] text-[13px] font-semibold flex items-center gap-2 transition-all cursor-pointer active:scale-[0.98] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download size={14} strokeWidth={1.8} />
-                <span>{isExporting ? "Generando…" : "Exportar PDF"}</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              <SectionHelpButton category="historial" />
+              {historyEvents.length > 0 && (
+                <button
+                  type="button"
+                  disabled={isExporting}
+                  onClick={async () => {
+                    setIsExporting(true);
+                    try {
+                      await exportHistorialPdf({ historyEvents, isBosko, logoUrl, useLogoUrl, textLogoValue });
+                    } catch {
+                      setExportError("No se pudo generar el PDF. Intentá de nuevo.");
+                    } finally {
+                      setIsExporting(false);
+                    }
+                  }}
+                  className="h-10 px-4 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)] text-[13px] font-semibold flex items-center gap-2 transition-all cursor-pointer active:scale-[0.98] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download size={14} strokeWidth={1.8} />
+                  <span>{isExporting ? "Generando…" : "Exportar PDF"}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {exportError && (
             <Toast variant="error" message={exportError} onClose={() => setExportError(null)} />
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div data-tour="historial-metrics" className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <MetricCard
               label="Esta Semana"
               value={weeklyDelta.thisWeek}
@@ -174,9 +178,11 @@ export default function HistorialSection({
             />
           </div>
 
-          <NightRecords records={nightRecords} isBosko={isBosko} />
+          <div data-tour="night-records">
+            <NightRecords records={nightRecords} isBosko={isBosko} />
+          </div>
 
-          <div className="w-full">
+          <div data-tour="night-comparator" className="w-full">
             <NightComparator
               nights={unifiedHistoryDays}
               isBosko={isBosko}
@@ -224,7 +230,10 @@ function DangerZone({
   if (closedNights.length === 0) return null;
 
   return (
-    <section className="bg-[var(--bg-surface)] border border-[var(--danger-line)] rounded-2xl shadow-card p-5">
+    <section
+      data-tour="delete-night"
+      className="bg-[var(--bg-surface)] border border-[var(--danger-line)] rounded-2xl shadow-card p-5"
+    >
       <div className="flex items-center gap-3 mb-4">
         <div className="w-9 h-9 rounded-full border border-[var(--danger-line)] bg-[var(--danger-soft)] flex items-center justify-center text-[var(--danger-base)]">
           <ShieldAlert size={15} strokeWidth={1.8} />

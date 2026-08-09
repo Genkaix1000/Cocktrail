@@ -1,10 +1,32 @@
 import { Router } from "express";
+import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import type { MercadoPagoWebhooksService } from "./mercadopago-webhooks.service.js";
+
+function parseLimit(raw: unknown, fallback = 20): number {
+  if (typeof raw !== "string") return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 export function createMercadoPagoWebhooksController(
   service: MercadoPagoWebhooksService,
 ): Router {
   const router = Router();
+
+  // GET /api/mercadopago/webhooks/events — diagnóstico admin (últimos webhooks).
+  router.get(
+    "/webhooks/events",
+    authMiddleware,
+    requireRole("admin"),
+    async (req, res, next) => {
+      try {
+        res.set("Cache-Control", "no-store");
+        res.json(await service.listRecentEvents(parseLimit(req.query.limit)));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   // POST /api/mercadopago/webhooks — público, validado por HMAC (Fase 6).
   // El 200 sale recién después de persistir el evento: un error de DB devuelve

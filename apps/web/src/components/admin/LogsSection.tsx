@@ -12,6 +12,13 @@ import {
 
 import { ordersService } from "@/services/orders.service";
 import Toast from "@/components/shared/Toast";
+import { SectionHelpButton } from "@/components/help/SectionHelpButton";
+import {
+  endAuditDemo,
+  getAuditDemoOrders,
+  isAuditDemoActive,
+  subscribeAuditDemo,
+} from "@/lib/auditTourDemo";
 import LogsTable, {
   type LogsColumnFilters,
   type LogsSortField,
@@ -107,15 +114,12 @@ const EMPTY_COL_FILTERS: LogsColumnFilters = {
   method: "all",
   totalMin: "",
   totalMax: "",
-  status: "all",
-  delivery: "",
   token: "",
 };
 
 /**
  * Vista "Auditoría de Tickets" del panel admin. Todo el detalle del ticket
- * (token, estado, entrega, cancelación) vive en columnas de la tabla — no hay
- * popup — y cancelar es una acción de fila como el borrado en Carta/Staff.
+ * vive en columnas de la tabla y cancelar es una acción de fila.
  */
 export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko }: Props) {
   const [auditLogs, setAuditLogs] = useState<Order[]>([]);
@@ -148,7 +152,20 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
   const [logSortField, setLogSortField] = useState<LogsSortField>("time");
   const [logSortDirection, setLogSortDirection] = useState<SortDirection>("desc");
 
+  const applyDemoOrders = useCallback((orders: Order[]) => {
+    setAuditLogs(orders);
+    setLogsLoaded(true);
+    setLoadingLogs(false);
+    setViewAllNights(true);
+    setViewFilter("all");
+    setSearch("");
+    setFiltersOpen(false);
+    setColumnFilters(EMPTY_COL_FILTERS);
+    setConfirmingCancelId(null);
+  }, []);
+
   const fetchLogs = useCallback(async (all: boolean = false) => {
+    if (isAuditDemoActive()) return;
     setLoadingLogs(true);
     try {
       const data = await ordersService.getAuditLogs(all);
@@ -162,6 +179,11 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
   }, []);
 
   useEffect(() => {
+    const demo = getAuditDemoOrders();
+    if (demo) {
+      applyDemoOrders(demo);
+      return;
+    }
     if (!logsLoaded) {
       fetchLogs(viewAllNights);
     }
@@ -171,6 +193,18 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
     // (el botón "Ver Noches Anteriores" ya llama fetchLogs directamente).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Tour de ayuda: inyecta / limpia tickets demo sin API ni noche abierta.
+  useEffect(() => {
+    return subscribeAuditDemo(() => {
+      const demo = getAuditDemoOrders();
+      if (demo) {
+        applyDemoOrders(demo);
+        return;
+      }
+      void fetchLogs(viewAllNights);
+    });
+  }, [applyDemoOrders, fetchLogs, viewAllNights]);
 
   // Group logs by month first, then by day
   const groupedLogData = useMemo(() => {
@@ -272,8 +306,6 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
           o.token,
           itemsLabel(o),
           o.createdBy || "Cliente",
-          o.deliveredBy ?? "",
-          o.deliveredByBar ?? "",
         ]
           .join(" ")
           .toLowerCase()
@@ -296,17 +328,10 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
         list = list.filter((o) => (o.createdBy || "Cliente").toLowerCase().includes(q));
       }
       if (cf.method !== "all") list = list.filter((o) => o.paymentMethod === cf.method);
-      if (cf.status !== "all") list = list.filter((o) => o.status === cf.status);
       const min = Number(cf.totalMin);
       if (cf.totalMin.trim() && !Number.isNaN(min)) list = list.filter((o) => o.total >= min);
       const max = Number(cf.totalMax);
       if (cf.totalMax.trim() && !Number.isNaN(max)) list = list.filter((o) => o.total <= max);
-      if (cf.delivery.trim()) {
-        const q = cf.delivery.toLowerCase();
-        list = list.filter((o) =>
-          `${o.deliveredByBar ?? ""} ${o.deliveredBy ?? ""}`.toLowerCase().includes(q),
-        );
-      }
       if (cf.token.trim()) {
         const q = cf.token.toLowerCase();
         list = list.filter((o) => o.token.toLowerCase().includes(q));
@@ -367,6 +392,21 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
 
   const handleCancelTicket = useCallback(async (order: Order) => {
     setConfirmingCancelId(null);
+    if (isAuditDemoActive()) {
+      setAuditLogs((prev) =>
+        prev.map((o) =>
+          o.id === order.id
+            ? {
+                ...o,
+                status: "cancelado" as const,
+                cancelledBy: "demo",
+                cancelledAt: Date.now(),
+              }
+            : o,
+        ),
+      );
+      return;
+    }
     try {
       const updated = await ordersService.updateStatus(order.id, "cancelado");
       setAuditLogs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
@@ -378,47 +418,62 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
 
   return (
     <div key="logs" className="flex flex-col gap-8 w-full animate-dashboard-in">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
+      <div data-tour="audit-header" className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
         <div>
           <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
             Auditoría de Tickets
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
-            Historial de tickets emitidos, con operadores y estado de canje
+            {isAuditDemoActive()
+              ? "Modo demo del tour — tickets de ejemplo (no son reales)"
+              : "Historial de tickets emitidos, con operadores y estado de canje"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => {
-              const nextVal = !viewAllNights;
-              setViewAllNights(nextVal);
-              fetchLogs(nextVal);
-            }}
-            className={`h-10 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] border ${
-              viewAllNights
-                ? "bg-[var(--accent-primary)] border-transparent text-[var(--text-on-accent)]"
-                : "bg-[var(--bg-surface)] border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
-            }`}
-          >
-            <CalendarDays size={14} strokeWidth={1.8} />
-            {viewAllNights ? "Noche actual" : "Noches anteriores"}
-          </button>
+          <SectionHelpButton category="auditoria" />
+          {isAuditDemoActive() ? (
+            <button
+              type="button"
+              onClick={() => endAuditDemo()}
+              className="h-10 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] border bg-[var(--accent-surface)] border-[var(--accent-line)] text-[var(--accent-text)]"
+            >
+              Salir del demo
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !viewAllNights;
+                  setViewAllNights(nextVal);
+                  fetchLogs(nextVal);
+                }}
+                className={`h-10 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] border ${
+                  viewAllNights
+                    ? "bg-[var(--accent-primary)] border-transparent text-[var(--text-on-accent)]"
+                    : "bg-[var(--bg-surface)] border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)]"
+                }`}
+              >
+                <CalendarDays size={14} strokeWidth={1.8} />
+                {viewAllNights ? "Noche actual" : "Noches anteriores"}
+              </button>
 
-          <button
-            type="button"
-            onClick={() => fetchLogs(viewAllNights)}
-            disabled={loadingLogs}
-            className="h-10 px-4 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 select-none active:scale-[0.98]"
-          >
-            <RefreshCw size={14} strokeWidth={1.8} className={loadingLogs ? "animate-spin" : ""} />
-            Actualizar
-          </button>
+              <button
+                type="button"
+                onClick={() => fetchLogs(viewAllNights)}
+                disabled={loadingLogs}
+                className="h-10 px-4 rounded-full bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-app)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 select-none active:scale-[0.98]"
+              >
+                <RefreshCw size={14} strokeWidth={1.8} className={loadingLogs ? "animate-spin" : ""} />
+                Actualizar
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {!loadingLogs && logMonths.length > 0 && (
-        <div className="space-y-3">
+        <div data-tour="audit-nav" className="space-y-3">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             {logMonths.map((month) => (
               <button
@@ -451,6 +506,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
                   <button
                     key={day}
                     type="button"
+                    data-tour={selectedLogDay === day ? "audit-day-active" : "audit-day-other"}
                     onClick={() => setSelectedLogDay(day)}
                     className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all cursor-pointer shrink-0 border ${
                       selectedLogDay === day
@@ -477,7 +533,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div data-tour="logs-filters" className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               {VIEWS.map((v) => {
                 const active = viewFilter === v.id;
@@ -485,6 +541,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
                   <button
                     key={v.id}
                     type="button"
+                    data-tour={v.id === "cancelado" ? "audit-filter-cancelados" : v.id === "all" ? "audit-filter-todos" : undefined}
                     onClick={() => setViewFilter(v.id)}
                     className={`h-10 px-4 rounded-full text-[13px] font-semibold transition-all cursor-pointer ${
                       active
@@ -498,6 +555,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
               })}
               <button
                 type="button"
+                data-tour="audit-col-filters"
                 title="Filtros de columna"
                 aria-label="Filtros de columna"
                 aria-pressed={filtersOpen}
@@ -512,7 +570,10 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
               </button>
             </div>
 
-            <div className="flex-1 min-w-[180px] flex items-center h-10 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] overflow-hidden focus-within:border-[var(--accent-primary)]">
+            <div
+              data-tour="audit-search"
+              className="flex-1 min-w-[180px] flex items-center h-10 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] overflow-hidden focus-within:border-[var(--accent-primary)]"
+            >
               <input
                 type="text"
                 value={search}
@@ -526,25 +587,27 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
             </div>
           </div>
 
-          <LogsTable
-            orders={paginatedLogs}
-            hasActiveSearch={Boolean(search.trim()) || viewFilter !== "all"}
-            sortField={logSortField}
-            sortDirection={logSortDirection}
-            visibleCols={visibleCols}
-            filtersOpen={filtersOpen}
-            columnFilters={columnFilters}
-            confirmingCancelId={confirmingCancelId}
-            onSort={handleSort}
-            onToggleCol={toggleCol}
-            onColumnFiltersChange={(patch) => setColumnFilters((prev) => ({ ...prev, ...patch }))}
-            onAskCancel={(o) => setConfirmingCancelId(o.id)}
-            onDismissCancel={() => setConfirmingCancelId(null)}
-            onConfirmCancel={handleCancelTicket}
-          />
+          <div data-tour="logs-table">
+            <LogsTable
+              orders={paginatedLogs}
+              hasActiveSearch={Boolean(search.trim()) || viewFilter !== "all"}
+              sortField={logSortField}
+              sortDirection={logSortDirection}
+              visibleCols={visibleCols}
+              filtersOpen={filtersOpen}
+              columnFilters={columnFilters}
+              confirmingCancelId={confirmingCancelId}
+              onSort={handleSort}
+              onToggleCol={toggleCol}
+              onColumnFiltersChange={(patch) => setColumnFilters((prev) => ({ ...prev, ...patch }))}
+              onAskCancel={(o) => setConfirmingCancelId(o.id)}
+              onDismissCancel={() => setConfirmingCancelId(null)}
+              onConfirmCancel={handleCancelTicket}
+            />
+          </div>
 
           {totalLogPages > 1 && (
-            <div className="flex items-center justify-center gap-1.5 pt-2">
+            <div data-tour="audit-pagination" className="flex items-center justify-center gap-1.5 pt-2">
               <button
                 type="button"
                 onClick={() => setCurrentLogPage((p) => Math.max(1, p - 1))}

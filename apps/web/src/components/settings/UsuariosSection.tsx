@@ -9,6 +9,7 @@ import {
 } from "@/services/users.service";
 import type { Role } from "@cocktrail/shared";
 import Toast from "@/components/shared/Toast";
+import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 import UsersTable, { type StaffColumnFilters } from "./UsersTable";
 import UserFormDrawer from "./UserFormDrawer";
 import {
@@ -256,20 +257,23 @@ export default function UsuariosSection() {
 
   return (
     <div className="flex flex-col gap-8 max-w-5xl">
-      <div>
-        <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
-          Staff
-        </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
-          Gestioná las cuentas de personal. {filtered.length}{" "}
-          {filtered.length === 1 ? "usuario" : "usuarios"}
-          {filtered.length !== users.length
-            ? filtered.length === 1
-              ? " visible"
-              : " visibles"
-            : ""}
-          .
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+            Staff
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+            Gestioná las cuentas de personal. {filtered.length}{" "}
+            {filtered.length === 1 ? "usuario" : "usuarios"}
+            {filtered.length !== users.length
+              ? filtered.length === 1
+                ? " visible"
+                : " visibles"
+              : ""}
+            .
+          </p>
+        </div>
+        <SectionHelpButton category="staff" />
       </div>
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3 shadow-card">

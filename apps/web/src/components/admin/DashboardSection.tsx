@@ -11,6 +11,7 @@ import {
 import PaymentDonut from "@/components/analytics/PaymentDonut";
 import MetricCard from "@/components/shared/MetricCard";
 import SystemSanidadPanel from "@/components/admin/SystemSanidadPanel";
+import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 
 import { formatNightDateLong } from "@/lib/analytics";
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
@@ -124,7 +125,10 @@ export default function DashboardSection({
         </div>
       ) : (
         <div key={activeTab} className="flex flex-col gap-8">
-          <div className="flex flex-col md:flex-row justify-between md:items-end gap-3">
+          <div
+            data-tour="night-status"
+            className="flex flex-col md:flex-row justify-between md:items-end gap-3"
+          >
             <div>
               <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
                 Dashboard General
@@ -140,12 +144,15 @@ export default function DashboardSection({
             <div className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)] font-medium">
               <CalendarDays size={14} className="text-[var(--text-tertiary)]" />
               <span>Hoy, {new Date().toLocaleDateString("es-AR", { day: "numeric", month: "long" })}</span>
+              <SectionHelpButton category="dashboard" />
             </div>
           </div>
 
-          <SystemSanidadPanel onGoToPagos={onGoToPagos} />
+          <div data-tour="sistema-sanidad">
+            <SystemSanidadPanel onGoToPagos={onGoToPagos} />
+          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div data-tour="dashboard-metrics" className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <MetricCard
               label={totals.netTotal != null ? "Ingreso neto" : "Ventas Totales"}
               value={totals.netTotal ?? totals.total}
@@ -183,14 +190,21 @@ export default function DashboardSection({
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <HourlySalesChart slots={hourlyData} />
+            <div data-tour="hourly-chart">
+              <HourlySalesChart slots={hourlyData} />
+            </div>
 
-            <TopProductsList products={productRevenue} />
+            <div data-tour="top-products">
+              <TopProductsList products={productRevenue} />
+            </div>
 
-            <PaymentDonut breakdown={customPaymentBreakdown} total={totals.total} />
+            <div data-tour="payment-donut">
+              <PaymentDonut breakdown={customPaymentBreakdown} total={totals.total} />
+            </div>
           </div>
 
           <div
+            data-tour="peak-hour"
             className={`rounded-2xl p-5 flex flex-col gap-3 justify-center min-h-[140px] shadow-card border border-transparent ${
               isNightOpen
                 ? "bg-[var(--accent-primary)] dark:bg-[var(--accent-featured)] text-[var(--text-on-accent)]"
@@ -224,7 +238,7 @@ export default function DashboardSection({
             </span>
           </div>
 
-          <div className="flex justify-between items-center text-[10px] text-[var(--text-tertiary)] pt-2 border-t border-[var(--border-subtle)]">
+          <div data-tour="dashboard-footer" className="flex justify-between items-center text-[10px] text-[var(--text-tertiary)] pt-2 border-t border-[var(--border-subtle)]">
             <div className="flex items-center gap-4">
               {isNightOpen ? (
                 <>

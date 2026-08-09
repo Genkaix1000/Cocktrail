@@ -55,6 +55,11 @@ const SELECT_COLS =
 /** Tope de reintentos por evento: pasado esto, replayPending() lo deja de mirar. */
 export const MP_WEBHOOK_MAX_ATTEMPTS = 5;
 
+export type ListRecentWebhookEventsResult = {
+  available: boolean;
+  events: MpWebhookEvent[];
+};
+
 export interface MpWebhookEventsRepository {
   /**
    * Persiste el evento entrante. Si el x_request_id ya existe (reintento de MP),
@@ -66,6 +71,17 @@ export interface MpWebhookEventsRepository {
   markFailed(id: string, error: string): Promise<void>;
   /** Eventos sin procesar con attempts < MP_WEBHOOK_MAX_ATTEMPTS, más viejos primero. */
   findPending(): Promise<MpWebhookEvent[]>;
+  /** Diagnóstico admin: últimos N por received_at. Fail-soft si la tabla no existe (Cloud). */
+  listRecent(limit: number): Promise<ListRecentWebhookEventsResult>;
+}
+
+function isMissingTableError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "PGRST205" ||
+    error.code === "42P01" ||
+    (typeof error.message === "string" &&
+      (error.message.includes("schema cache") || error.message.includes("does not exist")))
+  );
 }
 
 export class SupabaseMpWebhookEventsRepository implements MpWebhookEventsRepository {
@@ -145,5 +161,24 @@ export class SupabaseMpWebhookEventsRepository implements MpWebhookEventsReposit
     }
 
     return ((data ?? []) as MpWebhookEventRow[]).map(mapRow);
+  }
+
+  async listRecent(limit: number): Promise<ListRecentWebhookEventsResult> {
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 20, 50));
+    const { data, error } = await supabase
+      .from("mp_webhook_events")
+      .select(SELECT_COLS)
+      .order("received_at", { ascending: false })
+      .limit(capped);
+
+    if (error) {
+      if (isMissingTableError(error)) {
+        return { available: false, events: [] };
+      }
+      console.error("[SupabaseMpWebhookEventsRepository] Error listing recent:", error);
+      throw error;
+    }
+
+    return { available: true, events: ((data ?? []) as MpWebhookEventRow[]).map(mapRow) };
   }
 }

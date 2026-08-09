@@ -102,32 +102,34 @@ export default function MetricasSection({ event, activeNightOrders, totals }: Pr
         }
       `}</style>
 
-      <section className="flex flex-col gap-1">
-        <h1 className="text-[28px] md:text-[32px] font-bold leading-none text-[var(--text-primary)]">
-          Métricas de Venta
-        </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-          Revisión horaria del flujo de dinero y tickets registrados en el transcurso del evento.
-        </p>
-        <p className="text-[13px] text-[var(--text-primary)] mt-2 font-mono tabular">
-          {totals.netTotal != null ? (
-            <>
-              Ingreso neto ${totals.netTotal.toLocaleString("es-AR")}
-              {" · "}Facturado ${totals.total.toLocaleString("es-AR")}
-              {totals.mpFeeTotal != null && (
-                <>
-                  {" · "}Comisiones MP ${totals.mpFeeTotal.toLocaleString("es-AR")}
-                </>
-              )}
-              {totals.mpFeesPending ? ` (${totals.mpFeesPending} fee pend.)` : ""}
-            </>
-          ) : (
-            <>Facturado ${totals.total.toLocaleString("es-AR")}</>
-          )}
-        </p>
+      <section className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[28px] md:text-[32px] font-bold leading-none text-[var(--text-primary)]">
+            Métricas de Venta
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            Revisión horaria del flujo de dinero y tickets registrados en el transcurso del evento.
+          </p>
+          <p className="text-[13px] text-[var(--text-primary)] mt-2 font-mono tabular">
+            {totals.netTotal != null ? (
+              <>
+                Ingreso neto ${totals.netTotal.toLocaleString("es-AR")}
+                {" · "}Facturado ${totals.total.toLocaleString("es-AR")}
+                {totals.mpFeeTotal != null && (
+                  <>
+                    {" · "}Comisiones MP ${totals.mpFeeTotal.toLocaleString("es-AR")}
+                  </>
+                )}
+                {totals.mpFeesPending ? ` (${totals.mpFeesPending} fee pend.)` : ""}
+              </>
+            ) : (
+              <>Facturado ${totals.total.toLocaleString("es-AR")}</>
+            )}
+          </p>
+        </div>
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div data-tour="metrics-totals" className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
           label="Ticket Promedio"
           value={avgTicket}
@@ -163,7 +165,7 @@ export default function MetricasSection({ event, activeNightOrders, totals }: Pr
         </div>
       </div>
 
-      <div className={`${cardShell} p-5 flex flex-col h-[380px]`}>
+      <div data-tour="metrics-payments" className={`${cardShell} p-5 flex flex-col h-[380px]`}>
         <div className="flex items-baseline justify-between gap-3 shrink-0 mb-4 select-none">
           <h3 className="text-[15px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <TrendingUp size={14} className="text-[var(--accent-primary)]" />

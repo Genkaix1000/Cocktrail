@@ -2,7 +2,7 @@
 
 import { CircleHelp, Menu, Moon, Sun, User, Shield, Banknote } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
-import { useTourSafe } from "@/components/tour/TourProvider";
+import { useHelpSafe } from "@/components/help/HelpCenterProvider";
 import type { Role } from "@cocktrail/shared";
 
 type Props = {
@@ -21,7 +21,7 @@ function RoleIcon({ role }: { role?: string }) {
 /** Topbar Bosko autónoma: enrutado + toggle día/noche + usuario. */
 export function AppTopbar({ breadcrumbs, username, role, onMenuClick }: Props) {
   const { isDark, toggleDark } = useTheme();
-  const tour = useTourSafe();
+  const help = useHelpSafe();
   const displayName = username?.trim() || "—";
   const displayRole = role || "Personal";
   const initials = username?.trim() ? username.trim().slice(0, 2).toUpperCase() : "?";
@@ -66,13 +66,13 @@ export function AppTopbar({ breadcrumbs, username, role, onMenuClick }: Props) {
       </div>
 
       <div className="flex items-center gap-2.5 shrink-0">
-        {tour && (
+        {help && (
           <button
             type="button"
-            onClick={() => tour.start({ force: true })}
+            onClick={() => void help.startGeneralTour()}
             className="w-10 h-10 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-app)] transition-all cursor-pointer active:scale-95"
-            title="Recorrido guiado"
-            aria-label="Recorrido guiado"
+            title="Ayuda general"
+            aria-label="Ayuda general"
           >
             <CircleHelp size={16} strokeWidth={1.8} />
           </button>

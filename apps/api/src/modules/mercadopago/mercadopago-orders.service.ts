@@ -551,4 +551,9 @@ export class MercadoPagoOrdersService {
     if (!text) return {} as T;
     return JSON.parse(text) as T;
   }
+
+  /** Diagnóstico admin: últimas filas de mp_orders. */
+  listRecentOrders(limit: number): Promise<MpOrder[]> {
+    return this.mpOrdersRepo.listRecent(limit);
+  }
 }

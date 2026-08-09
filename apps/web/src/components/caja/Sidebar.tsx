@@ -46,6 +46,8 @@ type Props = {
   printerTestMessage: string | null;
   posnetLevel: PosnetLevel;
   posnetMessage: string | null;
+  /** null = aún no sabemos; false = sin Posnet vinculado (QR dinámico). */
+  hasLinkedDevice?: boolean | null;
   handleLogout: () => void | Promise<void>;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -105,6 +107,7 @@ export default function CajaSidebar({
   printerTestMessage,
   posnetLevel,
   posnetMessage,
+  hasLinkedDevice = null,
   handleLogout,
   isCollapsed = false,
   onToggleCollapse = () => {},
@@ -134,6 +137,7 @@ export default function CajaSidebar({
 
   return (
     <aside
+      data-tour="caja-sidebar"
       className={`
         shrink-0 flex flex-col print:hidden relative overflow-hidden
         bg-[var(--bg-panel)] text-[var(--text-primary)]
@@ -160,7 +164,7 @@ export default function CajaSidebar({
         ) : (
           <>
             <BrandLogo size="md" />
-            <button
+            <button data-tour-nav="collapse"
               type="button"
               onClick={onToggleCollapse}
               className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
@@ -182,6 +186,7 @@ export default function CajaSidebar({
           {!collapsed && <p className={sectionLabelClass}>Menú</p>}
 
           <button
+            data-tour-nav="venta"
             type="button"
             title={collapsed ? "Nueva Venta" : undefined}
             onClick={() => go("venta")}
@@ -201,6 +206,7 @@ export default function CajaSidebar({
 
           {hasPermission("historial") && (
             <button
+              data-tour-nav="historial"
               type="button"
               title={collapsed ? "Historial de Ventas" : undefined}
               onClick={() => go("historial")}
@@ -221,6 +227,7 @@ export default function CajaSidebar({
 
           {hasPermission("metricas") && (
             <button
+              data-tour-nav="metricas"
               type="button"
               title={collapsed ? "Métricas" : undefined}
               onClick={() => go("metricas")}
@@ -259,6 +266,7 @@ export default function CajaSidebar({
       >
         <div className="pointer-events-auto flex flex-col gap-3">
           <div
+            data-tour="caja-dispositivos"
             className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] ${
               collapsed ? "p-2" : "p-3"
             }`}
@@ -274,13 +282,15 @@ export default function CajaSidebar({
                 >
                   <Printer size={16} />
                 </button>
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center border ${deviceChip(posnetTone)}`}
-                  title={posnetTitle(posnetLevel)}
-                  aria-label={posnetTitle(posnetLevel)}
-                >
-                  <CreditCard size={16} />
-                </div>
+                {hasLinkedDevice !== false && (
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center border ${deviceChip(posnetTone)}`}
+                    title={posnetTitle(posnetLevel)}
+                    aria-label={posnetTitle(posnetLevel)}
+                  >
+                    <CreditCard size={16} />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -320,21 +330,24 @@ export default function CajaSidebar({
                   )}
                 </div>
 
-                <div>
-                  <span
-                    className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(posnetTone)}`}
-                    title={posnetLevel !== "ok" ? (posnetMessage ?? undefined) : undefined}
-                  >
-                    <CreditCard size={13} />
-                    {posnetTitle(posnetLevel)}
-                  </span>
-                </div>
+                {hasLinkedDevice !== false && (
+                  <div>
+                    <span
+                      className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(posnetTone)}`}
+                      title={posnetLevel !== "ok" ? (posnetMessage ?? undefined) : undefined}
+                    >
+                      <CreditCard size={13} />
+                      {posnetTitle(posnetLevel)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           {canCloseNight && (
             <button
+              data-tour="caja-cerrar"
               type="button"
               onClick={() => {
                 setCloseModalOpen(true);

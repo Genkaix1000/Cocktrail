@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { ChevronDown, ChevronUp, Ban, TriangleAlert, Wine } from "lucide-react";
 import { displayOrderRevenue, type Order, type PaymentMethod } from "@cocktrail/shared";
 
 import { ConfirmRail } from "@/components/shared/ConfirmRail";
 import ColumnPicker from "@/components/shared/ColumnPicker";
+import CancelledTicketModal from "@/components/shared/CancelledTicketModal";
 import { gridMinWidth } from "@/lib/crudCols";
 import { formatHm } from "@/lib/utils";
 import {
@@ -28,8 +30,6 @@ export type LogsColumnFilters = {
   method: "all" | PaymentMethod;
   totalMin: string;
   totalMax: string;
-  status: "all" | OrderStatus;
-  delivery: string;
   token: string;
 };
 
@@ -127,11 +127,6 @@ function FilterSelect({
   );
 }
 
-/** Línea corta de metadata (Entrega / Cancelación) dentro de una celda. */
-function MetaLine({ children }: { children: React.ReactNode }) {
-  return <span className="block text-[11px] leading-tight truncate">{children}</span>;
-}
-
 const SORTABLE: Partial<Record<LogsColId, LogsSortField>> = {
   time: "time",
   ticket: "ticket",
@@ -156,6 +151,8 @@ export default function LogsTable({
   onDismissCancel,
   onConfirmCancel,
 }: Props) {
+  const [selectedCancelledOrder, setSelectedCancelledOrder] = useState<Order | null>(null);
+
   const grid = logsGridTemplate(visibleCols);
   const minWidth = gridMinWidth(grid);
 
@@ -263,27 +260,6 @@ export default function LogsTable({
         </div>
       );
     }
-    if (col === "status") {
-      return cell(
-        <FilterSelect
-          value={columnFilters.status}
-          onChange={(v) => onColumnFiltersChange({ status: v as LogsColumnFilters["status"] })}
-          options={[
-            { value: "all", label: "Todos" },
-            { value: "cancelado", label: "Cancelado" },
-          ]}
-        />,
-      );
-    }
-    if (col === "delivery") {
-      return cell(
-        <FilterInput
-          value={columnFilters.delivery}
-          onChange={(v) => onColumnFiltersChange({ delivery: v })}
-          placeholder="Barra u operador…"
-        />,
-      );
-    }
     if (col === "token") {
       return cell(
         <FilterInput
@@ -314,8 +290,9 @@ export default function LogsTable({
       );
     }
     if (col === "ticket") {
+      const isCancelled = o.status === "cancelado";
       return (
-        <div key={col} className="px-3 py-2 flex items-center">
+        <div key={col} className="px-3 py-2 flex items-center gap-1.5">
           <span
             className={`w-12 h-9 flex items-center justify-center rounded-xl border font-mono font-bold text-[13px] shrink-0 ${
               isConfirming
@@ -325,6 +302,17 @@ export default function LogsTable({
           >
             #{o.displayNumber}
           </span>
+          {isCancelled && (
+            <button
+              type="button"
+              onClick={() => setSelectedCancelledOrder(o)}
+              title="Ticket cancelado — Ver detalles"
+              aria-label={`Ver detalles de cancelación del ticket #${o.displayNumber}`}
+              className="w-7 h-7 rounded-lg bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] flex items-center justify-center hover:scale-105 transition-transform cursor-pointer shrink-0"
+            >
+              <TriangleAlert size={14} strokeWidth={2.2} />
+            </button>
+          )}
         </div>
       );
     }
@@ -389,77 +377,6 @@ export default function LogsTable({
         </div>
       );
     }
-    if (col === "status") {
-      return (
-        <div key={col} className="px-3 py-2.5 flex items-center">
-          {!isConfirming && o.status === "cancelado" ? (
-            <span
-              className={`${pillBase} bg-[var(--danger-soft)] text-[var(--danger-base)] inline-flex items-center gap-1`}
-              title="Anulado — no suma al arqueo"
-            >
-              <TriangleAlert size={11} strokeWidth={2.2} aria-hidden />
-              Cancelado
-            </span>
-          ) : !isConfirming ? (
-            <span className="text-[12px] text-[var(--text-tertiary)]">—</span>
-          ) : null}
-        </div>
-      );
-    }
-    if (col === "delivery") {
-      const delivered = o.status === "entregado";
-      return (
-        <div
-          key={col}
-          className={`px-3 py-2 min-w-0 flex flex-col justify-center ${
-            dim || "text-[var(--text-secondary)]"
-          }`}
-        >
-          {delivered ? (
-            <>
-              <MetaLine>
-                {o.deliveredByBar || "—"}
-                {o.deliveredBy ? ` · ${o.deliveredBy}` : ""}
-              </MetaLine>
-              <MetaLine>
-                <span className="text-[var(--text-tertiary)]">
-                  {o.redeemMethod === "manual"
-                    ? "Manual"
-                    : o.redeemMethod === "scan"
-                      ? "Escaneo QR"
-                      : "—"}
-                  {o.deliveredAt ? ` · ${formatHm(o.deliveredAt)} hs` : ""}
-                </span>
-              </MetaLine>
-            </>
-          ) : (
-            <span className="text-[12px] text-[var(--text-tertiary)]">—</span>
-          )}
-        </div>
-      );
-    }
-    if (col === "cancellation") {
-      return (
-        <div key={col} className="px-3 py-2 min-w-0 flex flex-col justify-center">
-          {o.status === "cancelado" ? (
-            <>
-              <MetaLine>
-                <span className="text-[var(--danger-base)]">{o.cancelledBy || "sistema"}</span>
-              </MetaLine>
-              {o.cancelledAt && (
-                <MetaLine>
-                  <span className="text-[var(--text-tertiary)]">
-                    {formatDateHour(o.cancelledAt)}
-                  </span>
-                </MetaLine>
-              )}
-            </>
-          ) : (
-            <span className="text-[12px] text-[var(--text-tertiary)]">—</span>
-          )}
-        </div>
-      );
-    }
     if (col === "token") {
       return (
         <div key={col} className="px-3 py-2.5 min-w-0 flex items-center">
@@ -494,11 +411,7 @@ export default function LogsTable({
               <button
                 type="button"
                 disabled
-                title={
-                  o.status === "cancelado"
-                    ? "El ticket ya está cancelado"
-                    : "El ticket ya fue entregado"
-                }
+                title="El ticket ya está cancelado"
                 className="w-7 h-7 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-tertiary)] opacity-40 cursor-not-allowed flex items-center justify-center"
               >
                 <Ban size={11} />
@@ -575,6 +488,14 @@ export default function LogsTable({
           )}
         </div>
       </div>
+
+      {selectedCancelledOrder && (
+        <CancelledTicketModal
+          order={selectedCancelledOrder}
+          onClose={() => setSelectedCancelledOrder(null)}
+        />
+      )}
     </div>
   );
 }
+

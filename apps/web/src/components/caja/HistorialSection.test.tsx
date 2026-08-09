@@ -224,4 +224,31 @@ describe("HistorialSection", () => {
 
     expect(screen.queryByRole("button", { name: /cancelar ticket/i })).not.toBeInTheDocument();
   });
+
+  it("muestra el triangulito rojo en tickets cancelados y despliega el modal al hacer clic", async () => {
+    const user = userEvent.setup();
+    const cancelledOrder = makeOrder({
+      status: "cancelado",
+      cancelledBy: "admin",
+      cancelledAt: Date.now(),
+    });
+
+    render(
+      <HistorialSection
+        orders={[cancelledOrder]}
+        currentUser={adminUser}
+        printer={printer}
+        onOrderUpdated={noopOnOrderUpdated}
+      />,
+    );
+
+    const triangleBtn = screen.getByRole("button", {
+      name: "Ver detalles de cancelación del ticket #1",
+    });
+    expect(triangleBtn).toBeInTheDocument();
+
+    await user.click(triangleBtn);
+    expect(screen.getByText("Información de cancelación")).toBeInTheDocument();
+    expect(screen.getByText("admin")).toBeInTheDocument();
+  });
 });

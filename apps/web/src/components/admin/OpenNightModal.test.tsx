@@ -97,14 +97,14 @@ describe("OpenNightModal", () => {
       expect(onSubmit).not.toHaveBeenCalled();
     });
 
-    it("el botón Generar palabra completa el input con una palabra de la lista curada", async () => {
+    it("el botón Generar completa el input con una palabra de la lista curada", async () => {
       const user = userEvent.setup();
       render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
 
       const input = screen.getByPlaceholderText("ej. TEQUILA") as HTMLInputElement;
       expect(input.value).toBe("");
 
-      await user.click(screen.getByRole("button", { name: /Generar palabra/i }));
+      await user.click(screen.getByRole("button", { name: /^Generar$/i }));
 
       expect(NIGHT_KEYWORDS).toContain(input.value);
     });
@@ -147,16 +147,18 @@ describe("OpenNightModal", () => {
       expect(() => fireEvent.keyDown(window, { key: "Escape" })).not.toThrow();
     });
 
-    it("ofrece la casilla de noche de prueba, desmarcada por defecto (A1)", () => {
+    it("ofrece el toggle de noche de prueba, apagado por defecto (A1)", async () => {
+      const user = userEvent.setup();
       render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
 
-      const checkbox = screen.getByRole("checkbox", { name: /Noche de prueba/i });
-      expect(checkbox).not.toBeChecked();
-      // La advertencia de qué implica va junto a la casilla, no escondida.
-      expect(screen.getByText(/No se guarda nada/i)).toBeInTheDocument();
+      const toggle = screen.getByRole("switch", { name: /Noche de prueba/i });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+
+      await user.click(screen.getByRole("button", { name: /qué es noche de prueba/i }));
+      expect(screen.getByText(/sin ensuciar el arqueo/i)).toBeInTheDocument();
     });
 
-    it("con la casilla tildada abre la noche marcada como prueba", async () => {
+    it("con el toggle activo abre la noche marcada como prueba", async () => {
       const user = userEvent.setup();
       const event = makeNightEvent({ keyword: "MOJITO", isTest: true });
       mockedEventsService.openEvent.mockResolvedValue(event);
@@ -164,7 +166,7 @@ describe("OpenNightModal", () => {
       render(<OpenNightModal mode="open" onSubmit={vi.fn()} />);
 
       await user.type(screen.getByPlaceholderText("ej. TEQUILA"), "MOJITO");
-      await user.click(screen.getByRole("checkbox", { name: /Noche de prueba/i }));
+      await user.click(screen.getByRole("switch", { name: /Noche de prueba/i }));
       await user.click(screen.getByRole("button", { name: /Abrir noche/i }));
 
       await waitFor(() =>
@@ -180,7 +182,7 @@ describe("OpenNightModal", () => {
 
       render(<OpenNightModal mode="open" onSubmit={onSubmit} />);
 
-      await user.click(screen.getByRole("button", { name: /Generar palabra/i }));
+      await user.click(screen.getByRole("button", { name: /^Generar$/i }));
       const input = screen.getByPlaceholderText("ej. TEQUILA") as HTMLInputElement;
       const generated = input.value;
 
@@ -192,20 +194,20 @@ describe("OpenNightModal", () => {
   });
 
   describe("modo edit", () => {
-    it("no ofrece la casilla de noche de prueba: la marca se decide al abrir (A2)", () => {
+    it("no ofrece noche de prueba: la marca se decide al abrir (A2)", () => {
       render(
         <OpenNightModal mode="edit" onClose={vi.fn()} onSubmit={vi.fn()} currentKeyword="TEQUILA" />,
       );
 
-      expect(screen.queryByRole("checkbox", { name: /Noche de prueba/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("switch", { name: /Noche de prueba/i })).not.toBeInTheDocument();
     });
 
-    it("no muestra el botón Generar palabra (solo tiene sentido al abrir, no al editar)", () => {
+    it("no muestra el botón Generar (solo tiene sentido al abrir, no al editar)", () => {
       render(
         <OpenNightModal mode="edit" onClose={vi.fn()} onSubmit={vi.fn()} currentKeyword="TEQUILA" />,
       );
 
-      expect(screen.queryByRole("button", { name: /Generar palabra/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Generar/i })).not.toBeInTheDocument();
     });
 
     it("precarga la palabra clave actual y guarda la nueva", async () => {

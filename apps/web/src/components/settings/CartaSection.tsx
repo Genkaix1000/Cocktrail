@@ -6,6 +6,7 @@ import { drinksService } from "@/services/drinks.service";
 import { drinkCategoriesService } from "@/services/drink-categories.service";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
 import Toast from "@/components/shared/Toast";
+import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 import DrinksTable, {
   type ColumnFilters,
   type SortDirection,
@@ -442,20 +443,23 @@ export default function CartaSection() {
 
   return (
     <div className="flex flex-col gap-8 max-w-5xl">
-      <div>
-        <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
-          Carta
-        </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
-          Gestioná los tragos de tu boliche. {sortedAndFiltered.length}{" "}
-          {sortedAndFiltered.length === 1 ? "trago" : "tragos"}
-          {sortedAndFiltered.length !== drinks.length
-            ? sortedAndFiltered.length === 1
-              ? " visible"
-              : " visibles"
-            : " registrados"}
-          .
-        </p>
+      <div data-tour="carta-header" className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+            Carta
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
+            Gestioná los tragos de tu boliche. {sortedAndFiltered.length}{" "}
+            {sortedAndFiltered.length === 1 ? "trago" : "tragos"}
+            {sortedAndFiltered.length !== drinks.length
+              ? sortedAndFiltered.length === 1
+                ? " visible"
+                : " visibles"
+              : " registrados"}
+            .
+          </p>
+        </div>
+        <SectionHelpButton category="carta" />
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
@@ -520,6 +524,7 @@ export default function CartaSection() {
 
             <button
               type="button"
+              data-tour="carta-categories"
               onClick={openCategories}
               aria-pressed={sidePanel === "categories"}
               className={`h-10 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] border ${
@@ -533,7 +538,8 @@ export default function CartaSection() {
             </button>
           </div>
 
-          <DrinksTable
+          <div data-tour="carta-table">
+            <DrinksTable
             drinks={sortedAndFiltered}
             categoryNames={categoryNames}
             loadError={loadError}
@@ -553,8 +559,9 @@ export default function CartaSection() {
             onCancelDelete={() => setConfirmingDeleteId(null)}
             onConfirmDelete={handleConfirmDelete}
             onToggleCol={toggleCol}
-            onColumnFiltersChange={(patch) => setColumnFilters((prev) => ({ ...prev, ...patch }))}
-          />
+              onColumnFiltersChange={(patch) => setColumnFilters((prev) => ({ ...prev, ...patch }))}
+            />
+          </div>
         </div>
 
         {sidePanel === "drink" && editDrink && (

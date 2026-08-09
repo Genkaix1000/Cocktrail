@@ -7,9 +7,25 @@ import type { MercadoPagoOrdersService } from "./mercadopago-orders.service.js";
 // variantes alfanuméricas con guiones de 16 a 64.
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9-]{16,64}$/;
 
+function parseLimit(raw: unknown, fallback = 20): number {
+  if (typeof raw !== "string") return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export function createMercadoPagoOrdersController(service: MercadoPagoOrdersService): Router {
   const router = Router();
   const cajaOrAdmin = [authMiddleware, requireRole("admin", "caja"), mpContextMiddleware] as const;
+
+  // GET /api/mercadopago/orders/recent — diagnóstico admin (antes de :orderId).
+  router.get("/orders/recent", authMiddleware, requireRole("admin"), async (req, res, next) => {
+    try {
+      res.set("Cache-Control", "no-store");
+      res.json({ orders: await service.listRecentOrders(parseLimit(req.query.limit)) });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   // POST /api/mercadopago/orders/qr — crear order QR estática
   router.post("/orders/qr", ...cajaOrAdmin, async (req, res, next) => {

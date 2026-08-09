@@ -13,9 +13,4 @@ describe("SistemaSection", () => {
     );
   });
 
-  // La dirección que la app pide a mano es el origen real del server, no una IP fija.
-  it("muestra como dirección del servidor el origen desde el que se sirve la página", async () => {
-    render(<SistemaSection />);
-    expect(await screen.findByText(window.location.origin)).toBeInTheDocument();
-  });
 });

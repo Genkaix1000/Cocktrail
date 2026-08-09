@@ -39,6 +39,7 @@ import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
 import Toast from "@/components/shared/Toast";
+
 import { formatHm, plural } from "@/lib/utils";
 import type { Drink, DrinkCategory, Order } from "@cocktrail/shared";
 import { qrDisplaySrc } from "@/lib/qr-display";
@@ -438,6 +439,9 @@ export default function VentaSection({
     }
   }, [cart]);
 
+  // Tras un cobro no hace falta el toast de "se quitó del pedido".
+  const clearCartSilent = useCallback(() => setCart({}), []);
+
   const addToCart = useCallback((id: number) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 })), []);
   const removeFromCart = useCallback((id: number) => setCart((prev) => {
     const next = { ...prev };
@@ -519,7 +523,7 @@ export default function VentaSection({
     cartEntries,
     totalPrice,
     totalItems,
-    clearCart,
+    clearCart: clearCartSilent,
     printTicket: printer.printTicket,
     isTestNight,
   });
@@ -759,7 +763,10 @@ export default function VentaSection({
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
           {/* Buscar + Ordenar */}
-          <div className="flex flex-wrap items-center gap-3 px-5 pt-5 pb-1 select-none w-full shrink-0">
+          <div
+            data-tour="caja-productos"
+            className="flex flex-wrap items-center gap-3 px-5 pt-5 pb-1 select-none w-full shrink-0"
+          >
             <div className="relative flex-1 min-w-[160px] max-w-sm">
               <Search
                 size={14}
@@ -829,6 +836,7 @@ export default function VentaSection({
 
               {sortBy === "categoria" && (
                 <button
+                  data-tour="tendencias-dinamicas"
                   type="button"
                   onClick={() => setDynamicTrendsActive((prev) => !prev)}
                   title="Reordenar tragos en vivo según ventas (con margen de gracia de 6 unidades)"
@@ -870,14 +878,19 @@ export default function VentaSection({
               </div>
             ) : drinkSections ? (
               <div className="space-y-6">
-                {drinkSections.map((section) => (
+                {drinkSections.map((section, sIdx) => (
                   <section key={section.id}>
                     <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)] mb-3">
                       {section.title}
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:hidden">
                       {section.drinks.map((d, idx) => (
-                          <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
+                          <div
+                            key={d.id}
+                            className="drink-card-anim"
+                            style={{ animationDelay: `${idx * 40}ms` }}
+                            data-tour={sIdx === 0 && idx === 0 ? "primer-producto" : undefined}
+                          >
                             <DrinkCard
                               {...d}
                               icon={d.iconName}
@@ -893,7 +906,12 @@ export default function VentaSection({
                       {section.drinks.map((d, idx) => {
                         const flatIdx = filteredDrinks.findIndex((x) => x.id === d.id);
                         return (
-                          <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
+                          <div
+                            key={d.id}
+                            className="drink-card-anim"
+                            style={{ animationDelay: `${idx * 40}ms` }}
+                            data-tour={sIdx === 0 && idx === 0 ? "primer-producto" : undefined}
+                          >
                             <CompactDrinkCard
                               drink={d}
                               qty={cart[d.id] || 0}
@@ -913,7 +931,12 @@ export default function VentaSection({
                 {/* Mobile Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:hidden">
                   {filteredDrinks.map((d, idx) => (
-                    <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
+                    <div
+                      key={d.id}
+                      className="drink-card-anim"
+                      style={{ animationDelay: `${idx * 40}ms` }}
+                      data-tour={idx === 0 ? "primer-producto" : undefined}
+                    >
                       <DrinkCard
                         {...d}
                         icon={d.iconName}
@@ -928,7 +951,12 @@ export default function VentaSection({
                 {/* Desktop Grid */}
                 <div className="hidden md:grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   {filteredDrinks.map((d, idx) => (
-                    <div key={d.id} className="drink-card-anim" style={{ animationDelay: `${idx * 40}ms` }}>
+                    <div
+                      key={d.id}
+                      className="drink-card-anim"
+                      style={{ animationDelay: `${idx * 40}ms` }}
+                      data-tour={idx === 0 ? "primer-producto" : undefined}
+                    >
                       <CompactDrinkCard
                         drink={d}
                         qty={cart[d.id] || 0}
@@ -961,6 +989,7 @@ export default function VentaSection({
               </button>
 
               <button
+                data-tour="caja-cobrar"
                 type="button"
                 onClick={openCheckout}
                 className="h-11 px-5 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-[13px] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all shrink-0"
@@ -973,7 +1002,10 @@ export default function VentaSection({
         </div>
 
         {/* Sidebar cart (md+ only) */}
-        <aside className="hidden md:flex w-[320px] xl:w-[350px] flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shrink-0 h-full relative overflow-hidden rounded-r-[24px]">
+        <aside
+          data-tour="caja-carrito"
+          className="hidden md:flex w-[320px] xl:w-[350px] flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shrink-0 h-full relative overflow-hidden rounded-r-[24px]"
+        >
           <div
             ref={shoppingBagRef}
             className="px-4 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between gap-2 shrink-0"
@@ -1042,6 +1074,7 @@ export default function VentaSection({
               </span>
             </div>
             <button
+              data-tour="caja-cobrar"
               type="button"
               onClick={openCheckout}
               disabled={totalItems === 0}
@@ -1124,7 +1157,7 @@ export default function VentaSection({
           }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
         >
-          <div onClick={(e) => e.stopPropagation()} className={`bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full ${paymentMethod === "efectivo" && !latestOrder && posnetStatus !== "error" ? "max-w-lg" : "max-w-md"} rounded-[24px] p-6 shadow-card animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh] transition-[max-width] duration-200`}>
+          <div onClick={(e) => e.stopPropagation()} className={`bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full ${((paymentMethod === "efectivo" || paymentMethod === "qr") && !latestOrder && posnetStatus !== "error") ? "max-w-lg" : "max-w-md"} rounded-[24px] p-6 shadow-card animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh] transition-[max-width] duration-200`}>
 
             {latestOrder ? (
               // Vista Éxito / Ticket (con animación elástica GSAP)
@@ -1472,7 +1505,7 @@ export default function VentaSection({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full mt-2">
+                    <div className="grid grid-cols-2 gap-3 w-full mt-2">
                       <button
                         disabled={submitting}
                         onClick={() => setPaymentMethod("efectivo")}
@@ -1484,38 +1517,31 @@ export default function VentaSection({
                         <span className="font-bold text-xs text-ink-50">Efectivo</span>
                       </button>
 
-                      <button
-                        disabled={
-                          submitting ||
-                          mpDisabledReason !== null ||
-                          hasLinkedDevice === false
-                        }
-                        title={
-                          mpDisabledReason ??
-                          (hasLinkedDevice === false
-                            ? "Esta caja no tiene Posnet vinculado. Usá Código QR."
-                            : undefined)
-                        }
-                        onClick={() => startPosnetPayment("debito")}
-                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center shrink-0">
-                          <CreditCard size={22} />
-                        </div>
-                        <span className="font-bold text-xs text-ink-50">Tarjeta</span>
-                      </button>
+                      {mpDisabledReason === null && hasLinkedDevice !== false && (
+                        <button
+                          disabled={submitting}
+                          onClick={() => startPosnetPayment("debito")}
+                          className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-blue-soft border border-blue-line text-blue flex items-center justify-center shrink-0">
+                            <CreditCard size={22} />
+                          </div>
+                          <span className="font-bold text-xs text-ink-50">Tarjeta</span>
+                        </button>
+                      )}
 
-                      <button
-                        disabled={submitting || mpDisabledReason !== null}
-                        title={mpDisabledReason ?? undefined}
-                        onClick={() => startQrPayment()}
-                        className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/25 text-accent flex items-center justify-center shrink-0">
-                          <QrCode size={22} />
-                        </div>
-                        <span className="font-bold text-xs text-ink-50">Código QR</span>
-                      </button>
+                      {mpDisabledReason === null && (
+                        <button
+                          disabled={submitting}
+                          onClick={() => startQrPayment()}
+                          className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/25 text-accent flex items-center justify-center shrink-0">
+                            <QrCode size={22} />
+                          </div>
+                          <span className="font-bold text-xs text-ink-50">Código QR</span>
+                        </button>
+                      )}
 
                       <button
                         disabled={submitting}
@@ -1545,8 +1571,8 @@ export default function VentaSection({
                 ) : (
                   // Confirmar Método Elegido
                   <div className="flex flex-col gap-5 overflow-y-auto pr-1">
-                    {/* Total genérico solo para débito/QR — en efectivo/split/cortesia se maneja en su propio bloque */}
-                    {(paymentMethod === "debito" || paymentMethod === "qr") && (
+                    {/* Total genérico solo para débito — QR lo muestra embebido junto al código */}
+                    {paymentMethod === "debito" && (
                       <div className="flex justify-between items-center p-4 bg-[var(--bg-panel)] rounded-2xl border border-[var(--border-subtle)]">
                         <div className="flex items-center gap-2">
                           <Receipt size={15} className="text-[var(--text-tertiary)]" />
@@ -1712,7 +1738,7 @@ export default function VentaSection({
                             <span>Cortesía / Regalo ($0)</span>
                           </div>
                           <p className="text-xs text-ink-300 leading-relaxed">
-                            Esta orden se emitirá con monto $0 sin sumar saldo a la caja. Se descontarán las unidades del inventario y quedará registrada en auditoría.
+                            Ticket a $0. No suma a la caja y queda en el historial.
                           </p>
                         </div>
 
@@ -2028,40 +2054,51 @@ export default function VentaSection({
                     )}
 
                     {paymentMethod === "qr" && (
-                      <div className="flex flex-col gap-4">
-                        <div className="py-8 flex flex-col items-center text-center gap-4 bg-ink-950 border border-ink-800 rounded-2xl animate-pulse">
-                          <Loader2 size={48} className={`animate-spin ${paymentIntentState === "unknown" ? "text-amber-500" : "text-accent"}`} />
-                          <div className="flex flex-col gap-1.5">
-                            {paymentIntentState === "unknown" ? (
-                              // MP devolvió un estado no reconocido: advertencia, nunca
-                              // "pendiente" — el polling sigue acotado por el expiresAt.
-                              <>
-                                <p className="text-sm font-bold text-amber-500">
-                                  Estado del cobro desconocido — verificando…
-                                </p>
-                                <p className="text-xs text-ink-400 px-8 leading-relaxed">
-                                  Mercado Pago devolvió un estado no reconocido. Seguimos consultando — no vuelvas a cobrar.
-                                </p>
-                              </>
-                            ) : (
-                              <>
-                                <p className="text-sm font-bold text-ink-50">
-                                  Esperando pago QR...
-                                </p>
-                                <p className="text-xs text-ink-400 px-8 leading-relaxed">
-                                  Mostrá este QR al cliente para que lo escanee con la app de Mercado Pago.
-                                </p>
-                              </>
-                            )}
+                      <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex flex-col items-center text-center gap-4">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-ink-400">Total</span>
+                            <span className="text-2xl font-black tabular text-accent tracking-tight">
+                              ${totalPrice.toLocaleString("es-AR")}
+                            </span>
                           </div>
-                          {qrSrc && (
+
+                          {qrSrc ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={qrSrc}
                               alt="QR de cobro"
-                              className="w-40 h-40 rounded-xl border border-ink-800 bg-white object-contain p-2"
+                              className="w-[min(72vw,18rem)] h-[min(72vw,18rem)] sm:w-72 sm:h-72 rounded-2xl bg-white object-contain p-3 shadow-lg ring-1 ring-ink-800"
                             />
+                          ) : (
+                            <div className="w-[min(72vw,18rem)] h-[min(72vw,18rem)] sm:w-72 sm:h-72 rounded-2xl bg-ink-950 border border-ink-800 flex items-center justify-center">
+                              <Loader2 size={40} className="animate-spin text-accent" />
+                            </div>
                           )}
+
+                          <div className="flex flex-col items-center gap-1.5">
+                            {paymentIntentState === "unknown" ? (
+                              <>
+                                <p className="text-sm font-bold text-amber-500 flex items-center gap-2">
+                                  <Loader2 size={16} className="animate-spin shrink-0" />
+                                  Estado desconocido — verificando…
+                                </p>
+                                <p className="text-xs text-ink-400 px-4 leading-relaxed max-w-sm">
+                                  Seguimos consultando — no vuelvas a cobrar.
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-bold text-ink-50 flex items-center gap-2">
+                                  <Loader2 size={16} className="animate-spin text-accent shrink-0" />
+                                  Esperando pago QR…
+                                </p>
+                                <p className="text-xs text-ink-400 px-4 leading-relaxed max-w-sm">
+                                  Que el cliente lo escanee con Mercado Pago.
+                                </p>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         {currentIntentId ? (

@@ -113,6 +113,7 @@ describe("MercadoPagoWebhooksService", () => {
       markProcessed: vi.fn().mockResolvedValue(undefined),
       markFailed: vi.fn().mockResolvedValue(undefined),
       findPending: vi.fn().mockResolvedValue([]),
+      listRecent: vi.fn().mockResolvedValue({ available: true, events: [] }),
     };
 
     emit = vi.fn();
@@ -379,6 +380,25 @@ describe("MercadoPagoWebhooksService", () => {
     it("sin pendientes: no toca nada", async () => {
       await service.replayPending();
       expect(mpOrdersService.reconcileFromMp).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("listRecentEvents", () => {
+    it("delega al repo y agrega webhookSecretConfigured", async () => {
+      const event = makeStoredEvent({ id: "evt-1" });
+      vi.mocked(webhookEventsRepo.listRecent).mockResolvedValue({
+        available: true,
+        events: [event],
+      });
+
+      const res = await service.listRecentEvents(20);
+
+      expect(webhookEventsRepo.listRecent).toHaveBeenCalledWith(20);
+      expect(res).toEqual({
+        available: true,
+        events: [event],
+        webhookSecretConfigured: true,
+      });
     });
   });
 });

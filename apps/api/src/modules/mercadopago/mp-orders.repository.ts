@@ -176,6 +176,8 @@ export interface MpOrdersRepository {
   findByAttemptId(attemptId: string): Promise<MpOrder | null>;
   findProcessedPendingFees(limit: number): Promise<MpOrder[]>;
   sumFeesForEvent(eventId: string): Promise<MpEventFeeTotals>;
+  /** Diagnóstico admin: últimos N por created_at (sin qrData/cartItems). */
+  listRecent(limit: number): Promise<MpOrder[]>;
   update(orderIdMp: string, patch: MpOrderUpdate): Promise<MpOrder>;
   updateStatus(orderIdMp: string, status: MpOrderStatus): Promise<MpOrder>;
 }
@@ -314,6 +316,26 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
       throw error;
     }
     return (data as MpOrderRow[] | null)?.map(mapMpOrderRow) ?? [];
+  }
+
+  async listRecent(limit: number): Promise<MpOrder[]> {
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 20, 50));
+    const { data, error } = await supabase
+      .from("mp_orders")
+      .select(SELECT_COLS)
+      .order("created_at", { ascending: false })
+      .limit(capped);
+
+    if (error) {
+      console.error("[SupabaseMpOrdersRepository] Error listing recent:", error);
+      throw error;
+    }
+
+    return ((data as MpOrderRow[] | null) ?? []).map((row) => ({
+      ...mapMpOrderRow(row),
+      qrData: null,
+      cartItems: null,
+    }));
   }
 
   async sumFeesForEvent(eventId: string): Promise<MpEventFeeTotals> {

@@ -1,6 +1,6 @@
 {
-  "name": "Bosko — Caja",
-  "short_name": "Bosko",
+  "name": "miBoliche",
+  "short_name": "miBoliche",
   "description": "Ventas, cobros y cierre de noche del boliche",
   "start_url": "/caja",
   "scope": "/",

@@ -34,6 +34,11 @@ export function createSystemController(
     res.json(systemService.getHealth());
   });
 
+  // GET /api/system/version — staff. Versión de app + deploy (sin I/O).
+  router.get("/version", authMiddleware, requireRole("admin", "caja"), (_req, res) => {
+    res.json(systemService.getVersion());
+  });
+
   // POST /api/system/migrations/accept-drift — admin. Pisa checksums al disco actual.
   router.post(
     "/migrations/accept-drift",

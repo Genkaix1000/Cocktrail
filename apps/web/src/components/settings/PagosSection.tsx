@@ -23,6 +23,8 @@ import Toast from "@/components/shared/Toast";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import ComisionesPlazosPanel from "@/components/settings/ComisionesPlazosPanel";
 import MpHealthPanel from "@/components/settings/MpHealthPanel";
+import MpDevToolsPanel from "@/components/settings/MpDevToolsPanel";
+import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 
 function formatRelative(iso: string | null): string | null {
   if (!iso) return null;
@@ -194,13 +196,16 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
 
   return (
     <div data-tour="pagos-section" className="max-w-5xl flex flex-col gap-5">
-      <div>
-        <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
-          Pagos
-        </h1>
-        <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-          Cuenta MP, PDVs y Posnets
-        </p>
+      <div data-tour="pagos-header" className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
+            Pagos
+          </h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            Cuenta MP, PDVs y Posnets
+          </p>
+        </div>
+        <SectionHelpButton category="pagos" />
       </div>
 
       {/* 1. Mercado Pago */}
@@ -361,11 +366,12 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
         </div>
       )}
 
-      {/* 2. Sanidad compacta (MpHealthPanel) */}
-      <MpHealthPanel />
+      <div data-tour="pagos-salud">
+        <MpHealthPanel />
+      </div>
 
       {/* 3. Sucursal + Sesión (denso) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
+      <div data-tour="pagos-sucursal" className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
         <div className={`${cardShell} p-3.5 space-y-2.5 flex flex-col`}>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -482,6 +488,9 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
 
       {/* 4. PDVs / Posnets */}
       {children}
+
+      {/* Diagnóstico avanzado al final — no compite con el flujo de vinculación */}
+      <MpDevToolsPanel />
 
       <ComisionesPlazosPanel
         open={comisionesOpen}

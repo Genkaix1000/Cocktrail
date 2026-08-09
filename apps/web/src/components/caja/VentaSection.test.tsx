@@ -245,6 +245,25 @@ describe("VentaSection", () => {
     expect(screen.getByRole("button", { name: /código qr/i })).toBeInTheDocument();
   });
 
+  it("oculta Tarjeta cuando la caja no tiene Posnet vinculado", async () => {
+    render(
+      <VentaSection
+        drinks={[makeDrink()]}
+        categories={[]}
+        printer={printer}
+        hasLinkedDevice={false}
+      />,
+    );
+    const user = await addFirstDrinkToCart();
+
+    const cobrarButtons = screen.getAllByRole("button", { name: /cobrar/i });
+    await user.click(cobrarButtons[0]);
+
+    expect(await screen.findByRole("button", { name: /efectivo/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /tarjeta/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /código qr/i })).toBeInTheDocument();
+  });
+
   it("inicia un pago QR llamando a createQrOrder", async () => {
     mockedMercadopagoService.createQrOrder.mockResolvedValue({
       orderId: "ORD01QR",

@@ -11,6 +11,7 @@ export function TestNightBanner() {
   return (
     <div
       role="alert"
+      data-tour="test-night-banner"
       className="flex items-start gap-2.5 px-5 py-2.5 bg-amber-500/10 border-b border-amber-500/40 text-amber-500 text-[13px] print:hidden"
     >
       <FlaskConical size={16} className="shrink-0 mt-0.5" aria-hidden="true" />

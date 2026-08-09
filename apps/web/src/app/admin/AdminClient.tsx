@@ -22,7 +22,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { AppTopbar } from "@/components/shared/AppTopbar";
 import { NightActionCard } from "@/components/shared/NightActionCard";
 import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
-import { TourProvider } from "@/components/tour/TourProvider";
+import { HelpCenterProvider } from "@/components/help/HelpCenterProvider";
 
 import { computeTotals, withLiveMpFees } from "@cocktrail/shared";
 import { useEventState } from "@/hooks/useEventState";
@@ -37,7 +37,6 @@ import UsuariosSection from "@/components/settings/UsuariosSection";
 import SistemaSection from "@/components/settings/SistemaSection";
 
 import DashboardSection from "@/components/admin/DashboardSection";
-import { MigrationsBanner } from "@/components/admin/MigrationsBanner";
 import { MpFallbackBanner } from "@/components/admin/MpFallbackBanner";
 import { TestNightBanner } from "@/components/shared/TestNightBanner";
 import HistorialSection from "@/components/admin/HistorialSection";
@@ -485,7 +484,7 @@ export default function AdminClient({
   };
 
   return (
-    <TourProvider onNavigateTab={handleTabChange}>
+    <HelpCenterProvider role="admin" onNavigateTab={handleTabChange} adminNightConfig={{ hasActiveNight: isNightOpen }}>
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {editKeywordOpen && event && (
@@ -542,7 +541,6 @@ export default function AdminClient({
             </header>
 
             <div className="flex-1 bg-[var(--bg-panel)] md:rounded-[24px] shadow-card p-5 md:p-6">
-              <MigrationsBanner />
               <MpFallbackBanner />
               {event?.isTest && <TestNightBanner />}
 
@@ -610,6 +608,6 @@ export default function AdminClient({
         </div>
       </main>
     </div>
-    </TourProvider>
+    </HelpCenterProvider>
   );
 }

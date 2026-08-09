@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSteps, type TourStepId } from "./tourSteps";
+import { buildPagosSteps, buildSteps, type TourStepId } from "./tourSteps";
 
 function ids(cfg: Parameters<typeof buildSteps>[0]): TourStepId[] {
   return buildSteps(cfg).map((s) => s.id);
@@ -67,5 +67,30 @@ describe("buildSteps", () => {
     expect(welcome.title).toMatch(/Mi Boliche/i);
     expect(welcome.icon).toBe("brand");
     expect(welcome.phase).toBe("inicio");
+  });
+});
+
+describe("buildPagosSteps", () => {
+  it("unlinked empieza en vinculame y no incluye carta/staff", () => {
+    const list = buildPagosSteps({
+      linked: false,
+      displayName: null,
+      hasOrphanCaja: false,
+      resumePostLink: false,
+    });
+    expect(list[0]?.id).toBe("mp-unlinked");
+    expect(list.map((s) => s.id)).not.toContain("carta-intro");
+    expect(list.map((s) => s.id)).toContain("pdv-posnet");
+  });
+
+  it("resume post-link arranca en congrats", () => {
+    expect(
+      buildPagosSteps({
+        linked: true,
+        displayName: "X",
+        hasOrphanCaja: false,
+        resumePostLink: true,
+      })[0]?.id,
+    ).toBe("mp-congrats");
   });
 });

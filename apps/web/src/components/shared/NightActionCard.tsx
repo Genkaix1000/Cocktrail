@@ -24,6 +24,7 @@ export function NightActionCard({
   if (nightOpen) {
     return (
       <div
+        data-tour="night-card"
         className="relative overflow-hidden rounded-2xl p-4 text-white"
         style={{
           background:
@@ -48,6 +49,7 @@ export function NightActionCard({
         )}
         <button
           type="button"
+          data-tour="night-close-btn"
           onClick={onCloseNight}
           className="relative mt-3 w-full h-9 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer active:scale-[0.98]"
         >
@@ -70,6 +72,7 @@ export function NightActionCard({
 
   return (
     <div
+      data-tour="night-card"
       className="relative overflow-hidden rounded-2xl p-4 text-white"
       style={{
         background:
@@ -92,6 +95,7 @@ export function NightActionCard({
       </p>
       <button
         type="button"
+        data-tour="night-open-btn"
         onClick={onOpenNight}
         className="relative mt-3 w-full h-9 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer active:scale-[0.98]"
       >

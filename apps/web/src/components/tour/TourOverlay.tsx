@@ -12,12 +12,7 @@ import {
   Wine,
   X,
 } from "lucide-react";
-import {
-  TOUR_PHASES,
-  type TourPhase,
-  type TourStep,
-  type TourStepIcon,
-} from "./tourSteps";
+import { type TourStep, type TourStepIcon } from "./tourSteps";
 
 type Spot = { top: number; left: number; width: number; height: number };
 
@@ -26,6 +21,7 @@ type Props = {
   index: number;
   total: number;
   busy?: boolean;
+  visible?: boolean;
   onNext: () => void;
   onPrev: () => void;
   onSkip: () => void;
@@ -165,36 +161,38 @@ function StepIcon({ icon, mp }: { icon: TourStepIcon; mp?: boolean }) {
   return wrap(<PartyPopper size={20} strokeWidth={1.9} />, "var(--success-soft)", "var(--success-base)");
 }
 
-function PhaseRail({ phase }: { phase: TourPhase }) {
-  const activeIdx = TOUR_PHASES.findIndex((p) => p.id === phase);
+function StepProgressBar({
+  index,
+  total,
+  accent,
+}: {
+  index: number;
+  total: number;
+  accent?: boolean;
+}) {
+  const activeColor = accent ? MP_BLUE : "var(--accent-primary)";
   return (
-    <div className="flex items-center gap-1 w-full" aria-label="Progreso del recorrido">
-      {TOUR_PHASES.map((p, i) => {
-        const done = i < activeIdx;
-        const active = i === activeIdx;
-        const barColor =
-          active && p.id === "pagos"
-            ? MP_BLUE
-            : done || active
-              ? "var(--accent-primary)"
-              : "var(--border-subtle)";
-        return (
-          <div key={p.id} className="flex-1 flex flex-col gap-1 min-w-0">
+    <div className="flex flex-col gap-1.5 w-full" aria-label={`Paso ${index + 1} de ${total}`}>
+      <p className="text-[11px] font-medium text-[var(--text-tertiary)]">
+        Paso {index + 1} de {total}
+      </p>
+      <div className="flex items-center gap-1 w-full">
+        {Array.from({ length: total }, (_, i) => {
+          const done = i < index;
+          const active = i === index;
+          return (
             <div
-              className="h-1.5 rounded-full transition-all duration-500"
-              style={{ background: barColor, opacity: active ? 1 : done ? 0.65 : 1 }}
+              key={i}
+              className="flex-1 h-1.5 rounded-full transition-all duration-300"
+              style={{
+                background: done || active ? activeColor : "var(--border-subtle)",
+                opacity: active ? 1 : done ? 0.6 : 1,
+                boxShadow: active ? `0 0 0 1px ${activeColor}` : undefined,
+              }}
             />
-            <span
-              className={`text-[9px] sm:text-[10px] font-semibold tracking-wide truncate ${
-                active ? "text-[var(--text-primary)]" : done ? "text-[var(--text-secondary)]" : "text-[var(--text-tertiary)]"
-              }`}
-              style={active && p.id === "pagos" ? { color: MP_BLUE } : undefined}
-            >
-              {p.label}
-            </span>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -225,11 +223,19 @@ function RichBody({ text, mpAccent }: { text: string; mpAccent?: boolean }) {
   );
 }
 
-export function TourOverlay({ step, index, total, busy, onNext, onPrev, onSkip }: Props) {
+export function TourOverlay({
+  step,
+  index,
+  total,
+  busy,
+  visible = true,
+  onNext,
+  onPrev,
+  onSkip,
+}: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
-  const [cardKey, setCardKey] = useState(0);
 
   const forceCenter =
     !step.selector ||
@@ -245,10 +251,15 @@ export function TourOverlay({ step, index, total, busy, onNext, onPrev, onSkip }
   };
 
   useLayoutEffect(() => {
-    setCardKey((k) => k + 1);
     remeasure();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step.id, step.selector, forceCenter, busy]);
+  }, [step.id, step.selector, forceCenter]);
+
+  // Remeasure when busy ends (DOM may have shifted) without re-animating the card
+  useLayoutEffect(() => {
+    remeasure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy]);
 
   useEffect(() => {
     const onScrollOrResize = () => remeasure();
@@ -274,7 +285,8 @@ export function TourOverlay({ step, index, total, busy, onNext, onPrev, onSkip }
 
   return (
     <div
-      className="fixed inset-0 z-[9999] pointer-events-none"
+      className="fixed inset-0 z-[10000] pointer-events-none"
+      style={{ opacity: visible ? 1 : 0, transition: "opacity 0.15s ease" }}
       role="dialog"
       aria-modal="true"
       aria-label={step.title}
@@ -297,12 +309,17 @@ export function TourOverlay({ step, index, total, busy, onNext, onPrev, onSkip }
       )}
 
       <div
-        key={cardKey}
         ref={cardRef}
-        className="fixed pointer-events-auto w-[min(400px,calc(100vw-28px))] rounded-2xl bg-[var(--bg-panel)] shadow-card p-5 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-300"
-        style={{ top: pos.top, left: pos.left, border: `1.5px solid ${borderColor}` }}
+        className="fixed w-[min(400px,calc(100vw-28px))] rounded-2xl bg-[var(--bg-panel)] shadow-card p-5 flex flex-col gap-3.5 animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-300"
+        style={{
+          top: pos.top,
+          left: pos.left,
+          border: `1.5px solid ${borderColor}`,
+          pointerEvents: visible ? "auto" : "none",
+          transition: "top 0.4s ease-out, left 0.4s ease-out, border-color 0.3s ease",
+        }}
       >
-        {step.id === "welcome" && (
+        {isFirst && step.icon === "brand" && (
           <div className="flex justify-center -mt-1 mb-1">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -313,18 +330,19 @@ export function TourOverlay({ step, index, total, busy, onNext, onPrev, onSkip }
           </div>
         )}
 
-        <PhaseRail phase={step.phase} />
+        <StepProgressBar index={index} total={total} accent={step.mpAccent} />
 
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
             <StepIcon icon={step.icon} mp={step.mpAccent} />
             <div className="min-w-0 pt-0.5">
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                Paso {index + 1} de {total}
-                {busy ? " · moviendo…" : ""}
-              </p>
+              {busy && (
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                  Moviendo…
+                </p>
+              )}
               <h2
-                className="text-[17px] font-semibold tracking-tight mt-0.5 leading-snug"
+                className="text-[17px] font-semibold tracking-tight leading-snug"
                 style={{ color: step.mpAccent ? MP_BLUE : "var(--text-primary)" }}
               >
                 {step.title}
@@ -345,7 +363,7 @@ export function TourOverlay({ step, index, total, busy, onNext, onPrev, onSkip }
 
         {step.advanceOnClick && (
           <p className="text-[12px] font-medium rounded-xl px-3 py-2 bg-[var(--accent-surface)] text-[var(--accent-text)]">
-            Tocá el botón resaltado para seguir — te guiamos en el siguiente paso.
+            Tocá el botón resaltado, o Continuar y lo tocamos por vos.
           </p>
         )}
 
@@ -384,8 +402,8 @@ export function TourOverlay({ step, index, total, busy, onNext, onPrev, onSkip }
               {isLast
                 ? "Listo"
                 : step.advanceOnClick
-                  ? "Omitir click"
-                  : index === 0 && step.id === "welcome"
+                  ? "Continuar"
+                  : isFirst
                     ? "Empezar"
                     : "Siguiente"}
               {!isLast && <ChevronRight size={15} />}

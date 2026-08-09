@@ -212,14 +212,35 @@ describe("MercadoPagoOAuthService", () => {
     it("devuelve linked:false si no hay seller activo", async () => {
       sellersRepo.findActive.mockResolvedValue(null);
       const res = await service.getSellerStatus("BARRA-01");
-      expect(res).toEqual({ linked: false, status: null, nickname: null, email: null, linkedAt: null, displayName: null });
+      expect(res).toEqual({
+        linked: false,
+        status: null,
+        nickname: null,
+        email: null,
+        linkedAt: null,
+        displayName: null,
+        userId: null,
+        expiresAt: null,
+        hasAccessToken: false,
+        hasRefreshToken: false,
+      });
     });
 
     it("devuelve datos de cuenta si hay seller activo", async () => {
       sellersRepo.findActive.mockResolvedValue(makeSeller());
       const res = await service.getSellerStatus("BARRA-01");
-      expect(res).toMatchObject({ linked: true, status: "active", nickname: "BOSKO BAR", email: "bosko@example.com", displayName: "BOSKO BAR" });
+      expect(res).toMatchObject({
+        linked: true,
+        status: "active",
+        nickname: "BOSKO BAR",
+        email: "bosko@example.com",
+        displayName: "BOSKO BAR",
+        userId: "seller-1",
+        hasAccessToken: true,
+        hasRefreshToken: true,
+      });
       expect(res.linkedAt).toBe("2026-07-15T22:14:00.000Z");
+      expect(res.expiresAt).toBeTruthy();
     });
   });
 

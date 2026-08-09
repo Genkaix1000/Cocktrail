@@ -38,6 +38,12 @@ export type SellerStatusResult = {
   linkedAt: string | null;
   /** Nombre real compuesto (first_name + last_name). Preferido sobre nickname. */
   displayName: string | null;
+  /** Diagnóstico admin: user_id de MP (nunca el token). */
+  userId: string | null;
+  /** Vencimiento del access_token OAuth (ISO), si hay seller. */
+  expiresAt: string | null;
+  hasAccessToken: boolean;
+  hasRefreshToken: boolean;
 };
 
 /** Resultado del pull del buzón (deprecated F0 — siempre no-op). */
@@ -144,7 +150,18 @@ export class MercadoPagoOAuthService {
     const seller = await this.sellersRepo.findActive();
 
     if (!seller) {
-      return { linked: false, status: null, nickname: null, email: null, linkedAt: null, displayName: null };
+      return {
+        linked: false,
+        status: null,
+        nickname: null,
+        email: null,
+        linkedAt: null,
+        displayName: null,
+        userId: null,
+        expiresAt: null,
+        hasAccessToken: false,
+        hasRefreshToken: false,
+      };
     }
     const displayName = [seller.firstName, seller.lastName].filter(Boolean).join(" ") || seller.nickname;
     return {
@@ -154,6 +171,10 @@ export class MercadoPagoOAuthService {
       email: seller.email,
       linkedAt: seller.linkedAt ? seller.linkedAt.toISOString() : null,
       displayName,
+      userId: seller.userId,
+      expiresAt: seller.expiresAt ? seller.expiresAt.toISOString() : null,
+      hasAccessToken: Boolean(seller.accessToken),
+      hasRefreshToken: Boolean(seller.refreshToken),
     };
   }
 

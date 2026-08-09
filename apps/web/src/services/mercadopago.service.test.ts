@@ -126,4 +126,20 @@ describe("mercadopagoService", () => {
 
     expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/health?refresh=1");
   });
+
+  it("listWebhookEvents pide /webhooks/events con limit", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ available: true, events: [], webhookSecretConfigured: true });
+
+    await mercadopagoService.listWebhookEvents(10);
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/webhooks/events?limit=10");
+  });
+
+  it("listRecentOrders pide /orders/recent con limit", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ orders: [] });
+
+    await mercadopagoService.listRecentOrders(15);
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/mercadopago/orders/recent?limit=15");
+  });
 });

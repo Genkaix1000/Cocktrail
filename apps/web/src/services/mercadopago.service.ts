@@ -58,6 +58,49 @@ export type MpSellerStatus = {
   email: string | null;
   linkedAt: string | null;
   displayName: string | null;
+  /** Diagnóstico: user_id de MP (nunca el token). */
+  userId: string | null;
+  expiresAt: string | null;
+  hasAccessToken: boolean;
+  hasRefreshToken: boolean;
+};
+
+export type MpWebhookEventRow = {
+  id: string;
+  xRequestId: string;
+  dataId: string | null;
+  type: string | null;
+  payload: unknown;
+  receivedAt: string;
+  processedAt: string | null;
+  attempts: number;
+  lastError: string | null;
+};
+
+export type MpWebhookEventsResponse = {
+  available: boolean;
+  events: MpWebhookEventRow[];
+  webhookSecretConfigured: boolean;
+};
+
+export type MpRecentOrderRow = {
+  id: string;
+  orderIdMp: string;
+  externalRef: string;
+  paymentId: string | null;
+  amount: number;
+  status: string;
+  type: "qr" | "point";
+  barId: string | null;
+  deviceId: string | null;
+  rawState: string | null;
+  paymentStatus: string | null;
+  paymentStatusDetail: string | null;
+  paidAmount: number | null;
+  feeStatus: string;
+  verificationError: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /**
@@ -166,6 +209,18 @@ export const mercadopagoService = {
    */
   getMpHealth(refresh = false) {
     return apiFetch<MpHealth>(`/api/mercadopago/health${refresh ? "?refresh=1" : ""}`);
+  },
+
+  listWebhookEvents(limit = 20) {
+    return apiFetch<MpWebhookEventsResponse>(
+      `/api/mercadopago/webhooks/events?limit=${encodeURIComponent(String(limit))}`,
+    );
+  },
+
+  listRecentOrders(limit = 20) {
+    return apiFetch<{ orders: MpRecentOrderRow[] }>(
+      `/api/mercadopago/orders/recent?limit=${encodeURIComponent(String(limit))}`,
+    );
   },
 
   testDeviceCharge() {

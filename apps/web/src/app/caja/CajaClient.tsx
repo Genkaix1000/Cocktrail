@@ -1,8 +1,8 @@
 "use client";
 
-import { Power } from "lucide-react";
+import { Power, Printer, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useEventState } from "@/hooks/useEventState";
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
@@ -16,7 +16,10 @@ import VentaSection from "@/components/caja/VentaSection";
 import HistorialSection from "@/components/caja/HistorialSection";
 import MetricasSection from "@/components/caja/MetricasSection";
 import CajaSidebar from "@/components/caja/Sidebar";
+import { HelpCenterProvider } from "@/components/help/HelpCenterProvider";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
+
+const PRINTER_PROMPT_SEEN_KEY = "cocktrail:printer-prompt-seen";
 
 type CurrentUser = {
   role: string;
@@ -77,6 +80,8 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
   );
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [printerPromptOpen, setPrinterPromptOpen] = useState(false);
+  const [pairingPrinter, setPairingPrinter] = useState(false);
 
   const [openNightKeyword, setOpenNightKeyword] = useState("");
   const [openNightError, setOpenNightError] = useState<string | null>(null);
@@ -101,6 +106,41 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
   const { event, orders, summary, serverTotals, setSummary, upsertOrder } = useEventState({
     onEventClosed: () => setCloseModalOpen(true),
   });
+
+  // Aviso tipo onboarding si la caja abre sin impresora vinculada.
+  useEffect(() => {
+    if (event?.status !== "activo") return;
+    if (printerStatus === null) return; // todavía no sabemos
+    if (printerPaired || printerStatus.connected) {
+      setPrinterPromptOpen(false);
+      return;
+    }
+    try {
+      if (localStorage.getItem(PRINTER_PROMPT_SEEN_KEY)) return;
+    } catch {
+      /* private mode */
+    }
+    setPrinterPromptOpen(true);
+  }, [event?.status, printerStatus, printerPaired]);
+
+  function dismissPrinterPrompt() {
+    setPrinterPromptOpen(false);
+    try {
+      localStorage.setItem(PRINTER_PROMPT_SEEN_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+  }
+
+  async function handlePairPrinterFromPrompt() {
+    setPairingPrinter(true);
+    try {
+      await pairPrinterDevice();
+      // Si vinculó, el effect cierra el modal; si canceló/falló, queda abierto.
+    } finally {
+      setPairingPrinter(false);
+    }
+  }
 
   const activeNightOrders = useMemo(() => {
     if (!event) return orders;
@@ -168,12 +208,30 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     printerTestMessage,
     posnetLevel,
     posnetMessage,
+    hasLinkedDevice: posnetHealth?.hasLinkedDevice ?? null,
     handleLogout,
   } as const;
 
+  const cajaHelpConfig = useMemo(
+    () => ({
+      hasHistorial: hasPermission("historial"),
+      hasMetricas: hasPermission("metricas"),
+      canCloseNight: Boolean(currentUser.permissions?.closeNight),
+      hasLinkedDevice: posnetHealth?.hasLinkedDevice ?? null,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hasPermission is stable per render
+    [currentUser.permissions, posnetHealth?.hasLinkedDevice],
+  );
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
-      <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
+    <HelpCenterProvider
+      role="caja"
+      onNavigateTab={(tab) => setActiveTab(tab as typeof activeTab)}
+      enabled={event?.status === "activo"}
+      cajaConfig={cajaHelpConfig}
+    >
+      <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
+        <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {((event && closeModalOpen) || summary) && (
           <CloseNightModal
             totals={totals}
@@ -184,6 +242,56 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
             onConfirm={handleCloseConfirm}
             onClose={handleCloseModalClose}
           />
+        )}
+
+        {printerPromptOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+            <div
+              role="dialog"
+              aria-labelledby="printer-prompt-title"
+              className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[24px] p-6 shadow-card animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="w-14 h-14 rounded-2xl bg-amber-soft border border-amber-line text-amber flex items-center justify-center shrink-0">
+                  <Printer size={26} strokeWidth={2.2} />
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissPrinterPrompt}
+                  className="p-2 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] cursor-pointer"
+                  aria-label="Cerrar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div>
+                <h2 id="printer-prompt-title" className="text-xl font-black text-[var(--text-primary)] tracking-tight">
+                  No hay impresora
+                </h2>
+                <p className="mt-2 text-sm text-[var(--text-secondary)] leading-relaxed">
+                  Los tickets no se van a imprimir hasta que vincules una. Podés hacerlo ahora o más tarde desde el menú.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => void handlePairPrinterFromPrompt()}
+                  disabled={pairingPrinter}
+                  className="w-full h-12 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98] transition-all"
+                >
+                  <Printer size={16} />
+                  {pairingPrinter ? "Vinculando…" : "Vincular impresora"}
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissPrinterPrompt}
+                  className="w-full h-11 rounded-xl border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] font-semibold text-sm cursor-pointer transition-colors"
+                >
+                  Ahora no
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         <CajaSidebar
@@ -288,6 +396,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
                   </div>
 
                   <div
+                    data-tour="caja-historial"
                     className={
                       activeTab === "historial"
                         ? "h-full overflow-y-auto p-5 md:p-6 bosko-scroll min-h-0 w-full"
@@ -303,6 +412,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
                   </div>
 
                   <div
+                    data-tour="caja-metricas"
                     className={
                       activeTab === "metricas"
                         ? "h-full overflow-y-auto p-5 md:p-6 bosko-scroll min-h-0 w-full animate-in fade-in duration-200"
@@ -320,7 +430,8 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
             </div>
           </div>
         </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </HelpCenterProvider>
   );
 }

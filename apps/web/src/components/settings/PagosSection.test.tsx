@@ -16,6 +16,9 @@ vi.mock("@/services/mercadopago.service", () => ({
     unlinkSeller: vi.fn(),
     pullSeller: vi.fn(),
     getMpHealth: vi.fn(),
+    listWebhookEvents: vi.fn(),
+    listRecentOrders: vi.fn(),
+    getDeviceStatus: vi.fn(),
   },
 }));
 
@@ -51,7 +54,18 @@ const mockedPdvService = vi.mocked(pdvService);
 const mockedConfigService = vi.mocked(configService);
 const mockedBarSessions = vi.mocked(barSessionsService);
 
-const UNLINKED_STATUS = { linked: false, status: null, nickname: null, email: null, linkedAt: null, displayName: null };
+const UNLINKED_STATUS = {
+  linked: false,
+  status: null,
+  nickname: null,
+  email: null,
+  linkedAt: null,
+  displayName: null,
+  userId: null,
+  expiresAt: null,
+  hasAccessToken: false,
+  hasRefreshToken: false,
+};
 
 const LINKED_STATUS = {
   linked: true,
@@ -60,6 +74,10 @@ const LINKED_STATUS = {
   displayName: "Bosko Bar",
   email: "bosko@example.com",
   linkedAt: new Date().toISOString(),
+  userId: "1517393956",
+  expiresAt: new Date(Date.now() + 86400000).toISOString(),
+  hasAccessToken: true,
+  hasRefreshToken: true,
 };
 
 const SUMMARY = {
@@ -95,6 +113,12 @@ beforeEach(() => {
     hasLinkedDevice: false,
     checkedAt: new Date().toISOString(),
   });
+  mockedMpService.listWebhookEvents.mockResolvedValue({
+    available: true,
+    events: [],
+    webhookSecretConfigured: true,
+  });
+  mockedMpService.listRecentOrders.mockResolvedValue({ orders: [] });
   mockedPdvService.getSummary.mockResolvedValue(SUMMARY);
   mockedBarSessions.listAll.mockResolvedValue([]);
   mockedBarSessions.forceLogout.mockResolvedValue({ ok: true });
@@ -140,11 +164,7 @@ describe("PagosSection", () => {
 
   it("muestra los datos de la cuenta cuando hay seller activo", async () => {
     mockedMpService.getSellerStatus.mockResolvedValue({
-      linked: true,
-      status: "active",
-      nickname: "BOSKO BAR",
-      displayName: "Bosko Bar",
-      email: "bosko@example.com",
+      ...LINKED_STATUS,
       linkedAt: new Date().toISOString(),
     });
 
@@ -229,12 +249,13 @@ describe("PagosSection", () => {
 
   it("muestra el badge de sesión expirada cuando el seller está expired", async () => {
     mockedMpService.getSellerStatus.mockResolvedValue({
-      linked: true,
+      ...LINKED_STATUS,
       status: "expired",
-      nickname: "BOSKO BAR",
-      displayName: "Bosko Bar",
       email: null,
       linkedAt: null,
+      hasAccessToken: false,
+      hasRefreshToken: false,
+      expiresAt: null,
     });
 
     render(<PagosSection />);
@@ -244,21 +265,11 @@ describe("PagosSection", () => {
     expect(screen.getByRole("button", { name: /Re-vincular/i })).toBeInTheDocument();
   });
 
-  it("persiste el toggle Sandbox al cambiarlo", async () => {
-    const user = userEvent.setup();
+  it("muestra herramientas de desarrollador plegadas debajo de la sanidad", async () => {
     render(<PagosSection />);
-
-    const toggle = await screen.findByRole("button", { name: "Sandbox" });
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
-
-    await user.click(toggle);
-
-    await waitFor(() =>
-      expect(mockedConfigService.update).toHaveBeenCalledWith({
-        mercadoPago: { sandbox: true },
-      }),
-    );
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await screen.findByText("Pagos");
+    const btn = screen.getByRole("button", { name: /herramientas de desarrollador/i });
+    expect(btn).toHaveAttribute("aria-expanded", "false");
   });
 
   // ── Desvincular (hold-to-confirm) ──

@@ -153,6 +153,7 @@ describe("MercadoPagoOrdersService", () => {
       findByIdempotencyKey: vi.fn().mockResolvedValue(null),
       findByAttemptId: vi.fn().mockResolvedValue(null),
       findProcessedPendingFees: vi.fn().mockResolvedValue([]),
+      listRecent: vi.fn().mockResolvedValue([]),
       sumFeesForEvent: vi.fn().mockResolvedValue({ mpFeeTotal: 0, mpNetTotal: 0, pendingFees: 0 }),
       update: vi.fn().mockImplementation(async (orderIdMp, patch) => {
         const prev = (await vi.mocked(mpOrdersRepo.findByMpId).getMockImplementation()?.(orderIdMp)) ??

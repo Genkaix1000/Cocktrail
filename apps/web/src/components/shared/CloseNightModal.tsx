@@ -214,7 +214,7 @@ export default function CloseNightModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <style>{`
         @keyframes wiggle {
           0%, 100% { transform: scale(1) rotate(0deg); }
@@ -370,6 +370,7 @@ function ConfirmView({
           Tu contraseña / PIN
         </span>
         <input
+          data-tour="night-close-password"
           type="password"
           required
           value={password}
@@ -396,6 +397,7 @@ function ConfirmView({
         </button>
         <button
           type="button"
+          data-tour="night-close-submit"
           onClick={() => onConfirm(password)}
           disabled={submitting || !password.trim()}
           className="flex-1 h-12 rounded-xl bg-[var(--danger-base)] text-white font-semibold text-xs flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"

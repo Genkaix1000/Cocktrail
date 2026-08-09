@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import LogsSection from "./LogsSection";
 import { ordersService } from "@/services/orders.service";
+import { endAuditDemo, startAuditDemo } from "@/lib/auditTourDemo";
 
 import type { Order } from "@cocktrail/shared";
 
@@ -35,6 +36,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  endAuditDemo();
 });
 
 describe("LogsSection", () => {
@@ -57,7 +59,7 @@ describe("LogsSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("muestra el detalle del ticket en la propia tabla, sin popup", async () => {
+  it("muestra los datos principales del ticket en la propia tabla", async () => {
     const order = makeOrder({
       status: "entregado",
       deliveredByBar: "Barra VIP",
@@ -68,17 +70,16 @@ describe("LogsSection", () => {
 
     render(<LogsSection isBosko={false} />);
 
-    // Lo que antes vivía en el modal ahora son columnas de la fila.
     expect(await screen.findByText("TKN-1")).toBeInTheDocument();
     expect(screen.queryByText("Entregado")).not.toBeInTheDocument();
-    expect(screen.getByText("Barra VIP · barman1")).toBeInTheDocument();
+    expect(screen.queryByText("Barra VIP · barman1")).not.toBeInTheDocument();
     expect(screen.getByText("2x Fernet con Coca")).toBeInTheDocument();
   });
 
-  it("cancela un ticket desde la acción de la fila tras confirmar", async () => {
+  it("cancela un ticket y muestra el triangulito rojo interactivo", async () => {
     const user = userEvent.setup();
     const order = makeOrder();
-    const cancelledOrder: Order = { ...order, status: "cancelado", cancelledBy: "cajera1" };
+    const cancelledOrder: Order = { ...order, status: "cancelado", cancelledBy: "cajera1", cancelledAt: Date.now() };
 
     mockedOrdersService.getAuditLogs.mockResolvedValue([order]);
     mockedOrdersService.updateStatus.mockResolvedValue(cancelledOrder);
@@ -91,7 +92,15 @@ describe("LogsSection", () => {
     await waitFor(() =>
       expect(mockedOrdersService.updateStatus).toHaveBeenCalledWith(order.id, "cancelado"),
     );
-    expect(await screen.findByText("Cancelado")).toBeInTheDocument();
+
+    const triangleBtn = await screen.findByRole("button", {
+      name: "Ver detalles de cancelación del ticket #1",
+    });
+    expect(triangleBtn).toBeInTheDocument();
+
+    await user.click(triangleBtn);
+    expect(screen.getByText("Información de cancelación")).toBeInTheDocument();
+    expect(screen.getAllByText("cajera1").length).toBeGreaterThan(0);
   });
 
   it("filtra los tickets con el buscador", async () => {
@@ -127,5 +136,16 @@ describe("LogsSection", () => {
 
     // El ticket de esa noche aparece ya filtrado sin tocar ningún selector.
     expect(await screen.findByText("#7")).toBeInTheDocument();
+  });
+
+  it("inyecta tickets demo del tour sin llamar a la API", async () => {
+    mockedOrdersService.getAuditLogs.mockResolvedValue([]);
+    startAuditDemo();
+
+    render(<LogsSection isBosko={false} />);
+
+    expect(await screen.findByText(/Modo demo del tour/i)).toBeInTheDocument();
+    expect(await screen.findByText("#40")).toBeInTheDocument();
+    expect(mockedOrdersService.getAuditLogs).not.toHaveBeenCalled();
   });
 });

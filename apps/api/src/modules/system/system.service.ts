@@ -17,8 +17,11 @@ import {
   type MpFallbackStatus,
 } from "../mercadopago/mp-fallback-preflight.js";
 import { Conflict } from "../../shared/errors/http-errors.js";
+import { buildAppVersionInfo, type AppVersionInfo } from "./app-version.js";
 
 const serverStartedAt = Date.now();
+
+export type { AppVersionInfo };
 
 export type SystemHealth = {
   status: "ok" | "degraded";
@@ -106,6 +109,19 @@ export class SystemService {
       mpFallback: getMpFallbackStatus(),
       serverStartedAt,
     };
+  }
+
+  /** Versión de producto + metadata de deploy (Render/local). Sin I/O. */
+  getVersion(): AppVersionInfo {
+    const migrations = getMigrationsStatus();
+    return buildAppVersionInfo({
+      serverStartedAt,
+      migrations: {
+        state: migrations.state,
+        pending: migrations.pending,
+        appliedNow: migrations.appliedNow,
+      },
+    });
   }
 
   /** F1.c — re-evaluación on-demand del preflight (nunca lanza). */

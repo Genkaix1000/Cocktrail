@@ -6,6 +6,7 @@ import { validateWebhookSignature } from "./mercadopago-webhook-signature.js";
 import type { MercadoPagoOrdersService } from "./mercadopago-orders.service.js";
 import type { MpOrderStatus } from "./mp-orders.repository.js";
 import type {
+  ListRecentWebhookEventsResult,
   MpWebhookEvent,
   MpWebhookEventsRepository,
 } from "./mp-webhook-events.repository.js";
@@ -188,5 +189,16 @@ export class MercadoPagoWebhooksService {
       action,
       isPartialRefund,
     });
+  }
+
+  /** Diagnóstico admin: últimos webhooks + si el secret está configurado. */
+  async listRecentEvents(limit: number): Promise<
+    ListRecentWebhookEventsResult & { webhookSecretConfigured: boolean }
+  > {
+    const result = await this.webhookEventsRepo.listRecent(limit);
+    return {
+      ...result,
+      webhookSecretConfigured: Boolean(env.MP_WEBHOOK_SECRET),
+    };
   }
 }
