@@ -800,6 +800,7 @@ describe("MercadoPagoProvisioningService", () => {
       await expect(promise).rejects.toBeInstanceOf(Conflict);
       await expect(promise).rejects.toMatchObject({
         message: expect.stringContaining("Vinculala desde /admin"),
+        code: "MP_NOT_LINKED",
       });
       expect(fetch).not.toHaveBeenCalled();
     });

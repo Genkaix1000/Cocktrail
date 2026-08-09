@@ -41,6 +41,9 @@ export default function CajaPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [joiningBarId, setJoiningBarId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // true mientras el auto-join de "única caja disponible" está en curso,
+  // para suprimir el flash de CajaSessionOnboarding antes de que termine.
+  const [autoJoining, setAutoJoining] = useState(false);
 
   const activeBarId = activeSession?.barId ?? null;
   const activeBarIdRef = useRef(activeBarId);
@@ -227,6 +230,7 @@ export default function CajaPage() {
   }, [loadOptions]);
 
   // Una sola caja libre → entrar directo (sin pantalla de elección).
+  // autoJoining suprime el flash de CajaSessionOnboarding durante el join automático.
   useEffect(() => {
     if (loading || activeSession || joiningBarId) return;
     const joinable = boxes.filter((b) => b.status === "available" || b.status === "mine");
@@ -235,7 +239,8 @@ export default function CajaPage() {
     if (only.status !== "available") return;
     if (autoJoinedRef.current === only.barId) return;
     autoJoinedRef.current = only.barId;
-    void handleJoin(only.barId);
+    setAutoJoining(true);
+    void handleJoin(only.barId).finally(() => setAutoJoining(false));
   }, [loading, activeSession, joiningBarId, boxes, handleJoin]);
 
   async function handleLogout() {
@@ -258,11 +263,11 @@ export default function CajaPage() {
     }
   }, []);
 
-  if (loading || (activeBarId && loadedBarId !== activeBarId)) {
+  if (loading || autoJoining || (activeBarId && loadedBarId !== activeBarId)) {
     return (
       <main className="min-h-[100dvh] bg-ink-950 text-ink-50 flex items-center justify-center">
         <p className="text-ink-400 text-sm animate-pulse">
-          {activeSession ? "Conectando caja..." : "Buscando cajas..."}
+          {activeSession || autoJoining ? "Conectando caja..." : "Buscando cajas..."}
         </p>
       </main>
     );

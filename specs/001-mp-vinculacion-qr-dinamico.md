@@ -1,7 +1,7 @@
 # Spec 001 — Vinculación Mercado Pago, QR Dinámico y Portátil
 
 **Fecha:** 2026-08-09  
-**Estado:** En curso — F0+F1 ✅ · F2 ✅ · F3 ✅ · F4 ✅ · F5 pendiente  
+**Estado:** Completo — F0+F1 ✅ · F2 ✅ · F3 ✅ · F4 ✅ · F5A ✅ · F5B ✅  
 **Proyecto Supabase:** Bosko (`nmdvrmglmnbpoyfjmgab`)  
 **Contexto:** Handoff legado de la era Local/Cloud, Edge Function con redirect fijo a Render, QR de cobro atado a modo `static`, PDV huérfano al cambiar de cuenta MP, sin flujo tablet sin Posnet.
 
@@ -18,7 +18,7 @@ Cruzado contra código, Bosko y doc MP (MCP `search_documentation` + Orders API)
 | F2 persistencia | **Sobreestimada.** Desvincular ya no borra cajas; `isOrphan` es derivado. Queda copy + reprovision. |
 | F3 QR dinámico | **Ajustado.** Sigue haciendo falta Store + POS (`external_pos_id`). No hace falta Posnet Point. Sin columna `qr_mode`. |
 | F4 multi-barra | **Slice mínimo.** Onboarding ya elige caja. Para testeos: Barra VIP + Portátil. |
-| Comisiones | QR Orders = producto **Código QR presencial**, no Checkout Pro. Plazos/tasas se eligen en la cuenta MP del seller. |
+| Comisiones | QR Orders = producto **Código QR presencial**, no Checkout Pro. Plazos/tasas se eligen en la cuenta MP del seller. El **neto real** de cada cobro viene de `GET /v1/payments/{id}` → `transaction_details.net_received_amount` (no de tasas hardcodeadas). |
 
 **Estado vivo en Bosko (lectura 2026-08-09):**
 - Seller activo: `225043369` (con `access_token_enc`)
@@ -225,29 +225,76 @@ Diferir UI fancy de sidebar/dropdown hasta que haya ≥2 barras en producción r
 
 ---
 
-### Fase 5 — Comisiones y plazos de liberación en Pagos
+### Fase 5 — Neto real por cobro + panel de plazos
 
-**Objetivo:** En `/admin?tab=pagos`, que el negocio entienda y pueda elegir **qué comisión afronta según cuándo quiere el dinero disponible**.
+**Objetivo:** Que el dueño vea **plata que realmente le entra** (después de comisión MP), no el bruto del ticket — y que ese neto quede atribuido a la **caja/barra** que lo cobró, aunque la cuenta MP reciba plata de muchas fuentes.
 
-#### Cómo funciona en Mercado Pago (doc oficial)
+Absorbe y reemplaza el draft `docs/specs/comisiones-mp.md` (2026-07-24).
 
-- Las **tasas y plazos** se configuran en la **cuenta del seller**, no por order:
-  - UI: [https://www.mercadopago.com.ar/settings/release-options](https://www.mercadopago.com.ar/settings/release-options)
-  - Referencia tarifas: [support/37740](https://www.mercadopago.com.ar/developers/es/support/37740)
-- La doc de reportes (Liquidaciones / Liberaciones) lo confirma: *“Dependiendo de las tasas y plazos seleccionados, el valor se liquida un tiempo después de acreditado el cobro.”*
-- **No hay endpoint público en Orders/QR** para setear el plazo por transacción. Es setting de cuenta.
-- En integraciones OAuth (nuestro caso), aplica la config de la **cuenta vinculada** (el boliche), no la de la app Cocktrail.
+#### Problema
 
-#### Qué construimos en Cocktrail (lazy)
+Hoy: cliente paga $100 por QR → la app suma $100 a estadísticas. Mentira operativa: MP se queda la comisión; el neto es otro número. No queremos **especular** con % hardcodeados (cambian por medio, plazo, promo, IVA).
 
-1. **Panel informativo en Pagos** con tabla de referencia MLA (abajo) + disclaimer: *los valores exactos viven en tu cuenta MP y pueden cambiar*.
-2. **CTA primario:** “Configurar plazos y comisiones en Mercado Pago” → abre `https://www.mercadopago.com.ar/settings/release-options` (nueva pestaña; el seller debe estar logueado en esa cuenta).
-3. Texto corto: QR dinámico / Point QR = presencial; Checkout Pro = otro producto/tasa.
-4. **No** persistir la elección en nuestra DB ni intentar mutarla por API (no hay API estable documentada para esto en el flujo QR). Si MP publica API de release-options más adelante, se reevalúa.
+Además: una sola cuenta MP puede recibir cobros de VIP, Portátil, y fuera de Cocktrail. Sin atribución por cobro originado en la app, no se puede comparar barras.
 
-#### Tabla de referencia orientativa (MLA)
+#### Cómo lo resuelve MP (API, no especulación)
 
-> Fuente: estructura pública de plazos/comisiones de cobros MP en Argentina. **No es contractual.** Confirmar siempre en el panel del seller. IVA aparte salvo que MP lo indique incluido. Actualizar esta tabla cuando cambien las tarifas oficiales.
+Con el **mismo `access_token` del seller** (ya lo tenemos cifrado):
+
+```
+GET /v1/payments/{payment_id}
+→ transaction_amount          // bruto que pagó el cliente
+→ transaction_details.net_received_amount  // lo que acredita MP al seller
+→ fee_details[]               // desglose (comisión MP, financing, etc.)
+```
+
+Eso ya lo consulta parcialmente el gateway (`MercadoPagoService.getPayment`) para status/monto; F5 solo **persiste** neto + fees al concretar.
+
+**Cómo discriminamos por barra sin reconciliar toda la cuenta MP:**
+- Solo registramos cobros que **nosotros originamos** (QR Orders / Point intents).
+- Cada uno ya tiene `mp_orders.caja_id` (+ `external_pos_id` en el POS de esa caja) y, al concretarse, `payment_id`.
+- El neto de ese `payment_id` → esa caja. No hace falta scrapear el extracto completo de la cuenta ni adivinar origen de cobros ajenos a Cocktrail.
+
+#### 5A — Persistencia del neto (núcleo; esto es lo que falta para estadísticas honestas)
+
+**DB** (`mp_orders`):
+```sql
+ALTER TABLE mp_orders
+  ADD COLUMN IF NOT EXISTS net_received_amount NUMERIC(12,2),  -- pesos; lo que dice MP
+  ADD COLUMN IF NOT EXISTS mp_fee_amount       NUMERIC(12,2),  -- pesos; suma fee_details (o fee tipo mercadopago)
+  ADD COLUMN IF NOT EXISTS fee_status          TEXT NOT NULL DEFAULT 'none'
+    CHECK (fee_status IN ('none', 'pending', 'ready', 'unavailable'));
+-- fee_details JSON opcional: diferir; con los dos NUMERIC alcanza para stats
+```
+
+Reglas:
+- `paid_amount` / `orders.total` siguen siendo el **bruto** (ticket, arqueo, carrito). No se tocan.
+- `net_received_amount` / `mp_fee_amount` son **adicionales**. Efectivo: fee $0, neto = bruto, `fee_status=ready` sin llamar a MP.
+- Al concretar QR o Point (`status=processed` + `payment_id` conocido): con el token del seller, `GET /v1/payments/{id}` y persistir neto/fee → `fee_status=ready`.
+- Si MP aún no informa el neto o falla la consulta: venta se registra igual con `fee_status=pending` — **nunca bloquea el cobro**. Reintento lazy (poll/webhook/job corto) o backfill.
+- Idempotente: si `fee_status=ready`, no re-consultar salvo backfill forzado.
+
+**Dónde enganchar (mínimo):**
+1. `MercadoPagoOrdersService.buildStatusPatch` / post-concretar QR — ya tiene `paymentId`.
+2. `PointPaymentsService` al veredicto `FINISHED` — ya llama `/v1/payments`.
+3. Extender `MpPayment` / `IntentOutcome` con `netReceivedAmount` + fees (campos que hoy se descartan).
+4. Backfill: script o endpoint admin una vez — para filas `processed` con `payment_id` y `fee_status != ready`.
+
+**Fuera de alcance F5:**
+- Trasladar comisión al cliente / recargos.
+- Cálculo impositivo propio (IIBB, etc.): solo lo que MP informe.
+- Reconciliar cobros de la cuenta MP que no pasaron por Cocktrail.
+- Mutar release-options por API (no hay API estable en este flujo).
+
+#### 5B — UI: números reales + panel informativo de plazos
+
+1. **Cierre de noche / historial / stats admin:** tres números — Facturado (bruto), Comisiones MP, Neto. Filtro/desglose por caja cuando hay ≥2 (VIP vs Portátil).
+2. **Panel en `/admin?tab=pagos`:** tabla orientativa MLA (abajo) + disclaimer + CTA “Configurar plazos y comisiones en Mercado Pago” → `https://www.mercadopago.com.ar/settings/release-options`. Educativo; la verdad contable es 5A.
+3. Copy: la elección de plazo se confirma en MP, no con toggle local.
+
+#### Tabla de referencia orientativa (MLA) — solo panel 5B
+
+> **No es contractual.** Confirmar en el panel del seller. IVA aparte salvo que MP lo indique incluido.
 
 | Medio de pago del cliente | Plazo de liberación | Comisión orientativa |
 |---------------------------|---------------------|----------------------|
@@ -260,16 +307,20 @@ Diferir UI fancy de sidebar/dropdown hasta que haya ≥2 barras en producción r
 | Tarjeta de crédito / prepaga | ~35 días | ~1,49% + IVA |
 | Tarjeta de crédito / prepaga | ~70 días | Desde 0% / mínimo según cuenta |
 
-Notas operativas:
-- El **plazo elegido en release-options** aplica a los cobros de esa cuenta (incluye QR y Point bajo esa cuenta).
-- Más inmediato = comisión más alta; más días = más barato, menos liquidez.
-- Reclamos / contracargos pueden demorar la liberación aunque el plazo diga otra cosa.
-- Retenciones/percepciones impositivas (IIBB, etc.) son aparte de la comisión MP.
+Notas: más inmediato = comisión más alta; reclamos pueden demorar liberación; retenciones impositivas aparte.
 
 #### Verificación
-- En Pagos, con seller vinculado, se ve la tabla + CTA que abre release-options
-- Sin seller vinculado, el bloque explica que hace falta vincular primero
-- Copy deja claro que la elección se confirma en MP, no con un toggle local inventado
+- Cobro QR $100 processed → `paid_amount=100`, `net_received_amount` = valor de la app MP (centavo a centavo), `caja_id` de la barra que cobró
+- Cobro Point ídem
+- Stats por caja: VIP y Portátil suman netos distintos bajo el mismo seller
+- Falla de consulta de fees → venta igual, `fee_status=pending`, backfill la completa
+- Panel Pagos: tabla + CTA release-options; sin seller, copy de “vinculá primero”
+- Ticket/arqueo siguen en bruto
+
+#### Preguntas abiertas (cerrar en implementación con 1 pago real de prueba)
+1. ¿`net_received_amount` en MLA ya descuenta IIBB/retenciones además de la comisión, o solo fee MP? Si trae ítems en `fee_details`, ¿UI muestra un solo “se llevó MP” o desglose?
+2. ¿Neto visible por venta individual en historial, o solo agregados de noche/caja?
+3. Backfill: ¿botón admin una vez o script de mantenimiento?
 
 ---
 
@@ -281,11 +332,11 @@ Notas operativas:
 | **F2** Huérfanas light | F0 recomendado | 0.5-1h | Copy + reprovision del PDV actual |
 | **F3** QR dynamic | F0 | 2-3h | Tablet sin Posnet puede cobrar |
 | **F4** Portátil (2ª caja) | F3 | 1-2h | VIP + Portátil en testeos |
-| **F5** Panel comisiones/plazos | Nada (UI) | 1-2h | Transparencia de costos; deep-link a MP |
+| **F5** Neto real + panel plazos | F0 (token) | 3-5h | Stats honestas por caja; deep-link a MP |
 
 **Orden:** F0+F1 → F3 → F2 (o en paralelo a F3) → F4 → F5
 
-F5 puede adelantarse si solo es UI estática + link (no bloquea cobros).
+F5B (panel estático) puede ir primero si hace falta copy ya; F5A (persistir neto) es el corte que arregla estadísticas.
 
 ---
 
@@ -312,7 +363,10 @@ Si no hay device → solo QR. Si hay device → QR + Tarjeta. El cobro QR siempr
 | `POST` | `/api/mercadopago/provisioning/pos/:id/reprovision` | F2 | Verificar (ya existe) |
 | `POST` | `/api/mercadopago/orders/qr` | F3 | `mode: dynamic` + devolver `qr_data` |
 | `POST` | `/api/mercadopago/provisioning/pos` | F4 | Permitir 2ª caja `PORTATIL` |
-| — | UI Pagos → release-options | F5 | Tabla + deep-link (sin API nueva) |
+| — | Al concretar QR/Point → `GET /v1/payments/{id}` | F5A | Persistir `net_received_amount` + `mp_fee_amount` en `mp_orders` |
+| `POST` | `/api/mercadopago/fees/backfill` (o script) | F5A | Completar pendientes / históricos con `payment_id` |
+| — | UI Pagos → release-options | F5B | Tabla + deep-link (sin API nueva) |
+| — | Stats/cierre noche | F5A | Facturado / Comisiones / Neto; desglose por `caja_id` |
 
 ### Variables de entorno
 

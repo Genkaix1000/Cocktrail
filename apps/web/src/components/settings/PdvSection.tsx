@@ -13,7 +13,6 @@ import { barSessionsService } from "@/services/bar-sessions.service";
 import { mercadopagoService } from "@/services/mercadopago.service";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import Toast from "@/components/shared/Toast";
-import MpHealthPanel from "./MpHealthPanel";
 import PdvTable from "./PdvTable";
 import PdvFormPanel, { type PdvForm, type PdvPreset } from "./PdvFormPanel";
 import BoskoSelect from "@/components/shared/BoskoSelect";
@@ -139,6 +138,24 @@ export default function PdvSection() {
     try {
       setMpListing(await pdvService.listMpDevices());
     } catch (err) {
+      // Sin cuenta vinculada no es un fallo de red: el Dashboard/Sanidad lo
+      // marca como crítico. Acá solo dejamos el listado vacío, sin console.error.
+      const code =
+        err instanceof ApiError && err.data && typeof err.data === "object"
+          ? (err.data as { code?: string }).code
+          : undefined;
+      const notLinked =
+        code === "MP_NOT_LINKED" ||
+        (err instanceof Error && /no hay ninguna cuenta de Mercado Pago vinculada/i.test(err.message));
+      if (notLinked) {
+        setMpListing({
+          devices: [],
+          token: { source: "seller", userId: null },
+          sellerUserId: null,
+        });
+        setMpListingError(false);
+        return;
+      }
       console.error("Error loading MP devices listing:", err);
       setMpListing(null);
       setMpListingError(true);
@@ -461,7 +478,7 @@ export default function PdvSection() {
     mpListing.token.userId !== mpListing.sellerUserId;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8" data-tour="pdv-section">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -555,7 +572,10 @@ export default function PdvSection() {
       </div>
 
       {/* Posnets — lista única (activo / histórico / sin caja) + alta desde MP */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-card">
+      <div
+        data-tour="agregar-posnet"
+        className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-card"
+      >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
             <Monitor size={16} strokeWidth={1.8} />
@@ -803,9 +823,6 @@ export default function PdvSection() {
           </div>
         )}
       </div>
-
-      {/* Salud — abajo del todo en la tab Pagos */}
-      <MpHealthPanel />
 
       {saved && (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">

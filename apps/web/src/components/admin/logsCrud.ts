@@ -114,7 +114,7 @@ export function formatDateHour(ts: number): string {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} - ${pad(d.getHours())}:${pad(d.getMinutes())} hs`;
 }
 
-/** Un ticket solo se puede cancelar si todavía no se entregó ni se canceló. */
+/** Un ticket se puede anular mientras no esté cancelado (también si ya se entregó). */
 export function isCancelable(order: Order): boolean {
-  return order.status !== "cancelado" && order.status !== "entregado";
+  return order.status !== "cancelado";
 }

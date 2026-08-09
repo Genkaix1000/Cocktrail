@@ -1003,7 +1003,9 @@ export class MercadoPagoProvisioningService {
     } catch (err) {
       // Sin ninguna credencial no hay listado posible: 409 accionable (el
       // mensaje del resolver ya dice qué hacer), no un 500 opaco.
-      throw new Conflict(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      const notLinked = /no hay ninguna cuenta de Mercado Pago vinculada/i.test(message);
+      throw new Conflict(message, notLinked ? "MP_NOT_LINKED" : undefined);
     }
 
     // Si el token resuelto es el de la env (nivel 3 o degradación F1), la

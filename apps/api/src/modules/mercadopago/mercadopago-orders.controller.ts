@@ -74,5 +74,16 @@ export function createMercadoPagoOrdersController(service: MercadoPagoOrdersServ
     }
   });
 
+  // POST /api/mercadopago/fees/backfill — completa neto/fee pendientes (admin)
+  router.post("/fees/backfill", authMiddleware, requireRole("admin"), async (req, res, next) => {
+    try {
+      const raw = req.body?.limit;
+      const limit = typeof raw === "number" && Number.isFinite(raw) ? raw : 50;
+      res.json(await service.backfillFees(limit));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }

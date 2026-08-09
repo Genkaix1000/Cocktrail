@@ -8,6 +8,7 @@ import {
 } from "./analytics";
 
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
+import { displayRevenue, withLiveMpFees } from "@cocktrail/shared";
 
 const emptyTotals: EventTotals = {
   webTotal: 0,
@@ -70,6 +71,74 @@ describe("groupNightsByDay", () => {
     const s2 = makeSession({ id: "s2", closedAt: new Date(2026, 6, 15, 20, 0, 0).getTime() });
 
     expect(groupNightsByDay([s1, s2])).toHaveLength(2);
+  });
+  it("suma netTotal y mpFeeTotal cuando las sesiones traen fees MP", () => {
+    const day = new Date(2026, 6, 14, 22, 0, 0).getTime();
+    const s1 = makeSession({
+      id: "s1",
+      closedAt: day,
+      totals: {
+        ...emptyTotals,
+        efectivoTotal: 1000,
+        efectivoCount: 1,
+        qrTotal: 5000,
+        qrCount: 1,
+        total: 6000,
+        mpFeeTotal: 200,
+        netTotal: 5800,
+        drinksSold: [],
+      },
+    });
+    const s2 = makeSession({
+      id: "s2",
+      closedAt: day + 1000,
+      totals: {
+        ...emptyTotals,
+        efectivoTotal: 0,
+        qrTotal: 2000,
+        qrCount: 1,
+        total: 2000,
+        mpFeeTotal: 80,
+        netTotal: 1920,
+        drinksSold: [],
+      },
+    });
+
+    const nights = groupNightsByDay([s1, s2]);
+    expect(nights[0]!.totals.total).toBe(8000);
+    expect(nights[0]!.totals.mpFeeTotal).toBe(280);
+    expect(nights[0]!.totals.netTotal).toBe(7720);
+  });
+});
+
+describe("displayRevenue / withLiveMpFees", () => {
+  it("displayRevenue prefiere neto cuando existe", () => {
+    expect(displayRevenue({ ...emptyTotals, total: 1000 })).toBe(1000);
+    expect(displayRevenue({ ...emptyTotals, total: 1000, netTotal: 900 })).toBe(900);
+  });
+
+  it("withLiveMpFees mezcla bruto live con neto MP del snapshot", () => {
+    const live: EventTotals = {
+      ...emptyTotals,
+      efectivoTotal: 500,
+      efectivoCount: 1,
+      qrTotal: 2000,
+      qrCount: 1,
+      total: 2500,
+    };
+    const snapshot: EventTotals = {
+      ...emptyTotals,
+      efectivoTotal: 0,
+      qrTotal: 2000,
+      qrCount: 1,
+      total: 2000,
+      mpFeeTotal: 100,
+      netTotal: 1900,
+    };
+    const merged = withLiveMpFees(live, snapshot);
+    expect(merged.total).toBe(2500);
+    expect(merged.mpFeeTotal).toBe(100);
+    expect(merged.netTotal).toBe(2400); // 500 efectivo + 1900 mp neto
   });
 });
 

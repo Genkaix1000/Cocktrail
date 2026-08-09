@@ -17,11 +17,18 @@ import { claveDiaArgentina } from "../../shared/utils/fechas.js";
 import type { TestNightContext } from "./test-night/test-night-context.js";
 import type { TestNightStore } from "./test-night/test-night-store.js";
 
+export type MpNightFeeLookup = (eventId: string) => Promise<{
+  mpFeeTotal: number;
+  mpNetTotal: number;
+  pendingFees: number;
+}>;
+
 export class EventsService {
   private event: NightEvent | null = null;
   private activeTheme: Theme = "bosko";
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
+  private mpFeeLookup: MpNightFeeLookup | null = null;
 
   constructor(
     private eventsRepo: EventsRepository,
@@ -36,6 +43,50 @@ export class EventsService {
      */
     private testNight?: { context: TestNightContext; store: TestNightStore },
   ) {}
+
+  /** Wire-up post-construct (app.ts) — evita ciclo events ↔ mercadopago. */
+  setMpFeeLookup(lookup: MpNightFeeLookup): void {
+    this.mpFeeLookup = lookup;
+  }
+
+  /** Una sola advertencia: sin esto, cada snapshot spammea si falta la migración F5A. */
+  private mpFeeLookupDisabled = false;
+  private mpFeeLookupWarned = false;
+
+  private async withMpFees(eventId: string, totals: EventTotals): Promise<EventTotals> {
+    if (!this.mpFeeLookup || this.mpFeeLookupDisabled || totals.total === 0) return totals;
+    try {
+      const fees = await this.mpFeeLookup(eventId);
+      // Neto noche = efectivo (sin fee) + neto MP. Si hay pending, mpNetTotal ya
+      // usa paid_amount como techo hasta que el backfill complete.
+      const netTotal = totals.efectivoTotal + fees.mpNetTotal;
+      return {
+        ...totals,
+        mpFeeTotal: fees.mpFeeTotal,
+        netTotal,
+        mpFeesPending: fees.pendingFees,
+      };
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      const msg = err instanceof Error ? err.message : String(err);
+      // 42703 = columna inexistente → migración F5A no aplicada. Apagar lookup.
+      if (code === "42703" || /net_received_amount|mp_fee_amount|fee_status/.test(msg)) {
+        this.mpFeeLookupDisabled = true;
+        if (!this.mpFeeLookupWarned) {
+          this.mpFeeLookupWarned = true;
+          console.warn(
+            "[EventsService] Fees MP desactivados: faltan columnas en mp_orders. Aplicá la migración 20260809160000_mp_orders_fees.",
+          );
+        }
+        return totals;
+      }
+      if (!this.mpFeeLookupWarned) {
+        this.mpFeeLookupWarned = true;
+        console.warn(`[EventsService] No se pudieron sumar fees MP de ${eventId}:`, err);
+      }
+      return totals;
+    }
+  }
 
   private endTestNight(): void {
     this.testNight?.context.clear();
@@ -200,7 +251,7 @@ export class EventsService {
 
     const closedAt = Date.now();
     const orders = await this.ordersRepo.listForEvent(this.event.id);
-    const totals = computeTotals(orders);
+    const totals = await this.withMpFees(this.event.id, computeTotals(orders));
 
     // Update status to closed
     this.event.status = "cerrado";
@@ -249,7 +300,7 @@ export class EventsService {
     const summaries: EventSummary[] = [];
     for (const ev of closed) {
       const orders = await this.ordersRepo.listForEvent(ev.id);
-      const totals = computeTotals(orders);
+      const totals = await this.withMpFees(ev.id, computeTotals(orders));
 
       // Filtro de presentación: las noches en $0 no se muestran en el Historial,
       // pero NO se tocan en la base. Antes acá se las borraba (efecto colateral
@@ -318,7 +369,9 @@ export class EventsService {
     await this.ensureInitialized();
     const drinks = await this.drinksRepo.list();
     const orders = this.event ? await this.ordersRepo.listForEvent(this.event.id) : [];
-    const totals = computeTotals(orders);
+    const totals = this.event
+      ? await this.withMpFees(this.event.id, computeTotals(orders))
+      : computeTotals(orders);
     return {
       event: this.event,
       drinks,

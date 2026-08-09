@@ -11,6 +11,7 @@ export type MpOrderStatus =
   | "unknown"
   | "rejected";
 export type MpOrderType = "qr" | "point";
+export type MpFeeStatus = "none" | "pending" | "ready" | "unavailable";
 
 export type MpCartItem = { drinkId: number; qty: number };
 
@@ -37,6 +38,11 @@ export type MpOrder = {
   paymentStatusDetail: string | null;
   /** ⚠ En PESOS. */
   paidAmount: number | null;
+  /** Neto acreditado al seller según MP (pesos). */
+  netReceivedAmount: number | null;
+  /** Comisión / descuento total = bruto − neto (pesos). */
+  mpFeeAmount: number | null;
+  feeStatus: MpFeeStatus;
   verifiedAt: string | null;
   verificationError: string | null;
   cartItems: MpCartItem[] | null;
@@ -64,6 +70,9 @@ export type NewMpOrder = {
   paymentStatus?: string | null;
   paymentStatusDetail?: string | null;
   paidAmount?: number | null;
+  netReceivedAmount?: number | null;
+  mpFeeAmount?: number | null;
+  feeStatus?: MpFeeStatus;
   verifiedAt?: string | null;
   cartItems?: MpCartItem[] | null;
 };
@@ -76,8 +85,18 @@ export type MpOrderUpdate = {
   paymentStatus?: string | null;
   paymentStatusDetail?: string | null;
   paidAmount?: number | null;
+  netReceivedAmount?: number | null;
+  mpFeeAmount?: number | null;
+  feeStatus?: MpFeeStatus;
   verifiedAt?: string | null;
   verificationError?: string | null;
+};
+
+export type MpEventFeeTotals = {
+  mpFeeTotal: number;
+  /** Suma de netos ready; si pending, usa paid_amount como techo hasta completar. */
+  mpNetTotal: number;
+  pendingFees: number;
 };
 
 type MpOrderRow = {
@@ -101,6 +120,9 @@ type MpOrderRow = {
   payment_status: string | null;
   payment_status_detail: string | null;
   paid_amount: number | string | null;
+  net_received_amount: number | string | null;
+  mp_fee_amount: number | string | null;
+  fee_status: MpFeeStatus | null;
   verified_at: string | null;
   verification_error: string | null;
   cart_items: MpCartItem[] | null;
@@ -130,6 +152,9 @@ export function mapMpOrderRow(row: MpOrderRow): MpOrder {
     paymentStatus: row.payment_status,
     paymentStatusDetail: row.payment_status_detail,
     paidAmount: row.paid_amount == null ? null : Number(row.paid_amount),
+    netReceivedAmount: row.net_received_amount == null ? null : Number(row.net_received_amount),
+    mpFeeAmount: row.mp_fee_amount == null ? null : Number(row.mp_fee_amount),
+    feeStatus: row.fee_status ?? "none",
     verifiedAt: row.verified_at,
     verificationError: row.verification_error,
     cartItems: row.cart_items,
@@ -139,7 +164,7 @@ export function mapMpOrderRow(row: MpOrderRow): MpOrder {
 }
 
 const SELECT_COLS =
-  "id, order_id_mp, external_ref, idempotency_key, payment_transaction_id, payment_id, amount, status, type, bar_id, caja_id, event_id, qr_data, expires_at, device_id, attempt_id, raw_state, payment_status, payment_status_detail, paid_amount, verified_at, verification_error, cart_items, created_at, updated_at";
+  "id, order_id_mp, external_ref, idempotency_key, payment_transaction_id, payment_id, amount, status, type, bar_id, caja_id, event_id, qr_data, expires_at, device_id, attempt_id, raw_state, payment_status, payment_status_detail, paid_amount, net_received_amount, mp_fee_amount, fee_status, verified_at, verification_error, cart_items, created_at, updated_at";
 
 export interface MpOrdersRepository {
   create(order: NewMpOrder): Promise<MpOrder>;
@@ -149,6 +174,8 @@ export interface MpOrdersRepository {
   findByIdempotencyKey(idempotencyKey: string): Promise<MpOrder | null>;
   /** Puede haber varios intents por attempt (retry 2205) — devuelve el más nuevo. */
   findByAttemptId(attemptId: string): Promise<MpOrder | null>;
+  findProcessedPendingFees(limit: number): Promise<MpOrder[]>;
+  sumFeesForEvent(eventId: string): Promise<MpEventFeeTotals>;
   update(orderIdMp: string, patch: MpOrderUpdate): Promise<MpOrder>;
   updateStatus(orderIdMp: string, status: MpOrderStatus): Promise<MpOrder>;
 }
@@ -177,6 +204,9 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
         payment_status: order.paymentStatus ?? null,
         payment_status_detail: order.paymentStatusDetail ?? null,
         paid_amount: order.paidAmount ?? null,
+        net_received_amount: order.netReceivedAmount ?? null,
+        mp_fee_amount: order.mpFeeAmount ?? null,
+        fee_status: order.feeStatus ?? "none",
         verified_at: order.verifiedAt ?? null,
         cart_items: order.cartItems ?? null,
       })
@@ -268,6 +298,55 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
     return data ? mapMpOrderRow(data as MpOrderRow) : null;
   }
 
+  async findProcessedPendingFees(limit: number): Promise<MpOrder[]> {
+    // `none` = filas pre-F5A (default de migración); `pending` = cobro nuevo sin neto aún.
+    const { data, error } = await supabase
+      .from("mp_orders")
+      .select(SELECT_COLS)
+      .eq("status", "processed")
+      .in("fee_status", ["pending", "none"])
+      .not("payment_id", "is", null)
+      .order("created_at", { ascending: true })
+      .limit(Math.max(1, Math.min(limit, 200)));
+
+    if (error) {
+      console.error("[SupabaseMpOrdersRepository] Error listing pending fees:", error);
+      throw error;
+    }
+    return (data as MpOrderRow[] | null)?.map(mapMpOrderRow) ?? [];
+  }
+
+  async sumFeesForEvent(eventId: string): Promise<MpEventFeeTotals> {
+    const { data, error } = await supabase
+      .from("mp_orders")
+      .select("paid_amount, net_received_amount, mp_fee_amount, fee_status, status")
+      .eq("event_id", eventId)
+      .eq("status", "processed");
+
+    if (error) {
+      console.error("[SupabaseMpOrdersRepository] Error summing fees for event:", error);
+      throw error;
+    }
+
+    let mpFeeTotal = 0;
+    let mpNetTotal = 0;
+    let pendingFees = 0;
+    for (const row of data ?? []) {
+      const feeStatus = (row.fee_status as MpFeeStatus | null) ?? "none";
+      const paid = row.paid_amount == null ? 0 : Number(row.paid_amount);
+      const net = row.net_received_amount == null ? null : Number(row.net_received_amount);
+      const fee = row.mp_fee_amount == null ? null : Number(row.mp_fee_amount);
+      if (feeStatus === "ready" && fee != null && net != null) {
+        mpFeeTotal += fee;
+        mpNetTotal += net;
+      } else {
+        pendingFees += 1;
+        mpNetTotal += paid;
+      }
+    }
+    return { mpFeeTotal, mpNetTotal, pendingFees };
+  }
+
   async update(orderIdMp: string, patch: MpOrderUpdate): Promise<MpOrder> {
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.status !== undefined) payload.status = patch.status;
@@ -279,6 +358,9 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
     if (patch.paymentStatus !== undefined) payload.payment_status = patch.paymentStatus;
     if (patch.paymentStatusDetail !== undefined) payload.payment_status_detail = patch.paymentStatusDetail;
     if (patch.paidAmount !== undefined) payload.paid_amount = patch.paidAmount;
+    if (patch.netReceivedAmount !== undefined) payload.net_received_amount = patch.netReceivedAmount;
+    if (patch.mpFeeAmount !== undefined) payload.mp_fee_amount = patch.mpFeeAmount;
+    if (patch.feeStatus !== undefined) payload.fee_status = patch.feeStatus;
     if (patch.verifiedAt !== undefined) payload.verified_at = patch.verifiedAt;
     if (patch.verificationError !== undefined) payload.verification_error = patch.verificationError;
 

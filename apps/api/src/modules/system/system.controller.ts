@@ -34,6 +34,20 @@ export function createSystemController(
     res.json(systemService.getHealth());
   });
 
+  // POST /api/system/migrations/accept-drift — admin. Pisa checksums al disco actual.
+  router.post(
+    "/migrations/accept-drift",
+    authMiddleware,
+    requireRole("admin"),
+    async (_req, res, next) => {
+      try {
+        res.json(await systemService.acceptMigrationDrift());
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   // GET /api/system/status — staff only (documentado en ARCHITECTURE.md, faltaba el guard)
   router.get("/status", authMiddleware, requireRole("admin", "caja"), systemStatusLimiter, async (_req, res, next) => {
     try {

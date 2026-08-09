@@ -547,12 +547,33 @@ function TotalsBlock({ totals }: { totals: EventTotals }) {
         />
         <div className="flex items-center justify-between px-4 py-3 bg-[var(--accent-surface)] border-t border-[var(--border-subtle)]">
           <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-text)]">
-            Total noche
+            Facturado
           </span>
           <span className="font-mono text-xl text-[var(--text-primary)] font-bold tabular">
             ${grandTotal.toLocaleString("es-AR")}
           </span>
         </div>
+        {totals.mpFeeTotal != null && (
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="text-[11px] font-medium text-[var(--text-secondary)]">
+              Comisiones MP
+              {totals.mpFeesPending ? ` (${totals.mpFeesPending} pend.)` : ""}
+            </span>
+            <span className="font-mono text-[13px] text-[var(--text-secondary)] tabular">
+              −${totals.mpFeeTotal.toLocaleString("es-AR")}
+            </span>
+          </div>
+        )}
+        {totals.netTotal != null && (
+          <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-panel)] border-t border-[var(--border-subtle)]">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-primary)]">
+              Ingreso neto
+            </span>
+            <span className="font-mono text-xl text-[var(--text-primary)] font-bold tabular">
+              ${totals.netTotal.toLocaleString("es-AR")}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Segmented Distribution Chart */}

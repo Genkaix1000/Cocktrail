@@ -109,6 +109,22 @@ export default function MetricasSection({ event, activeNightOrders, totals }: Pr
         <p className="text-[13px] text-[var(--text-secondary)] mt-1">
           Revisión horaria del flujo de dinero y tickets registrados en el transcurso del evento.
         </p>
+        <p className="text-[13px] text-[var(--text-primary)] mt-2 font-mono tabular">
+          {totals.netTotal != null ? (
+            <>
+              Ingreso neto ${totals.netTotal.toLocaleString("es-AR")}
+              {" · "}Facturado ${totals.total.toLocaleString("es-AR")}
+              {totals.mpFeeTotal != null && (
+                <>
+                  {" · "}Comisiones MP ${totals.mpFeeTotal.toLocaleString("es-AR")}
+                </>
+              )}
+              {totals.mpFeesPending ? ` (${totals.mpFeesPending} fee pend.)` : ""}
+            </>
+          ) : (
+            <>Facturado ${totals.total.toLocaleString("es-AR")}</>
+          )}
+        </p>
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -32,4 +32,12 @@ export const systemService = {
   getHealth() {
     return apiFetch<SystemHealth>("/api/system/health");
   },
+
+  /** Acepta drift legítimo (checksum disco → registrado). Admin only. */
+  acceptMigrationDrift() {
+    return apiFetch<{ updated: number; versions: string[] }>(
+      "/api/system/migrations/accept-drift",
+      { method: "POST" },
+    );
+  },
 };

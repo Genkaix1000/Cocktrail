@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  getMigrationsStatus,
   isDegraded,
   setMigrationsStatus,
   type MigrationDrift,
@@ -135,6 +136,41 @@ export async function runMigrations(opts: {
     `[migrations] ${status.appliedNow.length} aplicadas, ${status.pending.length} pendientes, drift: ${status.drift.length} (${status.state})`,
   );
   return status;
+}
+
+/**
+ * Acepta drift legítimo: pisa checksums registrados con los del disco actual
+ * y limpia el estado en memoria. No re-ejecuta SQL.
+ */
+export async function acceptMigrationDrift(opts: {
+  repo: PgMigrationsRepository;
+}): Promise<{ updated: number; versions: string[] }> {
+  const current = getMigrationsStatus();
+  if (current.drift.length === 0) {
+    return { updated: 0, versions: [] };
+  }
+
+  let connected = false;
+  try {
+    await opts.repo.connect();
+    connected = true;
+    const versions: string[] = [];
+    for (const d of current.drift) {
+      await opts.repo.updateChecksum(d.version, d.actual);
+      versions.push(d.version);
+    }
+    const next: MigrationsStatus = {
+      ...current,
+      drift: [],
+      lastRunAt: new Date().toISOString(),
+    };
+    next.state = isDegraded(next) ? "degraded" : "ok";
+    setMigrationsStatus(next);
+    console.log(`[migrations] Drift aceptado en ${versions.length} archivo(s): ${versions.join(", ")}`);
+    return { updated: versions.length, versions };
+  } finally {
+    if (connected) await opts.repo.disconnect().catch(() => {});
+  }
 }
 
 async function acquireLockWithRetry(

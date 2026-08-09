@@ -13,6 +13,7 @@ import type {
   EventTotals,
   DrinkSold,
 } from "@cocktrail/shared";
+import { displayRevenue } from "@cocktrail/shared";
 
 // ─────────────────────── Types ───────────────────────
 
@@ -320,10 +321,10 @@ export function computeWeeklyDelta(historyEvents: EventSummary[]): {
   for (const e of historyEvents) {
     const ts = e.closedAt ?? e.startedAt;
     if (ts >= thisWeekStart) {
-      thisWeek += e.totals.total;
+      thisWeek += displayRevenue(e.totals);
       thisWeekCount++;
     } else if (ts >= lastWeekStart && ts < thisWeekStart) {
-      lastWeek += e.totals.total;
+      lastWeek += displayRevenue(e.totals);
     }
   }
 
@@ -356,10 +357,10 @@ export function computeMonthlyDelta(historyEvents: EventSummary[]): {
   for (const e of historyEvents) {
     const ts = e.closedAt ?? e.startedAt;
     if (ts >= thisMonthStart) {
-      thisMonth += e.totals.total;
+      thisMonth += displayRevenue(e.totals);
       thisMonthCount++;
     } else if (ts >= lastMonthStart && ts < thisMonthStart) {
-      lastMonth += e.totals.total;
+      lastMonth += displayRevenue(e.totals);
     }
   }
 
@@ -392,9 +393,9 @@ export function computeWeeklyBreakdown(historyEvents: EventSummary[]): {
     const acc = weeks.get(weekStart);
     if (acc) {
       acc.nightsCount++;
-      acc.total += e.totals.total;
+      acc.total += displayRevenue(e.totals);
     } else {
-      weeks.set(weekStart, { nightsCount: 1, total: e.totals.total });
+      weeks.set(weekStart, { nightsCount: 1, total: displayRevenue(e.totals) });
     }
   }
 
@@ -422,9 +423,9 @@ export function computeMonthlyBreakdown(historyEvents: EventSummary[]): {
     const acc = months.get(monthStart);
     if (acc) {
       acc.nightsCount++;
-      acc.total += e.totals.total;
+      acc.total += displayRevenue(e.totals);
     } else {
-      months.set(monthStart, { nightsCount: 1, total: e.totals.total });
+      months.set(monthStart, { nightsCount: 1, total: displayRevenue(e.totals) });
     }
   }
 
@@ -473,6 +474,18 @@ export function groupNightsByDay(historyEvents: EventSummary[]): UnifiedNightDay
     const debitoTotal = sessions.reduce((sum, s) => sum + (s.totals.debitoTotal || 0), 0);
     const debitoCount = sessions.reduce((sum, s) => sum + (s.totals.debitoCount || 0), 0);
     const total = sessions.reduce((sum, s) => sum + s.totals.total, 0);
+    const hasFees = sessions.some(
+      (s) => s.totals.netTotal != null || s.totals.mpFeeTotal != null,
+    );
+    const mpFeeTotal = hasFees
+      ? sessions.reduce((sum, s) => sum + (s.totals.mpFeeTotal ?? 0), 0)
+      : undefined;
+    const netTotal = hasFees
+      ? sessions.reduce((sum, s) => sum + displayRevenue(s.totals), 0)
+      : undefined;
+    const mpFeesPending = hasFees
+      ? sessions.reduce((sum, s) => sum + (s.totals.mpFeesPending ?? 0), 0) || undefined
+      : undefined;
     const orderCounter = sessions.reduce((sum, s) => sum + s.orderCounter, 0);
 
     const drinksMap: { [drinkId: number]: { drinkId: number; name: string; qty: number; subtotal: number } } = {};
@@ -507,6 +520,9 @@ export function groupNightsByDay(historyEvents: EventSummary[]): UnifiedNightDay
         debitoTotal,
         debitoCount,
         drinksSold,
+        ...(mpFeeTotal != null ? { mpFeeTotal } : {}),
+        ...(netTotal != null ? { netTotal } : {}),
+        ...(mpFeesPending != null ? { mpFeesPending } : {}),
       },
       orderCounter,
     };

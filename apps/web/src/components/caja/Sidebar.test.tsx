@@ -50,9 +50,7 @@ const baseProps = {
   printerPaired: false,
   printerTestMessage: null as string | null,
   posnetLevel: "ok" as const,
-  posnetMessage: "Posnet de la caja listo para cobrar (modo PDV).",
-  testPosnet: vi.fn(),
-  posnetTestMessage: null as string | null,
+  posnetMessage: "Posnet listo.",
   handleLogout: vi.fn(),
 };
 
@@ -157,13 +155,13 @@ describe("CajaSidebar", () => {
 
     render(<CajaSidebar {...baseProps} testPrint={testPrint} />);
 
-    expect(screen.getByText("Impresora conectada")).toBeInTheDocument();
+    expect(screen.getByText("Impresora OK")).toBeInTheDocument();
 
-    await user.click(screen.getByText("Imprimir ticket de prueba"));
+    await user.click(screen.getByText("Ticket de prueba"));
     expect(testPrint).toHaveBeenCalled();
   });
 
-  it("muestra Vincular impresora cuando no hay vínculo y el mensaje de test", async () => {
+  it("muestra Vincular cuando no hay vínculo y el mensaje de test", async () => {
     const user = userEvent.setup();
     const pairPrinterDevice = vi.fn();
     render(
@@ -175,11 +173,10 @@ describe("CajaSidebar", () => {
       />,
     );
 
-    expect(screen.getByText("Impresora sin conectar")).toBeInTheDocument();
-    // El mensaje del manager (printerStatus.message) se muestra como detalle.
-    expect(screen.getByText("sin conexión")).toBeInTheDocument();
+    expect(screen.getByText("Sin impresora")).toBeInTheDocument();
+    expect(screen.queryByText("sin conexión")).not.toBeInTheDocument();
     expect(screen.getByText("Error al imprimir la prueba.")).toBeInTheDocument();
-    await user.click(screen.getByText("Vincular impresora"));
+    await user.click(screen.getByText("Vincular"));
     expect(pairPrinterDevice).toHaveBeenCalled();
   });
 
@@ -194,7 +191,7 @@ describe("CajaSidebar", () => {
     expect(screen.getByText("Posnet listo")).toBeInTheDocument();
   });
 
-  it("muestra una advertencia (no bloqueo) con su mensaje cuando el nivel es warning", () => {
+  it("muestra aviso corto cuando el nivel es warning", () => {
     render(
       <CajaSidebar
         {...baseProps}
@@ -203,9 +200,9 @@ describe("CajaSidebar", () => {
       />,
     );
 
-    expect(screen.getByText("Posnet con advertencia")).toBeInTheDocument();
-    expect(screen.getByText(/modo STANDALONE/)).toBeInTheDocument();
-    expect(screen.queryByText("Cobro Posnet bloqueado")).not.toBeInTheDocument();
+    expect(screen.getByText("Posnet con aviso")).toBeInTheDocument();
+    expect(screen.queryByText(/modo STANDALONE/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Posnet bloqueado")).not.toBeInTheDocument();
   });
 
   it("muestra el bloqueo cuando el nivel es blocked", () => {
@@ -217,8 +214,7 @@ describe("CajaSidebar", () => {
       />,
     );
 
-    expect(screen.getByText("Cobro Posnet bloqueado")).toBeInTheDocument();
-    expect(screen.getByText(/NO aparece en el listado/)).toBeInTheDocument();
+    expect(screen.getByText("Posnet bloqueado")).toBeInTheDocument();
   });
 
   it("un nivel unknown queda neutro (nunca rojo)", () => {
@@ -226,7 +222,12 @@ describe("CajaSidebar", () => {
       <CajaSidebar {...baseProps} posnetLevel="unknown" posnetMessage="No se pudo consultar." />,
     );
 
-    expect(screen.getByText("Posnet sin verificar")).toBeInTheDocument();
-    expect(screen.queryByText("Cobro Posnet bloqueado")).not.toBeInTheDocument();
+    expect(screen.getByText("Posnet")).toBeInTheDocument();
+    expect(screen.queryByText("Posnet bloqueado")).not.toBeInTheDocument();
+  });
+
+  it("no ofrece Probar Posnet", () => {
+    render(<CajaSidebar {...baseProps} />);
+    expect(screen.queryByText(/Probar Posnet/i)).not.toBeInTheDocument();
   });
 });

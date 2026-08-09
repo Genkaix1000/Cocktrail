@@ -115,4 +115,12 @@ export class PgMigrationsRepository {
       [migration.version, migration.checksum, durationMs, appliedBy],
     );
   }
+
+  /** Acepta drift legítimo: actualiza el checksum registrado al del archivo actual. */
+  async updateChecksum(version: string, checksum: string): Promise<void> {
+    await this.db.query(
+      `UPDATE public.schema_migrations SET checksum = $2 WHERE version = $1`,
+      [version, checksum],
+    );
+  }
 }

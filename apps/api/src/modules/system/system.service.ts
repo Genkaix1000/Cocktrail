@@ -9,11 +9,14 @@ import {
   isDegraded,
   type MigrationsStatus,
 } from "../../infra/migrations/migrations-status.js";
+import { acceptMigrationDrift } from "../../infra/migrations/migration-runner.js";
+import type { PgMigrationsRepository } from "../../infra/migrations/pg-migrations.repository.js";
 import {
   getMpFallbackStatus,
   runMpFallbackPreflight,
   type MpFallbackStatus,
 } from "../mercadopago/mp-fallback-preflight.js";
+import { Conflict } from "../../shared/errors/http-errors.js";
 
 const serverStartedAt = Date.now();
 
@@ -60,7 +63,32 @@ export class SystemService {
      * app.ts inyecta `peek()` (sin efectos: reportar no es cobrar).
      */
     private resolvePosnetForStatus: () => Promise<ResolvedPosnet>,
+    /** Solo para accept-drift — conexión directa a Postgres (mismo que el runner). */
+    private migrationsRepo?: PgMigrationsRepository,
   ) {}
+
+  /**
+   * Acepta drift de migraciones ya aplicadas (checksum disco → registrado).
+   * No re-ejecuta SQL. Admin only vía controller.
+   */
+  async acceptMigrationDrift(): Promise<{ updated: number; versions: string[] }> {
+    if (!this.migrationsRepo) {
+      throw new Conflict("No hay conexión a Postgres para reparar migraciones.");
+    }
+    const drift = getMigrationsStatus().drift;
+    if (drift.length === 0) {
+      return { updated: 0, versions: [] };
+    }
+    try {
+      return await acceptMigrationDrift({ repo: this.migrationsRepo });
+    } catch (err) {
+      throw new Conflict(
+        err instanceof Error
+          ? `No se pudo aceptar el drift: ${err.message}`
+          : "No se pudo aceptar el drift de migraciones.",
+      );
+    }
+  }
 
   /**
    * Liviano (lee un singleton en memoria, sin I/O) — a diferencia de

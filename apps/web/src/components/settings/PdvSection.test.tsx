@@ -328,13 +328,6 @@ describe("PdvSection", () => {
     }
   });
 
-  it("renderiza el panel de salud de la vinculación", async () => {
-    render(<PdvSection />);
-    expect(
-      await screen.findByRole("heading", { name: /Salud de la vinculación/i }),
-    ).toBeInTheDocument();
-  });
-
   // ── Card Posnets: fixes del PR 6 ──
 
   it("el Test $15 viaja con el deviceId de la fila y el resultado se renderiza", async () => {

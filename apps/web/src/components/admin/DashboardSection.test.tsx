@@ -103,12 +103,18 @@ describe("DashboardSection", () => {
     expect(screen.queryByText(/\buds\b/)).not.toBeInTheDocument();
   });
 
-  it("muestra la Comparativa con 3 filas, sin Ticket Promedio", () => {
+  it("no muestra Comparativa (deltas viven en las MetricCards)", () => {
     render(<DashboardSection {...makeProps()} />);
-    expect(screen.getByText("Comparativa")).toBeInTheDocument();
-    expect(screen.getByText("Ventas")).toBeInTheDocument();
-    expect(screen.getByText("Tickets")).toBeInTheDocument();
-    expect(screen.getByText("Unidades")).toBeInTheDocument();
+    expect(screen.queryByText("Comparativa")).not.toBeInTheDocument();
+    expect(screen.getByText("Tickets Totales")).toBeInTheDocument();
+    expect(screen.getByText("Unidades Vendidas")).toBeInTheDocument();
+  });
+
+  it("marca charts de mix como bruto", () => {
+    render(<DashboardSection {...makeProps()} />);
+    expect(screen.getByText("Recaudación bruta")).toBeInTheDocument();
+    expect(screen.getByText("Subtotal bruto")).toBeInTheDocument();
+    expect(screen.getByText("% sobre facturado bruto")).toBeInTheDocument();
   });
 
   it("muestra el total de ventas formateado cuando hay pedidos", () => {
@@ -165,15 +171,6 @@ describe("DashboardSection", () => {
         orders: [],
       },
     ];
-
-    it("no muestra la card Comparativa", () => {
-      render(
-        <DashboardSection
-          {...makeProps({ event: null, isNightOpen: false, historyEvents, totals: historyEvents[0]!.totals })}
-        />,
-      );
-      expect(screen.queryByText("Comparativa")).not.toBeInTheDocument();
-    });
 
     it("no muestra delta ni 'EN VIVO', muestra la fecha de la última noche", () => {
       render(

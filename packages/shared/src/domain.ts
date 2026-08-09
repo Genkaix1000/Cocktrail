@@ -75,6 +75,13 @@ export type Order = {
   paymentRef?: string;
   paymentRecordId?: string;
   idempotencyKey?: string;
+  /**
+   * Neto acreditado por MP (fee_status=ready en mp_orders).
+   * El bruto del ticket sigue en `total`.
+   */
+  mpNetReceived?: number;
+  /** Comisión MP del cobro (pesos), si ya está lista. */
+  mpFeeAmount?: number;
 };
 
 export type NightEvent = {
@@ -112,6 +119,15 @@ export type EventTotals = {
   cortesiaCount?: number;
   drinksSold: DrinkSold[];
   total: number;
+  /** Comisión MP real (suma fee_status=ready). Opcional: ausente si no se enriqueció. */
+  mpFeeTotal?: number;
+  /**
+   * Ingreso neto de la noche: efectivo (fee 0) + netos MP.
+   * Facturado sigue en `total` (bruto).
+   */
+  netTotal?: number;
+  /** Cobros MP processed aún sin neto de la API. */
+  mpFeesPending?: number;
 };
 
 export type EventSummary = NightEvent & {
@@ -241,5 +257,40 @@ export function computeTotals(orders: Order[]): EventTotals {
     cortesiaCount,
     drinksSold,
     total,
+  };
+}
+
+/**
+ * Plata que “entra” por ese ticket: neto MP si ya está, si no el bruto.
+ */
+export function displayOrderRevenue(order: Pick<Order, "total" | "mpNetReceived">): number {
+  return order.mpNetReceived ?? order.total;
+}
+
+/**
+ * Plata que “entra” al boliche: neto MP+efectivo si el server ya enriqueció fees;
+ * si no, el facturado bruto.
+ */
+export function displayRevenue(totals: EventTotals): number {
+  return totals.netTotal ?? totals.total;
+}
+
+/**
+ * Totales live del carrito + fees MP del último snapshot del server.
+ * El bruto (efectivo/qr/débito/total) sigue saliendo de `orders`; el neto
+ * reusa la suma de netos MP del snapshot (no cambia con ventas en efectivo).
+ */
+export function withLiveMpFees(
+  live: EventTotals,
+  snapshot: EventTotals | null | undefined,
+): EventTotals {
+  if (snapshot == null) return live;
+  if (snapshot.mpFeeTotal == null && snapshot.netTotal == null) return live;
+  const snapshotMpNet = (snapshot.netTotal ?? snapshot.total) - snapshot.efectivoTotal;
+  return {
+    ...live,
+    mpFeeTotal: snapshot.mpFeeTotal ?? 0,
+    netTotal: live.efectivoTotal + Math.max(0, snapshotMpNet),
+    mpFeesPending: snapshot.mpFeesPending,
   };
 }

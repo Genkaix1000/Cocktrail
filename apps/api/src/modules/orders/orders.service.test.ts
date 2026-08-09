@@ -343,6 +343,7 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
   it.each([
     ["pendiente", "entregado"],
     ["pendiente", "cancelado"],
+    ["entregado", "cancelado"],
   ] as const)("permite la transición %s -> %s", async (from, to) => {
     vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: from }));
     vi.mocked(ordersRepo.updateStatus).mockResolvedValue(makeOrder({ status: to }));
@@ -353,7 +354,6 @@ describe("OrdersService.updateOrderStatus (máquina de estados)", () => {
   it.each([
     ["entregado", "pendiente"],
     ["cancelado", "entregado"],
-    ["entregado", "cancelado"],
   ] as const)("rechaza la transición inválida %s -> %s", async (from, to) => {
     vi.mocked(ordersRepo.findById).mockResolvedValue(makeOrder({ status: from }));
     await expect(service.updateOrderStatus("order-1", to)).rejects.toThrow(/Transición inválida/);

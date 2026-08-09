@@ -71,7 +71,7 @@ describe("MigrationsBanner", () => {
     expect(alert).toHaveTextContent("1 pendiente");
   });
 
-  it("muestra el texto de drift cuando solo hay drift", async () => {
+  it("no muestra banner cuando solo hay drift (va al panel Sanidad del Dashboard)", async () => {
     mockedSystemService.getHealth.mockResolvedValue(
       makeHealth({
         state: "degraded",
@@ -79,9 +79,10 @@ describe("MigrationsBanner", () => {
       }),
     );
 
-    render(<MigrationsBanner />);
-
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("1 migración(es) ya aplicadas cambió");
+    const { container } = render(<MigrationsBanner />);
+    await vi.waitFor(() => {
+      expect(mockedSystemService.getHealth).toHaveBeenCalled();
+    });
+    expect(container).toBeEmptyDOMElement();
   });
 });

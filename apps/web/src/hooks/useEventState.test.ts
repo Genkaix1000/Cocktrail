@@ -226,6 +226,60 @@ describe("useEventState", () => {
     expect(result.current.summary).toBeNull();
   });
 
+  it("expone serverTotals desde getState (fees MP del snapshot)", async () => {
+    mockedEventsService.getState.mockResolvedValueOnce({
+      event: makeNightEvent(),
+      drinks: [],
+      orders: [],
+      totals: {
+        webTotal: 0, webCount: 0, efectivoTotal: 1000, efectivoCount: 1,
+        qrTotal: 5000, qrCount: 1, debitoTotal: 0, debitoCount: 0,
+        drinksSold: [], total: 6000,
+        mpFeeTotal: 200, netTotal: 5800, mpFeesPending: 0,
+      },
+      activeTheme: "bosko",
+    });
+
+    const { result } = renderHook(() => useEventState());
+    const es = FakeEventSource.instances.at(-1)!;
+    act(() => es.emitOpen());
+
+    await waitFor(() => {
+      expect(result.current.serverTotals?.netTotal).toBe(5800);
+      expect(result.current.serverTotals?.mpFeeTotal).toBe(200);
+    });
+  });
+
+  it("order.created agenda refetch de fees tras debounce", async () => {
+    vi.useFakeTimers();
+    renderHook(() => useEventState());
+    const es = FakeEventSource.instances.at(-1)!;
+    mockedEventsService.getState.mockClear();
+
+    mockedEventsService.getState.mockResolvedValue({
+      event: makeNightEvent(),
+      drinks: [],
+      orders: [makeOrder({ id: "o1", total: 1000 })],
+      totals: {
+        webTotal: 0, webCount: 0, efectivoTotal: 0, efectivoCount: 0,
+        qrTotal: 1000, qrCount: 1, debitoTotal: 0, debitoCount: 0,
+        drinksSold: [], total: 1000,
+        mpFeeTotal: 50, netTotal: 950,
+      },
+      activeTheme: "bosko",
+    });
+
+    act(() => es.emit("order.created", { order: makeOrder({ id: "o1", total: 1000 }) }));
+    expect(mockedEventsService.getState).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+
+    expect(mockedEventsService.getState).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it("upsertOrder aplica un pedido sin pasar por SSE (caso HistorialSection en Caja)", () => {
     const { result } = renderHook(() => useEventState());
     const order = makeOrder({ id: "o1", status: "pendiente" });

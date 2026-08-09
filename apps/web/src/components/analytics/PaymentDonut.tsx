@@ -57,13 +57,18 @@ export default function PaymentDonut({ breakdown, total }: Props) {
 
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 flex flex-col justify-between h-[380px] shadow-card">
-      <div className="flex items-center justify-between shrink-0">
-        <h3 className="text-[15px] font-semibold text-[var(--text-primary)] select-none">
-          Distribución por Canal
-        </h3>
-        <span className="text-[11px] font-medium text-[var(--text-tertiary)] tabular px-2 py-0.5 rounded-full bg-[var(--bg-panel)]">
-          {breakdown.length}
-        </span>
+      <div className="shrink-0">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[15px] font-semibold text-[var(--text-primary)] select-none">
+            Distribución por Canal
+          </h3>
+          <span className="text-[11px] font-medium text-[var(--text-tertiary)] tabular px-2 py-0.5 rounded-full bg-[var(--bg-panel)]">
+            {breakdown.length}
+          </span>
+        </div>
+        <p className="text-[11px] text-[var(--text-tertiary)] mt-1 select-none">
+          % sobre facturado bruto
+        </p>
       </div>
 
       <div className="flex justify-center shrink-0 my-1">

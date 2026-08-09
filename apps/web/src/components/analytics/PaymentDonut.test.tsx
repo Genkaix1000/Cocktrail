@@ -8,6 +8,7 @@ describe("PaymentDonut", () => {
   it("muestra el mensaje sin datos de pago", () => {
     render(<PaymentDonut breakdown={[]} total={0} />);
     expect(screen.getByText("Sin datos de pago disponibles")).toBeInTheDocument();
+    expect(screen.getByText("% sobre facturado bruto")).toBeInTheDocument();
   });
 
   it("renderiza el % del canal dominante y la leyenda", () => {

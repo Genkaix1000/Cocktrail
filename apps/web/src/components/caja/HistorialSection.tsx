@@ -1,18 +1,19 @@
 "use client";
 
-import { Ban, Printer, Search, Wine } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Printer, Search, Trash2, TriangleAlert, Wine } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ConfirmRail } from "@/components/shared/ConfirmRail";
 import {
   isCancelable,
   itemsLabel,
   paymentLabel,
-  STATUS_LABELS,
 } from "@/components/admin/logsCrud";
+import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
+import Toast from "@/components/shared/Toast";
 import { ordersService } from "@/services/orders.service";
 import { formatHm } from "@/lib/utils";
-import type { Order, OrderStatus } from "@cocktrail/shared";
+import type { Order } from "@cocktrail/shared";
+import { displayOrderRevenue } from "@cocktrail/shared";
 
 type CurrentUser = {
   role: string;
@@ -33,18 +34,13 @@ type Props = {
 };
 
 const PAGE_SIZE = 12;
+const CANCEL_UNDO_MS = 5000;
 
 const pillBase =
   "inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full leading-none";
 
-const STATUS_PILL: Record<OrderStatus, string> = {
-  pendiente: "bg-[var(--amber-soft)] text-[var(--amber-base)]",
-  entregado: "bg-[var(--success-soft)] text-[var(--success-base)]",
-  cancelado: "bg-[var(--danger-soft)] text-[var(--danger-base)]",
-};
-
 const GRID =
-  "88px 92px minmax(160px, 1fr) 108px 100px 110px 120px";
+  "88px 92px minmax(160px, 1fr) 108px 100px 110px 100px";
 
 const formatDayMonth = (ts: number) => {
   const d = new Date(ts);
@@ -61,9 +57,12 @@ function dayChipLabel(orders: Order[], dayKey: string): string {
   return `${weekdays[d.getDay()]} ${d.getDate()}`;
 }
 
+const actionBtn =
+  "w-7 h-7 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] flex items-center justify-center transition-all cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed";
+
 /**
- * Historial de ventas de caja — tabla read-only al estilo Auditoría (admin).
- * Reimpresión y cancelación viven en la columna Acciones; sin popup ni grid de cards.
+ * Historial de ventas de caja — tabla read-only al estilo Auditoría.
+ * Cancelar: hold-to-confirm → toast con Deshacer → PATCH diferido.
  */
 export default function HistorialSection({ orders, currentUser, printer, onOrderUpdated }: Props) {
   const { reprintTicket, printError, reprinting } = printer;
@@ -71,8 +70,14 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
   const [selectedDay, setSelectedDay] = useState("");
   const [ticketSearch, setTicketSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [cancelUndo, setCancelUndo] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const pendingCancelRef = useRef<{
+    previous: Order;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const canCancel =
     currentUser?.role === "admin" || Boolean(currentUser?.permissions?.cancelarTickets);
@@ -108,8 +113,16 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-    setConfirmingCancelId(null);
   }, [selectedDay, ticketSearch]);
+
+  useEffect(() => {
+    return () => {
+      const pending = pendingCancelRef.current;
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingCancelRef.current = null;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const list = groupedOrders[selectedDay] || [];
@@ -129,15 +142,45 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page]);
 
-  async function handleCancel(order: Order) {
-    setConfirmingCancelId(null);
-    setActionError(null);
+  async function commitCancel(orderId: string, previous: Order) {
     try {
-      const updated = await ordersService.updateStatus(order.id, "cancelado");
+      const updated = await ordersService.updateStatus(orderId, "cancelado");
       onOrderUpdated(updated);
     } catch (err) {
+      onOrderUpdated(previous);
       setActionError(err instanceof Error ? err.message : "Error al cancelar el ticket");
     }
+  }
+
+  function scheduleCancel(order: Order) {
+    if (pendingCancelRef.current) {
+      clearTimeout(pendingCancelRef.current.timer);
+      void commitCancel(pendingCancelRef.current.previous.id, pendingCancelRef.current.previous);
+      pendingCancelRef.current = null;
+    }
+
+    const previous = order;
+    onOrderUpdated({ ...order, status: "cancelado" });
+    setCancelTarget(null);
+    setCancelUndo(true);
+    setActionError(null);
+
+    const timer = setTimeout(() => {
+      pendingCancelRef.current = null;
+      setCancelUndo(false);
+      void commitCancel(order.id, previous);
+    }, CANCEL_UNDO_MS);
+
+    pendingCancelRef.current = { previous, timer };
+  }
+
+  function handleUndoCancel() {
+    const pending = pendingCancelRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingCancelRef.current = null;
+    onOrderUpdated(pending.previous);
+    setCancelUndo(false);
   }
 
   return (
@@ -222,7 +265,6 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
                   </div>
                 ) : (
                   pageOrders.map((o, i) => {
-                    const confirming = confirmingCancelId === o.id;
                     const muted = o.status === "cancelado";
                     const detail = itemsLabel(o);
 
@@ -231,9 +273,7 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
                         key={o.id}
                         className={`grid border-b border-[var(--border-subtle)] last:border-b-0 items-center ${
                           i % 2 === 1 ? "bg-[var(--bg-panel)]/45" : ""
-                        } ${confirming ? "bg-[var(--danger-soft)]/40" : ""} ${
-                          muted ? "opacity-60" : ""
-                        }`}
+                        } ${muted ? "opacity-60" : ""}`}
                         style={{ gridTemplateColumns: GRID }}
                       >
                         <div className="px-3 py-2.5 font-mono text-[12.5px] tabular text-[var(--text-secondary)]">
@@ -264,43 +304,73 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
                           {paymentLabel(o.paymentMethod)}
                         </div>
 
-                        <div className="px-3 py-2.5 font-mono text-[13px] font-bold tabular text-[var(--text-primary)]">
-                          ${o.total.toLocaleString("es-AR")}
+                        <div
+                          className="px-3 py-2.5 font-mono tabular text-[var(--text-primary)]"
+                          title={
+                            o.mpNetReceived != null && o.mpFeeAmount != null
+                              ? `Facturado $${o.total.toLocaleString("es-AR")} · Comisión MP $${o.mpFeeAmount.toLocaleString("es-AR")}`
+                              : undefined
+                          }
+                        >
+                          <span className="text-[13px] font-bold">
+                            ${displayOrderRevenue(o).toLocaleString("es-AR")}
+                          </span>
+                          {o.mpNetReceived != null && o.mpNetReceived !== o.total && (
+                            <span className="block text-[10px] font-medium text-[var(--text-tertiary)] leading-tight">
+                              fact. ${o.total.toLocaleString("es-AR")}
+                            </span>
+                          )}
                         </div>
 
                         <div className="px-3 py-2.5">
-                          <span className={`${pillBase} ${STATUS_PILL[o.status]}`}>
-                            {STATUS_LABELS[o.status]}
-                          </span>
+                          {o.status === "cancelado" ? (
+                            <span
+                              className={`${pillBase} bg-[var(--danger-soft)] text-[var(--danger-base)] inline-flex items-center gap-1`}
+                              title="Anulado — no suma al arqueo"
+                            >
+                              <TriangleAlert size={11} strokeWidth={2.2} aria-hidden />
+                              Cancelado
+                            </span>
+                          ) : (
+                            <span className="text-[12px] text-[var(--text-tertiary)]">—</span>
+                          )}
                         </div>
 
-                        <div className="px-2 py-1.5 flex items-center gap-1 min-h-11">
+                        <div className="px-3 py-2 flex items-center gap-1.5">
                           <button
                             type="button"
                             title="Reimprimir"
                             aria-label={`Reimprimir ticket ${o.displayNumber}`}
                             disabled={reprinting}
                             onClick={() => void reprintTicket(o.id)}
-                            className="h-8 w-8 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] transition-colors cursor-pointer disabled:opacity-40"
+                            className={`${actionBtn} hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]`}
                           >
-                            <Printer size={14} strokeWidth={2} />
+                            <Printer size={11} />
                           </button>
 
                           {canCancel && isCancelable(o) ? (
-                            <div className="flex-1 min-w-0 h-8">
-                              <ConfirmRail
-                                confirm={confirming}
-                                onAsk={() => setConfirmingCancelId(o.id)}
-                                onCancel={() => setConfirmingCancelId(null)}
-                                onConfirm={() => void handleCancel(o)}
-                                message="¿Cancelar?"
-                                askLabel="Cancelar ticket"
-                                confirmLabel="Sí"
-                                cancelLabel="No"
-                              >
-                                <Ban size={14} className="text-[var(--danger-base)]" />
-                              </ConfirmRail>
-                            </div>
+                            <button
+                              type="button"
+                              title="Cancelar ticket"
+                              aria-label={`Cancelar ticket #${o.displayNumber}`}
+                              onClick={() => setCancelTarget(o)}
+                              className={`${actionBtn} hover:text-[var(--danger-base)] hover:border-[var(--danger-base)]/40`}
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          ) : canCancel ? (
+                            <button
+                              type="button"
+                              disabled
+                              title={
+                                o.status === "cancelado"
+                                  ? "El ticket ya está cancelado"
+                                  : "El ticket ya fue entregado"
+                              }
+                              className={`${actionBtn} opacity-40`}
+                            >
+                              <Trash2 size={11} />
+                            </button>
                           ) : null}
                         </div>
                       </div>
@@ -340,6 +410,36 @@ export default function HistorialSection({ orders, currentUser, printer, onOrder
             )}
           </div>
         </>
+      )}
+
+      {cancelTarget && (
+        <SafeDeleteModal
+          onClose={() => setCancelTarget(null)}
+          onConfirm={() => scheduleCancel(cancelTarget)}
+          title={`Cancelar #${String(cancelTarget.displayNumber).padStart(3, "0")}`}
+          confirmLabel="Cancelar ticket"
+          warning={
+            <>
+              El ticket{" "}
+              <strong className="text-danger font-semibold">
+                #{String(cancelTarget.displayNumber).padStart(3, "0")}
+              </strong>{" "}
+              quedará anulado. Vas a poder deshacer durante unos segundos.
+            </>
+          }
+        />
+      )}
+
+      {cancelUndo && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast
+            variant="success"
+            message="Ticket cancelado"
+            duration={CANCEL_UNDO_MS}
+            action={{ label: "Deshacer", onClick: handleUndoCancel }}
+            onClose={() => setCancelUndo(false)}
+          />
+        </div>
       )}
     </div>
   );

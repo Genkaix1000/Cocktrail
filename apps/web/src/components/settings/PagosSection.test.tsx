@@ -15,6 +15,7 @@ vi.mock("@/services/mercadopago.service", () => ({
     getSellerStatus: vi.fn(),
     unlinkSeller: vi.fn(),
     pullSeller: vi.fn(),
+    getMpHealth: vi.fn(),
   },
 }));
 
@@ -81,6 +82,19 @@ beforeEach(() => {
   mockedMpService.getSellerStatus.mockResolvedValue(UNLINKED_STATUS);
   mockedMpService.getOAuthUrl.mockResolvedValue({ url: "https://auth.mercadopago.com/authorization?..." });
   mockedMpService.unlinkSeller.mockResolvedValue({ ok: true, cloudCleaned: true });
+  mockedMpService.getMpHealth.mockResolvedValue({
+    checks: {
+      singleSeller: { ok: false, detail: "Sin seller" },
+      deviceOwnership: { ok: null, detail: "—" },
+      deviceMode: { ok: null, detail: "—" },
+      cajaProvisioned: { ok: null, detail: "—" },
+    },
+    fallback: { status: "unknown", checkedAt: null },
+    usingEnvDevice: false,
+    blocking: false,
+    hasLinkedDevice: false,
+    checkedAt: new Date().toISOString(),
+  });
   mockedPdvService.getSummary.mockResolvedValue(SUMMARY);
   mockedBarSessions.listAll.mockResolvedValue([]);
   mockedBarSessions.forceLogout.mockResolvedValue({ ok: true });
@@ -136,17 +150,16 @@ describe("PagosSection", () => {
 
     render(<PagosSection />);
 
-    expect(await screen.findByText("Bosko Bar")).toBeInTheDocument();
-    expect(screen.getByText("bosko@example.com")).toBeInTheDocument();
+    expect(await screen.findByText(/Bosko Bar/)).toBeInTheDocument();
+    expect(screen.getByText(/bosko@example.com/)).toBeInTheDocument();
   });
 
   // ── Sucursal (los PDVs/Posnets viven en la tab "PDV y Posnets" — ver PdvSection.test.tsx) ──
 
-  it("muestra la sucursal del summary con su store_id", async () => {
+  it("muestra la sucursal del summary sin store_id a la vista", async () => {
     render(<PagosSection />);
-    expect(await screen.findByText("GARCIAMANUEL")).toBeInTheDocument();
-    expect(screen.getByText(/store_id: 85068168/)).toBeInTheDocument();
-    expect(screen.getByText("Vinculada")).toBeInTheDocument();
+    expect(await screen.findByText(/GARCIAMANUEL/)).toBeInTheDocument();
+    expect(screen.queryByText(/store_id/i)).not.toBeInTheDocument();
   });
 
   it("renombra la sucursal: el nombre viaja a MP (rama A)", async () => {
@@ -159,7 +172,7 @@ describe("PagosSection", () => {
     render(<PagosSection />);
     await user.click(await screen.findByRole("button", { name: /Renombrar/i }));
 
-    const input = screen.getByLabelText("Nombre de la sucursal");
+    const input = screen.getByLabelText(/Nombre en el comprobante MP/i);
     await user.clear(input);
     await user.type(input, "Boliche Nuevo");
     await user.click(screen.getByRole("button", { name: /Guardar/i }));
@@ -167,7 +180,7 @@ describe("PagosSection", () => {
     await waitFor(() =>
       expect(mockedPdvService.renameStore).toHaveBeenCalledWith("Boliche Nuevo"),
     );
-    expect(await screen.findByText("Boliche Nuevo")).toBeInTheDocument();
+    expect(await screen.findByText(/Boliche Nuevo/)).toBeInTheDocument();
   });
 
   it("si MP no acepta el rename, muestra el alias local + el nombre real de MP (rama B)", async () => {
@@ -181,13 +194,13 @@ describe("PagosSection", () => {
     render(<PagosSection />);
     await user.click(await screen.findByRole("button", { name: /Renombrar/i }));
 
-    const input = screen.getByLabelText("Nombre de la sucursal");
+    const input = screen.getByLabelText(/Nombre en el comprobante MP/i);
     await user.clear(input);
     await user.type(input, "Alias Local");
     await user.click(screen.getByRole("button", { name: /Guardar/i }));
 
-    expect(await screen.findByText(/Mercado Pago no aceptó el cambio de nombre/)).toBeInTheDocument();
-    expect(screen.getByText(/«Alias Local»/)).toBeInTheDocument();
+    expect(await screen.findByText(/MP no aceptó el cambio/)).toBeInTheDocument();
+    expect(screen.getByText(/Alias Local/)).toBeInTheDocument();
   });
 
   it("ya no renderiza las secciones de Puntos de Venta ni Posnets (mudadas a PdvSection)", async () => {
@@ -248,7 +261,7 @@ describe("PagosSection", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
-  // ── Desvincular (hold-to-confirm + Deshacer) ──
+  // ── Desvincular (hold-to-confirm) ──
 
   async function holdUnlinkConfirm() {
     const hold = await screen.findByRole("button", { name: /Desvincular\. Mantené/i });
@@ -286,7 +299,7 @@ describe("PagosSection", () => {
     expect(mockedMpService.unlinkSeller).not.toHaveBeenCalled();
   });
 
-  it("tras hold muestra toast con Deshacer y solo entonces llama unlinkSeller", async () => {
+  it("tras hold llama unlinkSeller al toque y muestra toast", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
@@ -296,13 +309,8 @@ describe("PagosSection", () => {
       await user.click(await screen.findByRole("button", { name: "Desvincular" }));
       await holdUnlinkConfirm();
 
-      expect(await screen.findByText(/Cuenta de Mercado Pago desvinculada/i)).toBeInTheDocument();
-      expect(mockedMpService.unlinkSeller).not.toHaveBeenCalled();
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(5100);
-      });
       await waitFor(() => expect(mockedMpService.unlinkSeller).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText(/Cuenta de Mercado Pago desvinculada/i)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -318,9 +326,6 @@ describe("PagosSection", () => {
       render(<PagosSection />);
       await user.click(await screen.findByRole("button", { name: "Desvincular" }));
       await holdUnlinkConfirm();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(5100);
-      });
 
       expect(await screen.findByText(/limpieza pendiente en la nube/i)).toBeInTheDocument();
     } finally {
@@ -349,14 +354,14 @@ describe("PagosSection", () => {
     render(<PagosSection />);
     expect(await screen.findByText("ana")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Cerrar sesión/i }));
+    await user.click(screen.getByRole("button", { name: /^Cerrar$/i }));
 
     await waitFor(() => expect(mockedBarSessions.forceLogout).toHaveBeenCalledWith("bar-1"));
-    expect(await screen.findByText("Sin usuario conectado")).toBeInTheDocument();
+    expect(await screen.findByText(/Nadie conectado/i)).toBeInTheDocument();
   });
 
-  it("muestra 'Sin usuario conectado' cuando no hay sesiones", async () => {
+  it("muestra 'Nadie conectado' cuando no hay sesiones", async () => {
     render(<PagosSection />);
-    expect(await screen.findByText("Sin usuario conectado")).toBeInTheDocument();
+    expect(await screen.findByText(/Nadie conectado/i)).toBeInTheDocument();
   });
 });

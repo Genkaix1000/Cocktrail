@@ -15,6 +15,7 @@ import {
 import type { UnifiedNightDay } from "@/lib/analytics";
 import { formatNightDateLong, formatEventDuration } from "@/lib/analytics";
 import { formatHm, formatMoney, MONTHS_SHORT } from "@/lib/utils";
+import { displayRevenue } from "@cocktrail/shared";
 
 type Props = {
   nights: UnifiedNightDay[];
@@ -52,8 +53,8 @@ type ComparisonRow = {
 };
 
 function buildRows(a: UnifiedNightDay, b: UnifiedNightDay): ComparisonRow[] {
-  const totalA = a.totals.total;
-  const totalB = b.totals.total;
+  const totalA = displayRevenue(a.totals);
+  const totalB = displayRevenue(b.totals);
   const ticketsA = a.orderCounter;
   const ticketsB = b.orderCounter;
   const webSalesA = a.totals.webTotal;
@@ -65,9 +66,14 @@ function buildRows(a: UnifiedNightDay, b: UnifiedNightDay): ComparisonRow[] {
   const durA = getDurationMs(a);
   const durB = getDurationMs(b);
 
+  const revenueLabel =
+    a.totals.netTotal != null || b.totals.netTotal != null
+      ? "Ingreso neto"
+      : "Recaudado";
+
   return [
     {
-      label: "Total Facturado",
+      label: revenueLabel,
       valueA: formatMoney(totalA),
       valueB: formatMoney(totalB),
       rawA: totalA,
@@ -309,8 +315,8 @@ function NightDetailView({
   const metrics = [
     {
       icon: Banknote,
-      label: "Recaudado",
-      value: `$${night.totals.total.toLocaleString("es-AR")}`,
+      label: night.totals.netTotal != null ? "Ingreso neto" : "Recaudado",
+      value: `$${displayRevenue(night.totals).toLocaleString("es-AR")}`,
       accent: true,
     },
     {
@@ -454,10 +460,10 @@ function NightDetailView({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
-                    Recaudado
+                    {session.totals.netTotal != null ? "Ingreso neto" : "Recaudado"}
                   </span>
                   <span className="text-[var(--text-primary)] font-bold tabular">
-                    ${session.totals.total.toLocaleString("es-AR")}
+                    ${displayRevenue(session.totals).toLocaleString("es-AR")}
                   </span>
                 </div>
                 <div className="flex flex-col gap-0.5">
@@ -538,7 +544,7 @@ function NightSelector({
           {nights.map((n, idx) => (
             <option key={idx} value={idx}>
               {formatNightDate(n.closedAt ?? n.startedAt)} —{" "}
-              {formatMoney(n.totals.total)}
+              {formatMoney(displayRevenue(n.totals))}
             </option>
           ))}
         </select>

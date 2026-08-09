@@ -278,6 +278,7 @@ export default function PdvTable({
               {caja.isOrphan && onReprovisionClick && (
                 <button
                   type="button"
+                  data-tour="reprovisionar"
                   onClick={() => onReprovisionClick(caja)}
                   className="text-[12px] font-medium text-[var(--amber-base)] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
                 >

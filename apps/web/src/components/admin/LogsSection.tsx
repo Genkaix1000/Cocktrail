@@ -97,8 +97,6 @@ type ViewFilter = "all" | OrderStatus;
 
 const VIEWS: { id: ViewFilter; label: string }[] = [
   { id: "all", label: "Todos" },
-  { id: "pendiente", label: "Pendientes" },
-  { id: "entregado", label: "Entregados" },
   { id: "cancelado", label: "Cancelados" },
 ];
 
@@ -324,7 +322,7 @@ export default function LogsSection({ initialFilterTimestamp, isBosko: _isBosko 
       if (logSortField === "ticket") return o.displayNumber;
       if (logSortField === "creator") return (o.createdBy || "Cliente").toLowerCase();
       if (logSortField === "method") return paymentLabel(o.paymentMethod).toLowerCase();
-      return o.total;
+      return o.mpNetReceived ?? o.total;
     };
     return [...filteredLogs].sort((a, b) => {
       const valA = value(a);

@@ -70,7 +70,7 @@ describe("LogsSection", () => {
 
     // Lo que antes vivía en el modal ahora son columnas de la fila.
     expect(await screen.findByText("TKN-1")).toBeInTheDocument();
-    expect(screen.getByText("Entregado")).toBeInTheDocument();
+    expect(screen.queryByText("Entregado")).not.toBeInTheDocument();
     expect(screen.getByText("Barra VIP · barman1")).toBeInTheDocument();
     expect(screen.getByText("2x Fernet con Coca")).toBeInTheDocument();
   });

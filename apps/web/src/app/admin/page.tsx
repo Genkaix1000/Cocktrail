@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminClient from "./AdminClient";
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
-import type { NightEvent, Order, Role } from "@cocktrail/shared";
+import type { EventTotals, NightEvent, Order, Role } from "@cocktrail/shared";
 
 type CurrentUser = {
   role: Role;
@@ -16,6 +16,7 @@ export default function AdminPage() {
   const router = useRouter();
   const [initialEvent, setInitialEvent] = useState<NightEvent | null>(null);
   const [initialOrders, setInitialOrders] = useState<Order[]>([]);
+  const [initialTotals, setInitialTotals] = useState<EventTotals | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,6 +51,7 @@ export default function AdminPage() {
           .then((state) => {
             setInitialEvent(state.event);
             setInitialOrders(state.orders);
+            setInitialTotals(state.totals ?? null);
             setLoading(false);
           })
           .catch(() => {
@@ -73,6 +75,7 @@ export default function AdminPage() {
     <AdminClient
       initialEvent={initialEvent}
       initialOrders={initialOrders}
+      initialTotals={initialTotals}
       currentUser={currentUser}
     />
   );

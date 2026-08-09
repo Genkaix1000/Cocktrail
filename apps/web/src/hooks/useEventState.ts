@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import type { EventSummary, NightEvent, Order } from "@cocktrail/shared";
+import { useCallback, useRef, useState } from "react";
+import type { EventSummary, EventTotals, NightEvent, Order } from "@cocktrail/shared";
 import { eventsService } from "@/services/events.service";
 import { useSSE } from "@/lib/useSSE";
 
@@ -14,40 +14,19 @@ function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
 }
 
 type Options = {
-  /**
-   * Valores iniciales opcionales (ej. `AdminClient` los recibe como props
-   * porque su página padre ya hizo su propio `eventsService.getState()`
-   * antes de montarlo, para no mostrar un instante de estado vacío). Sin
-   * esto, el estado arranca en `null`/`[]` hasta el primer `refetch`
-   * (comportamiento que ya tenía `CajaClient`, que no recibe semilla).
-   */
   initial?: {
     event?: NightEvent | null;
     orders?: Order[];
+    totals?: EventTotals | null;
   };
-  /** Se dispara tras order.created/order.updated, y en cada onOpen. */
   onActivity?: () => void;
-  /** Se dispara tras event.closed, una vez que `summary` ya quedó seteado. */
   onEventClosed?: (summary: EventSummary) => void;
 };
 
 /**
- * Estado compartido de la noche (event/orders/summary) + sync en tiempo real
- * por SSE, extraído de la duplicación casi idéntica que tenían
- * AdminClient.tsx y CajaClient.tsx (Fase 3B, deuda "useSSE centralizado").
- * BarraClient.tsx queda fuera a propósito: su modelo de estado (cola de
- * pendientes, toasts, modo dev) no comparte este molde de upsert-por-id.
- *
- * `setEvent`/`setSummary` se exponen porque los shells los necesitan para
- * flujos que no son SSE (respuestas HTTP directas: abrir noche, editar la
- * palabra clave, confirmar el cierre, limpiar el resumen al cerrar el
- * modal) — ahí no hay ningún invariante que proteger, es un reemplazo
- * completo del valor. `setOrders` NO se expone crudo porque sí hay un
- * invariante (upsert-por-id); en cambio se expone `upsertOrder`, que reusa
- * la misma lógica interna para el único caso real que lo necesita:
- * `CajaClient` sincroniza el estado de un pedido tras una respuesta HTTP
- * directa (cancelar/reimprimir desde `HistorialSection`), sin esperar el
- * eco por SSE.
+ * Estado compartido de la noche (event/orders/summary/totals) + sync SSE.
+ * `serverTotals` trae mpFeeTotal/netTotal del snapshot; los shells los
+ * mezclan con computeTotals(orders) vía withLiveMpFees.
  */
 export function useEventState(options?: Options) {
   const { initial, onActivity, onEventClosed } = options ?? {};
@@ -55,25 +34,39 @@ export function useEventState(options?: Options) {
   const [event, setEvent] = useState<NightEvent | null>(initial?.event ?? null);
   const [orders, setOrders] = useState<Order[]>(initial?.orders ?? []);
   const [summary, setSummary] = useState<EventSummary | null>(null);
+  const [serverTotals, setServerTotals] = useState<EventTotals | null>(
+    initial?.totals ?? null,
+  );
+  const feeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refetch = useCallback(async () => {
     try {
       const state = await eventsService.getState();
       setEvent(state.event);
       setOrders(state.orders ?? []);
+      setServerTotals(state.totals ?? null);
     } catch {
       // Sin conexión momentánea: el próximo evento SSE o reconexión reintenta.
     }
   }, []);
 
+  const scheduleFeeRefresh = useCallback(() => {
+    if (feeRefreshTimer.current) clearTimeout(feeRefreshTimer.current);
+    feeRefreshTimer.current = setTimeout(() => {
+      void refetch();
+    }, 400);
+  }, [refetch]);
+
   useSSE(
     {
       "order.created": ({ order }) => {
         setOrders((prev) => upsertById(prev, order));
+        scheduleFeeRefresh();
         onActivity?.();
       },
       "order.updated": ({ order }) => {
         setOrders((prev) => upsertById(prev, order));
+        scheduleFeeRefresh();
         onActivity?.();
       },
       "event.opened": ({ event: newEvent }) => {
@@ -87,8 +80,6 @@ export function useEventState(options?: Options) {
       },
     },
     {
-      // Una reconexión se trata como una actividad más, así Admin no pierde
-      // el refresh de logs del sistema que hoy dispara en cada onOpen.
       onOpen: () => {
         refetch();
         onActivity?.();
@@ -98,7 +89,17 @@ export function useEventState(options?: Options) {
 
   const upsertOrder = useCallback((order: Order) => {
     setOrders((prev) => upsertById(prev, order));
-  }, []);
+    scheduleFeeRefresh();
+  }, [scheduleFeeRefresh]);
 
-  return { event, orders, summary, setEvent, setSummary, upsertOrder, refetch };
+  return {
+    event,
+    orders,
+    summary,
+    serverTotals,
+    setEvent,
+    setSummary,
+    upsertOrder,
+    refetch,
+  };
 }

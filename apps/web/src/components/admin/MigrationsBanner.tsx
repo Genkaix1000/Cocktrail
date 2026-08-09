@@ -38,15 +38,18 @@ export function MigrationsBanner() {
     };
   }, []);
 
+  // Drift solo se muestra en SystemSanidadPanel (Dashboard) con botón de fix.
+  // Este banner queda para fallos/pendientes de schema — no negociable.
   if (!health || health.status !== "degraded") return null;
 
-  const { failed, pending, drift } = health.migrations;
+  const { failed, pending } = health.migrations;
+  if (!failed && pending.length === 0) return null;
 
   const message = failed
     ? `Actualización de base de datos incompleta: falló «${failed.version}»${
         pending.length > 0 ? ` (${plural(pending.length, "pendiente", "pendientes")})` : ""
       }. El sistema opera con el esquema anterior — no cierres la noche sin avisar a soporte.`
-    : `El contenido de ${drift.length} migración(es) ya aplicadas cambió respecto de lo registrado. Verificá supabase/migrations antes de la próxima actualización.`;
+    : `${plural(pending.length, "migración pendiente", "migraciones pendientes")}. Reiniciá el API o corré pnpm db:migrate.`;
 
   return (
     <div

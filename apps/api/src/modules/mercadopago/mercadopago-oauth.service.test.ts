@@ -174,6 +174,19 @@ describe("MercadoPagoOAuthService", () => {
       expect(statesRepo.insert.mock.calls[0][0].redirectUrl).toBe("http://localhost:3000");
     });
 
+    it("acepta IP LAN (origen desde el que el admin abrió la app)", async () => {
+      await service.generateAuthUrl("BARRA-01", "http://192.168.1.42:3000");
+      expect(statesRepo.insert.mock.calls[0][0].redirectUrl).toBe("http://192.168.1.42:3000");
+    });
+
+    it("acepta 10.x / 172.16-31.x", async () => {
+      await service.generateAuthUrl("BARRA-01", "http://10.0.0.5:3000");
+      expect(statesRepo.insert.mock.calls[0][0].redirectUrl).toBe("http://10.0.0.5:3000");
+      statesRepo.insert.mockClear();
+      await service.generateAuthUrl("BARRA-01", "http://172.20.3.9:3000");
+      expect(statesRepo.insert.mock.calls[0][0].redirectUrl).toBe("http://172.20.3.9:3000");
+    });
+
     it("lanza si faltan MP_APP_ID / MP_REDIRECT_URI", async () => {
       const svc = new MercadoPagoOAuthService(
         statesRepo as unknown as OAuthStatesRepository,

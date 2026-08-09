@@ -18,6 +18,7 @@ import {
 } from "@/lib/analytics";
 import { formatMoney } from "@/lib/utils";
 import type { EventSummary } from "@cocktrail/shared";
+import { displayRevenue } from "@cocktrail/shared";
 
 type ExportInput = {
   historyEvents: EventSummary[];
@@ -134,7 +135,7 @@ export async function exportHistorialPdf(input: ExportInput): Promise<void> {
     },
   });
 
-  const allTotal = historyEvents.reduce((s, e) => s + e.totals.total, 0);
+  const allTotal = historyEvents.reduce((s, e) => s + displayRevenue(e.totals), 0);
   const nightRecords = computeNightRecords(historyEvents);
   const topDrink = nightRecords[0];
   const weeklyBreakdown = computeWeeklyBreakdown(historyEvents);
@@ -233,7 +234,7 @@ export async function exportHistorialPdf(input: ExportInput): Promise<void> {
           return (
             <View key={night.dateKey} style={styles.tableRow} wrap={false}>
               <Text style={[styles.tableCell, { width: "18%" }]}>{formatShortDate(night.closedAt)}</Text>
-              <Text style={[styles.tableCell, { width: "18%" }]}>{formatMoney(night.totals.total)}</Text>
+              <Text style={[styles.tableCell, { width: "18%" }]}>{formatMoney(displayRevenue(night.totals))}</Text>
               <Text style={[styles.tableCell, { width: "18%" }]}>{night.orderCounter}</Text>
               <Text style={[styles.tableCell, { width: "34%" }]}>{top ? `${top.name} (×${top.qty})` : "—"}</Text>
               <Text style={[styles.tableCell, { width: "12%" }]}>

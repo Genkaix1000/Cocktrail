@@ -112,10 +112,40 @@ describe("NightComparator", () => {
     const selects = screen.getAllByRole("combobox");
     await user.selectOptions(selects[1]!, "1");
 
-    expect(screen.getByText("Total Facturado")).toBeInTheDocument();
+    expect(screen.getByText("Recaudado")).toBeInTheDocument();
     expect(screen.getByText("$100.000")).toBeInTheDocument();
     expect(screen.getByText("$50.000")).toBeInTheDocument();
     expect(screen.getAllByText("+100%").length).toBeGreaterThan(0);
+  });
+
+  it("con fees, la fila de dinero en comparación dice Ingreso neto", async () => {
+    const user = userEvent.setup();
+    const nightA = makeNight({
+      dateKey: "a",
+      closedAt: Date.now(),
+      totals: {
+        ...makeSession().totals,
+        netTotal: 90000,
+        mpFeeTotal: 10000,
+      },
+    });
+    const nightB = makeNight({
+      dateKey: "b",
+      closedAt: Date.now() - 24 * 60 * 60 * 1000,
+      totals: {
+        ...makeSession().totals,
+        total: 50000,
+        netTotal: 45000,
+        mpFeeTotal: 5000,
+      },
+    });
+    render(<NightComparator nights={[nightA, nightB]} isBosko={false} onRedirectToLogs={noop} />);
+
+    const selects = screen.getAllByRole("combobox");
+    await user.selectOptions(selects[1]!, "1");
+
+    expect(screen.getByText("Ingreso neto")).toBeInTheDocument();
+    expect(screen.queryByText("Total Facturado")).not.toBeInTheDocument();
   });
 
   it("permite cambiar la noche seleccionada en el selector A", async () => {

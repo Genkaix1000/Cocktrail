@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Ban, Wine } from "lucide-react";
-import type { Order, OrderStatus, PaymentMethod } from "@cocktrail/shared";
+import { ChevronDown, ChevronUp, Ban, TriangleAlert, Wine } from "lucide-react";
+import { displayOrderRevenue, type Order, type PaymentMethod } from "@cocktrail/shared";
 
 import { ConfirmRail } from "@/components/shared/ConfirmRail";
 import ColumnPicker from "@/components/shared/ColumnPicker";
@@ -16,7 +16,6 @@ import {
   itemsLabel,
   logsGridTemplate,
   paymentLabel,
-  STATUS_LABELS,
 } from "./logsCrud";
 
 export type LogsSortField = "time" | "ticket" | "creator" | "method" | "total";
@@ -52,12 +51,6 @@ type Props = {
 };
 
 const pillBase = "inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full leading-none";
-
-const STATUS_PILL: Record<OrderStatus, string> = {
-  pendiente: "bg-[var(--amber-soft)] text-[var(--amber-base)]",
-  entregado: "bg-[var(--success-soft)] text-[var(--success-base)]",
-  cancelado: "bg-[var(--danger-soft)] text-[var(--danger-base)]",
-};
 
 function SortHeader({
   label,
@@ -277,8 +270,6 @@ export default function LogsTable({
           onChange={(v) => onColumnFiltersChange({ status: v as LogsColumnFilters["status"] })}
           options={[
             { value: "all", label: "Todos" },
-            { value: "pendiente", label: "Pendiente" },
-            { value: "entregado", label: "Entregado" },
             { value: "cancelado", label: "Cancelado" },
           ]}
         />,
@@ -373,23 +364,45 @@ export default function LogsTable({
       );
     }
     if (col === "total") {
+      const net = o.mpNetReceived;
+      const showNet = net != null && net !== o.total;
       return (
         <div
           key={col}
-          className={`px-3 py-2.5 font-mono text-[13px] font-bold tabular ${
+          className={`px-3 py-2.5 font-mono tabular ${
             dim || (muted ? "text-[var(--text-tertiary)]" : "text-[var(--text-primary)]")
           }`}
+          title={
+            showNet && o.mpFeeAmount != null
+              ? `Facturado $${o.total.toLocaleString("es-AR")} · Comisión MP $${o.mpFeeAmount.toLocaleString("es-AR")}`
+              : undefined
+          }
         >
-          ${o.total.toLocaleString("es-AR")}
+          <span className="text-[13px] font-bold">
+            ${displayOrderRevenue(o).toLocaleString("es-AR")}
+          </span>
+          {showNet && (
+            <span className="block text-[10px] font-medium text-[var(--text-tertiary)] leading-tight">
+              fact. ${o.total.toLocaleString("es-AR")}
+            </span>
+          )}
         </div>
       );
     }
     if (col === "status") {
       return (
         <div key={col} className="px-3 py-2.5 flex items-center">
-          {!isConfirming && (
-            <span className={`${pillBase} ${STATUS_PILL[o.status]}`}>{STATUS_LABELS[o.status]}</span>
-          )}
+          {!isConfirming && o.status === "cancelado" ? (
+            <span
+              className={`${pillBase} bg-[var(--danger-soft)] text-[var(--danger-base)] inline-flex items-center gap-1`}
+              title="Anulado — no suma al arqueo"
+            >
+              <TriangleAlert size={11} strokeWidth={2.2} aria-hidden />
+              Cancelado
+            </span>
+          ) : !isConfirming ? (
+            <span className="text-[12px] text-[var(--text-tertiary)]">—</span>
+          ) : null}
         </div>
       );
     }

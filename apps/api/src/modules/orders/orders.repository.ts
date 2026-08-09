@@ -1,5 +1,6 @@
 import type { Order, OrderStatus } from "@cocktrail/shared";
 import { supabase } from "../../shared/supabase.js";
+import { withMpFeesOnOrders } from "./with-mp-fees-on-orders.js";
 
 // ── Interface (contrato) ──
 
@@ -86,6 +87,32 @@ function mapRowToOrder(row: OrderRow): Order {
     paymentRecordId: row.mp_order_id || undefined,
     idempotencyKey: row.idempotency_key || undefined,
   };
+}
+
+/** Adjunta neto/fee de mp_orders a los pedidos que tienen paymentRecordId. */
+async function attachMpFees(orders: Order[]): Promise<Order[]> {
+  const ids = [
+    ...new Set(orders.map((o) => o.paymentRecordId).filter((id): id is string => Boolean(id))),
+  ];
+  if (ids.length === 0) return orders;
+  const { data, error } = await supabase
+    .from("mp_orders")
+    .select("id, net_received_amount, mp_fee_amount, fee_status")
+    .in("id", ids);
+  if (error) {
+    // Fail-open: auditoría sigue con bruto si falta migración o la query falla.
+    console.error("[SupabaseOrdersRepository] Error fetching mp fees:", error);
+    return orders;
+  }
+  return withMpFeesOnOrders(
+    orders,
+    (data ?? []).map((row) => ({
+      id: row.id as string,
+      netReceivedAmount: row.net_received_amount == null ? null : Number(row.net_received_amount),
+      mpFeeAmount: row.mp_fee_amount == null ? null : Number(row.mp_fee_amount),
+      feeStatus: (row.fee_status as string) ?? "none",
+    })),
+  );
 }
 
 export class SupabaseOrdersRepository implements OrdersRepository {
@@ -211,7 +238,7 @@ export class SupabaseOrdersRepository implements OrdersRepository {
       throw error;
     }
 
-    return data.map(mapRowToOrder);
+    return attachMpFees(data.map(mapRowToOrder));
   }
 
   async listAll(): Promise<Order[]> {
@@ -225,7 +252,7 @@ export class SupabaseOrdersRepository implements OrdersRepository {
       throw error;
     }
 
-    return data.map(mapRowToOrder);
+    return attachMpFees(data.map(mapRowToOrder));
   }
 
   async updateStatus(

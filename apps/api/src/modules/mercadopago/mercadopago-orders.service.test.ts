@@ -68,6 +68,9 @@ function makeMpOrder(overrides: Partial<MpOrder> = {}): MpOrder {
     paymentStatus: null,
     paymentStatusDetail: null,
     paidAmount: null,
+    netReceivedAmount: null,
+    mpFeeAmount: null,
+    feeStatus: "none",
     verifiedAt: null,
     verificationError: null,
     cartItems: null,
@@ -149,9 +152,15 @@ describe("MercadoPagoOrdersService", () => {
       findByExternalRef: vi.fn(),
       findByIdempotencyKey: vi.fn().mockResolvedValue(null),
       findByAttemptId: vi.fn().mockResolvedValue(null),
-      update: vi.fn().mockImplementation(async (orderIdMp, patch) =>
-        makeMpOrder({ orderIdMp, ...patch }),
-      ),
+      findProcessedPendingFees: vi.fn().mockResolvedValue([]),
+      sumFeesForEvent: vi.fn().mockResolvedValue({ mpFeeTotal: 0, mpNetTotal: 0, pendingFees: 0 }),
+      update: vi.fn().mockImplementation(async (orderIdMp, patch) => {
+        const prev = (await vi.mocked(mpOrdersRepo.findByMpId).getMockImplementation()?.(orderIdMp)) ??
+          makeMpOrder({ orderIdMp });
+        const next = makeMpOrder({ ...prev, orderIdMp, ...patch });
+        vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(next);
+        return next;
+      }),
       updateStatus: vi.fn().mockImplementation(async (orderIdMp, status) =>
         makeMpOrder({ orderIdMp, status }),
       ),
@@ -389,7 +398,7 @@ describe("MercadoPagoOrdersService", () => {
   describe("getOrderStatus", () => {
     it("devuelve directo si el estado local ya es final", async () => {
       vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(
-        makeMpOrder({ status: "processed", paymentId: "12345" }),
+        makeMpOrder({ status: "processed", paymentId: "12345", feeStatus: "ready", netReceivedAmount: 1480, mpFeeAmount: 20 }),
       );
 
       const result = await service.getOrderStatus("ORD01ABC");
@@ -406,6 +415,13 @@ describe("MercadoPagoOrdersService", () => {
           payments: [{ id: "PAY01TXN", reference_id: "99887766", status: "processed", amount: "1500.00" }],
         },
       });
+      // enrichFees: GET /v1/payments/{id}
+      mockFetchOk({
+        id: "99887766",
+        status: "approved",
+        transaction_amount: 1500,
+        transaction_details: { net_received_amount: 1480 },
+      });
 
       const result = await service.getOrderStatus("ORD01ABC");
       expect(mpOrdersRepo.update).toHaveBeenCalledWith(
@@ -414,11 +430,21 @@ describe("MercadoPagoOrdersService", () => {
           status: "processed",
           paymentId: "99887766",
           paidAmount: 1500,
+          feeStatus: "pending",
           verifiedAt: expect.any(String),
           verificationError: null,
         }),
       );
+      expect(mpOrdersRepo.update).toHaveBeenCalledWith(
+        "ORD01ABC",
+        expect.objectContaining({
+          netReceivedAmount: 1480,
+          mpFeeAmount: 20,
+          feeStatus: "ready",
+        }),
+      );
       expect(result.status).toBe("processed");
+      expect(result.feeStatus).toBe("ready");
     });
 
     it("processed sin monto/payment_id verificable queda unknown, nunca concretado (criterio B)", async () => {

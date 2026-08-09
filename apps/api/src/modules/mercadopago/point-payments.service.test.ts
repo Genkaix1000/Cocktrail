@@ -33,6 +33,9 @@ function makeRow(overrides: Partial<MpOrder> = {}): MpOrder {
     paymentStatus: null,
     paymentStatusDetail: null,
     paidAmount: null,
+    netReceivedAmount: null,
+    mpFeeAmount: null,
+    feeStatus: "none",
     verifiedAt: null,
     verificationError: null,
     cartItems: null,
@@ -43,7 +46,11 @@ function makeRow(overrides: Partial<MpOrder> = {}): MpOrder {
 }
 
 describe("PointPaymentsService", () => {
-  let mpService: { createPaymentIntent: ReturnType<typeof vi.fn>; resolveIntentOutcome: ReturnType<typeof vi.fn> };
+  let mpService: {
+    createPaymentIntent: ReturnType<typeof vi.fn>;
+    resolveIntentOutcome: ReturnType<typeof vi.fn>;
+    getPayment: ReturnType<typeof vi.fn>;
+  };
   let repo: MpOrdersRepository;
   let row: MpOrder | null;
   let service: PointPaymentsService;
@@ -61,6 +68,7 @@ describe("PointPaymentsService", () => {
         deviceIdUsed: "device-1",
       }),
       resolveIntentOutcome: vi.fn(),
+      getPayment: vi.fn(),
     };
     repo = {
       create: vi.fn().mockImplementation(async (input) => makeRow({ ...input, amount: Number(input.amount) } as Partial<MpOrder>)),
@@ -69,6 +77,8 @@ describe("PointPaymentsService", () => {
       findByExternalRef: vi.fn(),
       findByIdempotencyKey: vi.fn(),
       findByAttemptId: vi.fn(),
+      findProcessedPendingFees: vi.fn().mockResolvedValue([]),
+      sumFeesForEvent: vi.fn().mockResolvedValue({ mpFeeTotal: 0, mpNetTotal: 0, pendingFees: 0 }),
       update: vi.fn().mockImplementation(async (_id, patch) => {
         row = { ...(row as MpOrder), ...patch } as MpOrder;
         return row;
@@ -206,6 +216,8 @@ describe("PointPaymentsService", () => {
         paymentStatus: "approved",
         statusDetail: "accredited",
         transactionAmount: 1500,
+        netReceivedAmount: 1450,
+        mpFeeAmount: 50,
       });
 
       const verdict = await service.getIntentVerdict("intent-1");
@@ -220,6 +232,9 @@ describe("PointPaymentsService", () => {
           paidAmount: 1500,
           verifiedAt: expect.any(String),
           verificationError: null,
+          netReceivedAmount: 1450,
+          mpFeeAmount: 50,
+          feeStatus: "ready",
         }),
       );
     });

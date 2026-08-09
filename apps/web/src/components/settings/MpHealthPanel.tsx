@@ -1,96 +1,81 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { mercadopagoService, type MpHealth, type MpHealthCheck } from "@/services/mercadopago.service";
-import { formatHm } from "@/lib/utils";
 
 const CHECK_LABELS: Record<keyof MpHealth["checks"], string> = {
-  singleSeller: "Cuenta de Mercado Pago única",
-  deviceOwnership: "El lector pertenece a la cuenta activa",
+  singleSeller: "Cuenta de Mercado Pago",
+  deviceOwnership: "Posnet en la cuenta activa",
   deviceMode: "Modo del lector (PDV)",
-  cajaProvisioned: "Caja provisionada en la cuenta activa",
+  cajaProvisioned: "Caja provisionada",
 };
 
 const CHECK_ORDER: (keyof MpHealth["checks"])[] = [
   "singleSeller",
+  "cajaProvisioned",
   "deviceOwnership",
   "deviceMode",
-  "cajaProvisioned",
 ];
 
-function formatCheckedAt(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return formatHm(d.getTime());
-}
+export type MpHealthScore = {
+  percent: number;
+  /** Checks con ok === false. */
+  failures: { key: keyof MpHealth["checks"]; label: string; check: MpHealthCheck }[];
+  warnings: string[];
+  blocking: boolean;
+};
 
-/** Punto de estado: verde (ok) / rojo (falla) / gris (desconocido — nunca rojo). */
-function StatusDot({ ok }: { ok: boolean | null }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${
-        ok === true
-          ? "bg-[var(--success-base)]"
-          : ok === false
-            ? "bg-[var(--danger-base)]"
-            : "bg-[var(--text-tertiary)]"
-      }`}
-    />
-  );
-}
+/** Score solo con checks decididos (ok true/false). Unknown no baja el % (cero falsos positivos). */
+export function scoreMpHealth(health: MpHealth): MpHealthScore {
+  let decided = 0;
+  let okCount = 0;
+  const failures: MpHealthScore["failures"] = [];
 
-function estadoDe(ok: boolean | null): string {
-  return ok === true ? "OK" : ok === false ? "Falla" : "Desconocido";
-}
+  for (const key of CHECK_ORDER) {
+    // Sin Posnet vinculado, ownership/mode no aplican al score operativo.
+    if (!health.hasLinkedDevice && (key === "deviceOwnership" || key === "deviceMode")) {
+      continue;
+    }
+    const check = health.checks[key];
+    if (check.ok === null) continue;
+    decided += 1;
+    if (check.ok) okCount += 1;
+    else failures.push({ key, label: CHECK_LABELS[key], check });
+  }
 
-function HealthRow({ label, check }: { label: string; check: MpHealthCheck }) {
-  return (
-    <div className="flex items-start gap-3 px-4 py-3">
-      <StatusDot ok={check.ok} />
-      <div className="min-w-0 space-y-0.5">
-        <p className="text-[13px] font-medium text-[var(--text-primary)]">
-          {label}
-          <span
-            className={`ml-2 text-[10px] font-semibold uppercase tracking-wider ${
-              check.ok === true
-                ? "text-[var(--success-base)]"
-                : check.ok === false
-                  ? "text-[var(--danger-base)]"
-                  : "text-[var(--text-tertiary)]"
-            }`}
-          >
-            {estadoDe(check.ok)}
-          </span>
-        </p>
-        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">{check.detail}</p>
-        {check.ok === false && check.action && (
-          <p className="text-[12px] text-[var(--amber-base)] leading-relaxed">→ {check.action}</p>
-        )}
-      </div>
-    </div>
-  );
+  const warnings: string[] = [];
+  if (health.usingEnvDevice) {
+    warnings.push("Algún cobro salió por el Posnet de emergencia (env), no por el de la caja.");
+  }
+  if (health.fallback.lastDegradedAt) {
+    warnings.push(
+      health.fallback.lastDegradedReason
+        ? `Degradó al fallback: ${health.fallback.lastDegradedReason}`
+        : "Un cobro degradó al fallback de emergencia.",
+    );
+  }
+
+  const percent = decided === 0 ? 100 : Math.round((okCount / decided) * 100);
+  return { percent, failures, warnings, blocking: health.blocking };
 }
 
 /**
- * Panel de salud de la vinculación con Mercado Pago (bloque G): los 4 chequeos
- * + la fila F1 del fallback de emergencia + el flag de env-device. Un
- * "desconocido" nunca se pinta rojo (cero falsos positivos que paren la caja).
+ * Sanidad MP compacta: una línea si todo OK; score + solo fallas si hay problemas.
  */
 export default function MpHealthPanel() {
   const [health, setHealth] = useState<MpHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (refresh: boolean) => {
     setError(null);
     try {
       setHealth(await mercadopagoService.getMpHealth(refresh));
-    } catch (err) {
-      console.error("Error loading MP health:", err);
-      setError("No se pudo consultar la salud de la vinculación. Reintentá en unos segundos.");
+    } catch {
+      setError("No se pudo consultar la salud de Mercado Pago.");
     }
   }, []);
 
@@ -99,134 +84,137 @@ export default function MpHealthPanel() {
     load(false).finally(() => setLoading(false));
   }, [load]);
 
-  const handleRefresh = useCallback(async () => {
+  const score = useMemo(() => (health ? scoreMpHealth(health) : null), [health]);
+  const hasIssues = Boolean(
+    score && (score.failures.length > 0 || score.warnings.length > 0 || score.blocking),
+  );
+
+  const handleRefresh = async () => {
     setRefreshing(true);
-    // refresh=1 fuerza el re-chequeo contra MP (salta el cache server de 30s).
     await load(true);
     setRefreshing(false);
-  }, [load]);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-[12px] text-[var(--text-tertiary)] py-1" role="status">
+        <Loader2 size={12} className="animate-spin" aria-hidden />
+        Revisando salud MP…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2">
+        <p className="text-[12px] text-[var(--text-secondary)]">{error}</p>
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          className="text-[12px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  if (!score || !health) return null;
+
+  if (!hasIssues) {
+    return (
+      <div
+        className="flex items-center justify-between gap-3 text-[12px] text-[var(--text-tertiary)] py-1 select-none"
+        role="status"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <CheckCircle2 size={14} className="text-[var(--success-base)]/70 shrink-0" aria-hidden />
+          Salud MP {score.percent}% · todo bien
+        </span>
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          aria-label="Refrescar salud MP"
+          className="p-1 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+        >
+          {refreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <section
-      aria-label="Salud de la vinculación con Mercado Pago"
-      className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-card"
+      aria-label="Salud de Mercado Pago"
+      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3.5 py-2.5 space-y-2"
     >
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] text-[var(--accent-primary)] shrink-0">
-            <Activity size={16} strokeWidth={1.8} />
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">
-              Salud de la vinculación
-            </h3>
-            <p className="text-[12px] text-[var(--text-tertiary)]">
-              Chequeos contra Mercado Pago
-              {health ? ` — última lectura ${formatCheckedAt(health.checkedAt)}` : ""}
-            </p>
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-2">
         <button
           type="button"
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-          className="h-9 px-4 rounded-full bg-[var(--bg-panel)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[12px] font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-wait cursor-pointer"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-2 min-w-0 text-left cursor-pointer"
+          aria-expanded={expanded}
+        >
+          <AlertTriangle
+            size={14}
+            className={
+              score.blocking || score.failures.length > 0
+                ? "text-[var(--danger-base)] shrink-0"
+                : "text-[var(--amber-base)] shrink-0"
+            }
+            aria-hidden
+          />
+          <span className="text-[13px] font-semibold text-[var(--text-primary)] tabular">
+            Salud MP {score.percent}%
+          </span>
+          <span className="text-[12px] text-[var(--text-secondary)] truncate">
+            {score.blocking
+              ? "· cobro Posnet bloqueado"
+              : `· ${score.failures.length + score.warnings.length} aviso${
+                  score.failures.length + score.warnings.length === 1 ? "" : "s"
+                }`}
+          </span>
+          <ChevronDown
+            size={14}
+            className={`text-[var(--text-tertiary)] shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          aria-label="Refrescar salud MP"
+          className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
         >
           {refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          Refrescar
         </button>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-24">
-          <Loader2 size={20} className="animate-spin text-[var(--text-tertiary)]" />
-        </div>
-      ) : error ? (
-        <div className="rounded-xl bg-[var(--bg-panel)] px-4 py-4 text-center space-y-2">
-          <p className="text-[12px] text-[var(--text-secondary)]">{error}</p>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            className="text-[13px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
-          >
-            Reintentar
-          </button>
-        </div>
-      ) : health ? (
-        <div className="space-y-3">
-          {health.blocking && (
-            <div
-              role="alert"
-              className="flex items-center gap-2.5 rounded-xl bg-[var(--danger-soft)] px-3.5 py-2.5 text-[12px] font-medium text-[var(--danger-base)]"
-            >
-              <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
-              <span>El cobro con Posnet está bloqueado: la plata entraría a otra cuenta.</span>
-            </div>
+      {expanded && (
+        <ul className="space-y-2 pt-1 border-t border-[var(--border-subtle)]">
+          {score.blocking && (
+            <li className="text-[12px] text-[var(--danger-base)] font-medium">
+              El cobro con Posnet está bloqueado: la plata entraría a otra cuenta.
+            </li>
           )}
-
-          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)] overflow-hidden">
-            {CHECK_ORDER.map((key) => (
-              <HealthRow key={key} label={CHECK_LABELS[key]} check={health.checks[key]} />
-            ))}
-
-            {/* Fila F1 — fallback de emergencia (MP_ACCESS_TOKEN + MP_POS_DEVICE_ID) */}
-            <div className="flex items-start gap-3 px-4 py-3">
-              <StatusDot
-                ok={
-                  health.fallback.status === "usable"
-                    ? true
-                    : health.fallback.status === "unusable"
-                      ? false
-                      : null
-                }
-              />
-              <div className="min-w-0 space-y-0.5">
-                <p className="text-[13px] font-medium text-[var(--text-primary)]">
-                  Fallback de emergencia (F1)
-                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                    {health.fallback.status === "usable"
-                      ? "Usable"
-                      : health.fallback.status === "unusable"
-                        ? "No usable"
-                        : "Desconocido"}
-                  </span>
-                </p>
-                {health.fallback.reason && (
-                  <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-                    {health.fallback.reason}
-                  </p>
-                )}
-                {health.fallback.lastDegradedAt && (
-                  <p className="text-[12px] text-[var(--amber-base)] leading-relaxed">
-                    Un cobro degradó al fallback de emergencia
-                    {health.fallback.lastDegradedReason ? `: ${health.fallback.lastDegradedReason}` : "."}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Cobros saliendo por el device de la env (D2) — advertencia, nunca rojo */}
-            <div className="flex items-start gap-3 px-4 py-3">
-              <span
-                aria-hidden="true"
-                className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${
-                  health.usingEnvDevice ? "bg-[var(--amber-base)]" : "bg-[var(--success-base)]"
-                }`}
-              />
-              <div className="min-w-0 space-y-0.5">
-                <p className="text-[13px] font-medium text-[var(--text-primary)]">
-                  Posnet de emergencia en uso
-                </p>
-                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
-                  {health.usingEnvDevice
-                    ? "Algún cobro de esta sesión salió por el Posnet de la variable de entorno, no por el vinculado a la caja."
-                    : "Los cobros salen por el Posnet vinculado a la caja."}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+          {score.failures.map(({ key, label, check }) => (
+            <li key={key} className="text-[12px] text-[var(--text-primary)] leading-snug">
+              <span className="font-semibold text-[var(--danger-base)]">{label}</span>
+              <span className="text-[var(--text-secondary)]"> — {check.detail}</span>
+              {check.action && (
+                <span className="block text-[var(--amber-base)] mt-0.5">→ {check.action}</span>
+              )}
+            </li>
+          ))}
+          {score.warnings.map((w) => (
+            <li key={w} className="text-[12px] text-[var(--amber-base)] leading-snug">
+              {w}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

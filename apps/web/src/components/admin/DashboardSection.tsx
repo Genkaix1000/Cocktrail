@@ -10,11 +10,11 @@ import {
 
 import PaymentDonut from "@/components/analytics/PaymentDonut";
 import MetricCard from "@/components/shared/MetricCard";
+import SystemSanidadPanel from "@/components/admin/SystemSanidadPanel";
 
 import { formatNightDateLong } from "@/lib/analytics";
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
-import type { DeltaInfo, HourlySlot, ProductRevenue } from "@/lib/analytics";
-import type { LucideIcon } from "lucide-react";
+import type { HourlySlot, ProductRevenue } from "@/lib/analytics";
 
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
 
@@ -36,6 +36,7 @@ type Props = {
   isTabTransitioning: boolean;
   activeTab: string;
   isNightOpen: boolean;
+  onGoToPagos?: () => void;
 };
 
 const cardShell =
@@ -56,6 +57,7 @@ export default function DashboardSection({
   isTabTransitioning,
   activeTab,
   isNightOpen,
+  onGoToPagos,
 }: Props) {
   const {
     startedAtStr,
@@ -79,8 +81,6 @@ export default function DashboardSection({
     : isNightOpen
       ? "Noche en curso — sin noches previas"
       : "Sin noches registradas";
-
-  const peakSales = Math.max(0, ...hourlyData.map((s) => s.totalSales));
 
   return (
     <>
@@ -120,10 +120,7 @@ export default function DashboardSection({
             <div className={`${cardShell} p-5 animate-pulse h-[380px]`} />
             <div className={`${cardShell} p-5 animate-pulse h-[380px]`} />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className={`${cardShell} p-5 animate-pulse h-[180px]`} />
-            <div className={`${cardShell} p-5 animate-pulse h-[180px]`} />
-          </div>
+          <div className={`${cardShell} p-5 animate-pulse h-[140px]`} />
         </div>
       ) : (
         <div key={activeTab} className="flex flex-col gap-8">
@@ -146,15 +143,25 @@ export default function DashboardSection({
             </div>
           </div>
 
+          <SystemSanidadPanel onGoToPagos={onGoToPagos} />
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <MetricCard
-              label="Ventas Totales"
-              value={totals.total}
+              label={totals.netTotal != null ? "Ingreso neto" : "Ventas Totales"}
+              value={totals.netTotal ?? totals.total}
               isCurrency
               delta={isNightOpen ? deltaTotal : undefined}
               icon={TrendingUp}
               featured
-              subtitle={`vs. ${lastNightName}`}
+              subtitle={
+                totals.netTotal != null
+                  ? `Facturado $${totals.total.toLocaleString("es-AR")}${
+                      totals.mpFeeTotal != null
+                        ? ` · Comisiones MP $${totals.mpFeeTotal.toLocaleString("es-AR")}`
+                        : ""
+                    }${totals.mpFeesPending ? ` · ${totals.mpFeesPending} pend.` : ""}`
+                  : `vs. ${lastNightName}`
+              }
               noDeltaLabel={lastNightLabel}
             />
             <MetricCard
@@ -183,75 +190,38 @@ export default function DashboardSection({
             <PaymentDonut breakdown={customPaymentBreakdown} total={totals.total} />
           </div>
 
-          <div className={`grid grid-cols-1 gap-5 ${isNightOpen ? "md:grid-cols-2" : ""}`}>
-            {isNightOpen && (
-              <div className={`${cardShell} p-5 flex flex-col justify-between`}>
-                <div className="flex justify-between items-center shrink-0 mb-1">
-                  <h3 className="text-[15px] font-semibold text-[var(--text-primary)] select-none">
-                    Comparativa
-                  </h3>
-                  <span className="text-[11px] font-medium text-[var(--text-tertiary)] px-2.5 py-1 rounded-full bg-[var(--bg-panel)]">
-                    vs. {lastNightName}
-                  </span>
-                </div>
-
-                <div className="flex flex-col justify-between flex-1 mt-3">
-                  <ComparisonRow
-                    label="Ventas"
-                    icon={TrendingUp}
-                    currentVal={totals.total}
-                    delta={deltaTotal}
-                    isCurrency
-                  />
-                  <ComparisonRow
-                    label="Tickets"
-                    icon={Tag}
-                    currentVal={totalOps}
-                    delta={deltaTickets}
-                  />
-                  <ComparisonRow
-                    label="Unidades"
-                    icon={Wine}
-                    currentVal={totalDrinkUnits}
-                    delta={deltaUnits}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div
-              className={`rounded-2xl p-5 flex flex-col gap-3 justify-center min-h-[140px] shadow-card border border-transparent ${
-                isNightOpen
-                  ? "bg-[var(--accent-primary)] dark:bg-[var(--accent-featured)] text-[var(--text-on-accent)]"
-                  : `${cardShell} text-[var(--text-primary)]`
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className={`text-[11px] font-medium uppercase tracking-[0.14em] flex items-center gap-2 ${
-                    isNightOpen ? "text-white/70" : "text-[var(--text-tertiary)]"
-                  }`}
-                >
-                  <Activity size={12} /> Hora Pico de Ventas
-                </span>
-                {isNightOpen && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/15 text-white">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    En vivo
-                  </span>
-                )}
-              </div>
+          <div
+            className={`rounded-2xl p-5 flex flex-col gap-3 justify-center min-h-[140px] shadow-card border border-transparent ${
+              isNightOpen
+                ? "bg-[var(--accent-primary)] dark:bg-[var(--accent-featured)] text-[var(--text-on-accent)]"
+                : `${cardShell} text-[var(--text-primary)]`
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
               <span
-                className={`font-mono text-[32px] md:text-[36px] font-bold leading-none tracking-tight ${
-                  isNightOpen ? "text-[var(--text-on-accent)]" : "text-[var(--accent-primary)]"
+                className={`text-[11px] font-medium uppercase tracking-[0.14em] flex items-center gap-2 ${
+                  isNightOpen ? "text-white/70" : "text-[var(--text-tertiary)]"
                 }`}
               >
-                {peakHour}
+                <Activity size={12} /> Hora Pico de Ventas
               </span>
-              <span className={`text-[12px] ${isNightOpen ? "text-white/55" : "text-[var(--text-secondary)]"}`}>
-                Mayor recaudación bruta de la noche
-              </span>
+              {isNightOpen && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/15 text-white">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  En vivo
+                </span>
+              )}
             </div>
+            <span
+              className={`font-mono text-[32px] md:text-[36px] font-bold leading-none tracking-tight ${
+                isNightOpen ? "text-[var(--text-on-accent)]" : "text-[var(--accent-primary)]"
+              }`}
+            >
+              {peakHour}
+            </span>
+            <span className={`text-[12px] ${isNightOpen ? "text-white/55" : "text-[var(--text-secondary)]"}`}>
+              Mayor recaudación bruta de la noche
+            </span>
           </div>
 
           <div className="flex justify-between items-center text-[10px] text-[var(--text-tertiary)] pt-2 border-t border-[var(--border-subtle)]">
@@ -332,7 +302,7 @@ function HourlySalesChart({ slots }: { slots: HourlySlot[] }) {
 
   return (
     <div className={`${cardShell} p-5 flex flex-col h-[380px]`}>
-      <div className="flex items-baseline justify-between gap-3 shrink-0 mb-4 select-none">
+      <div className="flex items-baseline justify-between gap-3 shrink-0 mb-1 select-none">
         <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">
           Ventas por Hora
         </h3>
@@ -345,6 +315,9 @@ function HourlySalesChart({ slots }: { slots: HourlySlot[] }) {
           </span>
         )}
       </div>
+      <p className="text-[11px] text-[var(--text-tertiary)] shrink-0 mb-3 select-none">
+        Recaudación bruta
+      </p>
 
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="flex-1 min-h-0 flex gap-3">
@@ -443,9 +416,12 @@ function HourlySalesChart({ slots }: { slots: HourlySlot[] }) {
 function TopProductsList({ products }: { products: ProductRevenue[] }) {
   return (
     <div className={`${cardShell} p-5 flex flex-col min-w-0 h-[380px]`}>
-      <h3 className="text-[15px] font-semibold text-[var(--text-primary)] select-none shrink-0 mb-4">
+      <h3 className="text-[15px] font-semibold text-[var(--text-primary)] select-none shrink-0 mb-1">
         Productos Más Vendidos
       </h3>
+      <p className="text-[11px] text-[var(--text-tertiary)] shrink-0 mb-3 select-none">
+        Subtotal bruto
+      </p>
 
       {products.length === 0 ? (
         <div className="flex-1 flex items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-panel)] p-6 text-center text-[13px] text-[var(--text-tertiary)]">
@@ -480,43 +456,3 @@ function TopProductsList({ products }: { products: ProductRevenue[] }) {
   );
 }
 
-function ComparisonRow({
-  label,
-  icon: Icon,
-  currentVal,
-  delta,
-  isCurrency,
-}: {
-  label: string;
-  icon: LucideIcon;
-  currentVal: number;
-  delta: DeltaInfo | null;
-  isCurrency?: boolean;
-}) {
-  const deltaPct = delta?.pct ?? 0;
-  const isUp = deltaPct >= 0;
-  return (
-    <div className="flex items-center justify-between py-2.5 border-b border-[var(--border-subtle)] last:border-b-0 min-h-11">
-      <div className="flex items-center gap-2 text-[var(--text-secondary)] text-xs min-w-[110px]">
-        <Icon size={13} className="text-[var(--text-tertiary)]" />
-        <span>{label}</span>
-      </div>
-
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="font-mono text-[var(--text-primary)] text-xs font-bold tabular">
-          {isCurrency && "$"}
-          {currentVal.toLocaleString("es-AR")}
-        </span>
-        <span
-          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-            isUp
-              ? "bg-[var(--success-soft)] text-[var(--success-base)]"
-              : "bg-[var(--danger-soft)] text-[var(--danger-base)]"
-          }`}
-        >
-          {isUp ? "↑" : "↓"} {Math.abs(deltaPct).toFixed(0)}%
-        </span>
-      </div>
-    </div>
-  );
-}

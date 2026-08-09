@@ -460,7 +460,7 @@ export default function CartaSection() {
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         <div className="flex-1 w-full space-y-4 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+          <div data-tour="carta-toolbar" className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               {views.map((v) => {
                 const active = viewFilter === v.id;
@@ -510,6 +510,7 @@ export default function CartaSection() {
 
             <button
               type="button"
+              data-tour="nuevo-trago"
               onClick={openCreate}
               className="h-10 px-4 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98]"
             >

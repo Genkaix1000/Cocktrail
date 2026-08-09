@@ -11,7 +11,9 @@ import type {
   MpOrder,
   MpOrderStatus,
   MpOrdersRepository,
+  MpOrderUpdate,
 } from "./mp-orders.repository.js";
+import { parsePaymentFees, type MpPaymentFeeFields } from "./mp-payment-fees.js";
 
 const MP_API = "https://api.mercadopago.com";
 // Coherente con expiration_time: "PT15M" en el create.
@@ -249,6 +251,18 @@ export class MercadoPagoOrdersService {
     if (!order) throw new NotFound(`Order ${orderId} no encontrada.`);
 
     if (FINAL_STATUSES.has(order.status)) {
+      // Reintento lazy de fees si el cobro ya cerró sin neto de MP.
+      if (
+        order.status === "processed" &&
+        order.paymentId &&
+        (order.feeStatus === "pending" || order.feeStatus === "none")
+      ) {
+        const token = await this.credentialsResolver.resolve({
+          barId: order.barId ?? undefined,
+          allowGlobalFallback: true,
+        });
+        return this.enrichFees(order, token);
+      }
       return order;
     }
 
@@ -264,7 +278,32 @@ export class MercadoPagoOrdersService {
       "Error al consultar la order en Mercado Pago",
     );
 
-    return this.mpOrdersRepo.update(order.orderIdMp, this.buildStatusPatch(order, mpOrder));
+    const updated = await this.mpOrdersRepo.update(order.orderIdMp, this.buildStatusPatch(order, mpOrder));
+    if (updated.status === "processed" && updated.paymentId && updated.feeStatus !== "ready") {
+      return this.enrichFees(updated, token);
+    }
+    return updated;
+  }
+
+  /**
+   * Completa neto/fee de cobros processed con fee_status=pending.
+   * Idempotente: filas already ready no se tocan.
+   */
+  async backfillFees(limit = 50): Promise<{ checked: number; updated: number; unavailable: number }> {
+    const rows = await this.mpOrdersRepo.findProcessedPendingFees(limit);
+    let updated = 0;
+    let unavailable = 0;
+    for (const row of rows) {
+      const token = await this.credentialsResolver.resolve({
+        barId: row.barId ?? undefined,
+        allowGlobalFallback: true,
+      });
+      const before = row.feeStatus;
+      const after = await this.enrichFees(row, token);
+      if (after.feeStatus === "ready" && before !== "ready") updated += 1;
+      if (after.feeStatus === "unavailable") unavailable += 1;
+    }
+    return { checked: rows.length, updated, unavailable };
   }
 
   /**
@@ -310,11 +349,46 @@ export class MercadoPagoOrdersService {
       status: "processed" as const,
       paymentId,
       paidAmount,
+      feeStatus: "pending",
       verifiedAt: new Date().toISOString(),
       verificationError: null,
       ...(payment?.status_detail ? { paymentStatusDetail: payment.status_detail } : {}),
       ...(payment?.status ? { paymentStatus: payment.status } : {}),
     };
+  }
+
+  /** Best-effort: nunca tira — el cobro ya está concreto. */
+  private async enrichFees(order: MpOrder, token: string): Promise<MpOrder> {
+    if (!order.paymentId || order.feeStatus === "ready") return order;
+    try {
+      const payment = await this.mpRequest<MpPaymentFeeFields & { id?: string }>(
+        token,
+        `/v1/payments/${encodeURIComponent(order.paymentId)}`,
+        { method: "GET" },
+        "Error al consultar el pago en Mercado Pago",
+      );
+      const fees = parsePaymentFees(payment);
+      if (!fees) {
+        return this.mpOrdersRepo.update(order.orderIdMp, { feeStatus: "pending" });
+      }
+      const patch: MpOrderUpdate = {
+        netReceivedAmount: fees.netReceivedAmount,
+        mpFeeAmount: fees.mpFeeAmount,
+        feeStatus: "ready",
+      };
+      return this.mpOrdersRepo.update(order.orderIdMp, patch);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("404") || /not found/i.test(msg)) {
+        try {
+          return await this.mpOrdersRepo.update(order.orderIdMp, { feeStatus: "unavailable" });
+        } catch {
+          return order;
+        }
+      }
+      console.warn(`[MP Orders] No se pudo enriquecer fees de ${order.orderIdMp}:`, msg);
+      return order;
+    }
   }
 
   /**
@@ -339,7 +413,10 @@ export class MercadoPagoOrdersService {
 
     // Misma verificación de monto que getOrderStatus: el webhook también es
     // un camino de concretar y el CHECK de DB exige paid_amount en processed.
-    const updated = await this.mpOrdersRepo.update(order.orderIdMp, this.buildStatusPatch(order, mpOrder));
+    let updated = await this.mpOrdersRepo.update(order.orderIdMp, this.buildStatusPatch(order, mpOrder));
+    if (updated.status === "processed" && updated.paymentId && updated.feeStatus !== "ready") {
+      updated = await this.enrichFees(updated, token);
+    }
 
     const payment = mpOrder.transactions?.payments?.[0];
     return {

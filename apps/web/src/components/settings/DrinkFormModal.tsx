@@ -72,7 +72,10 @@ export default function DrinkFormModal({
   }
 
   return (
-    <div className="w-full lg:w-[480px] shrink-0 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 flex flex-col gap-5 shadow-card animate-in slide-in-from-right duration-200">
+    <div
+      data-tour="drink-form"
+      className="w-full lg:w-[480px] shrink-0 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 flex flex-col gap-5 shadow-card animate-in slide-in-from-right duration-200"
+    >
       <div className="flex justify-between items-center pb-3 border-b border-[var(--border-subtle)]">
         <h2 className="text-[18px] font-semibold text-[var(--text-primary)] tracking-tight">
           {editDrink.id ? "Editar trago" : "Nuevo trago"}

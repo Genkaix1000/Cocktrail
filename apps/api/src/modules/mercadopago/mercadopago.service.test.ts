@@ -461,7 +461,13 @@ describe("MercadoPagoService", () => {
       mockFetchOnce({ ok: true, body: { id: "intent-1", state: "FINISHED", payment: { id: "payment-1" } } });
       mockFetchOnce({
         ok: true,
-        body: { id: "payment-1", status: "approved", status_detail: "accredited", transaction_amount: 101 },
+        body: {
+          id: "payment-1",
+          status: "approved",
+          status_detail: "accredited",
+          transaction_amount: 101,
+          transaction_details: { net_received_amount: 98.5 },
+        },
       });
 
       const outcome = await service.resolveIntentOutcome("intent-1");
@@ -472,6 +478,8 @@ describe("MercadoPagoService", () => {
         paymentStatus: "approved",
         statusDetail: "accredited",
         transactionAmount: 101,
+        netReceivedAmount: 98.5,
+        mpFeeAmount: 2.5,
       });
     });
 

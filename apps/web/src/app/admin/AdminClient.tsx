@@ -22,8 +22,9 @@ import { useTheme } from "@/components/ThemeProvider";
 import { AppTopbar } from "@/components/shared/AppTopbar";
 import { NightActionCard } from "@/components/shared/NightActionCard";
 import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
+import { TourProvider } from "@/components/tour/TourProvider";
 
-import { computeTotals } from "@cocktrail/shared";
+import { computeTotals, withLiveMpFees } from "@cocktrail/shared";
 import { useEventState } from "@/hooks/useEventState";
 
 import { eventsService } from "@/services/events.service";
@@ -60,6 +61,7 @@ import type {
 type Props = {
   initialEvent: NightEvent | null;
   initialOrders: Order[];
+  initialTotals?: EventTotals | null;
   currentUser: { role: Role; username: string };
 };
 
@@ -86,6 +88,7 @@ type NavItem = {
 export default function AdminClient({
   initialEvent,
   initialOrders,
+  initialTotals = null,
   currentUser,
 }: Props) {
   const router = useRouter();
@@ -127,8 +130,8 @@ export default function AdminClient({
     return () => clearTimeout(timer);
   }, []);
 
-  const { event, orders, summary, setEvent, setSummary } = useEventState({
-    initial: { event: initialEvent, orders: initialOrders },
+  const { event, orders, summary, serverTotals, setEvent, setSummary } = useEventState({
+    initial: { event: initialEvent, orders: initialOrders, totals: initialTotals },
     onEventClosed: () => {
       setModalOpen(true);
       setHistoryLoaded(false);
@@ -192,7 +195,10 @@ export default function AdminClient({
     handleTabChange("logs");
   };
 
-  const totals = useMemo(() => computeTotals(orders), [orders]);
+  const totals = useMemo(
+    () => withLiveMpFees(computeTotals(orders), serverTotals),
+    [orders, serverTotals],
+  );
 
   const pendingDeliveries = useMemo(
     () => orders.filter((o) => o.status === "pendiente").length,
@@ -217,7 +223,7 @@ export default function AdminClient({
     const effectiveEfectivo = dashboardTotals.efectivoTotal;
     const effectiveQR = dashboardTotals.qrTotal;
     const effectiveDebito = dashboardTotals.debitoTotal;
-    const effectiveWeb = dashboardTotals.webTotal;
+    const total = dashboardTotals.total;
 
     const breakdown = [
       {
@@ -225,53 +231,28 @@ export default function AdminClient({
         label: "Efectivo",
         total: effectiveEfectivo,
         count: dashboardTotals.efectivoCount,
-        pct: dashboardTotals.total > 0 ? Math.round((effectiveEfectivo / dashboardTotals.total) * 100) : 0,
+        pct: total > 0 ? Math.round((effectiveEfectivo / total) * 100) : 0,
         color: "#10b981",
       },
       {
-        method: "tarjeta",
-        label: "Tarjeta",
-        total: effectiveDebito + effectiveWeb,
-        count: dashboardTotals.debitoCount + dashboardTotals.webCount,
-        pct:
-          dashboardTotals.total > 0
-            ? Math.round(((effectiveDebito + effectiveWeb) / dashboardTotals.total) * 100)
-            : 0,
-        color: "#3b82f6",
-      },
-      {
         method: "qr",
-        label: "Transferencia / QR",
+        label: "QR",
         total: effectiveQR,
         count: dashboardTotals.qrCount,
-        pct: dashboardTotals.total > 0 ? Math.round((effectiveQR / dashboardTotals.total) * 100) : 0,
+        pct: total > 0 ? Math.round((effectiveQR / total) * 100) : 0,
         color: "#a855f7",
       },
       {
-        method: "otros",
-        label: "Otros",
-        total: Math.max(
-          0,
-          dashboardTotals.total - (effectiveEfectivo + effectiveQR + effectiveDebito + effectiveWeb),
-        ),
-        count: 0,
-        pct:
-          dashboardTotals.total > 0
-            ? Math.max(
-                0,
-                100 -
-                  (Math.round((effectiveEfectivo / dashboardTotals.total) * 100) +
-                    Math.round(((effectiveDebito + effectiveWeb) / dashboardTotals.total) * 100) +
-                    Math.round((effectiveQR / dashboardTotals.total) * 100)),
-              )
-            : 0,
-        color: "#f97316",
+        method: "debito",
+        label: "Tarjeta",
+        total: effectiveDebito,
+        count: dashboardTotals.debitoCount,
+        pct: total > 0 ? Math.round((effectiveDebito / total) * 100) : 0,
+        color: "#3b82f6",
       },
     ];
 
-    return dashboardTotals.total > 0
-      ? breakdown.filter((b) => b.total > 0 || b.pct > 0)
-      : breakdown;
+    return total > 0 ? breakdown.filter((b) => b.total > 0) : breakdown;
   }, [dashboardTotals]);
 
   async function handleCloseConfirm(password: string) {
@@ -362,6 +343,7 @@ export default function AdminClient({
       <button
         key={item.id}
         type="button"
+        data-tour-nav={item.id}
         title={collapsed ? item.label : undefined}
         onClick={() => (item.onClick ? item.onClick() : handleTabChange(item.id))}
         className={`w-full flex items-center text-left transition-colors duration-150 cursor-pointer bg-transparent ${
@@ -386,6 +368,7 @@ export default function AdminClient({
 
     return (
       <aside
+        data-tour="sidebar"
         className={`
           shrink-0 flex flex-col print:hidden relative overflow-hidden
           bg-[var(--bg-panel)] text-[var(--text-primary)]
@@ -502,6 +485,7 @@ export default function AdminClient({
   };
 
   return (
+    <TourProvider onNavigateTab={handleTabChange}>
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {editKeywordOpen && event && (
@@ -572,6 +556,7 @@ export default function AdminClient({
                   isTabTransitioning={isTabTransitioning}
                   activeTab={activeTab}
                   isNightOpen={isNightOpen}
+                  onGoToPagos={() => setActiveTab("pdv")}
                 />
               )}
 
@@ -625,5 +610,6 @@ export default function AdminClient({
         </div>
       </main>
     </div>
+    </TourProvider>
   );
 }

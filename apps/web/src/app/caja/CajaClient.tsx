@@ -9,7 +9,7 @@ import { authService } from "@/services/auth.service";
 import CloseNightModal from "@/components/shared/CloseNightModal";
 import { AppTopbar } from "@/components/shared/AppTopbar";
 import { TestNightBanner } from "@/components/shared/TestNightBanner";
-import { computeTotals } from "@cocktrail/shared";
+import { computeTotals, withLiveMpFees } from "@cocktrail/shared";
 import { usePrinterStatus } from "@/hooks/usePrinterStatus";
 import { usePosnetStatus } from "@/hooks/usePosnetStatus";
 import VentaSection from "@/components/caja/VentaSection";
@@ -70,7 +70,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     reprinting,
   } = usePrinterStatus();
 
-  const { posnetLevel, posnetMessage } = usePosnetStatus();
+  const { posnetHealth, posnetLevel, posnetMessage } = usePosnetStatus();
   const ventaPrinter = useMemo(
     () => ({ reprintTicket, printTicket, printError, reprinting }),
     [reprintTicket, printTicket, printError, reprinting],
@@ -98,7 +98,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     }
   }
 
-  const { event, orders, summary, setSummary, upsertOrder } = useEventState({
+  const { event, orders, summary, serverTotals, setSummary, upsertOrder } = useEventState({
     onEventClosed: () => setCloseModalOpen(true),
   });
 
@@ -126,7 +126,10 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     }
   }
 
-  const totals = useMemo(() => computeTotals(activeNightOrders), [activeNightOrders]);
+  const totals = useMemo(
+    () => withLiveMpFees(computeTotals(activeNightOrders), serverTotals),
+    [activeNightOrders, serverTotals],
+  );
 
   const pendingDeliveries = useMemo(
     () => activeNightOrders.filter((o) => o.status === "pendiente").length,

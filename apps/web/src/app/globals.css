@@ -477,3 +477,51 @@ body {
   opacity: 0;
   animation: ticketPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.05s forwards;
 }
+
+/* ──────────────────────────────────────────────────────────
+   Tour guiado — pulse en nav + “click” finger
+   ────────────────────────────────────────────────────────── */
+@keyframes tourNavPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-primary) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 14px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes tourNavFlash {
+  0%, 100% { background-color: transparent; }
+  40%      { background-color: color-mix(in srgb, var(--accent-primary) 22%, transparent); }
+}
+.tour-nav-pulse {
+  position: relative;
+  z-index: 10000 !important;
+  border-radius: 12px;
+  animation: tourNavPulse 0.7s ease-out, tourNavFlash 0.7s ease-out;
+}
+@keyframes tourFingerTap {
+  0%   { opacity: 0; transform: translate(12px, 12px) scale(0.85); }
+  35%  { opacity: 1; transform: translate(0, 0) scale(1); }
+  55%  { opacity: 1; transform: translate(0, 2px) scale(0.92); }
+  100% { opacity: 0; transform: translate(-4px, -4px) scale(1); }
+}
+.tour-finger {
+  position: fixed;
+  z-index: 10001;
+  width: 28px;
+  height: 28px;
+  margin-left: -4px;
+  margin-top: -4px;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff 0%, #009EE3 55%, #273577 100%);
+  box-shadow: 0 4px 14px rgba(0, 158, 227, 0.45);
+  animation: tourFingerTap 0.75s ease-out forwards;
+}
+
+/* Logos Mi Boliche en el tour — tinta del tema (neutro) */
+.tour-miboliche-ink {
+  filter: brightness(0) saturate(100%);
+  opacity: 0.72;
+}
+.dark .tour-miboliche-ink {
+  filter: brightness(0) saturate(100%) invert(1);
+  opacity: 0.9;
+}

@@ -8,7 +8,8 @@ import type { EmitFn } from "../../shared/sse/sse-manager.js";
 
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pendiente: ["entregado", "cancelado"],
-  entregado: [],
+  // Cancelar entregado = anular del arqueo (sin reembolso MP; el dueño lo ve muted).
+  entregado: ["cancelado"],
   cancelado: [],
 };
 

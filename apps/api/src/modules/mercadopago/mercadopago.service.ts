@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Conflict } from "../../shared/errors/http-errors.js";
 import type { CredentialsResolverService } from "./credentials-resolver.service.js";
 import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
+import { parsePaymentFees, type MpPaymentFeeFields } from "./mp-payment-fees.js";
 
 type MpNormalizedStatus = "OPEN" | "ON_TERMINAL" | "FINISHED" | "CANCELED" | "PENDING";
 
@@ -21,7 +22,7 @@ export type MpPaymentIntentResponse = {
   [key: string]: unknown;
 };
 
-type MpPayment = {
+type MpPayment = MpPaymentFeeFields & {
   id: string;
   status: string;
   status_detail?: string;
@@ -52,6 +53,10 @@ export type IntentOutcome = {
   statusDetail?: string;
   /** ⚠ En PESOS (viene de /v1/payments, no de la Point API). */
   transactionAmount?: number;
+  /** Neto acreditado al seller (pesos), si MP ya lo informó. */
+  netReceivedAmount?: number;
+  /** bruto − neto (pesos). */
+  mpFeeAmount?: number;
 };
 
 /** Mapea el estado real de un pago de MP al status normalizado que expone el service. */
@@ -346,6 +351,11 @@ export class MercadoPagoService {
     outcome.paymentStatus = payment.status;
     if (payment.status_detail !== undefined) outcome.statusDetail = payment.status_detail;
     if (payment.transaction_amount !== undefined) outcome.transactionAmount = payment.transaction_amount;
+    const fees = parsePaymentFees(payment);
+    if (fees) {
+      outcome.netReceivedAmount = fees.netReceivedAmount;
+      outcome.mpFeeAmount = fees.mpFeeAmount;
+    }
     return outcome;
   }
 

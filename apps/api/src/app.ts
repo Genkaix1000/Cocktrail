@@ -61,6 +61,7 @@ import { resolveInstallationBarId } from "./modules/mercadopago/mp-context.middl
 import { createMercadoPagoPaymentAdapter } from "./modules/mercadopago/mercadopago-payment-adapter.js";
 import { SupabaseMpOrdersRepository } from "./modules/mercadopago/mp-orders.repository.js";
 import { getMigrationsStatus } from "./infra/migrations/migrations-status.js";
+import { PgMigrationsRepository } from "./infra/migrations/pg-migrations.repository.js";
 import { SupabaseMpWebhookEventsRepository } from "./modules/mercadopago/mp-webhook-events.repository.js";
 import { BarSessionsService } from "./modules/bar-sessions/bar-sessions.service.js";
 import { SupabaseBarSessionsRepository } from "./modules/bar-sessions/bar-sessions.repository.js";
@@ -155,6 +156,7 @@ const mpProvisioningService = new MercadoPagoProvisioningService(
 // Fase 4 — Orders QR estático. `getActiveEvent` liga cada cobro a la noche
 // abierta (mismo patrón que OrdersService).
 const mpOrdersRepo = new SupabaseMpOrdersRepository();
+eventsService.setMpFeeLookup((eventId) => mpOrdersRepo.sumFeesForEvent(eventId));
 const mpOrdersService = new MercadoPagoOrdersService(
   credentialsResolver,
   barsRepo,
@@ -252,6 +254,7 @@ const systemService = new SystemService(
   printerService,
   supabase,
   async () => posnetResolver.peek((await resolveInstallationBarId()) ?? env.BAR_CODE),
+  new PgMigrationsRepository(env.DATABASE_URL),
 );
 
 // ── Express App ──

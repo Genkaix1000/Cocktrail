@@ -16,6 +16,7 @@ import {
 } from "@/lib/analytics";
 
 import type { EventSummary, EventTotals, Order } from "@cocktrail/shared";
+import { displayRevenue } from "@cocktrail/shared";
 
 /**
  * Hook compartido con todos los valores derivados de analytics que consumen
@@ -45,7 +46,9 @@ export function useAdminAnalytics(
 
     // 2. New Analytics (A)
     const prevTotals = getLastNightTotals(historyEvents);
-    const _deltaTotal = prevTotals ? computeDelta(totals.total, prevTotals.total) : null;
+    const _deltaTotal = prevTotals
+      ? computeDelta(displayRevenue(totals), displayRevenue(prevTotals))
+      : null;
 
     const prevTotalOps = prevTotals
       ? prevTotals.efectivoCount + prevTotals.qrCount + prevTotals.debitoCount
@@ -69,7 +72,7 @@ export function useAdminAnalytics(
     const _nightRecords = computeNightRecords(historyEvents);
     const _weeklyDelta = computeWeeklyDelta(historyEvents);
     const _monthlyDelta = computeMonthlyDelta(historyEvents);
-    const _allTotal = historyEvents.reduce((s, e) => s + e.totals.total, 0);
+    const _allTotal = historyEvents.reduce((s, e) => s + displayRevenue(e.totals), 0);
 
     return {
       totalDrinkUnits: _totalDrinkUnits,

@@ -4,7 +4,8 @@ import { env } from "../../config/env.js";
 import { BadRequest, Conflict, NotFound } from "../../shared/errors/http-errors.js";
 import type { EmitFn } from "../../shared/sse/sse-manager.js";
 import type { MercadoPagoService, MpPaymentIntentResponse, CreatedIntentMeta, IntentOutcome } from "./mercadopago.service.js";
-import type { MpCartItem, MpOrder, MpOrdersRepository, MpOrderStatus } from "./mp-orders.repository.js";
+import type { MpCartItem, MpFeeStatus, MpOrder, MpOrdersRepository, MpOrderStatus } from "./mp-orders.repository.js";
+import { parsePaymentFees } from "./mp-payment-fees.js";
 import type { ResolvedPosnet } from "./posnet-resolver.service.js";
 
 /**
@@ -151,7 +152,10 @@ export class PointPaymentsService {
    * MP; el resto se re-consulta y persiste.
    */
   async getIntentVerdict(intentId: string): Promise<PointIntentVerdict> {
-    const row = await this.findPointRow(intentId);
+    let row = await this.findPointRow(intentId);
+    if (needsFeeEnrichment(row)) {
+      row = await this.enrichFees(row);
+    }
     if (HARD_TERMINAL.has(row.status) || row.status === "expired") {
       return this.toVerdict(row);
     }
@@ -164,7 +168,10 @@ export class PointPaymentsService {
    * del deadline, mejor confirmarla acá que perderla.
    */
   async resolveIntent(intentId: string): Promise<PointIntentVerdict> {
-    const row = await this.findPointRow(intentId);
+    let row = await this.findPointRow(intentId);
+    if (needsFeeEnrichment(row)) {
+      row = await this.enrichFees(row);
+    }
     if (HARD_TERMINAL.has(row.status)) {
       return this.toVerdict(row);
     }
@@ -205,6 +212,7 @@ export class PointPaymentsService {
         paymentStatusDetail: outcome.statusDetail ?? null,
         verifiedAt: new Date().toISOString(),
         rawState: outcome.rawState,
+        ...feeFieldsFromOutcome(outcome),
       });
     } catch (err) {
       // Carrera: otro proceso ya la recuperó/creó — usar la fila ganadora.
@@ -302,6 +310,7 @@ export class PointPaymentsService {
         paidAmount: paid,
         verifiedAt: new Date().toISOString(),
         verificationError: null,
+        ...feeFieldsFromOutcome(outcome),
       };
     }
 
@@ -361,6 +370,24 @@ export class PointPaymentsService {
     return updated;
   }
 
+  /** Best-effort: completa neto/fee si el primer poll no los trajo. */
+  private async enrichFees(row: MpOrder): Promise<MpOrder> {
+    if (!row.paymentId || row.feeStatus === "ready") return row;
+    try {
+      const payment = await this.mpService.getPayment(row.paymentId, row.deviceId ?? undefined);
+      const fees = parsePaymentFees(payment);
+      if (!fees) return row;
+      return this.mpOrdersRepo.update(row.orderIdMp, {
+        netReceivedAmount: fees.netReceivedAmount,
+        mpFeeAmount: fees.mpFeeAmount,
+        feeStatus: "ready",
+      });
+    } catch (err) {
+      console.warn(`[PointPayments] No se pudo enriquecer fees de ${row.orderIdMp}:`, err);
+      return row;
+    }
+  }
+
   /** Preparación (nadie lo consume todavía): aviso SSE en transiciones terminales. */
   private emitUpdated(row: MpOrder): void {
     this.emit?.({
@@ -409,6 +436,33 @@ type PatchDecision = {
   paymentStatus?: string | null;
   paymentStatusDetail?: string | null;
   paidAmount?: number | null;
+  netReceivedAmount?: number | null;
+  mpFeeAmount?: number | null;
+  feeStatus?: MpFeeStatus;
   verifiedAt?: string | null;
   verificationError?: string | null;
 };
+
+function needsFeeEnrichment(row: MpOrder): boolean {
+  return (
+    row.status === "processed" &&
+    !!row.paymentId &&
+    (row.feeStatus === "pending" || row.feeStatus === "none")
+  );
+}
+
+function feeFieldsFromOutcome(outcome: IntentOutcome): Pick<PatchDecision, "netReceivedAmount" | "mpFeeAmount" | "feeStatus"> {
+  if (
+    typeof outcome.netReceivedAmount === "number" &&
+    Number.isFinite(outcome.netReceivedAmount) &&
+    typeof outcome.mpFeeAmount === "number" &&
+    Number.isFinite(outcome.mpFeeAmount)
+  ) {
+    return {
+      netReceivedAmount: outcome.netReceivedAmount,
+      mpFeeAmount: outcome.mpFeeAmount,
+      feeStatus: "ready",
+    };
+  }
+  return { feeStatus: "pending" };
+}

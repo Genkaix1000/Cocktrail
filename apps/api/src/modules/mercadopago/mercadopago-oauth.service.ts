@@ -49,8 +49,17 @@ export type PullSellerResult = {
 
 /**
  * Origen permitido para el redirect post-OAuth (anti open-redirect).
- * Acepta FRONTEND_URL o localhost/127.0.0.1; devuelve solo el origin.
+ * Acepta FRONTEND_URL, localhost y LAN privada (donde corrés en el boliche).
+ * Devuelve solo el origin — nunca un host público arbitrario.
  */
+function isLoopbackOrPrivateHost(hostname: string): boolean {
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  return false;
+}
+
 export function resolveOAuthRedirectUrl(candidate: string | null | undefined): string {
   const fallback = env.FRONTEND_URL;
   if (!candidate) return new URL(fallback).origin;
@@ -59,7 +68,7 @@ export function resolveOAuthRedirectUrl(candidate: string | null | undefined): s
     if (u.protocol !== "http:" && u.protocol !== "https:") return new URL(fallback).origin;
     const allowed = new URL(fallback).origin;
     if (u.origin === allowed) return u.origin;
-    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return u.origin;
+    if (isLoopbackOrPrivateHost(u.hostname)) return u.origin;
     return allowed;
   } catch {
     return new URL(fallback).origin;

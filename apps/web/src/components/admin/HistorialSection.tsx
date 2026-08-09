@@ -253,7 +253,10 @@ function DangerZone({
                 {formatHm(night.startedAt)} hs
                 {night.closedAt ? ` → ${formatHm(night.closedAt)} hs` : ""} ·{" "}
                 {night.orderCounter} {night.orderCounter === 1 ? "pedido" : "pedidos"} · $
-                {night.totals.total.toLocaleString("es-AR")}
+                {(night.totals.netTotal ?? night.totals.total).toLocaleString("es-AR")}
+                {night.totals.netTotal != null && night.totals.netTotal !== night.totals.total
+                  ? ` neto`
+                  : ""}
               </p>
             </div>
             <button
