@@ -44,6 +44,7 @@ function makeBar(overrides: Partial<Bar> = {}): Bar {
     id: "bar-uuid-1",
     name: "Barra VIP",
     code: "BARRA-01",
+    enabled: true,
     createdAt: "2026-07-17T00:00:00Z",
     ...overrides,
   };
@@ -124,6 +125,7 @@ describe("MercadoPagoProvisioningService", () => {
       findById: vi.fn().mockResolvedValue(makeBar()),
       listAll: vi.fn().mockResolvedValue([makeBar()]),
       findOrCreateByCode: vi.fn().mockResolvedValue(makeBar()),
+      setEnabled: vi.fn(async (id, enabled) => makeBar({ id, enabled })),
     };
 
     cajasRepo = {

@@ -47,7 +47,7 @@ describe("CajaSessionOnboarding", () => {
     expect(screen.getByRole("heading", { name: "Elegí una caja" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Caja VIP/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: /Caja Terraza/ })).toBeDisabled();
-    expect(screen.getByText("Sesión en uso")).toBeInTheDocument();
+    expect(screen.getByText("Ocupada")).toBeInTheDocument();
     expect(screen.getByText("marina")).toBeInTheDocument();
   });
 
@@ -64,7 +64,7 @@ describe("CajaSessionOnboarding", () => {
     const user = userEvent.setup();
     const props = renderOnboarding();
 
-    await user.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await user.click(screen.getByRole("button", { name: "Salir" }));
 
     expect(props.onLogout).toHaveBeenCalledOnce();
   });
@@ -72,6 +72,6 @@ describe("CajaSessionOnboarding", () => {
   it("muestra el estado sin cajas configuradas", () => {
     renderOnboarding({ boxes: [] });
 
-    expect(screen.getByText("No hay cajas configuradas")).toBeInTheDocument();
+    expect(screen.getByText("No hay cajas disponibles")).toBeInTheDocument();
   });
 });

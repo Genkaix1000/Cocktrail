@@ -5,6 +5,8 @@ export type NewOAuthState = {
   state: string;
   codeVerifier: string;
   barId: string | null;
+  /** Origen del frontend que inició el OAuth (F1 multi-entorno). */
+  redirectUrl?: string | null;
   expiresAt: Date;
 };
 
@@ -12,6 +14,7 @@ export type NewOAuthState = {
 export type ConsumedOAuthState = {
   codeVerifier: string;
   barId: string | null;
+  redirectUrl: string | null;
 };
 
 export interface OAuthStatesRepository {
@@ -26,6 +29,7 @@ export class SupabaseOAuthStatesRepository implements OAuthStatesRepository {
       state: state.state,
       code_verifier: state.codeVerifier,
       bar_id: state.barId,
+      redirect_url: state.redirectUrl ?? null,
       expires_at: state.expiresAt.toISOString(),
     });
 
@@ -50,6 +54,7 @@ export class SupabaseOAuthStatesRepository implements OAuthStatesRepository {
     return {
       codeVerifier: row.code_verifier,
       barId: row.bar_id ?? null,
+      redirectUrl: row.redirect_url ?? null,
     };
   }
 }

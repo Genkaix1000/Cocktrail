@@ -1,5 +1,5 @@
 import { Conflict, NotFound } from "../../shared/errors/http-errors.js";
-import type { BarsRepository } from "../mercadopago/bars.repository.js";
+import type { Bar, BarsRepository } from "../mercadopago/bars.repository.js";
 import type { BarSessionsRepository, BarSession } from "./bar-sessions.repository.js";
 
 export const BAR_SESSION_TTL_MS = 10 * 60 * 1000;
@@ -67,6 +67,9 @@ export class BarSessionsService {
     const bar = await this.barsRepo.findById(barId);
     if (!bar) {
       throw new NotFound("La caja seleccionada no existe.");
+    }
+    if (!bar.enabled) {
+      throw new Conflict("Esta caja está deshabilitada.", "BAR_DISABLED");
     }
 
     const barSession = await this.repo.findByBarId(barId);
@@ -145,24 +148,42 @@ export class BarSessionsService {
     const byBar = new Map(sessions.map((session) => [session.barId, session]));
 
     return {
-      boxes: bars.map((bar) => {
-        const session = byBar.get(bar.id) ?? null;
-        return {
-          barId: bar.id,
-          name: bar.name?.trim() || bar.code?.trim() || "Caja sin nombre",
-          code: bar.code,
-          status: !session
-            ? "available"
-            : session.userId === userId
-              ? "mine"
-              : "occupied",
-          session: session
-            ? { username: session.username, connectedAt: session.connectedAt }
-            : null,
-        };
-      }),
+      boxes: bars
+        .filter((bar) => bar.enabled)
+        .map((bar) => {
+          const session = byBar.get(bar.id) ?? null;
+          return {
+            barId: bar.id,
+            name: bar.name?.trim() || bar.code?.trim() || "Caja sin nombre",
+            code: bar.code,
+            status: !session
+              ? "available"
+              : session.userId === userId
+                ? "mine"
+                : "occupied",
+            session: session
+              ? { username: session.username, connectedAt: session.connectedAt }
+              : null,
+          };
+        }),
       currentSession,
     };
+  }
+
+  /**
+   * Admin: habilita/deshabilita una barra en el selector de caja.
+   * Al deshabilitar, echa la sesión activa de esa barra.
+   */
+  async setBarEnabled(
+    barId: string,
+    enabled: boolean,
+  ): Promise<{ bar: Bar; ejected: BarSession | null }> {
+    const existing = await this.barsRepo.findById(barId);
+    if (!existing) throw new NotFound("La barra no existe.");
+
+    const bar = await this.barsRepo.setEnabled(barId, enabled);
+    const ejected = enabled ? null : await this.forceLogout(barId);
+    return { bar, ejected };
   }
 
   async heartbeat(user: AuthenticatedUser): Promise<BarSession> {

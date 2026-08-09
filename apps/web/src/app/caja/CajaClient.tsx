@@ -70,8 +70,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     reprinting,
   } = usePrinterStatus();
 
-  const { posnetLevel, posnetMessage, testPosnet, posnetTestMessage, testingPosnet } =
-    usePosnetStatus();
+  const { posnetLevel, posnetMessage } = usePosnetStatus();
   const ventaPrinter = useMemo(
     () => ({ reprintTicket, printTicket, printError, reprinting }),
     [reprintTicket, printTicket, printError, reprinting],
@@ -166,9 +165,6 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     printerTestMessage,
     posnetLevel,
     posnetMessage,
-    testPosnet,
-    posnetTestMessage,
-    testingPosnet,
     handleLogout,
   } as const;
 
@@ -284,6 +280,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
                       orders={activeNightOrders}
                       onReloadCarta={onReloadCarta}
                       isTestNight={event.isTest === true}
+                      hasLinkedDevice={posnetHealth?.hasLinkedDevice ?? null}
                     />
                   </div>
 

@@ -8,10 +8,16 @@ export type PdvForm = {
   barCode: string;
 };
 
+export type PdvPreset = {
+  code: string;
+  name: string;
+};
+
 type Props = {
   form: PdvForm;
   saving: boolean;
-  supportedBarCode: string;
+  /** Presets aún sin PDV (ej. Portátil). Si hay más de uno, el admin elige. */
+  availablePresets: PdvPreset[];
   onChange: (patch: Partial<PdvForm>) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -30,26 +36,24 @@ const inputCls =
 export default function PdvFormPanel({
   form,
   saving,
-  supportedBarCode,
+  availablePresets,
   onChange,
   onCancel,
   onSave,
 }: Props) {
   const [touched, setTouched] = useState(false);
   const nameOk = form.name.trim().length > 0;
-  const multiBarWarning = form.barCode !== supportedBarCode;
+  const codeOk = availablePresets.some((p) => p.code === form.barCode);
 
   const headingId = useId();
   const nameId = useId();
   const barCodeId = useId();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Foco inicial al abrir el panel.
   useEffect(() => {
     nameInputRef.current?.focus();
   }, []);
 
-  // Escape cierra, escuche donde escuche el teclado (sin trap).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
@@ -92,7 +96,7 @@ export default function PdvFormPanel({
               onChange({ name: e.target.value });
             }}
             className={inputCls}
-            placeholder="Barra VIP"
+            placeholder="Portátil"
           />
           {touched && !nameOk && (
             <p className="text-[11px] text-[var(--danger-base)] mt-1">El nombre es obligatorio.</p>
@@ -103,21 +107,35 @@ export default function PdvFormPanel({
           <label htmlFor={barCodeId} className={labelCls}>
             Código de barra
           </label>
-          <input
-            id={barCodeId}
-            type="text"
-            value={form.barCode}
-            readOnly
-            className={`${inputCls} bg-[var(--bg-panel)] text-[var(--text-tertiary)] font-mono cursor-not-allowed`}
-          />
+          {availablePresets.length > 1 ? (
+            <select
+              id={barCodeId}
+              value={form.barCode}
+              onChange={(e) => {
+                const preset = availablePresets.find((p) => p.code === e.target.value);
+                onChange({
+                  barCode: e.target.value,
+                  ...(preset ? { name: preset.name } : {}),
+                });
+              }}
+              className={`${inputCls} font-mono`}
+            >
+              {availablePresets.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.code} — {p.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id={barCodeId}
+              type="text"
+              value={form.barCode}
+              readOnly
+              className={`${inputCls} bg-[var(--bg-panel)] text-[var(--text-tertiary)] font-mono cursor-not-allowed`}
+            />
+          )}
         </div>
-
-        {multiBarWarning && (
-          <div className="rounded-xl bg-[var(--amber-soft)] px-3.5 py-2.5 text-[12px] text-[var(--amber-base)] leading-relaxed">
-            Esta funcionalidad solo está disponible para Barra VIP ({supportedBarCode}). Multi-barra
-            no está implementado todavía.
-          </div>
-        )}
       </div>
 
       <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border-subtle)] mt-auto">
@@ -132,7 +150,7 @@ export default function PdvFormPanel({
         <button
           type="button"
           onClick={onSave}
-          disabled={saving || !nameOk || multiBarWarning}
+          disabled={saving || !nameOk || !codeOk}
           className="h-10 px-5 rounded-full bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 hover:bg-[var(--accent-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer active:scale-[0.98]"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : null}

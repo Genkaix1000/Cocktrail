@@ -15,9 +15,9 @@ INSERT INTO oauth_states (state, code_verifier, bar_id, expires_at)
 VALUES ('p1_ok', 'ver_ok', 'BARRA-01', now() + interval '10 minutes');
 
 SELECT results_eq(
-  $$ SELECT code_verifier, bar_id FROM consume_oauth_state('p1_ok') $$,
-  $$ VALUES ('ver_ok'::text, 'BARRA-01'::text) $$,
-  '#8a consume_oauth_state: primer consumo devuelve code_verifier + bar_id'
+  $$ SELECT code_verifier, bar_id, redirect_url FROM consume_oauth_state('p1_ok') $$,
+  $$ VALUES ('ver_ok'::text, 'BARRA-01'::text, NULL::text) $$,
+  '#8a consume_oauth_state: primer consumo devuelve code_verifier + bar_id + redirect_url'
 );
 
 -- #8b — segundo consumo del mismo state no devuelve nada (single-winner / one-shot)

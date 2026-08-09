@@ -129,8 +129,8 @@ const mpOAuthService = new MercadoPagoOAuthService(
     redirectUri: env.MP_REDIRECT_URI,
     refreshMarginDays: env.MP_REFRESH_MARGIN_DAYS,
   },
-  // Buzón de handoff: lo escribe la Edge Function `mp-auth-callback`. Con una sola base,
-  // ese proyecto es el mismo que `supabase` — antes iba el cliente cloud aparte.
+  // Misma base que el API (single-base). F0: la EF escribe tokens cifrados directo;
+  // cloudDb queda para limpieza residual en unlink (handoffs/bars).
   supabase,
 );
 
@@ -343,8 +343,8 @@ app.use("/api/mercadopago", createMercadoPagoOrdersController(mpOrdersService));
 app.use("/api/mercadopago", createMercadoPagoWebhooksController(mpWebhooksService));
 app.use(
   "/api/mercadopago",
-  createMercadoPagoController(mpService, pointPaymentsService, resolvePosnet, (refresh) =>
-    mpHealthService.getHealth(refresh),
+  createMercadoPagoController(mpService, pointPaymentsService, resolvePosnet, (refresh, barId) =>
+    mpHealthService.getHealth(refresh, barId),
   ),
 );
 app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));

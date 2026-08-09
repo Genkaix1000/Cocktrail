@@ -46,9 +46,6 @@ type Props = {
   printerTestMessage: string | null;
   posnetLevel: PosnetLevel;
   posnetMessage: string | null;
-  testPosnet: () => void | Promise<void>;
-  posnetTestMessage: string | null;
-  testingPosnet?: boolean;
   handleLogout: () => void | Promise<void>;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -81,6 +78,13 @@ function deviceChip(level: "ok" | "warn" | "bad" | "neutral") {
   return "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-tertiary)]";
 }
 
+function posnetTitle(level: PosnetLevel): string {
+  if (level === "blocked") return "Posnet bloqueado";
+  if (level === "warning") return "Posnet con aviso";
+  if (level === "ok") return "Posnet listo";
+  return "Posnet";
+}
+
 /**
  * Sidebar de Caja — mismo lenguaje Bosko que admin (rail activo, panel card, logout rail).
  */
@@ -101,9 +105,6 @@ export default function CajaSidebar({
   printerTestMessage,
   posnetLevel,
   posnetMessage,
-  testPosnet,
-  posnetTestMessage,
-  testingPosnet = false,
   handleLogout,
   isCollapsed = false,
   onToggleCollapse = () => {},
@@ -257,7 +258,6 @@ export default function CajaSidebar({
         }`}
       >
         <div className="pointer-events-auto flex flex-col gap-3">
-          {/* Devices */}
           <div
             className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] ${
               collapsed ? "p-2" : "p-3"
@@ -269,23 +269,18 @@ export default function CajaSidebar({
                   type="button"
                   onClick={printerStatus?.connected ? testPrint : pairPrinterDevice}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative ${deviceChip(printerLevel)}`}
-                  title={
-                    printerStatus?.message ??
-                    (printerStatus?.connected
-                      ? "Impresora conectada. Click para test."
-                      : "Sin impresora. Click para vincular.")
-                  }
+                  title={printerStatus?.connected ? "Impresora OK" : "Vincular impresora"}
+                  aria-label={printerStatus?.connected ? "Probar impresora" : "Vincular impresora"}
                 >
                   <Printer size={16} />
                 </button>
-                <button
-                  type="button"
-                  onClick={testPosnet}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative ${deviceChip(posnetTone)}`}
-                  title={posnetMessage ?? "Posnet de la caja. Click para probar."}
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center border ${deviceChip(posnetTone)}`}
+                  title={posnetTitle(posnetLevel)}
+                  aria-label={posnetTitle(posnetLevel)}
                 >
                   <CreditCard size={16} />
-                </button>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -294,26 +289,16 @@ export default function CajaSidebar({
                     className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(printerLevel)}`}
                   >
                     <Printer size={13} />
-                    {printerStatus?.connected ? "Impresora conectada" : "Impresora sin conectar"}
+                    {printerStatus?.connected ? "Impresora OK" : "Sin impresora"}
                   </span>
-                  {!printerStatus?.connected && printerStatus?.message && (
-                    <p
-                      role="status"
-                      className="text-[10px] mt-1.5 text-left leading-relaxed text-[var(--text-tertiary)]"
-                    >
-                      {printerStatus.message}
-                    </p>
-                  )}
                   {printerStatus?.connected ? (
                     <button type="button" onClick={testPrint} className={`${secondaryBtn} mt-2`}>
-                      Imprimir ticket de prueba
+                      Ticket de prueba
                     </button>
                   ) : printerPaired ? (
-                    // Ya vinculada: la Bluetooth se apaga sola por ahorro de
-                    // energía, así que alcanza con despertarla.
                     <>
                       <button type="button" onClick={connectPrinter} className={`${secondaryBtn} mt-2`}>
-                        Conectar impresora
+                        Conectar
                       </button>
                       <button
                         type="button"
@@ -325,11 +310,11 @@ export default function CajaSidebar({
                     </>
                   ) : (
                     <button type="button" onClick={pairPrinterDevice} className={`${secondaryBtn} mt-2`}>
-                      Vincular impresora
+                      Vincular
                     </button>
                   )}
                   {printerTestMessage && (
-                    <p className="text-[10px] text-[var(--text-tertiary)] mt-1.5 text-center">
+                    <p className="text-[10px] text-[var(--text-tertiary)] mt-1.5 text-center truncate">
                       {printerTestMessage}
                     </p>
                   )}
@@ -338,43 +323,11 @@ export default function CajaSidebar({
                 <div>
                   <span
                     className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(posnetTone)}`}
+                    title={posnetLevel !== "ok" ? (posnetMessage ?? undefined) : undefined}
                   >
                     <CreditCard size={13} />
-                    {posnetLevel === "blocked"
-                      ? "Cobro Posnet bloqueado"
-                      : posnetLevel === "warning"
-                        ? "Posnet con advertencia"
-                        : posnetLevel === "ok"
-                          ? "Posnet listo"
-                          : "Posnet sin verificar"}
+                    {posnetTitle(posnetLevel)}
                   </span>
-                  {posnetLevel !== "ok" && posnetMessage && (
-                    <p
-                      role="status"
-                      className={`text-[10px] mt-1.5 text-left leading-relaxed ${deviceTone(posnetTone)}`}
-                    >
-                      {posnetMessage}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={testPosnet}
-                    disabled={testingPosnet}
-                    className={`${secondaryBtn} mt-2`}
-                  >
-                    {testingPosnet ? "Probando Posnet…" : "Probar Posnet"}
-                  </button>
-                  {posnetTestMessage && (
-                    <p
-                      className={`text-[10px] mt-1.5 text-center ${
-                        posnetTone === "warn" || posnetTone === "bad"
-                          ? deviceTone(posnetTone)
-                          : "text-[var(--text-tertiary)]"
-                      }`}
-                    >
-                      {posnetTestMessage}
-                    </p>
-                  )}
                 </div>
               </div>
             )}

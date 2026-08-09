@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { MercadoPagoOAuthService } from "./mercadopago-oauth.service.js";
+import { resolveOAuthRedirectUrl } from "./mercadopago-oauth.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { env } from "../../config/env.js";
 
@@ -11,11 +12,16 @@ import { env } from "../../config/env.js";
 export function createMercadoPagoOAuthController(service: MercadoPagoOAuthService): Router {
   const router = Router();
 
-  // GET /api/mercadopago/oauth/url?barId=BARRA-01 — genera la URL de autorización (admin).
+  // GET /api/mercadopago/oauth/url?barId=BARRA-01&redirectUrl=http://localhost:3000
   router.get("/oauth/url", authMiddleware, requireRole("admin"), async (req, res, next) => {
     try {
       const barId = service.requireBarId(req.query.barId ?? env.BAR_CODE);
-      const result = await service.generateAuthUrl(barId);
+      const fromQuery =
+        typeof req.query.redirectUrl === "string" ? req.query.redirectUrl : null;
+      const fromOrigin =
+        typeof req.headers.origin === "string" ? req.headers.origin : null;
+      const redirectUrl = resolveOAuthRedirectUrl(fromQuery ?? fromOrigin ?? env.FRONTEND_URL);
+      const result = await service.generateAuthUrl(barId, redirectUrl);
       res.json(result);
     } catch (err) {
       next(err);
@@ -32,7 +38,7 @@ export function createMercadoPagoOAuthController(service: MercadoPagoOAuthServic
     }
   });
 
-  // POST /api/mercadopago/oauth/pull-seller — baja el seller del buzón de traspaso Cloud (admin).
+  // POST /api/mercadopago/oauth/pull-seller — deprecated F0 (no-op).
   router.post("/oauth/pull-seller", authMiddleware, requireRole("admin"), async (_req, res, next) => {
     try {
       res.json(await service.pullSellerFromCloud());
@@ -41,8 +47,7 @@ export function createMercadoPagoOAuthController(service: MercadoPagoOAuthServic
     }
   });
 
-  // DELETE /api/mercadopago/oauth/seller — desvincular (wipe local + Cloud) (admin).
-  // Contrato con el frontend: { ok: true, cloudCleaned: boolean }.
+  // DELETE /api/mercadopago/oauth/seller — desvincular (wipe) (admin).
   router.delete("/oauth/seller", authMiddleware, requireRole("admin"), async (_req, res, next) => {
     try {
       res.json(await service.unlinkSeller());

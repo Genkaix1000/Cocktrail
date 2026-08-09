@@ -46,6 +46,7 @@ export default function CajaPage() {
   const activeBarIdRef = useRef(activeBarId);
   const usernameRef = useRef(currentUser?.username ?? null);
   const loadOptionsRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
+  const autoJoinedRef = useRef<string | null>(null);
 
   useEffect(() => {
     activeBarIdRef.current = activeBarId;
@@ -201,7 +202,7 @@ export default function CajaPage() {
     return () => window.clearInterval(interval);
   }, [activeBarId, loadOptions]);
 
-  async function handleJoin(barId: string) {
+  const handleJoin = useCallback(async (barId: string) => {
     setJoiningBarId(barId);
     setError(null);
     try {
@@ -223,7 +224,19 @@ export default function CajaPage() {
     } finally {
       setJoiningBarId(null);
     }
-  }
+  }, [loadOptions]);
+
+  // Una sola caja libre → entrar directo (sin pantalla de elección).
+  useEffect(() => {
+    if (loading || activeSession || joiningBarId) return;
+    const joinable = boxes.filter((b) => b.status === "available" || b.status === "mine");
+    if (joinable.length !== 1) return;
+    const only = joinable[0];
+    if (only.status !== "available") return;
+    if (autoJoinedRef.current === only.barId) return;
+    autoJoinedRef.current = only.barId;
+    void handleJoin(only.barId);
+  }, [loading, activeSession, joiningBarId, boxes, handleJoin]);
 
   async function handleLogout() {
     await authService.logout();

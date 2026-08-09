@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import PagosSection from "./PagosSection";
@@ -248,17 +248,14 @@ describe("PagosSection", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
-  // ── Desvincular (D9 + aviso R22) ──
+  // ── Desvincular (hold-to-confirm + Deshacer) ──
 
-  /** Abre la confirmación, tipea DESVINCULAR y confirma. */
-  async function confirmUnlink(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(await screen.findByRole("button", { name: "Desvincular" }));
-    await user.type(screen.getByLabelText(/escribe/i), "DESVINCULAR");
-    const submit = screen
-      .getAllByRole("button", { name: "Desvincular" })
-      .find((b) => b.getAttribute("type") === "submit");
-    expect(submit).toBeDefined();
-    await user.click(submit!);
+  async function holdUnlinkConfirm() {
+    const hold = await screen.findByRole("button", { name: /Desvincular\. Mantené/i });
+    fireEvent.pointerDown(hold);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
   }
 
   it("no muestra Desvincular cuando no hay cuenta vinculada", async () => {
@@ -273,7 +270,7 @@ describe("PagosSection", () => {
     expect(await screen.findByRole("button", { name: "Desvincular" })).toBeInTheDocument();
   });
 
-  it("la confirmación muestra el aviso R22 (cajas huérfanas + QR que cambia + reimpresión)", async () => {
+  it("la confirmación aclara que barras/Posnets se conservan y cuándo hay que re-asociar", async () => {
     const user = userEvent.setup();
     mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
     render(<PagosSection />);
@@ -281,37 +278,54 @@ describe("PagosSection", () => {
     await user.click(await screen.findByRole("button", { name: "Desvincular" }));
 
     expect(screen.getByText("Desvincular Mercado Pago")).toBeInTheDocument();
-    expect(screen.getByText(/quedar huérfanas/i)).toBeInTheDocument();
-    expect(screen.getByText(/el QR estático cambia/i)).toBeInTheDocument();
-    expect(screen.getByText(/reimprimirlo/i)).toBeInTheDocument();
+    expect(screen.getByText(/barras y Posnets se conservan/i)).toBeInTheDocument();
+    expect(screen.getByText(/misma cuenta MP se restauran solos/i)).toBeInTheDocument();
+    expect(screen.getByText(/re-asociar el PDV/i)).toBeInTheDocument();
+    expect(screen.getByText(/QR estático puede cambiar/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mantené presionado/i)).toBeInTheDocument();
     expect(mockedMpService.unlinkSeller).not.toHaveBeenCalled();
   });
 
-  it("llama a unlinkSeller tras confirmar tipeando DESVINCULAR y refresca el estado", async () => {
-    const user = userEvent.setup();
+  it("tras hold muestra toast con Deshacer y solo entonces llama unlinkSeller", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
-    render(<PagosSection />);
 
-    const statusCallsBefore = mockedMpService.getSellerStatus.mock.calls.length;
-    await confirmUnlink(user);
+    try {
+      render(<PagosSection />);
+      await user.click(await screen.findByRole("button", { name: "Desvincular" }));
+      await holdUnlinkConfirm();
 
-    await waitFor(() => expect(mockedMpService.unlinkSeller).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(mockedMpService.getSellerStatus.mock.calls.length).toBeGreaterThan(statusCallsBefore),
-    );
-    // cloudCleaned:true → sin aviso de limpieza pendiente
-    expect(screen.queryByText(/limpieza pendiente en la nube/i)).not.toBeInTheDocument();
+      expect(await screen.findByText(/Cuenta de Mercado Pago desvinculada/i)).toBeInTheDocument();
+      expect(mockedMpService.unlinkSeller).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+      await waitFor(() => expect(mockedMpService.unlinkSeller).toHaveBeenCalledTimes(1));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("muestra el aviso persistente cuando cloudCleaned es false", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     mockedMpService.getSellerStatus.mockResolvedValue(LINKED_STATUS);
     mockedMpService.unlinkSeller.mockResolvedValue({ ok: true, cloudCleaned: false });
-    render(<PagosSection />);
 
-    await confirmUnlink(user);
+    try {
+      render(<PagosSection />);
+      await user.click(await screen.findByRole("button", { name: "Desvincular" }));
+      await holdUnlinkConfirm();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5100);
+      });
 
-    expect(await screen.findByText(/limpieza pendiente en la nube/i)).toBeInTheDocument();
+      expect(await screen.findByText(/limpieza pendiente en la nube/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // ── Sesión de caja (grid al lado de Sucursal) ──

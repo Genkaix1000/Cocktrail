@@ -99,5 +99,35 @@ export function createBarSessionsController(service: BarSessionsService): Router
     }
   });
 
+  // PATCH /api/bar-sessions/bars/:barId/enabled — admin habilita/deshabilita barra
+  router.patch(
+    "/bars/:barId/enabled",
+    authMiddleware,
+    requireRole("admin"),
+    async (req, res, next) => {
+      try {
+        const barId = req.params.barId as string;
+        const enabled = req.body?.enabled;
+        if (typeof enabled !== "boolean") {
+          res.status(400).json({ error: "enabled (boolean) es requerido." });
+          return;
+        }
+
+        const { bar, ejected } = await service.setBarEnabled(barId, enabled);
+        if (ejected) {
+          emit({
+            type: "bar-session.expired",
+            barId,
+            ejectedUser: ejected.username,
+            ejectedBy: req.session!.username,
+          });
+        }
+        res.json({ bar, ejected: Boolean(ejected) });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   return router;
 }

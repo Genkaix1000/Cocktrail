@@ -24,6 +24,7 @@ function makeBar(overrides: Partial<Bar> = {}): Bar {
     id: "bar-uuid-1",
     name: "Barra VIP",
     code: "BARRA-01",
+    enabled: true,
     createdAt: "2026-07-17T00:00:00Z",
     ...overrides,
   };
@@ -112,6 +113,7 @@ describe("MercadoPagoOrdersService", () => {
       findById: vi.fn().mockResolvedValue(makeBar()),
       listAll: vi.fn().mockResolvedValue([makeBar()]),
       findOrCreateByCode: vi.fn().mockResolvedValue(makeBar()),
+      setEnabled: vi.fn(async (id, enabled) => makeBar({ id, enabled })),
     };
 
     cajasRepo = {
@@ -177,10 +179,12 @@ describe("MercadoPagoOrdersService", () => {
 
   describe("createQrOrder", () => {
     it("crea la order en MP y la persiste localmente", async () => {
+      const emv = "00020101021243650016com.mercadolibre020130636test";
       mockFetchOk({
         id: "ORD01NEW",
         status: "created",
         transactions: { payments: [{ id: "PAY01TXN", amount: "1500.00" }] },
+        type_response: { qr_data: emv },
       });
 
       const result = await service.createQrOrder({
@@ -191,7 +195,7 @@ describe("MercadoPagoOrdersService", () => {
 
       expect(result).toMatchObject({
         orderId: "ORD01NEW",
-        qrImage: "https://mp.example/qr.png",
+        qrImage: emv,
         status: "created",
       });
       expect(result.expiresAt).toBeTruthy();
@@ -209,6 +213,7 @@ describe("MercadoPagoOrdersService", () => {
           barId: "bar-uuid-1",
           cajaId: "caja-1",
           amount: "1500.00",
+          qrData: emv,
         }),
       );
 
@@ -218,10 +223,23 @@ describe("MercadoPagoOrdersService", () => {
       expect(body).toMatchObject({
         type: "qr",
         total_amount: "1500.00",
-        config: { qr: { external_pos_id: "COCKTRAILBAR01", mode: "static" } },
+        config: { qr: { external_pos_id: "COCKTRAILBAR01", mode: "dynamic" } },
       });
       expect(body.external_reference).toMatch(/^COCKTRAIL-/);
       expect(body.external_reference.length).toBeLessThanOrEqual(64);
+    });
+
+    it("409 si MP no devuelve type_response.qr_data", async () => {
+      mockFetchOk({
+        id: "ORD01NOQR",
+        status: "created",
+        transactions: { payments: [{ id: "PAY01TXN", amount: "100.00" }] },
+      });
+      await expect(service.createQrOrder({ amount: 100, barId: "BARRA-01" })).rejects.toMatchObject({
+        name: "Conflict",
+        code: "QR_DATA_MISSING",
+      });
+      expect(mpOrdersRepo.create).not.toHaveBeenCalled();
     });
 
     it("409 si la barra no tiene caja provisionada", async () => {
@@ -274,7 +292,11 @@ describe("MercadoPagoOrdersService", () => {
     });
 
     it("usa la idempotencyKey del frontend en el header y deriva external_ref estable", async () => {
-      mockFetchOk({ id: "ORD01NEW", status: "created" });
+      mockFetchOk({
+        id: "ORD01NEW",
+        status: "created",
+        type_response: { qr_data: "00020101021243650016com.mercadolibre020130636idem" },
+      });
 
       await service.createQrOrder({ amount: 1500, idempotencyKey: STABLE_KEY });
 
@@ -286,14 +308,19 @@ describe("MercadoPagoOrdersService", () => {
     });
 
     it("persiste event_id, qr_data y expires_at al crear", async () => {
-      mockFetchOk({ id: "ORD01NEW", status: "created" });
+      const emv = "00020101021243650016com.mercadolibre020130636persist";
+      mockFetchOk({
+        id: "ORD01NEW",
+        status: "created",
+        type_response: { qr_data: emv },
+      });
 
       const result = await service.createQrOrder({ amount: 1500 });
 
       expect(mpOrdersRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventId: "event-1",
-          qrData: "https://mp.example/qr.png",
+          qrData: emv,
           expiresAt: result.expiresAt,
         }),
       );
@@ -328,7 +355,11 @@ describe("MercadoPagoOrdersService", () => {
     });
 
     it("carrera de 2 POSTs: el insert choca con el UNIQUE (23505) y devuelve la fila que ganó", async () => {
-      mockFetchOk({ id: "ORD01NEW", status: "created" });
+      mockFetchOk({
+        id: "ORD01NEW",
+        status: "created",
+        type_response: { qr_data: "00020101021243650016com.mercadolibre020130636race" },
+      });
       vi.mocked(mpOrdersRepo.create).mockRejectedValueOnce(
         Object.assign(new Error("duplicate key value"), { code: "23505" }),
       );

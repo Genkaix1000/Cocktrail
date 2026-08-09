@@ -62,4 +62,12 @@ export const barSessionsService = {
       body: { barId },
     });
   },
+
+  /** Solo admin — oculta/muestra la barra en el selector de caja. */
+  setBarEnabled(barId: string, enabled: boolean) {
+    return apiFetch<{ bar: { id: string; enabled: boolean }; ejected: boolean }>(
+      `/api/bar-sessions/bars/${encodeURIComponent(barId)}/enabled`,
+      { method: "PATCH", body: { enabled } },
+    );
+  },
 };

@@ -119,6 +119,10 @@ export type CajaDto = Caja & {
    * del seller activo. Se computa en cada listado, nunca se persiste.
    */
   isOrphan: boolean;
+  /** Código de la barra (BARRA-01 / PORTATIL). */
+  barCode: string | null;
+  /** Si false, no aparece en el selector de caja. */
+  barEnabled: boolean;
 };
 
 type MpStoreResponse = {
@@ -451,18 +455,25 @@ export class MercadoPagoProvisioningService {
   }
 
   async listCajas(): Promise<CajaDto[]> {
-    const [cajas, devices, activeSellerUserId] = await Promise.all([
+    const [cajas, devices, bars, activeSellerUserId] = await Promise.all([
       this.cajasRepo.listAll(),
       this.devicesRepo.listAll(),
+      this.barsRepo.listAll(),
       this.findActiveSellerUserId(),
     ]);
-    return cajas.map((c) => ({
-      ...c,
-      device: devices.find((d) => d.cajaId === c.id && d.isActive) ?? null,
-      // Sin seller activo → false: no hay cuenta "activa" contra la cual estar
-      // huérfana, y ese unknown ya lo señala el check cajaProvisioned del health.
-      isOrphan: activeSellerUserId !== null && c.sellerUserId !== activeSellerUserId,
-    }));
+    const barById = new Map(bars.map((b) => [b.id, b]));
+    return cajas.map((c) => {
+      const bar = barById.get(c.barId);
+      return {
+        ...c,
+        device: devices.find((d) => d.cajaId === c.id && d.isActive) ?? null,
+        // Sin seller activo → false: no hay cuenta "activa" contra la cual estar
+        // huérfana, y ese unknown ya lo señala el check cajaProvisioned del health.
+        isOrphan: activeSellerUserId !== null && c.sellerUserId !== activeSellerUserId,
+        barCode: bar?.code ?? null,
+        barEnabled: bar?.enabled ?? true,
+      };
+    });
   }
 
   async listDevices(): Promise<CajaDevice[]> {
@@ -576,7 +587,7 @@ export class MercadoPagoProvisioningService {
     const existingCaja = await this.cajasRepo.findByBarId(bar.id);
     if (existingCaja) {
       throw new Conflict(
-        `La barra ${bar.code ?? bar.id} ya tiene un PDV. Multi-barra no está disponible todavía.`,
+        `La barra ${bar.code ?? bar.id} ya tiene un PDV. Creá otra barra (ej. PORTATIL) si necesitás un segundo punto.`,
       );
     }
 
@@ -641,7 +652,13 @@ export class MercadoPagoProvisioningService {
     });
 
     // Recién provisionada en la cuenta del seller activo → nunca huérfana.
-    return { ...caja, device: null, isOrphan: false };
+    return {
+      ...caja,
+      device: null,
+      isOrphan: false,
+      barCode: bar.code,
+      barEnabled: bar.enabled,
+    };
   }
 
   async deletePos(id: string): Promise<{ ok: true }> {
@@ -717,10 +734,13 @@ export class MercadoPagoProvisioningService {
 
     // Merge device
     const devices = await this.devicesRepo.listAll();
+    const barMeta = await this.barsRepo.findById(updated.barId);
     return {
       ...updated,
       device: devices.find(d => d.cajaId === updated.id && d.isActive) ?? null,
       isOrphan: updated.sellerUserId !== seller.userId,
+      barCode: barMeta?.code ?? null,
+      barEnabled: barMeta?.enabled ?? true,
     };
   }
 
@@ -795,10 +815,13 @@ export class MercadoPagoProvisioningService {
     });
 
     const devices = await this.devicesRepo.listAll();
+    const barMeta = await this.barsRepo.findById(updated.barId);
     return {
       ...updated,
       device: devices.find((d) => d.cajaId === updated.id && d.isActive) ?? null,
       isOrphan: updated.sellerUserId !== seller.userId,
+      barCode: barMeta?.code ?? null,
+      barEnabled: barMeta?.enabled ?? true,
     };
   }
 

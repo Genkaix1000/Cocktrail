@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Calendar,
+  Check,
+  Copy,
   CreditCard,
+  HelpCircle,
   Link2,
   Loader2,
   LogOut,
@@ -37,6 +40,8 @@ function formatRelative(iso: string | null): string | null {
 const cardShell =
   "bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-card";
 
+const UNLINK_UNDO_MS = 5000;
+
 export default function PagosSection({ children }: { children?: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +53,11 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [cloudCleanupPending, setCloudCleanupPending] = useState(false);
+  const [unlinkUndo, setUnlinkUndo] = useState(false);
+  const pendingUnlinkRef = useRef<{
+    previous: MpSellerStatus;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const [summary, setSummary] = useState<ProvisioningSummary | null>(null);
   const [sessions, setSessions] = useState<BarSession[]>([]);
@@ -128,8 +138,7 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
     }
   }, []);
 
-  const handleUnlinkSeller = async () => {
-    setUnlinkConfirmOpen(false);
+  const commitUnlinkSeller = useCallback(async () => {
     setUnlinking(true);
     setError(null);
     try {
@@ -139,10 +148,57 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
       loadData();
     } catch {
       setError("No se pudo desvincular la cuenta de Mercado Pago. Reintentá en unos segundos.");
+      refreshSellerStatus();
     } finally {
       setUnlinking(false);
     }
-  };
+  }, [loadData, refreshSellerStatus]);
+
+  /** Hold confirm → toast con Deshacer; el DELETE real corre al expirar la ventana. */
+  const handleUnlinkSeller = useCallback(() => {
+    if (!sellerStatus?.linked) return;
+    if (pendingUnlinkRef.current) {
+      clearTimeout(pendingUnlinkRef.current.timer);
+      pendingUnlinkRef.current = null;
+    }
+    const previous = sellerStatus;
+    setUnlinkConfirmOpen(false);
+    setSellerStatus({
+      linked: false,
+      status: null,
+      nickname: null,
+      email: null,
+      linkedAt: null,
+      displayName: null,
+    });
+    setUnlinkUndo(true);
+    setError(null);
+    const timer = setTimeout(() => {
+      pendingUnlinkRef.current = null;
+      setUnlinkUndo(false);
+      void commitUnlinkSeller();
+    }, UNLINK_UNDO_MS);
+    pendingUnlinkRef.current = { previous, timer };
+  }, [sellerStatus, commitUnlinkSeller]);
+
+  const handleUndoUnlink = useCallback(() => {
+    const pending = pendingUnlinkRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingUnlinkRef.current = null;
+    setSellerStatus(pending.previous);
+    setUnlinkUndo(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const pending = pendingUnlinkRef.current;
+      if (!pending) return;
+      // Cancelar: no desvincular a ciegas al desmontar (Strict Mode / cambio de tab).
+      clearTimeout(pending.timer);
+      pendingUnlinkRef.current = null;
+    };
+  }, []);
 
   const handleRenameStore = async () => {
     const name = renameDraft.trim();
@@ -397,6 +453,7 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
                   }`}
                 />
               </button>
+              <SandboxHelpTooltip sandbox={sandbox} />
             </div>
           </div>
 
@@ -507,6 +564,7 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
                   }`}
                 />
               </button>
+              <SandboxHelpTooltip sandbox={sandbox} lightTheme={false} />
             </div>
           </div>
 
@@ -579,26 +637,37 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
           onClose={() => setUnlinkConfirmOpen(false)}
           onConfirm={handleUnlinkSeller}
           title="Desvincular Mercado Pago"
-          expectedText="DESVINCULAR"
           typeLabel="la cuenta"
           confirmLabel="Desvincular"
           warning={
             <>
-              Vas a desvincular la cuenta de Mercado Pago
+              ¿Estás seguro de que querés desvincular la cuenta de Mercado Pago
               {sellerStatus?.displayName ? (
                 <>
                   {" "}
                   <strong className="text-[var(--danger-base)] font-semibold">{sellerStatus.displayName}</strong>
                 </>
               ) : null}
-              . Las cajas provisionadas con esa cuenta van a quedar huérfanas, y al re-provisionar con otra
-              cuenta <strong className="text-[var(--danger-base)] font-semibold">el QR estático cambia</strong>: si el QR
-              ya está impreso, vas a tener que reimprimirlo.
+              ? Tus barras y Posnets se conservan. Con la misma cuenta MP se restauran solos; con otra
+              cuenta hay que re-asociar el PDV, y{" "}
+              <strong className="text-[var(--danger-base)] font-semibold">el QR estático puede cambiar</strong>
+              {" "}(si ya está impreso, reimprimilo).
             </>
           }
         />
       )}
 
+      {unlinkUndo && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast
+            variant="success"
+            message="Cuenta de Mercado Pago desvinculada"
+            duration={UNLINK_UNDO_MS}
+            action={{ label: "Deshacer", onClick: handleUndoUnlink }}
+            onClose={() => setUnlinkUndo(false)}
+          />
+        </div>
+      )}
       {linkedNotice && (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast variant="success" message="Cuenta de Mercado Pago vinculada" duration={3000} onClose={() => setLinkedNotice(false)} />
@@ -608,6 +677,122 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast variant="error" message={error} onClose={() => setError(null)} />
         </div>
+      )}
+    </div>
+  );
+}
+
+function SandboxHelpTooltip({ sandbox, lightTheme = true }: { sandbox: boolean; lightTheme?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+  const buttonRef = useCallback((node: HTMLButtonElement | null) => {
+    if (node) {
+      const rect = node.getBoundingClientRect();
+      setCoords({
+        top: rect.top - 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, []);
+
+  const credentials = [
+    { label: "Usuario", key: "user", val: "TESTUSER6590407514016219794" },
+    { label: "Contraseña", key: "password", val: "eZzQdemJBx" },
+    { label: "Código Verificación", key: "code", val: "724360" },
+  ];
+
+  const handleCopy = (key: string, val: string) => {
+    navigator.clipboard.writeText(val);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const toggleOpen = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setCoords({
+      top: rect.top - 8,
+      right: window.innerWidth - rect.right,
+    });
+    setOpen(!open);
+  };
+
+  return (
+    <div className="relative inline-block text-left">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleOpen}
+        title="Información de Sandbox"
+        className={`p-1 rounded-full transition-colors cursor-pointer ${
+          lightTheme
+            ? "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            : "text-white/60 hover:text-white hover:bg-white/10"
+        }`}
+      >
+        <HelpCircle size={16} strokeWidth={2} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            style={{
+              position: "fixed",
+              top: coords.top,
+              right: coords.right,
+              transform: "translateY(-100%)",
+            }}
+            className="w-80 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-2xl p-4 z-[9999] text-[var(--text-primary)] text-xs space-y-3"
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
+              <span className="font-semibold text-sm">Modo Sandbox</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  sandbox
+                    ? "bg-[var(--accent-soft)] text-[var(--accent-primary)]"
+                    : "bg-[var(--bg-panel)] text-[var(--text-tertiary)]"
+                }`}
+              >
+                {sandbox ? "Activado" : "Desactivado"}
+              </span>
+            </div>
+
+            <p className="text-[var(--text-secondary)] leading-relaxed">
+              El modo Sandbox es un entorno de simulación para realizar pruebas de cobro sin procesar dinero real.
+            </p>
+
+            {sandbox && (
+              <div className="space-y-2 pt-1">
+                <p className="font-semibold text-[var(--text-primary)] text-[11px]">
+                  Credenciales para cuenta de prueba:
+                </p>
+                <div className="space-y-1.5 bg-[var(--bg-panel)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                  {credentials.map((c) => (
+                    <div key={c.key} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-[var(--text-tertiary)] block">{c.label}</span>
+                        <span className="font-mono text-[11px] text-[var(--text-primary)] break-all">{c.val}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(c.key, c.val)}
+                        title="Copiar"
+                        className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] shrink-0 transition-colors cursor-pointer"
+                      >
+                        {copiedKey === c.key ? (
+                          <Check size={14} className="text-[var(--success-base)]" />
+                        ) : (
+                          <Copy size={14} />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

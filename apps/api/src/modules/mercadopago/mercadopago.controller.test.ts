@@ -37,7 +37,7 @@ describe("createMercadoPagoController (gestion-posnets A5: resolución server-si
     markCanceledLocally: ReturnType<typeof vi.fn>;
   };
   let resolvePosnet: Mock<(barId: string | undefined) => Promise<ResolvedPosnet>>;
-  let getMpHealth: Mock<(refresh: boolean) => Promise<MpHealth>>;
+  let getMpHealth: Mock<(refresh: boolean, barId?: string | null) => Promise<MpHealth>>;
   let app: express.Express;
 
   const HEALTH: MpHealth = {
@@ -50,6 +50,7 @@ describe("createMercadoPagoController (gestion-posnets A5: resolución server-si
     fallback: { status: "unknown", checkedAt: null },
     usingEnvDevice: false,
     blocking: false,
+    hasLinkedDevice: true,
     checkedAt: "2026-07-23T00:00:00.000Z",
   };
 
@@ -97,13 +98,13 @@ describe("createMercadoPagoController (gestion-posnets A5: resolución server-si
       expect(res.status).toBe(200);
       expect(res.headers["cache-control"]).toBe("no-store");
       expect(res.body.blocking).toBe(false);
-      expect(getMpHealth).toHaveBeenCalledWith(false);
+      expect(getMpHealth).toHaveBeenCalledWith(false, env.BAR_CODE);
     });
 
     it("?refresh=1 fuerza el re-chequeo", async () => {
       await request(app).get("/api/mercadopago/health?refresh=1");
 
-      expect(getMpHealth).toHaveBeenCalledWith(true);
+      expect(getMpHealth).toHaveBeenCalledWith(true, env.BAR_CODE);
     });
   });
 

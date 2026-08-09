@@ -303,6 +303,11 @@ describe("MpHealthService — cache TTL 30 s + refresh", () => {
 });
 
 describe("MpHealthService — blocking, fallback y usingEnvDevice", () => {
+  it("hasLinkedDevice refleja device en DB (sin Posnet → false; QR no depende de esto)", async () => {
+    expect((await makeService().service.getHealth()).hasLinkedDevice).toBe(true);
+    expect((await makeService({ device: null }).service.getHealth()).hasLinkedDevice).toBe(false);
+  });
+
   it("blocking SOLO por deviceOwnership rojo: otros rojos no bloquean", async () => {
     const { service } = makeService({
       findActive: async () => null, // singleSeller rojo

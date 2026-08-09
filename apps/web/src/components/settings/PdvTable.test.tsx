@@ -9,12 +9,14 @@ const CAJA: CajaRow = {
   id: "caja-1",
   barId: "bar-1",
   storeId: "1",
-  externalPosId: "COCKTRAIL-BAR-01",
+  externalPosId: "COCKTRAILBAR01",
   posIdMp: "1",
   qrImage: "https://mp.example/qr.png",
   qrTemplate: null,
   sellerUserId: "s1",
   storeName: null,
+  barCode: "BARRA-01",
+  barEnabled: true,
   isOrphan: false,
   createdAt: "2026-07-17T00:00:00Z",
   device: null,
@@ -38,7 +40,6 @@ function renderTable(overrides: Partial<Parameters<typeof PdvTable>[0]> = {}) {
     loadError: false,
     linkingCajaId: null,
     onRetry: vi.fn(),
-    onDeleteClick: vi.fn(),
     onLinkDevice: vi.fn().mockResolvedValue(undefined),
     onUnlinkDevice: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -62,13 +63,22 @@ describe("PdvTable", () => {
     expect(props.onRetry).toHaveBeenCalled();
   });
 
-  it("renderiza la fila de Barra VIP con su QR", () => {
+  it("sin Posnet muestra QR dinámico como tipo de integración", () => {
     renderTable();
     expect(screen.getByText("Barra VIP")).toBeInTheDocument();
-    expect(screen.getByText("Copiar URL")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Ver QR/i })).toHaveAttribute(
-      "href",
-      "https://mp.example/qr.png",
+    expect(screen.getByText("QR dinámico")).toBeInTheDocument();
+    expect(screen.getByText(/Cobros con código QR/i)).toBeInTheDocument();
+  });
+
+  it("permite deshabilitar la barra desde el switch", async () => {
+    const user = userEvent.setup();
+    const onToggleEnabled = vi.fn().mockResolvedValue(undefined);
+    renderTable({ onToggleEnabled });
+
+    await user.click(screen.getByRole("switch", { name: /Deshabilitar Barra VIP/i }));
+    expect(onToggleEnabled).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "caja-1" }),
+      false,
     );
   });
 
@@ -77,14 +87,12 @@ describe("PdvTable", () => {
     const onRecoverQr = vi.fn();
     renderTable({ cajas: [{ ...CAJA, qrImage: null }], onRecoverQr });
 
-    expect(screen.getByText("Sin QR")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Recuperar QR/i }));
     expect(onRecoverQr).toHaveBeenCalledWith(expect.objectContaining({ id: "caja-1" }));
   });
 
-  it("vincula un Posnet eligiéndolo del selector (el id no se tipea)", async () => {
+  it("vincula un Posnet eligiéndolo del selector", async () => {
     const user = userEvent.setup();
-    // Solo los devices inactivos (sin caja activa) son candidatos a vincular.
     const candidate: DeviceRow = {
       ...DEVICE,
       id: "dev-2",
@@ -94,7 +102,7 @@ describe("PdvTable", () => {
     };
     const props = renderTable({ cajas: [{ ...CAJA, device: null }], availableDevices: [candidate] });
 
-    await user.click(screen.getByRole("button", { name: /\+ Vincular/i }));
+    await user.click(screen.getByRole("button", { name: /Vincular Posnet/i }));
     await user.click(screen.getByLabelText("Posnet a vincular"));
     await user.click(screen.getByRole("option", { name: new RegExp(candidate.deviceId) }));
     await user.type(screen.getByLabelText("Apodo del Posnet"), "Caja 1");
@@ -103,7 +111,7 @@ describe("PdvTable", () => {
     expect(props.onLinkDevice).toHaveBeenCalledWith("caja-1", candidate.deviceId, "Caja 1");
   });
 
-  it("muestra el badge 'huérfana' y dispara la re-provisión cuando la caja es huérfana", async () => {
+  it("muestra el badge 'huérfana' y dispara la re-provisión", async () => {
     const user = userEvent.setup();
     const onReprovisionClick = vi.fn();
     renderTable({ cajas: [{ ...CAJA, isOrphan: true }], onReprovisionClick });
@@ -118,20 +126,23 @@ describe("PdvTable", () => {
     expect(screen.queryByText("Huérfana")).not.toBeInTheDocument();
   });
 
-  it("muestra el Posnet vinculado y permite desvincular", async () => {
+  it("con Posnet muestra el nombre y permite desvincular", async () => {
     const user = userEvent.setup();
     const props = renderTable({ cajas: [{ ...CAJA, device: DEVICE }] });
 
-    expect(screen.getByText(/Apodo: Caja 1/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Desvincular/i }));
+    expect(screen.getByText("Posnet")).toBeInTheDocument();
+    expect(screen.getByText(/Terminal: Caja 1/)).toBeInTheDocument();
+    expect(screen.queryByText("QR dinámico")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Desvincular Posnet/i }));
     expect(props.onUnlinkDevice).toHaveBeenCalledWith(DEVICE);
   });
 
-  it("dispara la confirmación de borrado", async () => {
-    const user = userEvent.setup();
-    const props = renderTable();
-
-    await user.click(screen.getByTitle("Eliminar PDV"));
-    expect(props.onDeleteClick).toHaveBeenCalledWith(expect.objectContaining({ id: "caja-1" }));
+  it("expone Copiar URL y Ver QR cuando hay imagen", () => {
+    renderTable();
+    expect(screen.getByRole("button", { name: /Copiar URL/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Ver QR/i })).toHaveAttribute(
+      "href",
+      "https://mp.example/qr.png",
+    );
   });
 });

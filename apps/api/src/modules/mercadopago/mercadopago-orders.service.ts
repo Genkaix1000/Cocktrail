@@ -67,6 +67,10 @@ type MpOrderResponse = {
   transactions?: {
     payments?: MpOrderPayment[];
   };
+  /** Presente en mode dynamic/hybrid — trama EMVCo para dibujar el QR. */
+  type_response?: {
+    qr_data?: string;
+  };
 };
 
 export type MpOrderReconcileResult = {
@@ -76,8 +80,9 @@ export type MpOrderReconcileResult = {
 };
 
 /**
- * Cobro QR estático vía Orders API (Fase 4).
- * Crea/consulta/cancela orders `type: "qr"` `mode: "static"` contra el POS de la barra.
+ * Cobro QR dinámico vía Orders API.
+ * Crea/consulta/cancela orders `type: "qr"` `mode: "dynamic"` contra el POS de la barra.
+ * No requiere Posnet Point: sí requiere Store+POS (`external_pos_id`).
  */
 export class MercadoPagoOrdersService {
   private readonly baseUrl = MP_API;
@@ -153,7 +158,7 @@ export class MercadoPagoOrdersService {
           config: {
             qr: {
               external_pos_id: caja.externalPosId,
-              mode: "static",
+              mode: "dynamic",
             },
           },
           transactions: {
@@ -175,6 +180,14 @@ export class MercadoPagoOrdersService {
     // payments[0].id al crear es la transacción, NO el payment_id real.
     const paymentTransactionId = response.transactions?.payments?.[0]?.id ?? null;
     const expiresAt = new Date(Date.now() + QR_EXPIRATION_MS).toISOString();
+    // type_response.qr_data = trama EMVCo (mode dynamic). El frontend la dibuja.
+    const qrData = response.type_response?.qr_data?.trim() || null;
+    if (!qrData) {
+      throw new Conflict(
+        "Mercado Pago no devolvió qr_data para el cobro dinámico. Reintentá o verificá que el POS exista en la cuenta.",
+        "QR_DATA_MISSING",
+      );
+    }
 
     try {
       await this.mpOrdersRepo.create({
@@ -188,7 +201,7 @@ export class MercadoPagoOrdersService {
         barId: bar.id,
         cajaId: caja.id,
         eventId: event.id,
-        qrData: caja.qrImage,
+        qrData,
         expiresAt,
       });
     } catch (err) {
@@ -203,7 +216,8 @@ export class MercadoPagoOrdersService {
 
     return {
       orderId: response.id,
-      qrImage: caja.qrImage,
+      // Contrato legacy del frontend: campo `qrImage` (payload para renderizar).
+      qrImage: qrData,
       status: "created",
       expiresAt,
     };

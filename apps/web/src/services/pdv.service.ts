@@ -31,6 +31,10 @@ export type CajaRow = {
   sellerUserId: string;
   /** Cache del nombre real de la sucursal en MP (rama A) o alias local (rama B). */
   storeName: string | null;
+  /** Código de la barra (BARRA-01 / PORTATIL). */
+  barCode: string | null;
+  /** Si false, no aparece en el selector de caja. */
+  barEnabled: boolean;
   /** R22: la caja fue provisionada con una cuenta distinta de la activa. */
   isOrphan: boolean;
   createdAt: string;

@@ -1,9 +1,9 @@
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Conflict, BadRequest } from "../../shared/errors/http-errors.js";
+import { env } from "../../config/env.js";
 import type { OAuthStatesRepository } from "./oauth-states.repository.js";
 import type { MercadoPagoSellersRepository, Seller } from "./mercadopago-sellers.repository.js";
-import { decryptHandoff } from "./mp-token-cipher.js";
 import { isFetchTimeout, MP_HTTP_TIMEOUT_MS } from "./mp-http.js";
 
 const AUTH_BASE_URL = "https://auth.mercadopago.com/authorization";
@@ -40,22 +40,38 @@ export type SellerStatusResult = {
   displayName: string | null;
 };
 
-/** Resultado del pull del buzón de traspaso. */
+/** Resultado del pull del buzón (deprecated F0 — siempre no-op). */
 export type PullSellerResult = {
   pulled: boolean;
   userId?: string;
   reason?: string;
 };
 
-export class MercadoPagoOAuthService {
-  /** Throttle del pull lazy de getSellerStatus: a lo sumo un intento por minuto. */
-  private lastLazyPullAt = 0;
+/**
+ * Origen permitido para el redirect post-OAuth (anti open-redirect).
+ * Acepta FRONTEND_URL o localhost/127.0.0.1; devuelve solo el origin.
+ */
+export function resolveOAuthRedirectUrl(candidate: string | null | undefined): string {
+  const fallback = env.FRONTEND_URL;
+  if (!candidate) return new URL(fallback).origin;
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return new URL(fallback).origin;
+    const allowed = new URL(fallback).origin;
+    if (u.origin === allowed) return u.origin;
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return u.origin;
+    return allowed;
+  } catch {
+    return new URL(fallback).origin;
+  }
+}
 
+export class MercadoPagoOAuthService {
   constructor(
     private readonly oauthStatesRepo: OAuthStatesRepository,
     private readonly sellersRepo: MercadoPagoSellersRepository,
     private readonly config: MpOAuthConfig,
-    /** Cliente de Supabase CLOUD (buzón de handoff + metadata). null = sin Cloud. */
+    /** Misma base que el API (single-base). Se usa en unlink para limpieza residual. */
     private readonly cloudDb: SupabaseClient | null = null,
   ) {}
 
@@ -76,19 +92,24 @@ export class MercadoPagoOAuthService {
    * requiere). Si en pruebas end-to-end MP no devuelve `refresh_token`, agregar
    * `scope=read write offline_access`. Ver docs/mp/api-oauth-best-practices.md.
    * ⚠ `redirect_uri` es estático (sin query params): MP valida match exacto. El
-   * contexto de negocio (`barId`) viaja en `oauth_states`, no en la URL.
+   * contexto de negocio (`barId`, `redirectUrl`) viaja en `oauth_states`.
    */
-  async generateAuthUrl(barId: string | null): Promise<{ url: string }> {
+  async generateAuthUrl(
+    barId: string | null,
+    redirectUrl: string | null = null,
+  ): Promise<{ url: string }> {
     const { appId, redirectUri } = this.assertConfigured();
 
     const codeVerifier = randomBytes(32).toString("base64url");
     const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
     const state = randomUUID();
+    const safeRedirect = resolveOAuthRedirectUrl(redirectUrl);
 
     await this.oauthStatesRepo.insert({
       state,
       codeVerifier,
       barId,
+      redirectUrl: safeRedirect,
       expiresAt: new Date(Date.now() + STATE_TTL_MS),
     });
 
@@ -108,31 +129,14 @@ export class MercadoPagoOAuthService {
   /**
    * Estado de vinculación para la UI. Modelo single-seller: devuelve el primer
    * seller activo (o expired). `barId` se acepta por compatibilidad/futuro multi-bar
-   * pero hoy no se filtra por barra (ver plan Fase 1 § restricción bars UUID vs código).
+   * pero hoy no se filtra por barra.
    */
   async getSellerStatus(_barId: string | null): Promise<SellerStatusResult> {
-    let seller = await this.sellersRepo.findActive();
-
-    // Pull lazy: si no hay seller local, quizás hay un handoff esperando en
-    // Cloud (el admin acaba de autorizar en MP). Oportunista y throttled —
-    // un fallo acá no rompe el status.
-    if (!seller && this.cloudDb && Date.now() - this.lastLazyPullAt > 60_000) {
-      this.lastLazyPullAt = Date.now();
-      try {
-        const pull = await this.pullSellerFromCloud();
-        if (pull.pulled) seller = await this.sellersRepo.findActive();
-      } catch (err) {
-        console.warn(
-          "[MercadoPagoOAuthService] pull lazy falló:",
-          err instanceof Error ? err.message : err,
-        );
-      }
-    }
+    const seller = await this.sellersRepo.findActive();
 
     if (!seller) {
       return { linked: false, status: null, nickname: null, email: null, linkedAt: null, displayName: null };
     }
-    // Componer nombre real: first_name + last_name. Fallback a nickname (API de MP).
     const displayName = [seller.firstName, seller.lastName].filter(Boolean).join(" ") || seller.nickname;
     return {
       linked: true,
@@ -151,19 +155,9 @@ export class MercadoPagoOAuthService {
    *
    * ⚠ El `refresh_token` es rotativo y de un solo uso: el nuevo se persiste ANTES
    * de devolver el access_token. Ante `invalid_grant`, marca el seller como expired.
-   *
-   * El repo persiste el token cifrado en la única base (Supabase Cloud). Este
-   * método es el ÚNICO escritor del refresh (cierra A8 por construcción).
-   *
-   * NOTA de concurrencia: el plan pide `SELECT ... FOR UPDATE` para serializar
-   * refreshes concurrentes, pero el backend usa supabase-js/PostgREST (sin pool pg
-   * directo), que no permite sostener una transacción con lock a través del fetch a
-   * MP. Se implementa sin lock; la ventana de carrera es mínima (solo cerca del
-   * vencimiento). Si se vuelve un problema, mover el refresh a una RPC/pg directo.
    */
   async refreshTokenIfNeeded(seller: Seller): Promise<string> {
     const marginMs = this.config.refreshMarginDays * 24 * 60 * 60 * 1000;
-    // accessToken/expiresAt nulos (fila stub o wipe) → forzar el refresh.
     if (
       seller.accessToken &&
       seller.expiresAt &&
@@ -212,7 +206,6 @@ export class MercadoPagoOAuthService {
       );
     }
 
-    // PERSISTIR INMEDIATAMENTE — el refresh_token viejo queda invalidado.
     await this.sellersRepo.update(seller.userId, {
       accessToken: response.access_token,
       refreshToken: response.refresh_token ?? seller.refreshToken,
@@ -224,127 +217,31 @@ export class MercadoPagoOAuthService {
   }
 
   /**
-   * Baja el seller desde el buzón de traspaso de Cloud (PR 4 — inversión del
-   * token): la Edge Function deposita el payload cifrado con MP_HANDOFF_KEY;
-   * acá se descifra, se re-cifra con la clave LOCAL y se borra el buzón.
-   * Modelo single-seller: si el handoff trae otro user_id, el activo previo
-   * queda expirado (wipe) ANTES del upsert — nunca 2 activos.
+   * @deprecated F0 — la Edge Function escribe tokens cifrados directo en
+   * `mercadopago_sellers`. El buzón `mercadopago_seller_handoff` ya no se usa.
    */
   async pullSellerFromCloud(): Promise<PullSellerResult> {
-    if (!this.cloudDb) {
-      return { pulled: false, reason: "Supabase Cloud no está configurado — no hay buzón que leer." };
-    }
-
-    // Handoff más nuevo, todavía no vencido (TTL 15 min en la tabla).
-    const { data, error } = await this.cloudDb
-      .from("mercadopago_seller_handoff")
-      .select("id, user_id, payload_enc, key_version, created_at, expires_at")
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      throw new Conflict(
-        `No se pudo leer el buzón de traspaso en Cloud: ${error.message}. ` +
-          "Verificá la conexión a internet y que la migración de mercadopago_seller_handoff esté aplicada en Cloud.",
-      );
-    }
-    if (!data) {
-      return { pulled: false, reason: "No hay ninguna vinculación pendiente de traspaso." };
-    }
-
-    const payload = decryptHandoff(data.payload_enc as string);
-
-    // Single-seller (D9/A17): expirar el activo previo si es otra cuenta.
-    const current = await this.sellersRepo.findActive();
-    if (current && current.userId !== payload.user_id) {
-      await this.sellersRepo.update(current.userId, {
-        accessToken: null,
-        refreshToken: null,
-        status: "expired",
-      });
-    }
-
-    // Metadata pública desde el seller de Cloud (la EF ya no manda tokens ahí).
-    let metadata: {
-      nickname?: string | null;
-      firstName?: string | null;
-      lastName?: string | null;
-      email?: string | null;
-    } = {};
-    try {
-      const { data: cloudSeller } = await this.cloudDb
-        .from("mercadopago_sellers")
-        .select("seller_nickname, seller_first_name, seller_last_name, seller_email")
-        .eq("user_id", payload.user_id)
-        .maybeSingle();
-      if (cloudSeller) {
-        metadata = {
-          nickname: cloudSeller.seller_nickname ?? null,
-          firstName: cloudSeller.seller_first_name ?? null,
-          lastName: cloudSeller.seller_last_name ?? null,
-          email: cloudSeller.seller_email ?? null,
-        };
-      }
-    } catch (err) {
-      console.warn(
-        "[MercadoPagoOAuthService] No se pudo bajar la metadata del seller desde Cloud:",
-        err instanceof Error ? err.message : err,
-      );
-    }
-
-    // Re-cifrado local (el repo cifra con MP_TOKEN_SECRET ?? AUTH_SECRET).
-    await this.sellersRepo.upsert({
-      userId: payload.user_id,
-      accessToken: payload.access_token,
-      refreshToken: payload.refresh_token,
-      expiresAt: new Date(payload.expires_at),
-      status: "active",
-      ...metadata,
-    });
-
-    // El buzón se vacía: el token no debe quedar en Cloud ni cifrado (D3).
-    const { error: delError } = await this.cloudDb
-      .from("mercadopago_seller_handoff")
-      .delete()
-      .eq("id", data.id);
-    if (delError) {
-      console.warn(
-        `[MercadoPagoOAuthService] El seller se trajo OK pero no se pudo borrar el handoff ${data.id}: ${delError.message}. El TTL de 15 min lo vence solo.`,
-      );
-    }
-
-    return { pulled: true, userId: payload.user_id };
+    return {
+      pulled: false,
+      reason: "Deprecated: la Edge Function persiste tokens cifrados directo en mercadopago_sellers (F0).",
+    };
   }
 
   /**
    * Desvincular (D9/A18): wipe de tokens + status expired — NUNCA DELETE, la
-   * FK mercadopago_cajas.seller_user_id lo impide y la fila sin tokens cumple
-   * D9 igual. Limpia también Cloud (sellers, handoffs, bars.seller_user_id),
-   * tolerante a Cloud caído: local se limpia SIEMPRE y `cloudCleaned` reporta
-   * si Cloud quedó limpio o no.
+   * FK mercadopago_cajas.seller_user_id lo impide. Limpia handoffs residuales
+   * y bars.seller_user_id.
    */
   async unlinkSeller(): Promise<{ ok: true; cloudCleaned: boolean }> {
     const wiped = await this.sellersRepo.wipeAllTokens();
     if (wiped.length > 0) {
-      console.log(`[MercadoPagoOAuthService] Sellers desvinculados en local: ${wiped.join(", ")}`);
+      console.log(`[MercadoPagoOAuthService] Sellers desvinculados: ${wiped.join(", ")}`);
     }
 
     let cloudCleaned = false;
     if (this.cloudDb) {
       try {
-        const { error: sellersErr } = await this.cloudDb
-          .from("mercadopago_sellers")
-          .update({
-            access_token: null,
-            refresh_token: null,
-            status: "expired",
-            updated_at: new Date().toISOString(),
-          })
-          .neq("user_id", "");
-        if (sellersErr) throw new Error(`mercadopago_sellers: ${sellersErr.message}`);
-
+        // Higiene: buzón legado + bars (wipeAllTokens ya limpió sellers).
         const { error: handoffErr } = await this.cloudDb
           .from("mercadopago_seller_handoff")
           .delete()
@@ -360,7 +257,7 @@ export class MercadoPagoOAuthService {
         cloudCleaned = true;
       } catch (err) {
         console.warn(
-          "[MercadoPagoOAuthService] Desvinculación local OK pero Cloud no se pudo limpiar:",
+          "[MercadoPagoOAuthService] Wipe local OK pero limpieza residual falló:",
           err instanceof Error ? err.message : err,
         );
       }

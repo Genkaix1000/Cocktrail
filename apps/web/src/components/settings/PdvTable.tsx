@@ -4,53 +4,51 @@ import { useState } from "react";
 import {
   Copy,
   Check,
+  CreditCard,
   ExternalLink,
   Link2,
   Loader2,
   QrCode,
   RotateCw,
-  Trash2,
   Unlink,
   X,
 } from "lucide-react";
 import type { CajaRow, DeviceRow } from "@/services/pdv.service";
 import BoskoSelect from "@/components/shared/BoskoSelect";
+import { barDisplayLabel, barVisualIcon, barVisualKind } from "@/lib/bar-visual";
 
 type Props = {
   cajas: CajaRow[];
   loadError: boolean;
   linkingCajaId: string | null;
-  /** Posnets ya registrados — opciones del selector de vinculación (el id nunca se tipea). */
+  togglingBarId?: string | null;
   availableDevices?: DeviceRow[];
   onRetry: () => void;
-  onDeleteClick: (caja: CajaRow) => void;
   onLinkDevice: (cajaId: string, deviceId: string, username: string) => Promise<void>;
   onUnlinkDevice: (device: DeviceRow) => Promise<void>;
+  onToggleEnabled?: (caja: CajaRow, enabled: boolean) => Promise<void>;
   onRecoverQr?: (caja: CajaRow) => void;
-  /** Bloque H: abre la confirmación de re-provisioning (el QR va a cambiar). */
   onReprovisionClick?: (caja: CajaRow) => void;
 };
 
 const inputCls =
-  "w-full h-8 px-2.5 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all";
-
-const pdvGrid =
-  "minmax(140px, 1.2fr) minmax(110px, 1fr) minmax(180px, 1.4fr) 104px";
+  "w-full h-9 px-3 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all";
 
 function shortDeviceId(id: string): string {
-  if (id.length <= 22) return id;
-  return `${id.slice(0, 12)}…${id.slice(-6)}`;
+  if (id.length <= 18) return id;
+  return `${id.slice(0, 10)}…${id.slice(-5)}`;
 }
 
 export default function PdvTable({
   cajas,
   loadError,
   linkingCajaId,
+  togglingBarId = null,
   availableDevices = [],
   onRetry,
-  onDeleteClick,
   onLinkDevice,
   onUnlinkDevice,
+  onToggleEnabled,
   onRecoverQr,
   onReprovisionClick,
 }: Props) {
@@ -68,7 +66,7 @@ export default function PdvTable({
       setCopiedId(caja.id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      // ignore clipboard failures
+      // ignore
     }
   }
 
@@ -80,222 +78,275 @@ export default function PdvTable({
     setUsernameDraft("");
   }
 
+  function closeLinkForm() {
+    setLinkFormCajaId(null);
+    setDeviceIdDraft("");
+    setUsernameDraft("");
+  }
+
+  if (loadError) {
+    return (
+      <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-12 text-center space-y-3">
+        <p className="text-sm text-[var(--text-secondary)]">No se pudieron cargar los PDVs.</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-[13px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  if (cajas.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-surface)] px-6 py-14 text-center">
+        <p className="text-sm text-[var(--text-secondary)]">Todavía no hay puntos de venta.</p>
+        <p className="text-[12px] text-[var(--text-tertiary)] mt-1">
+          Creá el PDV de Barra VIP para empezar.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden shadow-card">
-      <div className="overflow-x-auto">
-        <div className="min-w-[640px]">
-          <div
-            className="grid gap-0 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[11px] font-bold uppercase tracking-[0.12em] select-none"
-            style={{ gridTemplateColumns: pdvGrid }}
+    <ul className="flex flex-col gap-3 list-none m-0 p-0">
+      {cajas.map((caja) => {
+        const linking = linkingCajaId === caja.id;
+        const showLinkForm = linkFormCajaId === caja.id;
+        const hasPosnet = Boolean(caja.device);
+        const posnetLabel =
+          caja.device?.deviceUsername?.trim() ||
+          (caja.device ? shortDeviceId(caja.device.deviceId) : null);
+        const kind = barVisualKind(caja.barCode ?? caja.externalPosId);
+        const Icon = barVisualIcon(kind);
+        const enabled = caja.barEnabled !== false;
+        const toggling = togglingBarId === caja.barId;
+
+        return (
+          <li
+            key={caja.id}
+            className={[
+              "rounded-2xl border bg-[var(--bg-surface)] overflow-hidden transition-colors",
+              enabled
+                ? "border-[var(--border-subtle)] hover:border-[var(--border-strong)]"
+                : "border-[var(--border-subtle)] opacity-60",
+            ].join(" ")}
           >
-            <div className="px-4 py-3 text-[var(--text-secondary)]">Barra</div>
-            <div className="px-4 py-3 text-[var(--text-secondary)]">QR</div>
-            <div className="px-4 py-3 text-[var(--text-secondary)]">Posnet</div>
-            <div className="px-3 py-3 text-[var(--text-tertiary)] text-left">Acciones</div>
-          </div>
-
-          {loadError ? (
-            <div className="px-5 py-10 text-center space-y-3">
-              <p className="text-sm text-[var(--text-secondary)]">No se pudieron cargar los PDVs.</p>
-              <button
-                type="button"
-                onClick={onRetry}
-                className="text-[13px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
-              >
-                Reintentar
-              </button>
-            </div>
-          ) : cajas.length === 0 ? (
-            <div className="px-5 py-10 text-center text-sm text-[var(--text-tertiary)]">
-              Todavía no hay puntos de venta. Creá el PDV de Barra VIP para empezar.
-            </div>
-          ) : (
-            cajas.map((caja) => {
-              const linking = linkingCajaId === caja.id;
-              const showLinkForm = linkFormCajaId === caja.id;
-
-              return (
+            <div className="px-5 pt-5 pb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+              <div className="min-w-0 flex-1 flex items-start gap-4">
                 <div
-                  key={caja.id}
-                  className="grid gap-0 border-b border-[var(--border-subtle)] last:border-b-0 items-center hover:bg-[var(--bg-panel)]/60 transition-colors"
-                  style={{ gridTemplateColumns: pdvGrid }}
+                  className={[
+                    "shrink-0 w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] rounded-2xl border flex items-center justify-center",
+                    enabled
+                      ? "border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)]"
+                      : "border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-tertiary)]",
+                  ].join(" ")}
+                  aria-hidden
                 >
-                  <div className="px-4 py-4 min-w-0">
-                    <p className="text-sm font-semibold text-[var(--text-primary)] truncate flex items-center gap-2">
-                      <span className="truncate">
-                        {caja.externalPosId.includes("BAR01") ||
-                        caja.externalPosId.includes("BAR-01") ||
-                        caja.externalPosId.includes("BARRA-01")
-                          ? "Barra VIP"
-                          : caja.externalPosId}
+                  <Icon size={36} strokeWidth={1.5} />
+                </div>
+
+                <div className="min-w-0 space-y-2 pt-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-[16px] font-semibold tracking-tight text-[var(--text-primary)] leading-none">
+                      {barDisplayLabel(caja.barCode ?? caja.externalPosId, caja.storeName)}
+                    </h3>
+                    {hasPosnet ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[var(--bg-panel)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                        <CreditCard size={11} strokeWidth={2} />
+                        Posnet
                       </span>
-                      {caja.isOrphan && (
-                        <span
-                          className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--amber-soft)] text-[var(--amber-base)]"
-                          title="La caja fue provisionada con otra cuenta de Mercado Pago: los cobros QR no entran a la cuenta activa."
-                        >
-                          Huérfana
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[11px] font-mono text-[var(--text-tertiary)] mt-0.5 truncate">
-                      {caja.externalPosId}
-                    </p>
-                    {caja.isOrphan && onReprovisionClick && (
-                      <button
-                        type="button"
-                        onClick={() => onReprovisionClick(caja)}
-                        className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[var(--amber-base)] hover:underline cursor-pointer"
-                      >
-                        <RotateCw size={11} />
-                        Re-provisionar
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="px-4 py-4 space-y-1.5 min-w-0">
-                    {caja.qrImage ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => copyQr(caja)}
-                          className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-primary)] hover:text-[var(--accent-text)] transition-colors cursor-pointer"
-                        >
-                          {copiedId === caja.id ? <Check size={13} /> : <Copy size={13} />}
-                          {copiedId === caja.id ? "Copiado" : "Copiar URL"}
-                        </button>
-                        <a
-                          href={caja.qrImage}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                        >
-                          <QrCode size={13} />
-                          Ver QR
-                          <ExternalLink size={11} />
-                        </a>
-                      </>
                     ) : (
-                      <div className="space-y-1">
-                        <span className="text-[12px] text-[var(--text-tertiary)] block">Sin QR</span>
-                        {onRecoverQr && (
-                          <button
-                            type="button"
-                            onClick={() => onRecoverQr(caja)}
-                            className="text-[11px] font-medium text-[var(--accent-text)] hover:underline cursor-pointer"
-                          >
-                            Recuperar QR
-                          </button>
-                        )}
-                      </div>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[var(--accent-surface)] text-[var(--accent-text)]">
+                        <QrCode size={11} strokeWidth={2} />
+                        QR dinámico
+                      </span>
                     )}
-                  </div>
-
-                  <div className="px-4 py-4 space-y-2 min-w-0">
-                    {caja.device ? (
-                      <div className="space-y-1">
-                        <p
-                          className="text-[12px] font-mono text-[var(--text-primary)] truncate"
-                          title={caja.device.deviceId}
-                        >
-                          {shortDeviceId(caja.device.deviceId)}
-                        </p>
-                        {caja.device.deviceUsername && (
-                          <p className="text-[11px] text-[var(--text-secondary)]">
-                            Apodo: {caja.device.deviceUsername}
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => onUnlinkDevice(caja.device!)}
-                          disabled={linking}
-                          className="inline-flex items-center gap-1 text-[11px] text-[var(--danger-base)]/80 hover:text-[var(--danger-base)] transition-colors cursor-pointer disabled:opacity-40"
-                        >
-                          <Unlink size={12} />
-                          Desvincular
-                        </button>
-                      </div>
-                    ) : showLinkForm ? (
-                      <div className="space-y-2">
-                        {linkableDevices.length > 0 ? (
-                          <BoskoSelect
-                            value={deviceIdDraft}
-                            onChange={setDeviceIdDraft}
-                            aria-label="Posnet a vincular"
-                            placeholder="Elegí un Posnet…"
-                            options={linkableDevices.map((d) => ({
-                              value: d.deviceId,
-                              label: d.deviceUsername || shortDeviceId(d.deviceId),
-                              hint: d.deviceId,
-                            }))}
-                          />
-                        ) : (
-                          <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">
-                            No hay Posnets registrados disponibles. Agregá uno desde la lista de
-                            Mercado Pago (card Posnets).
-                          </p>
-                        )}
-                        <input
-                          type="text"
-                          value={usernameDraft}
-                          onChange={(e) => setUsernameDraft(e.target.value)}
-                          placeholder="Apodo (opcional)"
-                          aria-label="Apodo del Posnet"
-                          className={inputCls}
-                        />
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => submitLink(caja.id)}
-                            disabled={linking || !deviceIdDraft}
-                            className="h-7 px-3 rounded-full bg-[var(--accent-surface)] text-[var(--accent-text)] text-[11px] font-semibold flex items-center gap-1 disabled:opacity-40 cursor-pointer hover:brightness-95 transition-all"
-                          >
-                            {linking ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
-                            Vincular
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Cancelar vinculación"
-                            onClick={() => {
-                              setLinkFormCajaId(null);
-                              setDeviceIdDraft("");
-                              setUsernameDraft("");
-                            }}
-                            className="h-7 w-7 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] flex items-center justify-center cursor-pointer"
-                          >
-                            <X size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setLinkFormCajaId(caja.id)}
-                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--accent-text)] transition-colors cursor-pointer"
+                    {!enabled && (
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[var(--bg-panel)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]">
+                        Deshabilitada
+                      </span>
+                    )}
+                    {caja.isOrphan && (
+                      <span
+                        className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[var(--amber-soft)] text-[var(--amber-base)]"
+                        title="Provisionada con otra cuenta de Mercado Pago."
                       >
-                        <Link2 size={13} />
-                        + Vincular
-                      </button>
+                        Huérfana
+                      </span>
                     )}
                   </div>
 
-                  <div className="px-3 py-4 flex items-center justify-start gap-1.5 min-w-0">
+                  <p className="text-[13px] text-[var(--text-secondary)] leading-snug">
+                    {!enabled
+                      ? "No aparece en el selector de cajas"
+                      : hasPosnet && posnetLabel
+                        ? `Terminal: ${posnetLabel}`
+                        : "Cobros con código QR por transacción"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 self-start">
+                {onToggleEnabled && (
+                  <div className="flex items-center gap-2 mr-1">
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                      {enabled ? "Activa" : "Off"}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => onDeleteClick(caja)}
-                      className="w-8 h-8 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] flex items-center justify-center hover:text-[var(--danger-base)] hover:border-[var(--danger-base)]/40 transition-all cursor-pointer"
-                      title="Eliminar PDV"
-                      aria-label="Eliminar PDV"
+                      role="switch"
+                      aria-checked={enabled}
+                      aria-label={
+                        enabled
+                          ? `Deshabilitar ${barDisplayLabel(caja.barCode ?? caja.externalPosId)}`
+                          : `Habilitar ${barDisplayLabel(caja.barCode ?? caja.externalPosId)}`
+                      }
+                      disabled={toggling}
+                      onClick={() => void onToggleEnabled(caja, !enabled)}
+                      className={`relative w-10 h-5 rounded-full transition-all duration-300 cursor-pointer disabled:opacity-40 ${
+                        enabled ? "bg-[var(--accent-primary)]" : "bg-[var(--border-strong)]"
+                      }`}
                     >
-                      <Trash2 size={14} />
+                      <div
+                        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-all duration-300 ${
+                          enabled ? "left-[22px]" : "left-0.5"
+                        }`}
+                      />
                     </button>
                   </div>
+                )}
+
+                {caja.qrImage ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => copyQr(caja)}
+                      className="h-9 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {copiedId === caja.id ? <Check size={13} /> : <Copy size={13} />}
+                      {copiedId === caja.id ? "Copiado" : "Copiar URL"}
+                    </button>
+                    <a
+                      href={caja.qrImage}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="h-9 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <ExternalLink size={13} />
+                      Ver QR
+                    </a>
+                  </>
+                ) : onRecoverQr ? (
+                  <button
+                    type="button"
+                    onClick={() => onRecoverQr(caja)}
+                    className="h-9 px-3 rounded-xl border border-[var(--border-subtle)] text-[12px] font-medium text-[var(--accent-text)] hover:bg-[var(--accent-surface)] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    Recuperar QR
+                  </button>
+                ) : (
+                  <span className="text-[12px] text-[var(--text-tertiary)] px-1">Sin QR</span>
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)]/40 flex flex-wrap items-center gap-x-4 gap-y-2">
+              {hasPosnet && caja.device ? (
+                <button
+                  type="button"
+                  onClick={() => onUnlinkDevice(caja.device!)}
+                  disabled={linking}
+                  className="text-[12px] font-medium text-[var(--text-tertiary)] hover:text-[var(--danger-base)] inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  <Unlink size={13} />
+                  Desvincular Posnet
+                </button>
+              ) : !showLinkForm ? (
+                <button
+                  type="button"
+                  onClick={() => setLinkFormCajaId(caja.id)}
+                  className="text-[12px] font-medium text-[var(--text-tertiary)] hover:text-[var(--accent-text)] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Link2 size={13} />
+                  Vincular Posnet
+                </button>
+              ) : null}
+
+              {caja.isOrphan && onReprovisionClick && (
+                <button
+                  type="button"
+                  onClick={() => onReprovisionClick(caja)}
+                  className="text-[12px] font-medium text-[var(--amber-base)] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCw size={13} />
+                  Re-provisionar
+                </button>
+              )}
+
+              {!showLinkForm && !hasPosnet && !caja.isOrphan && (
+                <span className="text-[11px] text-[var(--text-tertiary)] ml-auto hidden sm:inline">
+                  Opcional: sumá un lector para cobros con tarjeta
+                </span>
+              )}
+            </div>
+
+            {showLinkForm && (
+              <div className="px-5 py-4 border-t border-[var(--border-subtle)] space-y-3 bg-[var(--bg-surface)]">
+                <p className="text-[12px] font-semibold text-[var(--text-primary)]">
+                  Vincular Posnet a esta barra
+                </p>
+                {linkableDevices.length > 0 ? (
+                  <BoskoSelect
+                    value={deviceIdDraft}
+                    onChange={setDeviceIdDraft}
+                    aria-label="Posnet a vincular"
+                    placeholder="Elegí un Posnet…"
+                    options={linkableDevices.map((d) => ({
+                      value: d.deviceId,
+                      label: d.deviceUsername || shortDeviceId(d.deviceId),
+                      hint: d.deviceId,
+                    }))}
+                  />
+                ) : (
+                  <p className="text-[12px] text-[var(--text-tertiary)] leading-relaxed">
+                    No hay Posnets disponibles. Registrá uno desde la sección Posnets más abajo.
+                  </p>
+                )}
+                <input
+                  type="text"
+                  value={usernameDraft}
+                  onChange={(e) => setUsernameDraft(e.target.value)}
+                  placeholder="Apodo (opcional)"
+                  aria-label="Apodo del Posnet"
+                  className={inputCls}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => submitLink(caja.id)}
+                    disabled={linking || !deviceIdDraft}
+                    className="h-9 px-4 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-text)] text-[12px] font-semibold inline-flex items-center gap-1.5 disabled:opacity-40 cursor-pointer hover:brightness-95 transition-all"
+                  >
+                    {linking ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
+                    Vincular
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Cancelar vinculación"
+                    onClick={closeLinkForm}
+                    className="h-9 w-9 rounded-xl text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] inline-flex items-center justify-center cursor-pointer"
+                  >
+                    <X size={15} />
+                  </button>
                 </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </div>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

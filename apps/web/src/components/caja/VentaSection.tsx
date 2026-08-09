@@ -41,6 +41,7 @@ import { useGridColumns } from "@/hooks/useGridColumns";
 import Toast from "@/components/shared/Toast";
 import { formatHm, plural } from "@/lib/utils";
 import type { Drink, DrinkCategory, Order } from "@cocktrail/shared";
+import { qrDisplaySrc } from "@/lib/qr-display";
 
 type Props = {
   drinks: Drink[];
@@ -49,6 +50,8 @@ type Props = {
   onReloadCarta?: () => Promise<void>;
   /** Noche de prueba: solo efectivo (C1). */
   isTestNight?: boolean;
+  /** false = caja sin Posnet → Tarjeta off; QR dinámico sigue OK. null = aún no sabemos. */
+  hasLinkedDevice?: boolean | null;
   printer: {
     reprintTicket: (orderId: string) => Promise<void>;
     printTicket: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>;
@@ -302,7 +305,15 @@ function CompactDrinkSkeleton() {
  * prop desde `usePrinterStatus` en el shell, porque ese mismo hook también
  * lo usa el popup de detalle de Historial (que todavía vive en CajaClient).
  */
-export default function VentaSection({ drinks, categories, orders = [], onReloadCarta, printer, isTestNight = false }: Props) {
+export default function VentaSection({
+  drinks,
+  categories,
+  orders = [],
+  onReloadCarta,
+  printer,
+  isTestNight = false,
+  hasLinkedDevice = null,
+}: Props) {
   const loadingProducts = false;
   const shoppingBagRef = useRef<HTMLDivElement>(null);
 
@@ -512,6 +523,8 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
     printTicket: printer.printTicket,
     isTestNight,
   });
+
+  const qrSrc = qrDisplaySrc(qrImage);
 
   const { reprintTicket, printError, reprinting } = printer;
 
@@ -1472,8 +1485,17 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                       </button>
 
                       <button
-                        disabled={submitting || mpDisabledReason !== null}
-                        title={mpDisabledReason ?? undefined}
+                        disabled={
+                          submitting ||
+                          mpDisabledReason !== null ||
+                          hasLinkedDevice === false
+                        }
+                        title={
+                          mpDisabledReason ??
+                          (hasLinkedDevice === false
+                            ? "Esta caja no tiene Posnet vinculado. Usá Código QR."
+                            : undefined)
+                        }
                         onClick={() => startPosnetPayment("debito")}
                         className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2027,16 +2049,16 @@ export default function VentaSection({ drinks, categories, orders = [], onReload
                                   Esperando pago QR...
                                 </p>
                                 <p className="text-xs text-ink-400 px-8 leading-relaxed">
-                                  El cliente debe escanear el QR fijo de la barra con la app de Mercado Pago.
+                                  Mostrá este QR al cliente para que lo escanee con la app de Mercado Pago.
                                 </p>
                               </>
                             )}
                           </div>
-                          {qrImage && (
+                          {qrSrc && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={qrImage}
-                              alt="QR estático de la barra"
+                              src={qrSrc}
+                              alt="QR de cobro"
                               className="w-40 h-40 rounded-xl border border-ink-800 bg-white object-contain p-2"
                             />
                           )}

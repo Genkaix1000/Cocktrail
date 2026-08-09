@@ -41,6 +41,8 @@ describe("createMercadoPagoProvisioningController (rutas gestion-posnets)", () =
     createdAt: "2026-07-17T00:00:00Z",
     device: null,
     isOrphan: false,
+    barCode: "BARRA-01",
+    barEnabled: true,
   };
 
   beforeEach(() => {

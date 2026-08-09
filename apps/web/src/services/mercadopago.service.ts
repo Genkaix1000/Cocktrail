@@ -94,8 +94,10 @@ export type MpHealth = {
   fallback: MpFallbackStatus;
   /** D2: algún cobro de este proceso se resolvió por MP_POS_DEVICE_ID. */
   usingEnvDevice: boolean;
-  /** true ⟺ deviceOwnership.ok === false — el ÚNICO caso que bloquea el cobro. */
+  /** true ⟺ deviceOwnership.ok === false — bloquea Tarjeta (Posnet). */
   blocking: boolean;
+  /** Hay Posnet activo vinculado a la caja. Sin esto, Tarjeta se deshabilita; QR sigue OK. */
+  hasLinkedDevice: boolean;
   checkedAt: string;
 };
 
@@ -119,8 +121,15 @@ export type QrOrderStatusResponse = {
 export const mercadopagoService = {
   /** Fase 1 — pide al backend la URL de autorización OAuth (PKCE) para vincular la cuenta MP. */
   getOAuthUrl(barId?: string) {
-    const qs = barId ? `?barId=${encodeURIComponent(barId)}` : "";
-    return apiFetch<{ url: string }>(`/api/mercadopago/oauth/url${qs}`);
+    const params = new URLSearchParams();
+    if (barId) params.set("barId", barId);
+    // F1: origen explícito — los GET same-origin a veces no mandan header Origin,
+    // y sin esto la EF cae al fallback NEXT_PUBLIC_SITE_URL (Render).
+    if (typeof window !== "undefined" && window.location?.origin) {
+      params.set("redirectUrl", window.location.origin);
+    }
+    const qs = params.toString();
+    return apiFetch<{ url: string }>(`/api/mercadopago/oauth/url${qs ? `?${qs}` : ""}`);
   },
 
   /** Fase 1 — estado de vinculación OAuth del vendedor (para la UI de Pagos). */

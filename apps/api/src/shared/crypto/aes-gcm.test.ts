@@ -52,10 +52,24 @@ describe("aes-gcm (contrato v1)", () => {
     expect(() => decryptSecret("v2.a.b.c", SECRET, INFO)).toThrow(/v1/);
   });
 
-  it("VECTOR FIJO WebCrypto→Node: descifra un blob generado con crypto.subtle (lado Deno)", () => {
-    // Generado y VERIFICADO con el WebCrypto real de la Edge Function
-    // (deriveBits HKDF-SHA256 → AES-GCM, ct||tag concatenado, b64url sin padding).
-    // Si este test rompe, se rompió el contrato de cifrado entre EF y backend.
+  it("VECTOR FIJO WebCrypto→Node (mp-token/v1): descifra blob de crypto.subtle (lado Deno/EF)", () => {
+    // Generado con WebCrypto (mismo path que supabase/functions/mp-auth-callback).
+    // Si rompe, el contrato EF↔API de F0 está roto.
+    const secret = "vector-de-test-cocktrail-token-v1-0123456789ab";
+    const info = "cocktrail/mp-token/v1";
+    const blob =
+      "v1.VB5LxziEg9dnIwlvQgfZ-g.Pvr9zghbY0OPSLkr.VJapU1WX4zh8idU94cpmBEdsifjzh5m_HDco27TWHP5q6xSK1AUAyhlUtIEY08lUlZYAxLQNSC7kqEkR23PsJms3-TR5UQmxkfibFF-0H1OJEeoR79NWYx4T5u1aeDagwSSSB0fTrxQUknNnpCQeAZVzFcZ50Ljz3aONft6xjB7mveMAuxfH5saZdPdh-vp6SR7lWpI";
+
+    const plaintext = decryptSecret(blob, secret, info);
+    expect(JSON.parse(plaintext)).toEqual({
+      user_id: "999999999",
+      access_token: "APP_USR-vector-fijo",
+      refresh_token: "TG-vector-fijo",
+      expires_at: "2027-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("VECTOR FIJO legado handoff: sigue descifrando (migración / buzón residual)", () => {
     const secret = "vector-de-test-cocktrail-handoff-0123456789abcdef";
     const info = "cocktrail/mp-handoff/v1";
     const blob =

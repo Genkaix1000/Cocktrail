@@ -6,6 +6,7 @@ import { BadRequest, Forbidden } from "../../shared/errors/http-errors.js";
 import type { BarsRepository } from "./bars.repository.js";
 
 const INSTALL_BAR_UUID = "49d338c7-0eed-4280-a8ab-98c7e960355c";
+const PORTATIL_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 function makeReq(headers: Record<string, string> = {}): Request {
   return {
@@ -15,23 +16,65 @@ function makeReq(headers: Record<string, string> = {}): Request {
 
 function fakeBarsRepo(overrides: Partial<BarsRepository> = {}): BarsRepository {
   return {
-    findByCode: vi.fn(async (code: string) =>
-      code === env.BAR_CODE
-        ? { id: INSTALL_BAR_UUID, name: "Barra VIP", code, createdAt: new Date() }
-        : null,
-    ),
-    findById: vi.fn(async () => null),
+    findByCode: vi.fn(async (code: string) => {
+      if (code === env.BAR_CODE) {
+        return {
+          id: INSTALL_BAR_UUID,
+          name: "Barra VIP",
+          code,
+          enabled: true,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      if (code === "PORTATIL") {
+        return {
+          id: PORTATIL_UUID,
+          name: "Portátil",
+          code,
+          enabled: true,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      return null;
+    }),
+    findById: vi.fn(async (id: string) => {
+      if (id === INSTALL_BAR_UUID) {
+        return {
+          id: INSTALL_BAR_UUID,
+          name: "Barra VIP",
+          code: env.BAR_CODE,
+          enabled: true,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      if (id === PORTATIL_UUID) {
+        return {
+          id: PORTATIL_UUID,
+          name: "Portátil",
+          code: "PORTATIL",
+          enabled: true,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      return null;
+    }),
     listAll: vi.fn(async () => []),
+    findOrCreateByCode: vi.fn(async () => {
+      throw new Error("not used");
+    }),
+    setEnabled: vi.fn(async () => {
+      throw new Error("not used");
+    }),
     ...overrides,
   } as unknown as BarsRepository;
 }
 
-describe("mpContextMiddleware (A12 mínimo)", () => {
+describe("mpContextMiddleware (multi-barra)", () => {
   beforeEach(() => {
     _setBarsRepoForTests(fakeBarsRepo());
   });
 
-  it("sin headers → el barId del contexto es el UUID resuelto de la instalación (no el code: cajasRepo.findByBarId espera bars.id)", async () => {
+  it("sin headers → UUID de la instalación", async () => {
     const req = makeReq();
     const next = vi.fn();
 
@@ -41,7 +84,7 @@ describe("mpContextMiddleware (A12 mínimo)", () => {
     expect(req.mpContext).toEqual({ barId: INSTALL_BAR_UUID });
   });
 
-  it("x-bar-id coincidente con BAR_CODE → pasa y el contexto lleva el UUID resuelto", async () => {
+  it("x-bar-id = BAR_CODE → UUID de la instalación", async () => {
     const req = makeReq({ "x-bar-id": env.BAR_CODE });
     const next = vi.fn();
 
@@ -51,7 +94,7 @@ describe("mpContextMiddleware (A12 mínimo)", () => {
     expect(req.mpContext?.barId).toBe(INSTALL_BAR_UUID);
   });
 
-  it("x-bar-id con el UUID de la barra de la instalación → pasa (es lo que manda la web)", async () => {
+  it("x-bar-id = UUID de VIP → pasa", async () => {
     const req = makeReq({ "x-bar-id": INSTALL_BAR_UUID });
     const next = vi.fn();
 
@@ -61,7 +104,27 @@ describe("mpContextMiddleware (A12 mínimo)", () => {
     expect(req.mpContext?.barId).toBe(INSTALL_BAR_UUID);
   });
 
-  it("x-bar-id de otra barra (ni code ni UUID conocido) → 403 Forbidden", async () => {
+  it("x-bar-id = UUID de Portátil → cobra contra esa barra", async () => {
+    const req = makeReq({ "x-bar-id": PORTATIL_UUID });
+    const next = vi.fn();
+
+    await mpContextMiddleware(req, {} as Response, next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.mpContext?.barId).toBe(PORTATIL_UUID);
+  });
+
+  it("x-bar-id = code PORTATIL → resuelve al UUID", async () => {
+    const req = makeReq({ "x-bar-id": "PORTATIL" });
+    const next = vi.fn();
+
+    await mpContextMiddleware(req, {} as Response, next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.mpContext?.barId).toBe(PORTATIL_UUID);
+  });
+
+  it("x-bar-id desconocido → 403 Forbidden", async () => {
     const req = makeReq({ "x-bar-id": "BARRA-99" });
     const next = vi.fn();
 
@@ -74,10 +137,13 @@ describe("mpContextMiddleware (A12 mínimo)", () => {
     expect(req.mpContext).toBeUndefined();
   });
 
-  it("si la DB falla, el UUID no valida (fail-open solo hacia el code)", async () => {
+  it("si la DB falla, solo el code de instalación pasa", async () => {
     _setBarsRepoForTests(
       fakeBarsRepo({
         findByCode: vi.fn(async () => {
+          throw new Error("db caída");
+        }),
+        findById: vi.fn(async () => {
           throw new Error("db caída");
         }),
       }),
@@ -87,23 +153,21 @@ describe("mpContextMiddleware (A12 mínimo)", () => {
 
     await mpContextMiddleware(uuidReq, {} as Response, next);
 
-    // Sin DB no se puede confirmar el UUID → se rechaza; el code sigue pasando.
     expect(next.mock.calls[0][0]).toBeInstanceOf(Forbidden);
 
     const codeReq = makeReq({ "x-bar-id": env.BAR_CODE });
     const next2 = vi.fn();
     await mpContextMiddleware(codeReq, {} as Response, next2);
     expect(next2).toHaveBeenCalledWith();
-    // Sin UUID resoluble, el contexto degrada al code (instalación legacy).
     expect(codeReq.mpContext?.barId).toBe(env.BAR_CODE);
   });
 
-  it("cachea el lookup de la barra (no consulta la DB en cada request)", async () => {
+  it("cachea el lookup de la barra de instalación (sin header)", async () => {
     const repo = fakeBarsRepo();
     _setBarsRepoForTests(repo);
 
     for (let i = 0; i < 3; i++) {
-      const req = makeReq({ "x-bar-id": INSTALL_BAR_UUID });
+      const req = makeReq();
       const next = vi.fn();
       await mpContextMiddleware(req, {} as Response, next);
       expect(next).toHaveBeenCalledWith();

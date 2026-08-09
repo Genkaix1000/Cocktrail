@@ -19,6 +19,7 @@ function makeBar(overrides: Partial<Bar> = {}): Bar {
     id: "bar-1",
     name: "Caja VIP",
     code: "BARRA-01",
+    enabled: true,
     createdAt: "2026-07-17T20:00:00.000Z",
     ...overrides,
   };
@@ -66,6 +67,7 @@ describe("BarSessionsService", () => {
       findById: vi.fn().mockResolvedValue(makeBar()),
       listAll: vi.fn().mockResolvedValue([makeBar()]),
       findOrCreateByCode: vi.fn(),
+      setEnabled: vi.fn(async (id, enabled) => makeBar({ id, enabled })),
     };
     service = new BarSessionsService(repo, barsRepo, () => NOW);
   });
@@ -109,6 +111,24 @@ describe("BarSessionsService", () => {
       ["Caja General", "available"],
     ]);
     expect(result.boxes[1]?.session?.username).toBe("bruno");
+  });
+
+  it("listOptions omite barras deshabilitadas", async () => {
+    vi.mocked(barsRepo.listAll).mockResolvedValue([
+      makeBar(),
+      makeBar({ id: "bar-off", name: "Portátil", code: "PORTATIL", enabled: false }),
+    ]);
+    const result = await service.listOptions(ANA);
+    expect(result.boxes.map((b) => b.code)).toEqual(["BARRA-01"]);
+  });
+
+  it("setBarEnabled(false) actualiza y echa la sesión de esa barra", async () => {
+    const session = makeSession();
+    vi.mocked(repo.findByBarId).mockResolvedValue(session);
+    const result = await service.setBarEnabled("bar-1", false);
+    expect(barsRepo.setEnabled).toHaveBeenCalledWith("bar-1", false);
+    expect(repo.deleteByBarId).toHaveBeenCalledWith("bar-1");
+    expect(result.ejected).toEqual(session);
   });
 
   it("no abandona la sesión actual si la caja elegida está ocupada", async () => {

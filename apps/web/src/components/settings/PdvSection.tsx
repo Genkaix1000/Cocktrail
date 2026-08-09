@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Monitor, Plus, RotateCw, Search, Trash2 } from "lucide-react";
+import { CircleHelp, Loader2, Monitor, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { ApiError } from "@/services/api-client";
 import {
   pdvService,
@@ -9,20 +9,34 @@ import {
   type DeviceRow,
   type MpDevicesListing,
 } from "@/services/pdv.service";
+import { barSessionsService } from "@/services/bar-sessions.service";
 import { mercadopagoService } from "@/services/mercadopago.service";
 import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import Toast from "@/components/shared/Toast";
 import MpHealthPanel from "./MpHealthPanel";
 import PdvTable from "./PdvTable";
-import PdvFormPanel, { type PdvForm } from "./PdvFormPanel";
+import PdvFormPanel, { type PdvForm, type PdvPreset } from "./PdvFormPanel";
 import BoskoSelect from "@/components/shared/BoskoSelect";
 
-const SUPPORTED_BAR_CODE = process.env.NEXT_PUBLIC_BAR_CODE || "BARRA-01";
+/** Slice F4: VIP + Portátil. Sin tope artificial de 3 ni UI multi-barra fancy. */
+const PDV_PRESETS: PdvPreset[] = [
+  { code: process.env.NEXT_PUBLIC_BAR_CODE || "BARRA-01", name: "Barra VIP" },
+  { code: "PORTATIL", name: "Portátil" },
+];
 
-const emptyForm = (): PdvForm => ({
-  name: "Barra VIP",
-  barCode: SUPPORTED_BAR_CODE,
-});
+function availablePresets(cajas: CajaRow[]): PdvPreset[] {
+  const taken = new Set(
+    cajas.map((c) => c.externalPosId.replace(/^COCKTRAIL/i, "").toUpperCase()),
+  );
+  // external_pos_id: BARRA-01 → COCKTRAILBAR01; PORTATIL → COCKTRAILPORTATIL
+  return PDV_PRESETS.filter((p) => {
+    const normalized = p.code
+      .replace(/^BARRA-/i, "BAR")
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .toUpperCase();
+    return !taken.has(normalized);
+  });
+}
 
 /** Estado de ciclo de vida de un Posnet registrado (D1). */
 function deviceEstado(device: DeviceRow): "activo" | "historico" | "sin-caja" {
@@ -50,8 +64,9 @@ export default function PdvSection() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<CajaRow | null>(null);
   const [linkingCajaId, setLinkingCajaId] = useState<string | null>(null);
+  const [togglingBarId, setTogglingBarId] = useState<string | null>(null);
+  const [moreBarsHelpOpen, setMoreBarsHelpOpen] = useState(false);
 
   // Listado CRUDO de la cuenta MP (T21): fuente del alta — el id no se tipea más.
   const [mpListing, setMpListing] = useState<MpDevicesListing | null>(null);
@@ -137,9 +152,11 @@ export default function PdvSection() {
   }, [loadData, loadMpListing]);
 
   const openCreate = useCallback(() => {
-    setForm(emptyForm());
+    const next = availablePresets(cajas)[0];
+    if (!next) return;
+    setForm({ name: next.name, barCode: next.code });
     setPanelOpen(true);
-  }, []);
+  }, [cajas]);
 
   const closePanel = useCallback(() => {
     setPanelOpen(false);
@@ -171,22 +188,6 @@ export default function PdvSection() {
       setSaving(false);
     }
   }, [form, saving, closePanel]);
-
-  const handleDelete = useCallback(async (caja: CajaRow) => {
-    try {
-      await pdvService.deleteCaja(caja.id);
-      setCajas((prev) => prev.filter((c) => c.id !== caja.id));
-      setDeleteConfirm(null);
-      setSaved(true);
-    } catch (err) {
-      console.error("Error deleting PDV:", err);
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "No se pudo eliminar el PDV. Reintentá en unos segundos.",
-      );
-    }
-  }, []);
 
   const handleLinkDevice = useCallback(
     async (cajaId: string, deviceId: string, username: string) => {
@@ -257,6 +258,27 @@ export default function PdvSection() {
     } catch (err) {
       console.error("Error recovering QR:", err);
       setError("No se pudo recuperar el QR. Reintentá en unos segundos.");
+    }
+  }, []);
+
+  const handleToggleEnabled = useCallback(async (caja: CajaRow, enabled: boolean) => {
+    setTogglingBarId(caja.barId);
+    setError(null);
+    try {
+      await barSessionsService.setBarEnabled(caja.barId, enabled);
+      setCajas((prev) =>
+        prev.map((c) => (c.barId === caja.barId ? { ...c, barEnabled: enabled } : c)),
+      );
+      setSaved(true);
+    } catch (err) {
+      console.error("Error toggling bar:", err);
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo actualizar la barra. Reintentá en unos segundos.",
+      );
+    } finally {
+      setTogglingBarId(null);
     }
   }, []);
 
@@ -422,7 +444,8 @@ export default function PdvSection() {
     );
   }
 
-  const canCreate = cajas.length < 1;
+  const presetsLeft = availablePresets(cajas);
+  const canCreate = presetsLeft.length > 0;
   // G6: nombre real de la sucursal en MP; si no llegó, el código de la caja.
   const cajaNameById = new Map(
     cajas.map((c) => [c.id, c.storeName?.trim() || c.externalPosId || "—"]),
@@ -450,25 +473,56 @@ export default function PdvSection() {
             </span>
           </div>
           <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-            Caja QR, Posnets y sesión de Barra VIP
+            Caja QR, Posnets y sesión (Barra VIP / Portátil)
           </p>
         </div>
 
-        <button
-          ref={createBtnRef}
-          type="button"
-          onClick={openCreate}
-          disabled={!canCreate}
-          title={
-            canCreate
-              ? "Crear PDV para Barra VIP"
-              : "Solo Barra VIP disponible — multi-barra no implementado"
-          }
-          className="h-10 px-4 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100 disabled:bg-[var(--bg-surface)] disabled:text-[var(--text-tertiary)] disabled:border disabled:border-[var(--border-strong)]"
-        >
-          <Plus size={14} strokeWidth={2.5} />
-          {canCreate ? "Nueva barra" : "Solo Barra VIP"}
-        </button>
+        {canCreate ? (
+          <button
+            ref={createBtnRef}
+            type="button"
+            onClick={openCreate}
+            title={`Crear PDV (${presetsLeft.map((p) => p.name).join(" o ")})`}
+            className="h-10 px-4 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98]"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            Nueva barra
+          </button>
+        ) : (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMoreBarsHelpOpen((v) => !v)}
+              aria-expanded={moreBarsHelpOpen}
+              aria-label="¿Necesitás más barras?"
+              className="h-10 w-10 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/40 flex items-center justify-center transition-all cursor-pointer"
+            >
+              <CircleHelp size={18} strokeWidth={2} />
+            </button>
+            {moreBarsHelpOpen && (
+              <div
+                role="dialog"
+                aria-label="Más barras"
+                className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-card"
+              >
+                <p className="text-[13px] font-semibold text-[var(--text-primary)] mb-1.5">
+                  ¿Necesitás más barras?
+                </p>
+                <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                  Escribinos y te gestionamos el plan para sumar puntos de venta
+                  adicionales a tu operación.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setMoreBarsHelpOpen(false)}
+                  className="mt-3 text-[12px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
+                >
+                  Entendido
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
@@ -477,11 +531,12 @@ export default function PdvSection() {
             cajas={cajas}
             loadError={loadError}
             linkingCajaId={linkingCajaId}
+            togglingBarId={togglingBarId}
             availableDevices={devices}
             onRetry={loadData}
-            onDeleteClick={setDeleteConfirm}
             onLinkDevice={handleLinkDevice}
             onUnlinkDevice={handleUnlinkDevice}
+            onToggleEnabled={handleToggleEnabled}
             onRecoverQr={handleRecoverQr}
             onReprovisionClick={setReprovisionConfirm}
           />
@@ -491,7 +546,7 @@ export default function PdvSection() {
           <PdvFormPanel
             form={form}
             saving={saving}
-            supportedBarCode={SUPPORTED_BAR_CODE}
+            availablePresets={presetsLeft}
             onChange={(patch) => setForm({ ...form, ...patch })}
             onCancel={closePanel}
             onSave={handleCreate}
@@ -768,31 +823,21 @@ export default function PdvSection() {
         </div>
       )}
 
-      {deleteConfirm && (
-        <SafeDeleteModal
-          onClose={() => setDeleteConfirm(null)}
-          onConfirm={() => handleDelete(deleteConfirm)}
-          title="Eliminar PDV"
-          expectedText={deleteConfirm.externalPosId}
-          typeLabel="el PDV"
-        />
-      )}
-
       {/* Bloque H: confirmación PREVIA al re-provisioning — el QR cambia */}
       {reprovisionConfirm && (
         <SafeDeleteModal
           onClose={() => setReprovisionConfirm(null)}
           onConfirm={() => handleReprovision(reprovisionConfirm)}
           title="Re-provisionar caja"
-          expectedText="REPROVISIONAR"
           typeLabel="la caja"
           confirmLabel="Re-provisionar"
           warning={
             <>
-              Vas a re-provisionar la caja en la cuenta activa de Mercado Pago.{" "}
-              <strong className="text-[var(--danger-base)] font-semibold">El QR estático va a cambiar</strong>:
-              si ya está impreso en las mesas, vas a tener que reimprimirlo. Los Posnets
-              históricos de la caja se conservan.
+              ¿Estás seguro de que querés re-provisionar esta caja en la cuenta activa de Mercado
+              Pago?{" "}
+              <strong className="text-[var(--danger-base)] font-semibold">El QR estático va a cambiar</strong>
+              : si ya está impreso, vas a tener que reimprimirlo. Los Posnets históricos se
+              conservan.
             </>
           }
         />

@@ -44,34 +44,26 @@ export function derivePosnetStatus(health: MpHealth | null): {
     return {
       level: "warning",
       message:
-        "Los cobros están saliendo por el Posnet de emergencia (variable de entorno), " +
-        "no por el vinculado a esta caja. Revisá la vinculación en /admin → PDV y Posnets.",
+        "Los cobros salen por el Posnet de emergencia, no por el de esta caja.",
     };
   }
   if (deviceOwnership.ok && deviceMode.ok && cajaProvisioned.ok) {
-    return { level: "ok", message: "Posnet de la caja listo para cobrar (modo PDV)." };
+    return { level: "ok", message: "Posnet listo." };
   }
-  // Algún chequeo quedó en desconocido: el detalle de pertenencia es el que
-  // explica el contexto (sin caja / sin Posnet vinculado / MP no respondió).
   return { level: "unknown", message: deviceOwnership.detail };
 }
 
 /**
- * Estado del Posnet de LA CAJA (gestion-posnets T24): polling de
- * GET /api/mercadopago/health cada 30s (mismo TTL que el cache server-side) y
- * test funcional manual. Distingue advertencia (STANDALONE, huérfana,
- * env-fallback) de bloqueo (el device pertenece a otra cuenta).
+ * Estado del Posnet de LA CAJA: polling de GET /api/mercadopago/health cada 30s.
+ * El cobro real valida solo; no hay test manual en caja.
  */
 export function usePosnetStatus() {
   const [posnetHealth, setPosnetHealth] = useState<MpHealth | null>(null);
-  const [posnetTestMessage, setPosnetTestMessage] = useState<string | null>(null);
-  const [testingPosnet, setTestingPosnet] = useState(false);
 
   const refreshPosnetStatus = useCallback(async () => {
     try {
       setPosnetHealth(await mercadopagoService.getMpHealth());
     } catch {
-      // Sin backend no hay salud que mostrar: el cartel queda en "unknown".
       setPosnetHealth(null);
     }
   }, []);
@@ -83,35 +75,6 @@ export function usePosnetStatus() {
     return () => clearInterval(interval);
   }, [refreshPosnetStatus]);
 
-  /**
-   * Test funcional real: manda $1 al Posnet de la caja (el device lo resuelve
-   * el server) y espera a que lo reciba. Antes re-chequea la salud con
-   * `refresh=1`: un bloqueo o un modo manual se explican sin gastar el test.
-   */
-  const testPosnet = useCallback(async () => {
-    setTestingPosnet(true);
-    setPosnetTestMessage(null);
-
-    const health = await mercadopagoService.getMpHealth(true).catch(() => null);
-    setPosnetHealth(health);
-
-    const derived = derivePosnetStatus(health);
-    if (derived.level === "blocked" || (health && health.checks.deviceMode.ok === false)) {
-      setPosnetTestMessage(derived.message);
-      setTestingPosnet(false);
-      return;
-    }
-
-    try {
-      const result = await mercadopagoService.testDeviceCharge();
-      setPosnetTestMessage(result.message);
-    } catch (err) {
-      setPosnetTestMessage(err instanceof Error ? err.message : "Error al probar el Posnet.");
-    } finally {
-      setTestingPosnet(false);
-    }
-  }, []);
-
   const { level: posnetLevel, message: posnetMessage } = derivePosnetStatus(posnetHealth);
 
   return {
@@ -119,8 +82,5 @@ export function usePosnetStatus() {
     posnetLevel,
     posnetMessage,
     refreshPosnetStatus,
-    testPosnet,
-    posnetTestMessage,
-    testingPosnet,
   };
 }

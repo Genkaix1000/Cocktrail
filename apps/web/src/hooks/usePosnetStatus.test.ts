@@ -20,6 +20,7 @@ function makeHealth(overrides: Partial<MpHealth> = {}): MpHealth {
     fallback: { status: "usable", checkedAt: "2026-07-23T00:00:00Z" },
     usingEnvDevice: false,
     blocking: false,
+    hasLinkedDevice: true,
     checkedAt: "2026-07-23T16:00:00Z",
     ...overrides,
   };

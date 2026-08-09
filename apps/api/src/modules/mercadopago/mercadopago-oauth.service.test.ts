@@ -3,8 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { MercadoPagoOAuthService, type MpOAuthConfig } from "./mercadopago-oauth.service.js";
 import type { OAuthStatesRepository } from "./oauth-states.repository.js";
 import type { MercadoPagoSellersRepository, Seller } from "./mercadopago-sellers.repository.js";
-import { encryptSecret } from "../../shared/crypto/aes-gcm.js";
-import { MP_HANDOFF_INFO } from "./mp-token-cipher.js";
 import { env } from "../../config/env.js";
 
 const CONFIG: MpOAuthConfig = {
@@ -153,14 +151,27 @@ describe("MercadoPagoOAuthService", () => {
       expect(new URL(url).searchParams.has("scope")).toBe(false);
     });
 
-    it("persiste el state con code_verifier, bar_id y TTL ~10 min", async () => {
+    it("persiste el state con code_verifier, bar_id, redirect_url y TTL ~10 min", async () => {
       const before = Date.now();
-      await service.generateAuthUrl("BARRA-01");
+      await service.generateAuthUrl("BARRA-01", "http://localhost:3000");
       const arg = statesRepo.insert.mock.calls[0][0];
       expect(arg.barId).toBe("BARRA-01");
+      expect(arg.redirectUrl).toBe("http://localhost:3000");
       const ttl = arg.expiresAt.getTime() - before;
       expect(ttl).toBeGreaterThan(9 * 60 * 1000);
       expect(ttl).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);
+    });
+
+    it("rechaza redirect host externo (anti open-redirect) y cae a FRONTEND_URL", async () => {
+      await service.generateAuthUrl("BARRA-01", "https://evil.example/phish");
+      expect(statesRepo.insert.mock.calls[0][0].redirectUrl).toBe(
+        new URL(env.FRONTEND_URL).origin,
+      );
+    });
+
+    it("acepta localhost aunque FRONTEND_URL sea otro origen", async () => {
+      await service.generateAuthUrl("BARRA-01", "http://localhost:3000");
+      expect(statesRepo.insert.mock.calls[0][0].redirectUrl).toBe("http://localhost:3000");
     });
 
     it("lanza si faltan MP_APP_ID / MP_REDIRECT_URI", async () => {
@@ -250,123 +261,23 @@ describe("MercadoPagoOAuthService", () => {
     });
   });
 
-  // ── PR 4 — buzón de traspaso Cloud→local y desvincular ──
+  // ── F0 — handoff deprecated; unlink limpia residuales ──
 
   describe("pullSellerFromCloud", () => {
-    const HANDOFF_KEY = "clave-del-buzon-para-tests-de-oauth-32-chars!!";
-    const payload = {
-      user_id: "seller-nuevo",
-      access_token: "APP_USR-traspasado",
-      refresh_token: "TG-traspasado",
-      expires_at: "2027-01-19T00:00:00.000Z",
-    };
-    let savedHandoffKey: string | undefined;
-
-    beforeEach(() => {
-      savedHandoffKey = env.MP_HANDOFF_KEY;
-      env.MP_HANDOFF_KEY = HANDOFF_KEY;
-    });
-
-    afterEach(() => {
-      env.MP_HANDOFF_KEY = savedHandoffKey;
-    });
-
-    function makeHandoffRow(overrides: Record<string, unknown> = {}) {
-      return {
-        id: "handoff-1",
-        user_id: payload.user_id,
-        payload_enc: encryptSecret(JSON.stringify(payload), HANDOFF_KEY, MP_HANDOFF_INFO),
-        key_version: 1,
-        created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        ...overrides,
-      };
-    }
-
-    function makeService(cloud: ReturnType<typeof makeCloudDb>) {
-      return new MercadoPagoOAuthService(
+    it("F0 deprecated → siempre no-op, no toca sellers ni Cloud", async () => {
+      const cloud = makeCloudDb();
+      const svc = new MercadoPagoOAuthService(
         statesRepo as unknown as OAuthStatesRepository,
         sellersRepo as unknown as MercadoPagoSellersRepository,
         CONFIG,
         cloud.db,
       );
-    }
-
-    it("sin cloudDb configurado → no-op con motivo", async () => {
-      await expect(service.pullSellerFromCloud()).resolves.toMatchObject({
+      await expect(svc.pullSellerFromCloud()).resolves.toMatchObject({
         pulled: false,
-        reason: expect.stringContaining("Cloud"),
+        reason: expect.stringContaining("Deprecated"),
       });
-    });
-
-    it("descifra el handoff, persiste vía repo (re-cifrado local) y borra el buzón", async () => {
-      const cloud = makeCloudDb();
-      cloud.state.results.push({ data: makeHandoffRow(), error: null }); // handoff
-      cloud.state.results.push({
-        data: { seller_nickname: "BOSKO", seller_first_name: "Manu", seller_last_name: null, seller_email: "b@x.com" },
-        error: null,
-      }); // metadata cloud
-      cloud.state.results.push({ data: null, error: null }); // delete handoff
-
-      const result = await makeService(cloud).pullSellerFromCloud();
-
-      expect(result).toEqual({ pulled: true, userId: "seller-nuevo" });
-      // El upsert recibe el token EN CLARO — el repo es quien cifra local.
-      expect(sellersRepo.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: "seller-nuevo",
-          accessToken: "APP_USR-traspasado",
-          refreshToken: "TG-traspasado",
-          status: "active",
-          nickname: "BOSKO",
-        }),
-      );
-      // El buzón queda vacío (D3): DELETE por id del handoff consumido.
-      const del = cloud.state.ops.find((op) => op.method === "delete");
-      expect(del?.table).toBe("mercadopago_seller_handoff");
-      expect(del?.chain).toContainEqual(["eq", "id", "handoff-1"]);
-      // Y la query del handoff filtró los vencidos.
-      expect(cloud.state.ops[0].chain.some((c) => c[0] === "gt" && c[1] === "expires_at")).toBe(true);
-    });
-
-    it("handoff vencido (query vacía) → no-op sin tocar sellers", async () => {
-      const cloud = makeCloudDb();
-      cloud.state.results.push({ data: null, error: null });
-
-      const result = await makeService(cloud).pullSellerFromCloud();
-
-      expect(result.pulled).toBe(false);
       expect(sellersRepo.upsert).not.toHaveBeenCalled();
-    });
-
-    it("reemplazo: expira al seller activo previo ANTES de upsertear el nuevo", async () => {
-      sellersRepo.findActive.mockResolvedValue(makeSeller({ userId: "seller-viejo" }));
-      const cloud = makeCloudDb();
-      cloud.state.results.push({ data: makeHandoffRow(), error: null });
-
-      await makeService(cloud).pullSellerFromCloud();
-
-      expect(sellersRepo.update).toHaveBeenCalledWith("seller-viejo", {
-        accessToken: null,
-        refreshToken: null,
-        status: "expired",
-      });
-      const updateOrder = sellersRepo.update.mock.invocationCallOrder[0];
-      const upsertOrder = sellersRepo.upsert.mock.invocationCallOrder[0];
-      expect(updateOrder).toBeLessThan(upsertOrder);
-    });
-
-    it("MP_HANDOFF_KEY desincronizada → error accionable, nunca silencioso", async () => {
-      const cloud = makeCloudDb();
-      cloud.state.results.push({
-        data: makeHandoffRow({
-          payload_enc: encryptSecret(JSON.stringify(payload), "otra-clave-en-la-edge-function-32-chars!!!", MP_HANDOFF_INFO),
-        }),
-        error: null,
-      });
-
-      await expect(makeService(cloud).pullSellerFromCloud()).rejects.toThrow(/MP_HANDOFF_KEY/);
-      expect(sellersRepo.upsert).not.toHaveBeenCalled();
+      expect(cloud.state.ops).toHaveLength(0);
     });
   });
 
@@ -380,29 +291,21 @@ describe("MercadoPagoOAuthService", () => {
       );
     }
 
-    it("wipe local + limpieza Cloud completa → cloudCleaned: true", async () => {
+    it("wipe + limpieza handoffs/bars → cloudCleaned: true", async () => {
       sellersRepo.wipeAllTokens.mockResolvedValue(["seller-1"]);
       const cloud = makeCloudDb();
-      // update sellers, delete handoffs, update bars — los tres OK.
-      cloud.state.results.push({ data: null, error: null });
-      cloud.state.results.push({ data: null, error: null });
-      cloud.state.results.push({ data: null, error: null });
+      cloud.state.results.push({ data: null, error: null }); // delete handoffs
+      cloud.state.results.push({ data: null, error: null }); // update bars
 
       const result = await makeService(cloud).unlinkSeller();
 
       expect(result).toEqual({ ok: true, cloudCleaned: true });
       expect(sellersRepo.wipeAllTokens).toHaveBeenCalledTimes(1);
-      const sellersOp = cloud.state.ops.find((op) => op.table === "mercadopago_sellers");
-      expect(sellersOp?.payload).toMatchObject({
-        access_token: null,
-        refresh_token: null,
-        status: "expired",
-      });
       expect(cloud.state.ops.find((op) => op.table === "mercadopago_seller_handoff")?.method).toBe("delete");
       expect(cloud.state.ops.find((op) => op.table === "bars")?.payload).toEqual({ seller_user_id: null });
     });
 
-    it("tolera Cloud caído: local se limpia igual y cloudCleaned: false", async () => {
+    it("tolera fallo residual: wipe local igual y cloudCleaned: false", async () => {
       sellersRepo.wipeAllTokens.mockResolvedValue(["seller-1"]);
       const cloud = makeCloudDb();
       cloud.state.results.push({ data: null, error: { message: "fetch failed" } });
@@ -413,30 +316,13 @@ describe("MercadoPagoOAuthService", () => {
       expect(sellersRepo.wipeAllTokens).toHaveBeenCalledTimes(1);
     });
 
-    it("sin Cloud configurado → cloudCleaned: false (no hay nada que limpiar remoto)", async () => {
+    it("sin Cloud configurado → cloudCleaned: false", async () => {
       await expect(makeService(null).unlinkSeller()).resolves.toEqual({ ok: true, cloudCleaned: false });
     });
   });
 
-  describe("getSellerStatus — pull lazy", () => {
-    it("sin seller local intenta UN pull (throttled a 1/min) y re-lee", async () => {
-      const cloud = makeCloudDb();
-      const svc = new MercadoPagoOAuthService(
-        statesRepo as unknown as OAuthStatesRepository,
-        sellersRepo as unknown as MercadoPagoSellersRepository,
-        CONFIG,
-        cloud.db,
-      );
-      const pullSpy = vi.spyOn(svc, "pullSellerFromCloud").mockResolvedValue({ pulled: false });
-
-      await svc.getSellerStatus("BARRA-01");
-      await svc.getSellerStatus("BARRA-01");
-
-      expect(pullSpy).toHaveBeenCalledTimes(1); // la segunda quedó throttled
-    });
-
-    it("con seller local NO consulta Cloud", async () => {
-      sellersRepo.findActive.mockResolvedValue(makeSeller());
+  describe("getSellerStatus", () => {
+    it("sin seller → linked false; no intenta pull (F0)", async () => {
       const cloud = makeCloudDb();
       const svc = new MercadoPagoOAuthService(
         statesRepo as unknown as OAuthStatesRepository,
@@ -448,8 +334,16 @@ describe("MercadoPagoOAuthService", () => {
 
       const res = await svc.getSellerStatus("BARRA-01");
 
-      expect(res.linked).toBe(true);
+      expect(res.linked).toBe(false);
       expect(pullSpy).not.toHaveBeenCalled();
+      expect(cloud.state.ops).toHaveLength(0);
+    });
+
+    it("con seller activo → linked true", async () => {
+      sellersRepo.findActive.mockResolvedValue(makeSeller());
+      const res = await service.getSellerStatus("BARRA-01");
+      expect(res.linked).toBe(true);
+      expect(res.nickname).toBe("BOSKO BAR");
     });
   });
 });

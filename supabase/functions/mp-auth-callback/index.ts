@@ -1,13 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1"
 
-// ── Cifrado del handoff (contrato "cocktrail/mp-handoff/v1") ──────────────────
+// ── Cifrado de tokens (contrato "cocktrail/mp-token/v1") ─────────────────────
 // Blob: "v1." + b64url(salt 16B) + "." + b64url(iv 12B) + "." + b64url(ct||tag)
-// Clave: HKDF-SHA256(ikm=utf8(MP_HANDOFF_KEY), salt, info) → AES-256-GCM.
-// El backend Node implementa EXACTAMENTE el mismo contrato (mp-token-cipher.ts):
-// cualquier desvío acá rompe el descifrado del pull. No tocar sin tocar ambos.
+// Clave: HKDF-SHA256(ikm=utf8(MP_TOKEN_SECRET), salt, info) → AES-256-GCM.
+// Debe ser IDÉNTICO a apps/api mp-token-cipher.ts / aes-gcm.ts. No tocar sin ambos.
 
-const HANDOFF_INFO = "cocktrail/mp-handoff/v1"
+const TOKEN_INFO = "cocktrail/mp-token/v1"
+const MP_TOKEN_KEY_VERSION = 1
 
 function b64url(bytes: Uint8Array): string {
   let bin = ""
@@ -15,7 +15,7 @@ function b64url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
-async function encryptHandoff(plaintext: string, secret: string): Promise<string> {
+async function encryptToken(plaintext: string, secret: string): Promise<string> {
   const encoder = new TextEncoder()
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const iv = crypto.getRandomValues(new Uint8Array(12))
@@ -25,31 +25,43 @@ async function encryptHandoff(plaintext: string, secret: string): Promise<string
     encoder.encode(secret),
     "HKDF",
     false,
-    ["deriveBits"]
+    ["deriveBits"],
   )
   const keyBits = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt, info: encoder.encode(HANDOFF_INFO) },
+    { name: "HKDF", hash: "SHA-256", salt, info: encoder.encode(TOKEN_INFO) },
     ikm,
-    256
+    256,
   )
   const key = await crypto.subtle.importKey(
     "raw",
     keyBits,
     { name: "AES-GCM" },
     false,
-    ["encrypt"]
+    ["encrypt"],
   )
-  // WebCrypto devuelve ciphertext||tag concatenado — compatible con Node.
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    encoder.encode(plaintext)
+    encoder.encode(plaintext),
   )
 
   return `v1.${b64url(salt)}.${b64url(iv)}.${b64url(new Uint8Array(ciphertext))}`
 }
 
+function resolveSiteUrl(redirectUrl: string | null | undefined): string {
+  const fallback = Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000"
+  if (!redirectUrl) return fallback
+  try {
+    const u = new URL(redirectUrl)
+    if (u.protocol !== "http:" && u.protocol !== "https:") return fallback
+    return u.origin
+  } catch {
+    return fallback
+  }
+}
+
 serve(async (req: Request) => {
+  let siteUrl = Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000"
   try {
     const url = new URL(req.url)
     const code = url.searchParams.get("code")
@@ -61,11 +73,9 @@ serve(async (req: Request) => {
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     )
 
-    // 1) Consumir state vía RPC atómica
-    // state es un nonce aleatorio anti-CSRF, NO un business ID
     const { data: oauthData, error: consumeError } =
       await supabaseAdmin.rpc("consume_oauth_state", { p_state: state })
 
@@ -73,26 +83,22 @@ serve(async (req: Request) => {
       throw new Error("State inválido o expirado. Reiniciá la vinculación.")
     }
 
-    const { code_verifier, bar_id } = oauthData[0]
+    const { code_verifier, bar_id, redirect_url } = oauthData[0]
+    siteUrl = resolveSiteUrl(redirect_url)
 
-    // 2) Intercambiar code por tokens
-    // Sin Authorization header — autenticación: client_id + client_secret en body
     const mpRedirectUri = Deno.env.get("MP_REDIRECT_URI")
     const mpClientId = Deno.env.get("MP_APP_ID")
     const mpClientSecret = Deno.env.get("MP_CLIENT_SECRET")
+    const tokenSecret = Deno.env.get("MP_TOKEN_SECRET")
 
     if (!mpRedirectUri || !mpClientId || !mpClientSecret) {
       throw new Error("Configuración MP incompleta: faltan secrets")
     }
-
-    // El secret del handoff se valida ANTES del exchange: si falta, la
-    // vinculación falla con mensaje claro. NUNCA se escriben tokens en claro
-    // como fallback (D3).
-    const handoffKey = Deno.env.get("MP_HANDOFF_KEY")
-    if (!handoffKey) {
+    if (!tokenSecret) {
       throw new Error(
-        "Falta el secret MP_HANDOFF_KEY en la Edge Function. " +
-        "Configuralo con `supabase secrets set MP_HANDOFF_KEY=...` y reintentá."
+        "Falta el secret MP_TOKEN_SECRET en la Edge Function. " +
+          "Configuralo con `supabase secrets set MP_TOKEN_SECRET=...` " +
+          "(mismo valor que apps/api) y reintentá.",
       )
     }
 
@@ -109,7 +115,7 @@ serve(async (req: Request) => {
           redirect_uri: mpRedirectUri,
           code_verifier: code_verifier,
         }),
-      }
+      },
     )
 
     if (!tokenResponse.ok) {
@@ -125,51 +131,18 @@ serve(async (req: Request) => {
       throw new Error(tokenData.message || "Error al obtener tokens de Mercado Pago")
     }
 
-    // 3a) Persistir: los tokens van CIFRADOS al buzón de traspaso
-    // (mercadopago_seller_handoff); mercadopago_sellers Cloud queda con SOLO
-    // metadata. El backend local hace el pull, descifra y re-cifra local (PR 4).
-    // Si expires_in no viene → NOW() para forzar refresh inmediato
     const expiresAt = tokenData.expires_in
       ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
       : new Date().toISOString()
     const sellerUserId = String(tokenData.user_id)
     const nowIso = new Date().toISOString()
 
-    // 3a.1) Higiene del buzón: fuera los handoffs vencidos y los del mismo user
-    const { error: cleanupError } = await supabaseAdmin
-      .from("mercadopago_seller_handoff")
-      .delete()
-      .or(`expires_at.lt.${nowIso},user_id.eq.${sellerUserId}`)
+    const accessTokenEnc = await encryptToken(tokenData.access_token, tokenSecret)
+    const refreshTokenEnc = tokenData.refresh_token
+      ? await encryptToken(tokenData.refresh_token, tokenSecret)
+      : null
 
-    if (cleanupError) {
-      // No es fatal: el INSERT nuevo sigue siendo el más reciente
-      console.error("mp-auth-callback: limpieza de handoffs falló:", cleanupError)
-    }
-
-    // 3a.2) INSERT del handoff cifrado (expires_at: DEFAULT NOW() + 15 min)
-    const payloadEnc = await encryptHandoff(
-      JSON.stringify({
-        user_id: sellerUserId,
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token ?? null,
-        expires_at: expiresAt,
-      }),
-      handoffKey
-    )
-
-    const { error: handoffError } = await supabaseAdmin
-      .from("mercadopago_seller_handoff")
-      .insert({
-        user_id: sellerUserId,
-        payload_enc: payloadEnc,
-        key_version: 1,
-      })
-
-    if (handoffError) throw handoffError
-
-    // 3a.3) Single-seller: expirar cualquier OTRO seller activo antes del
-    // upsert — el índice único parcial (WHERE status='active') rechazaría
-    // un segundo activo.
+    // Single-seller: expirar cualquier OTRO seller activo antes del upsert.
     const { error: expireError } = await supabaseAdmin
       .from("mercadopago_sellers")
       .update({ status: "expired", updated_at: nowIso })
@@ -178,8 +151,6 @@ serve(async (req: Request) => {
 
     if (expireError) throw expireError
 
-    // 3a.4) Upsert de SOLO metadata. Los tokens en NULL EXPLÍCITOS: en un
-    // re-link pisan cualquier token en claro que hubiera quedado de antes.
     const { error: dbError } = await supabaseAdmin
       .from("mercadopago_sellers")
       .upsert(
@@ -187,53 +158,52 @@ serve(async (req: Request) => {
           user_id: sellerUserId,
           access_token: null,
           refresh_token: null,
+          access_token_enc: accessTokenEnc,
+          refresh_token_enc: refreshTokenEnc,
+          key_version: MP_TOKEN_KEY_VERSION,
           expires_at: expiresAt,
           status: "active",
           updated_at: nowIso,
         },
-        { onConflict: "user_id" }
+        { onConflict: "user_id" },
       )
 
     if (dbError) throw dbError
 
-    // 3b) Vincular bar_id ↔ seller
     if (bar_id) {
+      const byCode = !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bar_id)
       await supabaseAdmin
         .from("bars")
         .update({ seller_user_id: sellerUserId })
-        .eq("id", bar_id)
+        .eq(byCode ? "code" : "id", bar_id)
     }
 
-    // 3c) Obtener y persistir datos públicos de la cuenta
     const userResponse = await fetch(
       "https://api.mercadopago.com/users/me",
-      { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } },
     )
     if (userResponse.ok) {
       const userData = await userResponse.json()
       await supabaseAdmin
         .from("mercadopago_sellers")
         .update({
-          seller_nickname:   userData.nickname ?? null,
-          seller_first_name:  userData.first_name ?? null,
-          seller_last_name:   userData.last_name ?? null,
-          seller_email:       userData.email ?? null,
+          seller_nickname: userData.nickname ?? null,
+          seller_first_name: userData.first_name ?? null,
+          seller_last_name: userData.last_name ?? null,
+          seller_email: userData.email ?? null,
         })
         .eq("user_id", sellerUserId)
     }
 
-    // 4) Redirect al frontend con bar_id
-    const siteUrl = Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000"
     const params = new URLSearchParams({ linked: "true" })
     if (bar_id) params.set("barId", bar_id)
 
     return Response.redirect(`${siteUrl}/admin?tab=pagos&${params.toString()}`, 302)
   } catch (error: any) {
     console.error("mp-auth-callback error:", error.message)
-    const siteUrl = Deno.env.get("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000"
     return Response.redirect(
       `${siteUrl}/admin?tab=pagos&linked=false&message=${encodeURIComponent(error.message)}`,
-      302
+      302,
     )
   }
 })

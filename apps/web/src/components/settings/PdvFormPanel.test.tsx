@@ -4,11 +4,14 @@ import userEvent from "@testing-library/user-event";
 
 import PdvFormPanel, { type PdvForm } from "./PdvFormPanel";
 
+const VIP = { code: "BARRA-01", name: "Barra VIP" };
+const PORTATIL = { code: "PORTATIL", name: "Portátil" };
+
 function renderPanel(overrides: Partial<Parameters<typeof PdvFormPanel>[0]> = {}) {
   const props = {
     form: { name: "Barra VIP", barCode: "BARRA-01" } as PdvForm,
     saving: false,
-    supportedBarCode: "BARRA-01",
+    availablePresets: [VIP],
     onChange: vi.fn(),
     onCancel: vi.fn(),
     onSave: vi.fn(),
@@ -19,7 +22,7 @@ function renderPanel(overrides: Partial<Parameters<typeof PdvFormPanel>[0]> = {}
 }
 
 describe("PdvFormPanel", () => {
-  it("las labels están asociadas a sus campos", () => {
+  it("las labels van asociadas a sus campos", () => {
     renderPanel();
     expect(screen.getByLabelText(/Nombre de la barra/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Código de barra/i)).toHaveValue("BARRA-01");
@@ -39,12 +42,9 @@ describe("PdvFormPanel", () => {
   });
 
   it("no tiene focus trap: Tab sale del panel sin quedar atrapado", async () => {
-    // Anti-regresión del criterio del PR 6: es un panel inline, no un diálogo modal.
     const user = userEvent.setup();
     renderPanel();
 
-    // Tab por todos los elementos focuseables: si hubiera trap, el foco
-    // volvería al primero; sin trap, termina en el body.
     for (let i = 0; i < 10; i++) {
       await user.tab();
     }
@@ -70,9 +70,22 @@ describe("PdvFormPanel", () => {
     expect(props.onSave).toHaveBeenCalledTimes(1);
   });
 
-  it("avisa cuando el código de barra no es el soportado", () => {
-    renderPanel({ form: { name: "Otra", barCode: "BARRA-02" } });
-    expect(screen.getByText(/Multi-barra\s*no está implementado todavía/i)).toBeInTheDocument();
+  it("con varios presets permite elegir Portátil", async () => {
+    const user = userEvent.setup();
+    const props = renderPanel({
+      form: { name: "Barra VIP", barCode: "BARRA-01" },
+      availablePresets: [VIP, PORTATIL],
+    });
+
+    await user.selectOptions(screen.getByLabelText(/Código de barra/i), "PORTATIL");
+    expect(props.onChange).toHaveBeenCalledWith({ barCode: "PORTATIL", name: "Portátil" });
+  });
+
+  it("deshabilita Crear si el código no está en los presets disponibles", () => {
+    renderPanel({
+      form: { name: "Otra", barCode: "BARRA-99" },
+      availablePresets: [VIP],
+    });
     expect(screen.getByRole("button", { name: "Crear PDV" })).toBeDisabled();
   });
 });

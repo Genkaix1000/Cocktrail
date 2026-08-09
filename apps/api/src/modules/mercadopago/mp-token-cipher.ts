@@ -2,9 +2,9 @@ import { env } from "../../config/env.js";
 import { decryptSecret, encryptSecret } from "../../shared/crypto/aes-gcm.js";
 
 /**
- * Cifrado de los tokens del seller (base local) y del payload de handoff
- * (buzón Cloud). Los `info` de HKDF separan los dominios: un blob de token
- * jamás descifra como handoff ni viceversa, aunque compartieran secret.
+ * Cifrado de los tokens del seller. F0: la Edge Function escribe con
+ * `cocktrail/mp-token/v1`. `MP_HANDOFF_INFO` queda por si hay blobs residuales
+ * del buzón deprecated.
  */
 export const MP_TOKEN_INFO = "cocktrail/mp-token/v1";
 export const MP_HANDOFF_INFO = "cocktrail/mp-handoff/v1";

@@ -33,8 +33,10 @@ export type MpHealth = {
   fallback: MpFallbackStatus;
   /** D2: algún cobro de este proceso se resolvió por MP_POS_DEVICE_ID. */
   usingEnvDevice: boolean;
-  /** true ⟺ deviceOwnership.ok === false — el ÚNICO caso que bloquea el cobro. */
+  /** true ⟺ deviceOwnership.ok === false — bloquea Tarjeta (Posnet). QR no usa device. */
   blocking: boolean;
+  /** Hay Posnet activo vinculado a la caja (solo DB — no consulta MP). */
+  hasLinkedDevice: boolean;
   checkedAt: string;
 };
 
@@ -67,19 +69,16 @@ function errMessage(err: unknown): string {
  * Bloque G de gestion-posnets: los 4 chequeos de salud de la vinculación con
  * Mercado Pago + la guarda del caso grave que consume el PosnetResolver (T17).
  *
- * Los chequeos operan sobre la caja de la instalación (misma resolución
- * barId → caja que el resolver). El listado de devices es EL MISMO camino que
- * `listMpDevices()` del provisioning (se inyecta la función): un solo fetch,
- * que además re-sincroniza el operating_mode — la salud y la tabla no pueden
- * decir cosas distintas. La dependencia va health → provisioning (función
- * inyectada en app.ts); provisioning no conoce a health: sin ciclo.
+ * Los chequeos operan sobre la caja de la barra activa (`barId` del contexto
+ * de cobro; sin él, la de instalación). El listado de devices es EL MISMO
+ * camino que `listMpDevices()` del provisioning (se inyecta la función).
  *
  * getHealth() NUNCA lanza: cualquier error interno degrada el chequeo a
  * unknown con el motivo en `detail`.
  */
 export class MpHealthService {
-  private cache: CacheEntry | null = null;
-  private inFlight: Promise<CacheEntry> | null = null;
+  private cache = new Map<string, CacheEntry>();
+  private inFlight = new Map<string, Promise<CacheEntry>>();
 
   constructor(
     private readonly sellersRepo: MercadoPagoSellersRepository,
@@ -91,8 +90,8 @@ export class MpHealthService {
     private readonly listMpDevices: () => Promise<MpDevicesListing>,
   ) {}
 
-  async getHealth(refresh = false): Promise<MpHealth> {
-    const entry = await this.getEntry(refresh);
+  async getHealth(refresh = false, barId?: string | null): Promise<MpHealth> {
+    const entry = await this.getEntry(refresh, barId);
     // Los singletons (preflight F1 y flag de env) se leen en vivo: son lecturas
     // de memoria gratis y así el panel refleja una degradación ocurrida DESPUÉS
     // de la última computación cacheada.
@@ -117,7 +116,12 @@ export class MpHealthService {
   async assertDeviceNotGrave(deviceId: string, _cajaId: string): Promise<void> {
     let entry: CacheEntry;
     try {
-      entry = await this.getEntry(false);
+      // El listado de devices es por seller (no por barra): alcanza cualquier
+      // cache tibio con listing, o computar la barra de instalación.
+      entry =
+        [...this.cache.values()].find(
+          (e) => e.listingIds && Date.now() - e.at < MP_HEALTH_TTL_MS,
+        ) ?? (await this.getEntry(false, null));
     } catch {
       // getEntry no debería lanzar (compute atrapa todo), pero si lo hiciera,
       // la guarda es fail-open por diseño.
@@ -137,22 +141,25 @@ export class MpHealthService {
 
   // ── internals ────────────────────────────────────────────────────────
 
-  private async getEntry(refresh: boolean): Promise<CacheEntry> {
-    if (!refresh && this.cache && Date.now() - this.cache.at < MP_HEALTH_TTL_MS) {
-      return this.cache;
+  private async getEntry(refresh: boolean, barId?: string | null): Promise<CacheEntry> {
+    const key = barId?.trim() || "__install__";
+    const warm = this.cache.get(key);
+    if (!refresh && warm && Date.now() - warm.at < MP_HEALTH_TTL_MS) {
+      return warm;
     }
-    // Dedup de computaciones concurrentes (varios cobros con cache frío): un
-    // solo fetch a MP, todos esperan el mismo resultado.
-    if (!this.inFlight) {
-      this.inFlight = this.compute().finally(() => {
-        this.inFlight = null;
-      });
-    }
-    return this.inFlight;
+    // Dedup de computaciones concurrentes por barra.
+    const pending = this.inFlight.get(key);
+    if (pending) return pending;
+    const created = this.compute(barId).finally(() => {
+      this.inFlight.delete(key);
+    });
+    this.inFlight.set(key, created);
+    return created;
   }
 
-  private async compute(): Promise<CacheEntry> {
+  private async compute(barIdHint?: string | null): Promise<CacheEntry> {
     const checkedAt = new Date().toISOString();
+    const cacheKey = barIdHint?.trim() || "__install__";
 
     // ── seller activo (R21) ──
     let seller: Seller | null = null;
@@ -189,12 +196,12 @@ export class MpHealthService {
         : { ok: null, detail: `No se pudo consultar las cuentas vinculadas: ${msg}` };
     }
 
-    // ── caja + device activo de la instalación (misma cadena que el resolver) ──
+    // ── caja + device activo de la barra del contexto (fallback: instalación) ──
     let caja: Caja | null = null;
     let device: CajaDevice | null = null;
     let contextError: string | null = null;
     try {
-      const barId = await this.resolveInstallationBarId();
+      const barId = barIdHint?.trim() || (await this.resolveInstallationBarId());
       caja = barId ? await this.cajasRepo.findByBarId(barId) : null;
       device = caja ? await this.devicesRepo.findActiveByCajaId(caja.id) : null;
     } catch (err) {
@@ -220,7 +227,9 @@ export class MpHealthService {
       checks: { singleSeller, deviceOwnership, deviceMode, cajaProvisioned },
       fallback: getMpFallbackStatus(),
       usingEnvDevice: isUsingEnvDevice(),
+      // Device en otra cuenta: bloquea Tarjeta. QR dinámico no usa Posnet.
       blocking: deviceOwnership.ok === false,
+      hasLinkedDevice: device !== null,
       checkedAt,
     };
 
@@ -229,7 +238,7 @@ export class MpHealthService {
       listingIds: listing ? new Set(listing.devices.map((d) => d.id)) : null,
       at: Date.now(),
     };
-    this.cache = entry;
+    this.cache.set(cacheKey, entry);
     return entry;
   }
 

@@ -37,21 +37,26 @@ export function createMercadoPagoController(
   // Bloque G (gestion-posnets): salud de la vinculación, cacheada 30 s en
   // MpHealthService — se inyecta la función, no el service (mismo criterio
   // que resolvePosnet).
-  getMpHealth: (refresh: boolean) => Promise<MpHealth>,
+  getMpHealth: (refresh: boolean, barId?: string | null) => Promise<MpHealth>,
 ): Router {
   const router = Router();
 
-  // GET /api/mercadopago/health — los 4 chequeos del bloque G + fila F1 +
-  // usingEnvDevice. La cajera también lo necesita (cartel de /caja). El cache
-  // de 30 s es server-side; ?refresh=1 fuerza el re-chequeo contra MP.
-  router.get("/health", authMiddleware, requireRole("admin", "caja"), async (req, res, next) => {
-    try {
-      res.set("Cache-Control", "no-store");
-      res.json(await getMpHealth(req.query.refresh === "1"));
-    } catch (err) {
-      next(err);
-    }
-  });
+  // GET /api/mercadopago/health — chequeos por barra activa (X-Bar-Id).
+  // Cache 30 s server-side; ?refresh=1 fuerza re-chequeo contra MP.
+  router.get(
+    "/health",
+    authMiddleware,
+    requireRole("admin", "caja"),
+    mpContextMiddleware,
+    async (req, res, next) => {
+      try {
+        res.set("Cache-Control", "no-store");
+        res.json(await getMpHealth(req.query.refresh === "1", req.mpContext?.barId));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   // POST /api/mercadopago/pos/intent - Enviar monto al Posnet (persiste el intent en mp_orders)
   router.post("/pos/intent", authMiddleware, requireRole("admin", "caja"), mpContextMiddleware, async (req, res, next) => {

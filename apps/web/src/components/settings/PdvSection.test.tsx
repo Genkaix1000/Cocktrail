@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import PdvSection from "./PdvSection";
@@ -23,6 +23,12 @@ vi.mock("@/services/pdv.service", () => ({
     refreshQr: vi.fn(),
     setDeviceMode: vi.fn(),
     reprovisionCaja: vi.fn(),
+  },
+}));
+
+vi.mock("@/services/bar-sessions.service", () => ({
+  barSessionsService: {
+    setBarEnabled: vi.fn(),
   },
 }));
 
@@ -50,6 +56,8 @@ const CAJA: CajaRow = {
   qrTemplate: null,
   sellerUserId: "s1",
   storeName: null,
+  barCode: "BARRA-01",
+  barEnabled: true,
   isOrphan: false,
   createdAt: "2026-07-17T00:00:00Z",
   device: null,
@@ -93,6 +101,7 @@ const HEALTH = {
   fallback: { status: "usable" as const, checkedAt: "2026-07-23T00:00:00Z" },
   usingEnvDevice: false,
   blocking: false,
+  hasLinkedDevice: true,
   checkedAt: "2026-07-23T16:00:00Z",
 };
 
@@ -154,7 +163,44 @@ describe("PdvSection", () => {
     mockedPdvService.listCajas.mockResolvedValue([{ ...CAJA, externalPosId: "COCKTRAILBAR01" }]);
 
     render(<PdvSection />);
-    expect(await screen.findByText(/COCKTRAILBAR01/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Barra VIP" })).toBeInTheDocument();
+    expect(await screen.findByText("QR dinámico")).toBeInTheDocument();
+  });
+
+  it("con VIP ya creada sigue permitiendo Portátil", async () => {
+    const user = userEvent.setup();
+    mockedPdvService.listCajas.mockResolvedValue([{ ...CAJA, externalPosId: "COCKTRAILBAR01" }]);
+    mockedPdvService.createCaja.mockResolvedValue({
+      ...CAJA,
+      id: "caja-port",
+      externalPosId: "COCKTRAILPORTATIL",
+    });
+
+    render(<PdvSection />);
+    const btn = await screen.findByRole("button", { name: /Nueva barra/i });
+    expect(btn).toBeEnabled();
+    await user.click(btn);
+    await user.click(await screen.findByRole("button", { name: "Crear PDV" }));
+
+    await waitFor(() =>
+      expect(mockedPdvService.createCaja).toHaveBeenCalledWith({
+        barId: "PORTATIL",
+        name: "Portátil",
+      }),
+    );
+  });
+
+  it("con VIP + Portátil muestra ayuda para pedir más barras", async () => {
+    const user = userEvent.setup();
+    mockedPdvService.listCajas.mockResolvedValue([
+      { ...CAJA, externalPosId: "COCKTRAILBAR01" },
+      { ...CAJA, id: "caja-2", externalPosId: "COCKTRAILPORTATIL" },
+    ]);
+
+    render(<PdvSection />);
+    expect(screen.queryByRole("button", { name: /Nueva barra/i })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Necesitás más barras/i }));
+    expect(screen.getByText(/te gestionamos el plan/i)).toBeInTheDocument();
   });
 
   it("muestra la sección Posnets con el selector de alta desde la lista de MP", async () => {
@@ -256,26 +302,30 @@ describe("PdvSection", () => {
     );
   });
 
-  it("re-provisionar una caja huérfana confirma primero (aviso de QR que cambia)", async () => {
-    const user = userEvent.setup();
+  it("re-provisionar una caja huérfana confirma con hold (aviso de QR que cambia)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     mockedPdvService.listCajas.mockResolvedValue([{ ...CAJA, isOrphan: true }]);
     mockedPdvService.reprovisionCaja.mockResolvedValue({ ...CAJA, isOrphan: false });
 
-    render(<PdvSection />);
-    await user.click(await screen.findByRole("button", { name: /Re-provisionar/i }));
+    try {
+      render(<PdvSection />);
+      await user.click(await screen.findByRole("button", { name: /Re-provisionar/i }));
 
-    // Aviso previo explícito: el QR va a cambiar y hay que reimprimir.
-    expect(await screen.findByText(/El QR estático va a cambiar/i)).toBeInTheDocument();
+      expect(await screen.findByText(/El QR estático va a cambiar/i)).toBeInTheDocument();
 
-    const input = screen.getByPlaceholderText("REPROVISIONAR");
-    await user.type(input, "REPROVISIONAR");
-    // Dos botones "Re-provisionar" (fila + confirm del modal): el submit es el del modal.
-    const confirms = screen.getAllByRole("button", { name: "Re-provisionar" });
-    await user.click(confirms[confirms.length - 1]);
+      const hold = screen.getByRole("button", { name: /Re-provisionar\. Mantené/i });
+      fireEvent.pointerDown(hold);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1200);
+      });
 
-    await waitFor(() =>
-      expect(mockedPdvService.reprovisionCaja).toHaveBeenCalledWith("caja-1"),
-    );
+      await waitFor(() =>
+        expect(mockedPdvService.reprovisionCaja).toHaveBeenCalledWith("caja-1"),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renderiza el panel de salud de la vinculación", async () => {

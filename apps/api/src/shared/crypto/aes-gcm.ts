@@ -9,9 +9,9 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:cr
  *   AES-256-GCM (el tag de 16B va concatenado al final del ciphertext,
  *   como lo devuelve WebCrypto — por eso acá se concatena a mano).
  *
- * Cambiar CUALQUIER unidad de este contrato rompe el traspaso Cloud→local.
- * El test con vector fijo generado con WebCrypto (aes-gcm.test.ts) es la
- * guarda de compatibilidad entre ambos lados.
+ * Cambiar CUALQUIER unidad de este contrato rompe el descifrado en el API
+ * de lo que escribe la Edge Function. El vector fijo WebCrypto→Node en
+ * aes-gcm.test.ts (info cocktrail/mp-token/v1) es la guarda.
  */
 
 const VERSION_PREFIX = "v1";
