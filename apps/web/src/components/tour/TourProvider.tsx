@@ -43,10 +43,6 @@ export function useTour() {
   return ctx;
 }
 
-export function useTourSafe() {
-  return useContext(TourContext);
-}
-
 function delay(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }

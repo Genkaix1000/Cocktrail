@@ -4,19 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { mercadopagoService, type MpHealth, type MpHealthCheck } from "@/services/mercadopago.service";
 
-const CHECK_LABELS: Record<keyof MpHealth["checks"], string> = {
-  singleSeller: "Cuenta de Mercado Pago",
-  deviceOwnership: "Posnet en la cuenta activa",
-  deviceMode: "Modo del lector (PDV)",
-  cajaProvisioned: "Caja provisionada",
-};
-
-const CHECK_ORDER: (keyof MpHealth["checks"])[] = [
-  "singleSeller",
-  "cajaProvisioned",
-  "deviceOwnership",
-  "deviceMode",
-];
+import { MP_HEALTH_CHECK_LABELS as CHECK_LABELS, MP_HEALTH_CHECK_ORDER as CHECK_ORDER } from "./mpHealthChecks";
 
 export type MpHealthScore = {
   percent: number;

@@ -13,4 +13,3 @@ export const generalLimiter = limiter(15 * 60 * 1000, isDev ? 10000 : 600, "Dema
 export const loginLimiter = limiter(15 * 60 * 1000, isDev ? 1000 : 20, "Demasiados intentos de login.");
 export const orderLimiter = limiter(60 * 1000, isDev ? 1000 : 15, "Demasiados pedidos creados. Intentá de nuevo en un minuto.");
 export const ticketLimiter = limiter(60 * 1000, isDev ? 1000 : 45, "Demasiados escaneos de tickets. Intentá de nuevo en un minuto.");
-export const systemStatusLimiter = limiter(60 * 1000, 10, "Demasiadas comprobaciones de estado. Esperá un minuto.");

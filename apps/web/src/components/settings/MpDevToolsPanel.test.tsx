@@ -12,7 +12,7 @@ vi.mock("@/services/mercadopago.service", () => ({
   },
 }));
 
-import { mercadopagoService } from "@/services/mercadopago.service";
+import { mercadopagoService, type MpRecentOrderRow } from "@/services/mercadopago.service";
 
 const mocked = vi.mocked(mercadopagoService);
 
@@ -83,13 +83,24 @@ describe("MpDevToolsPanel", () => {
   });
 
   it("pide de a 5 órdenes y permite cargar más", async () => {
-    const mk = (i: number) => ({
+    const mk = (i: number): MpRecentOrderRow => ({
       id: `o-${i}`,
+      orderIdMp: `ORD-${i}`,
+      externalRef: `REF-${i}`,
+      paymentId: null,
       type: "qr",
       amount: 1000 + i,
       status: "processed",
-      createdAt: "2026-08-09T12:00:00.000Z",
+      barId: null,
+      deviceId: null,
+      rawState: null,
+      paymentStatus: null,
+      paymentStatusDetail: null,
+      paidAmount: null,
+      feeStatus: "none",
       verificationError: null,
+      createdAt: "2026-08-09T12:00:00.000Z",
+      updatedAt: "2026-08-09T12:00:00.000Z",
     });
     mocked.listRecentOrders
       .mockResolvedValueOnce({ orders: Array.from({ length: 5 }, (_, i) => mk(i)) })

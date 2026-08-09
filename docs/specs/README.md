@@ -16,8 +16,8 @@ implementar (Plan Mode si es grande) → ir tildando las tareas
 ## Por qué nativo y no Spec Kit / OpenSpec
 
 Para este MVP, Spec Kit es overkill (phase gates rígidos + setup Python) y OpenSpec agrega una
-dependencia. El flujo nativo nos da el 90%: `CLAUDE.md`/`AGENTS.md` actúan como "constitution",
-Plan Mode como fase de plan, y la skill `brainstorming` como exploración previa.
+dependencia. El flujo nativo nos da el 90%: `docs/ARCHITECTURE.md` y `AGENTS.md` actúan como
+"constitution", Plan Mode como fase de plan, y la skill `brainstorming` como exploración previa.
 Si las specs se vuelven inmanejables en chat, evaluar subir a **OpenSpec** (lightweight, brownfield).
 Ver `docs/AGENTS.md`.
 
@@ -70,25 +70,9 @@ Plan: [`plans/03-auditoria-web/2026-07-05-fase-3c-design.md`](../plans/03-audito
 |---|---|---|
 | [`pulir-ui-caja.md`](./05-ui-caja/pulir-ui-caja.md) | `done` | Buscador con autocompletar + atajos de teclado + sacar el delay artificial de 800ms |
 | [`adaptacion-caja-tablet.md`](./05-ui-caja/adaptacion-caja-tablet.md) | `draft` | `/caja` en tablet: sidebar plegable, checkout centrado, numpad, permiso `openNight` |
+| [`caja_numpad_and_pos_improvements_spec.md`](./05-ui-caja/caja_numpad_and_pos_improvements_spec.md) | `done` | Numpad, mejoras de checkout y POS (F1-F2 completadas) |
 
 Plan: [`plans/05-ui-caja/2026-07-13-adaptacion-caja-tablet-design.md`](../plans/05-ui-caja/2026-07-13-adaptacion-caja-tablet-design.md).
-
-### `06-empaquetado/` — Fase 6: empaquetado y producto
-
-| Spec | Estado | De qué va |
-|---|---|---|
-| [`empaquetado-windows.md`](./06-empaquetado/empaquetado-windows.md) | `draft` | Que la PC Windows del boliche arranque el sistema sola, sin terminal ni Docker a mano |
-
-Plan: [`plans/06-empaquetado/2026-07-13-empaquetado-windows-design.md`](../plans/06-empaquetado/2026-07-13-empaquetado-windows-design.md).
-
-### `deuda-pre-fase-6/` — riesgos y deuda cerrados antes del empaquetado
-
-| Spec | Estado | De qué va |
-|---|---|---|
-| [`atomicidad-canje-ticket.md`](./deuda-pre-fase-6/atomicidad-canje-ticket.md) | `done` | R3 — canje de ticket atómico (se elimina el patrón leer→chequear→escribir) |
-| [`hardening-kong-demo-keys.md`](./deuda-pre-fase-6/hardening-kong-demo-keys.md) | `done` | R7 — camino real para reemplazar las demo keys de Kong/Supabase self-hosting |
-| [`restaurar-backup-desde-cloud.md`](./deuda-pre-fase-6/restaurar-backup-desde-cloud.md) | `done` | Restore de emergencia: bajar de Supabase Cloud lo que se perdió en la mini-PC |
-| [`activar-sync-cloud.md`](./deuda-pre-fase-6/activar-sync-cloud.md) | `done` | R2 — validar de punta a punta el sync local→cloud contra el proyecto real |
 
 ### `features/` — mejoras de producto sueltas (fuera de fase)
 
@@ -101,6 +85,7 @@ Plan: [`plans/06-empaquetado/2026-07-13-empaquetado-windows-design.md`](../plans
 | [`export-pdf-historial.md`](./features/export-pdf-historial.md) | `done` | Reemplazar el export CSV por un PDF con `@react-pdf/renderer` |
 | [`acceso-admin-sin-noche.md`](./features/acceso-admin-sin-noche.md) | `done` | Entrar a `/admin` sin noche activa (hoy el gate "Abrir Noche" tapa todo el panel) |
 | [`refactor-ui-bosko/`](./features/refactor-ui-bosko/) | `draft` | Refactor visual skin Bosko (light/dark, tokens, bento); admin shell primero |
+| [`002-onboarding-asistido.md`](./features/002-onboarding-asistido.md) | `draft` | Onboarding asistido con tour interactivo + Help Center por secciones (admin + caja) |
 
 ### Raíz — specs abiertas todavía sin archivar
 
@@ -133,9 +118,18 @@ Planes: [`plans/features/`](../plans/features/) —
 | [`remediacion-integracion-mp.md`](./mercadopago/remediacion-integracion-mp.md) | `in-progress` | Los 12 defectos altos de la integración que entró sin revisión — 6 PRs de remediación (1-4 hechos, 5-6 pendientes) |
 | [`cobro-verificado.md`](./mercadopago/cobro-verificado.md) | `done` | 🚨 Bloqueante — el sistema registra como venta un pago que MP **rechazó**; la venta se concreta si y solo si MP confirmó el cobro (R27) |
 | [`gestion-posnets.md`](./mercadopago/gestion-posnets.md) | `draft` | La pantalla de Posnets es decorativa: el cobro sale por `MP_POS_DEVICE_ID` y no por la caja. Alta/PDV/salud del Posnet desde `/admin` (R23/R24/R25) |
+| [`001-mp-vinculacion-qr-dinamico.md`](./mercadopago/001-mp-vinculacion-qr-dinamico.md) | `in-progress` | Vinculación MP + QR dinámico — spec canónica de la integración (F1–F8) |
 
 Planes: [`plans/mercadopago/`](../plans/mercadopago/) —
-[plan de implementación](../plans/mercadopago/plan-implementacion-mp.md),
-[log de deuda de la remediación](../plans/mercadopago/deuda-remediacion-mp.md).
-Doc de referencia de la API de MP: [`docs/mp/INDEX.md`](../mp/INDEX.md) y
-[`docs/fases-mp/INDEX.md`](../fases-mp/INDEX.md).
+[deuda de la remediación](../plans/mercadopago/deuda-remediacion-mp.md).
+
+### `security/` — auditorías de seguridad
+
+| Spec | Estado | De qué va |
+|---|---|---|
+| [`01-auditoria-seguridad-arquitectura.md`](./security/01-auditoria-seguridad-arquitectura.md) | `done` | Auditoría de seguridad arquitectónica: auth, surface, data, secrets |
+| [`02-evaluacion-tecnica-recomendaciones.md`](./security/02-evaluacion-tecnica-recomendaciones.md) | `done` | Evaluación técnica y recomendaciones de hardening |
+| [`03-resumen-soporte-mercadopago.md`](./security/03-resumen-soporte-mercadopago.md) | `done` | Resumen del soporte de Mercado Pago en el sistema |
+| [`04-auditoria-ciberseguridad.md`](./security/04-auditoria-ciberseguridad.md) | `done` | Auditoría completa con 5 frameworks (MITRE ATT&CK, NIST CSF, ATLAS, D3FEND, NIST AI RMF) |
+| [`05-framework-mappings.md`](./security/05-framework-mappings.md) | `done` | Mapeos detallados ATT&CK/CSF/ATLAS/D3FEND/AI-RMF |
+| [`README-cybersecurity.md`](./security/README-cybersecurity.md) | — | Índice del módulo de ciberseguridad |

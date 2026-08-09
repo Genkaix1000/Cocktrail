@@ -2,10 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { env } from "../../config/env.js";
 import { decryptSecret, encryptSecret } from "../../shared/crypto/aes-gcm.js";
 import {
-  MP_HANDOFF_INFO,
   MP_TOKEN_INFO,
   SellerTokenDecryptError,
-  decryptHandoff,
   decryptTokenForBackfill,
   decryptTokenTolerant,
   encryptToken,
@@ -13,27 +11,23 @@ import {
 
 const CURRENT = "clave-actual-de-cifrado-de-tokens-mp-32chars!!";
 const PREVIOUS = "clave-anterior-antes-de-la-rotacion-32chars!!!";
-const HANDOFF = "clave-del-buzon-de-traspaso-oauth-32-chars!!!!";
 
 // env es un objeto vivo compartido entre tests del worker: se fuerza el estado
 // acá y se restaura al salir (mismo patrón que system.service.test.ts).
-let saved: Partial<Record<"MP_TOKEN_SECRET" | "MP_TOKEN_SECRET_PREVIOUS" | "MP_HANDOFF_KEY", string | undefined>>;
+let saved: Partial<Record<"MP_TOKEN_SECRET" | "MP_TOKEN_SECRET_PREVIOUS", string | undefined>>;
 
 beforeEach(() => {
   saved = {
     MP_TOKEN_SECRET: env.MP_TOKEN_SECRET,
     MP_TOKEN_SECRET_PREVIOUS: env.MP_TOKEN_SECRET_PREVIOUS,
-    MP_HANDOFF_KEY: env.MP_HANDOFF_KEY,
   };
   env.MP_TOKEN_SECRET = CURRENT;
   env.MP_TOKEN_SECRET_PREVIOUS = undefined;
-  env.MP_HANDOFF_KEY = HANDOFF;
 });
 
 afterEach(() => {
   env.MP_TOKEN_SECRET = saved.MP_TOKEN_SECRET;
   env.MP_TOKEN_SECRET_PREVIOUS = saved.MP_TOKEN_SECRET_PREVIOUS;
-  env.MP_HANDOFF_KEY = saved.MP_HANDOFF_KEY;
 });
 
 describe("encryptToken / decryptTokenTolerant", () => {
@@ -101,35 +95,5 @@ describe("decryptTokenForBackfill", () => {
       plaintext: "rotado",
       source: "previous",
     });
-  });
-});
-
-describe("decryptHandoff", () => {
-  const payload = {
-    user_id: "1517393956",
-    access_token: "APP_USR-nuevo",
-    refresh_token: "TG-nuevo",
-    expires_at: "2027-01-19T00:00:00.000Z",
-  };
-
-  it("descifra y valida el payload del buzón", () => {
-    const blob = encryptSecret(JSON.stringify(payload), HANDOFF, MP_HANDOFF_INFO);
-    expect(decryptHandoff(blob)).toEqual(payload);
-  });
-
-  it("sin MP_HANDOFF_KEY lanza un error accionable", () => {
-    env.MP_HANDOFF_KEY = undefined;
-    const blob = encryptSecret(JSON.stringify(payload), HANDOFF, MP_HANDOFF_INFO);
-    expect(() => decryptHandoff(blob)).toThrow(/MP_HANDOFF_KEY/);
-  });
-
-  it("clave desincronizada EF↔backend lanza 'handoff ilegible' (nunca silencioso)", () => {
-    const blob = encryptSecret(JSON.stringify(payload), "otra-clave-que-uso-la-edge-function-32ch!!", MP_HANDOFF_INFO);
-    expect(() => decryptHandoff(blob)).toThrow(/[Hh]andoff ilegible/);
-  });
-
-  it("payload sin campos obligatorios lanza", () => {
-    const blob = encryptSecret(JSON.stringify({ user_id: "1" }), HANDOFF, MP_HANDOFF_INFO);
-    expect(() => decryptHandoff(blob)).toThrow(/inválido/);
   });
 });

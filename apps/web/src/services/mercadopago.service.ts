@@ -192,13 +192,6 @@ export const mercadopagoService = {
     });
   },
 
-  /** Re-intenta bajar el seller desde el buzón de traspaso en Cloud (post-OAuth). */
-  pullSeller() {
-    return apiFetch<{ ok: boolean }>("/api/mercadopago/oauth/pull-seller", {
-      method: "POST",
-    });
-  },
-
   getDeviceStatus() {
     return apiFetch<PosnetDeviceStatus>("/api/mercadopago/device/status");
   },

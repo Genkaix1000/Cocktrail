@@ -42,11 +42,6 @@ import { TestNightBanner } from "@/components/shared/TestNightBanner";
 import HistorialSection from "@/components/admin/HistorialSection";
 import LogsSection from "@/components/admin/LogsSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
-import {
-  MOCK_DEMO_TOTALS,
-  MOCK_DEMO_ORDERS,
-  MOCK_DEMO_HISTORY,
-} from "@/lib/mockDashboard";
 import { formatHm } from "@/lib/utils";
 
 import type {
@@ -137,14 +132,9 @@ export default function AdminClient({
     },
   });
 
-  const [isDemo, setIsDemo] = useState(false);
-
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("demo") === "true") {
-        setIsDemo(true);
-      }
       const tab = params.get("tab");
       if (tab === "pagos") {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -205,17 +195,12 @@ export default function AdminClient({
   );
 
   const isNightOpen = event?.status === "activo";
-  const effectiveHistoryEvents = useMemo(() => {
-    if (isDemo && historyEvents.length === 0) return MOCK_DEMO_HISTORY;
-    return historyEvents;
-  }, [isDemo, historyEvents]);
-
-  const lastNight = effectiveHistoryEvents[0] ?? null;
+  const lastNight = historyEvents[0] ?? null;
   const dashboardTotals = useMemo(
-    () => (isDemo ? MOCK_DEMO_TOTALS : isNightOpen ? totals : lastNight?.totals ?? EMPTY_TOTALS),
-    [isDemo, isNightOpen, totals, lastNight],
+    () => (isNightOpen ? totals : lastNight?.totals ?? EMPTY_TOTALS),
+    [isNightOpen, totals, lastNight],
   );
-  const dashboardOrders = isDemo ? MOCK_DEMO_ORDERS : isNightOpen ? orders : lastNight?.orders ?? [];
+  const dashboardOrders = isNightOpen ? orders : lastNight?.orders ?? [];
   const dashboardStartedAt = isNightOpen ? event?.startedAt : lastNight?.startedAt;
 
   const customPaymentBreakdown = useMemo(() => {

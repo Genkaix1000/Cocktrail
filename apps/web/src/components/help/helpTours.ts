@@ -1,22 +1,7 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  BarChart3,
-  Coffee,
-  CreditCard,
-  HelpCircle,
-  History,
-  LayoutDashboard,
-  SearchCheck,
-  Settings,
-  ShoppingCart,
-  Users,
-} from "lucide-react";
-
 import type { TourStep } from "@/components/tour/tourSteps";
 import { endAuditDemo, startAuditDemo } from "@/lib/auditTourDemo";
 
 export const HELP_GENERAL_SEEN_KEY = "cocktrail_help_general_seen";
-export const HELP_DONE_KEY = "cocktrail_help_done";
 
 export type HelpRole = "admin" | "caja";
 
@@ -35,16 +20,9 @@ export type HelpCategoryId =
 
 export type HelpCategory = {
   id: HelpCategoryId;
-  title: string;
-  description: string;
-  tips?: string[];
-  icon: LucideIcon;
-  /** Si true, los pasos se cargan async (Pagos / MP). */
   dynamicSteps?: boolean;
   steps: TourStep[];
-  /** Corre antes de arrancar el tour. Devuelve data que se pasa a onEnd. */
   onStart?: () => Promise<unknown>;
-  /** Corre al terminar el tour (done o skip). Recibe lo que devolvió onStart. */
   onEnd?: (ctx: unknown) => Promise<void>;
 };
 
@@ -82,28 +60,6 @@ export function markHelpGeneralSeen(): void {
   } catch {
     /* private mode */
   }
-}
-
-export function readCompletedCategories(): HelpCategoryId[] {
-  try {
-    const raw = localStorage.getItem(HELP_DONE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x): x is HelpCategoryId => typeof x === "string");
-  } catch {
-    return [];
-  }
-}
-
-export function markCategoryDone(id: HelpCategoryId): HelpCategoryId[] {
-  const next = [...new Set([...readCompletedCategories(), id])];
-  try {
-    localStorage.setItem(HELP_DONE_KEY, JSON.stringify(next));
-  } catch {
-    /* private mode */
-  }
-  return next;
 }
 
 export type AdminNightConfig = {
@@ -187,17 +143,10 @@ function adminGeneralSteps(cfg: AdminNightConfig): TourStep[] {
 const ADMIN_CATEGORIES: HelpCategory[] = [
   {
     id: "general",
-    title: "Ayuda General",
-    description: "Onboarding: app de caja, navegación y Mercado Pago.",
-    tips: ["Cada sección tiene su propio ? para un tour corto."],
-    icon: HelpCircle,
     steps: [], // filled at runtime via getCategories
   },
   {
     id: "dashboard",
-    title: "Dashboard",
-    description: "Estado de la noche, métricas y desglose de pagos.",
-    icon: LayoutDashboard,
     steps: [
       step({
         id: "dash-header",
@@ -267,9 +216,6 @@ const ADMIN_CATEGORIES: HelpCategory[] = [
   },
   {
     id: "historial",
-    title: "Historial de Noches",
-    description: "Noches cerradas, analíticas y borrado.",
-    icon: History,
     steps: [
       step({
         id: "hist-header",
@@ -318,10 +264,6 @@ const ADMIN_CATEGORIES: HelpCategory[] = [
   },
   {
     id: "auditoria",
-    title: "Auditoría de Tickets",
-    description: "Buscá tickets, filtrá y revisá el detalle.",
-    tips: ["El tour carga tickets de ejemplo en pantalla; no hace falta abrir una noche."],
-    icon: SearchCheck,
     onStart: auditoriaOnStart,
     onEnd: auditoriaOnEnd,
     steps: [
@@ -388,10 +330,6 @@ const ADMIN_CATEGORIES: HelpCategory[] = [
   },
   {
     id: "carta",
-    title: "Carta",
-    description: "Productos, categorías y columnas de la grilla.",
-    tips: ["Podés desactivar un trago sin borrarlo."],
-    icon: Coffee,
     steps: [
       step({
         id: "carta-header",
@@ -457,9 +395,6 @@ const ADMIN_CATEGORIES: HelpCategory[] = [
   },
   {
     id: "staff",
-    title: "Gestión de Staff",
-    description: "Usuarios, roles y permisos.",
-    icon: Users,
     steps: [
       step({
         id: "staff-table",
@@ -491,10 +426,6 @@ const ADMIN_CATEGORIES: HelpCategory[] = [
   },
   {
     id: "pagos",
-    title: "Pagos",
-    description: "Mercado Pago, sucursal, PDVs, Posnets y sesiones.",
-    tips: ["Si vinculás MP, el recorrido retoma solo al volver."],
-    icon: CreditCard,
     steps: [
       step({
         id: "pagos-header",
@@ -556,9 +487,6 @@ const ADMIN_CATEGORIES: HelpCategory[] = [
   },
   {
     id: "sistema",
-    title: "Sistema",
-    description: "App de caja para la tablet e impresión.",
-    icon: Settings,
     steps: [
       step({
         id: "sys-section",
@@ -762,17 +690,10 @@ export function getCategories(
   const cats: HelpCategory[] = [
     {
       id: "general",
-      title: "Ayuda General",
-      description: "Cómo vender, cobrar y consultar la noche desde la caja.",
-      tips: ["La impresora se vincula desde el menú lateral."],
-      icon: HelpCircle,
       steps: cajaGeneralSteps(cfg),
     },
     {
       id: "venta",
-      title: "Nueva Venta",
-      description: "Grilla, carrito y cobro.",
-      icon: ShoppingCart,
       steps: [
         step({
           id: "venta-grid",
@@ -820,9 +741,6 @@ export function getCategories(
   if (cfg.hasHistorial) {
     cats.push({
       id: "caja-historial",
-      title: "Historial de Ventas",
-      description: "Tickets de la noche, reimpresión y cancelación.",
-      icon: History,
       steps: [
         step({
           id: "caja-hist-orders",
@@ -850,9 +768,6 @@ export function getCategories(
   if (cfg.hasMetricas) {
     cats.push({
       id: "metricas",
-      title: "Métricas",
-      description: "Totales y desglose de la noche en vivo.",
-      icon: BarChart3,
       steps: [
         step({
           id: "metr-totals",

@@ -7,7 +7,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
 
@@ -15,9 +14,7 @@ import { TourProvider, useTour, type TourEndReason } from "@/components/tour/Tou
 import {
   getCategories,
   hasSeenHelpGeneral,
-  markCategoryDone,
   markHelpGeneralSeen,
-  readCompletedCategories,
   type AdminNightConfig,
   type CajaHelpConfig,
   type HelpCategoryId,
@@ -25,7 +22,6 @@ import {
 } from "./helpTours";
 
 type HelpApi = {
-  completedCategories: HelpCategoryId[];
   /** Tour de onboarding (topbar ?). */
   startGeneralTour: () => Promise<void>;
   /** Tour de una sección (hint ? contextual). */
@@ -57,14 +53,12 @@ function HelpBridge({
   role,
   cajaConfig,
   adminNightConfig,
-  completedCategories,
   children,
   cleanupRef,
 }: {
   role: HelpRole;
   cajaConfig?: CajaHelpConfig;
   adminNightConfig?: AdminNightConfig;
-  completedCategories: HelpCategoryId[];
   children: ReactNode;
   cleanupRef: React.MutableRefObject<(() => Promise<void>) | null>;
 }) {
@@ -84,7 +78,6 @@ function HelpBridge({
       startingRef.current = true;
       try {
         const steps = cat.steps;
-
         if (steps.length === 0) return;
 
         const startCtx = await cat.onStart?.();
@@ -97,7 +90,7 @@ function HelpBridge({
         startingRef.current = false;
       }
     },
-    [categories, tour],
+    [categories, tour, cleanupRef],
   );
 
   const startGeneralTour = useCallback(
@@ -105,7 +98,6 @@ function HelpBridge({
     [startTour],
   );
 
-  // First visit: arranca el tour general (no hay panel).
   useEffect(() => {
     if (hasSeenHelpGeneral()) return;
     markHelpGeneralSeen();
@@ -116,7 +108,6 @@ function HelpBridge({
   }, [startGeneralTour]);
 
   const api: HelpApi = {
-    completedCategories,
     startGeneralTour,
     startTour,
   };
@@ -132,19 +123,12 @@ export function HelpCenterProvider({
   adminNightConfig,
   children,
 }: Props) {
-  const [completedCategories, setCompletedCategories] = useState<HelpCategoryId[]>(() =>
-    readCompletedCategories(),
-  );
   const cleanupRef = useRef<(() => Promise<void>) | null>(null);
 
-  const handleTourEnd = useCallback((reason: TourEndReason, meta?: { categoryId?: string }) => {
-    // Call cleanup first (e.g. cancel test ticket for auditoría)
+  const handleTourEnd = useCallback((_reason: TourEndReason, _meta?: { categoryId?: string }) => {
     const cleanup = cleanupRef.current;
     cleanupRef.current = null;
     if (cleanup) void cleanup();
-
-    if (reason !== "done" || !meta?.categoryId) return;
-    setCompletedCategories(markCategoryDone(meta.categoryId as HelpCategoryId));
   }, []);
 
   return (
@@ -160,7 +144,6 @@ export function HelpCenterProvider({
           role={role}
           cajaConfig={cajaConfig}
           adminNightConfig={adminNightConfig}
-          completedCategories={completedCategories}
           cleanupRef={cleanupRef}
         >
           {children}

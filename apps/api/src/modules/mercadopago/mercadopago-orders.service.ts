@@ -349,7 +349,7 @@ export class MercadoPagoOrdersService {
       status: "processed" as const,
       paymentId,
       paidAmount,
-      feeStatus: "pending",
+      feeStatus: "pending" as const,
       verifiedAt: new Date().toISOString(),
       verificationError: null,
       ...(payment?.status_detail ? { paymentStatusDetail: payment.status_detail } : {}),

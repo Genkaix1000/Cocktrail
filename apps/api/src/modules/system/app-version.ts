@@ -1,3 +1,5 @@
+import { loadReleaseNotes, type ReleaseNotes } from "./changelog.js";
+
 /**
  * Versión de producto (semver). Override con APP_VERSION / APP_CHANNEL en env
  * si un deploy necesita etiquetar distinto sin tocar código.
@@ -29,6 +31,8 @@ export type AppVersionInfo = {
     pendingCount: number;
     lastApplied: string | null;
   };
+  /** Novedades de esta versión (desde CHANGELOG.md). */
+  releaseNotes: ReleaseNotes | null;
 };
 
 function shortSha(sha: string | null | undefined): string | null {
@@ -85,5 +89,6 @@ export function buildAppVersionInfo(input: {
       pendingCount: input.migrations.pending.length,
       lastApplied: applied.length > 0 ? applied[applied.length - 1]! : null,
     },
+    releaseNotes: loadReleaseNotes(version),
   };
 }

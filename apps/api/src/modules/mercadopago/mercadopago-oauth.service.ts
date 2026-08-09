@@ -46,13 +46,6 @@ export type SellerStatusResult = {
   hasRefreshToken: boolean;
 };
 
-/** Resultado del pull del buzón (deprecated F0 — siempre no-op). */
-export type PullSellerResult = {
-  pulled: boolean;
-  userId?: string;
-  reason?: string;
-};
-
 /**
  * Origen permitido para el redirect post-OAuth (anti open-redirect).
  * Acepta FRONTEND_URL, localhost y LAN privada (donde corrés en el boliche).
@@ -247,20 +240,8 @@ export class MercadoPagoOAuthService {
   }
 
   /**
-   * @deprecated F0 — la Edge Function escribe tokens cifrados directo en
-   * `mercadopago_sellers`. El buzón `mercadopago_seller_handoff` ya no se usa.
-   */
-  async pullSellerFromCloud(): Promise<PullSellerResult> {
-    return {
-      pulled: false,
-      reason: "Deprecated: la Edge Function persiste tokens cifrados directo en mercadopago_sellers (F0).",
-    };
-  }
-
-  /**
    * Desvincular (D9/A18): wipe de tokens + status expired — NUNCA DELETE, la
-   * FK mercadopago_cajas.seller_user_id lo impide. Limpia handoffs residuales
-   * y bars.seller_user_id.
+   * FK mercadopago_cajas.seller_user_id lo impide. Limpia bars.seller_user_id.
    */
   async unlinkSeller(): Promise<{ ok: true; cloudCleaned: boolean }> {
     const wiped = await this.sellersRepo.wipeAllTokens();
@@ -271,13 +252,6 @@ export class MercadoPagoOAuthService {
     let cloudCleaned = false;
     if (this.cloudDb) {
       try {
-        // Higiene: buzón legado + bars (wipeAllTokens ya limpió sellers).
-        const { error: handoffErr } = await this.cloudDb
-          .from("mercadopago_seller_handoff")
-          .delete()
-          .neq("user_id", "");
-        if (handoffErr) throw new Error(`mercadopago_seller_handoff: ${handoffErr.message}`);
-
         const { error: barsErr } = await this.cloudDb
           .from("bars")
           .update({ seller_user_id: null })

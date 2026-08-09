@@ -1,7 +1,9 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, GitBranch, RefreshCw, Server } from "lucide-react";
 import { SectionHelpButton } from "@/components/help/SectionHelpButton";
+import { systemService, type AppVersionInfo } from "@/services/system.service";
 
 const CAJA_APK_HREF = "/miboliche-caja.apk";
 
@@ -21,11 +23,61 @@ const STEPS = [
   "Enchufá la impresora y tocá «Permitir» cuando aparezca el aviso.",
 ];
 
+function formatUptime(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  if (h < 48) return remM ? `${h}h ${remM}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH ? `${d}d ${remH}h` : `${d}d`;
+}
+
+function providerLabel(provider: AppVersionInfo["deploy"]["provider"]): string {
+  if (provider === "render") return "Render";
+  if (provider === "local") return "Local";
+  return "Desconocido";
+}
+
+function VersionRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <dt className="text-[12px] text-[var(--text-tertiary)] shrink-0">{label}</dt>
+      <dd className="text-[12px] font-medium text-[var(--text-primary)] text-right tabular truncate min-w-0">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 /**
  * Sección "Sistema" de Configuración en /admin — app de caja para la tablet
- * (WebView + impresión USB nativa).
+ * (WebView + impresión USB nativa) + versión / deploy.
  */
 export default function SistemaSection() {
+  const [version, setVersion] = useState<AppVersionInfo | null>(null);
+  const [versionError, setVersionError] = useState<string | null>(null);
+  const [loadingVersion, setLoadingVersion] = useState(true);
+
+  const loadVersion = async () => {
+    setLoadingVersion(true);
+    setVersionError(null);
+    try {
+      setVersion(await systemService.getVersion());
+    } catch {
+      setVersionError("No se pudo leer la versión del servidor.");
+      setVersion(null);
+    } finally {
+      setLoadingVersion(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadVersion();
+  }, []);
+
   return (
     <div data-tour="sistema-section" className="max-w-5xl flex flex-col gap-8">
       <div className="flex items-start justify-between gap-3">
@@ -34,7 +86,7 @@ export default function SistemaSection() {
             Sistema
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
-            La app de caja para la tablet
+            App de caja, versión y datos del deploy
           </p>
         </div>
         <SectionHelpButton category="sistema" />
@@ -93,6 +145,117 @@ export default function SistemaSection() {
               </li>
             ))}
           </ol>
+        </div>
+
+        {/* Versión / deploy */}
+        <div
+          data-tour="sistema-version"
+          className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 flex flex-col shadow-card"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent-primary)] shrink-0">
+                <Server size={16} strokeWidth={1.8} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Versión</h3>
+                <p className="text-[12px] text-[var(--text-tertiary)]">
+                  Build que está corriendo este servidor
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadVersion()}
+              disabled={loadingVersion}
+              aria-label="Actualizar versión"
+              className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loadingVersion ? "animate-spin" : ""} />
+            </button>
+          </div>
+
+          {versionError && (
+            <p className="mt-4 text-[12px] text-[var(--danger-base)]" role="alert">
+              {versionError}
+            </p>
+          )}
+
+          {loadingVersion && !version ? (
+            <p className="mt-6 text-[12px] text-[var(--text-tertiary)]">Cargando…</p>
+          ) : version ? (
+            <>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center h-8 px-3 rounded-full bg-[var(--accent-surface)] text-[var(--accent-text)] border border-[var(--accent-line)] text-[13px] font-semibold tabular">
+                  v{version.version}
+                </span>
+                <span className="inline-flex items-center h-8 px-3 rounded-full bg-[var(--amber-soft)] text-[var(--amber-base)] border border-[var(--amber-line)] text-[12px] font-semibold uppercase tracking-wide">
+                  {version.channel}
+                </span>
+              </div>
+
+              <dl className="mt-4 divide-y divide-[var(--border-subtle)]">
+                <VersionRow label="Etiqueta" value={version.label} />
+                <VersionRow label="Entorno" value={version.environment} />
+                <VersionRow label="Hosting" value={providerLabel(version.deploy.provider)} />
+                {version.deploy.service && (
+                  <VersionRow label="Servicio" value={version.deploy.service} />
+                )}
+                {version.deploy.branch && (
+                  <VersionRow label="Rama" value={version.deploy.branch} />
+                )}
+                {version.deploy.commitShort && (
+                  <VersionRow label="Commit" value={version.deploy.commitShort} />
+                )}
+                <VersionRow label="Uptime" value={formatUptime(version.runtime.uptimeSec)} />
+                <VersionRow label="Node" value={version.runtime.node} />
+                <VersionRow
+                  label="Migraciones"
+                  value={
+                    version.migrations.pendingCount > 0
+                      ? `${version.migrations.state} · ${version.migrations.pendingCount} pend.`
+                      : version.migrations.state
+                  }
+                />
+              </dl>
+
+              {version.deploy.externalUrl && (
+                <p className="mt-3 text-[11px] text-[var(--text-tertiary)] flex items-center gap-1.5 truncate">
+                  <GitBranch size={11} className="shrink-0" aria-hidden />
+                  <span className="truncate">{version.deploy.externalUrl}</span>
+                </p>
+              )}
+
+              {version.releaseNotes && version.releaseNotes.highlights.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                  <div className="flex items-baseline justify-between gap-2 mb-2">
+                    <h4 className="text-[12px] font-semibold text-[var(--text-primary)]">
+                      Novedades de esta versión
+                    </h4>
+                    {version.releaseNotes.date && (
+                      <span className="text-[11px] text-[var(--text-tertiary)] tabular shrink-0">
+                        {version.releaseNotes.date}
+                      </span>
+                    )}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {version.releaseNotes.highlights.map((item) => (
+                      <li
+                        key={item}
+                        className="flex gap-2 text-[12px] text-[var(--text-secondary)] leading-snug"
+                      >
+                        <span
+                          className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] shrink-0"
+                          aria-hidden
+                        />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : null}
         </div>
       </div>
     </div>

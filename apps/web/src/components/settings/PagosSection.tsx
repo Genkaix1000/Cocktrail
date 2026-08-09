@@ -147,6 +147,10 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
         email: null,
         linkedAt: null,
         displayName: null,
+        userId: null,
+        expiresAt: null,
+        hasAccessToken: false,
+        hasRefreshToken: false,
       });
       setCloudCleanupPending(res.cloudCleaned === false);
       setUnlinkDone(true);

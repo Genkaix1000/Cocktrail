@@ -9,11 +9,11 @@ import { drinkCategoriesService } from "@/services/drink-categories.service";
 import { authService } from "@/services/auth.service";
 import {
   barSessionsService,
-  setActiveBarContext,
   type BarSession,
   type BarSessionOption,
   type BarSessionOptions,
 } from "@/services/bar-sessions.service";
+import { setActiveBarContext } from "@/lib/bar-context";
 import { ApiError } from "@/services/api-client";
 import { useSSE } from "@/lib/useSSE";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";

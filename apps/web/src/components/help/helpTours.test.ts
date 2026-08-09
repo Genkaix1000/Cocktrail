@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  HELP_DONE_KEY,
   HELP_GENERAL_SEEN_KEY,
   getCategories,
   hasSeenHelpGeneral,
-  markCategoryDone,
   markHelpGeneralSeen,
-  readCompletedCategories,
 } from "./helpTours";
 
 describe("helpTours storage", () => {
@@ -24,15 +21,6 @@ describe("helpTours storage", () => {
   it("migra tour lineal viejo como seen", () => {
     localStorage.setItem("cocktrail_tour_seen_admin", "1");
     expect(hasSeenHelpGeneral()).toBe(true);
-  });
-
-  it("markCategoryDone acumula ids en localStorage", () => {
-    expect(readCompletedCategories()).toEqual([]);
-    markCategoryDone("dashboard");
-    markCategoryDone("pagos");
-    markCategoryDone("dashboard");
-    expect(readCompletedCategories()).toEqual(["dashboard", "pagos"]);
-    expect(JSON.parse(localStorage.getItem(HELP_DONE_KEY)!)).toEqual(["dashboard", "pagos"]);
   });
 });
 

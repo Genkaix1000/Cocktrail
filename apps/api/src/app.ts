@@ -245,17 +245,7 @@ const mpWebhooksService = new MercadoPagoWebhooksService(
   emit,
 );
 
-// T18: el bloque posnet de getStatus() usa la MISMA verdad que el cobro (el
-// resolver), vía peek() — sin marcar el flag de uso de env (eso es de cobros).
-// El `?? env.BAR_CODE` replica el contexto que arma mpContextMiddleware.
-const systemService = new SystemService(
-  eventsRepo,
-  mpService,
-  printerService,
-  supabase,
-  async () => posnetResolver.peek((await resolveInstallationBarId()) ?? env.BAR_CODE),
-  new PgMigrationsRepository(env.DATABASE_URL),
-);
+const systemService = new SystemService(new PgMigrationsRepository(env.DATABASE_URL));
 
 // ── Express App ──
 
@@ -352,7 +342,7 @@ app.use(
 );
 app.use("/api/bar-sessions", createBarSessionsController(barSessionsService));
 app.use("/api/printer", createPrinterController(printerService, ordersRepo, eventsService));
-app.use("/api/system", createSystemController(usersRepo, systemService));
+app.use("/api/system", createSystemController(systemService));
 app.use("/api", createEventsController(eventsService, usersRepo, nightDeletionService));
 
 // Error handler global (ÚLTIMO)

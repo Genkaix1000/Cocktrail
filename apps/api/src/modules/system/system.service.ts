@@ -1,9 +1,3 @@
-import { exec } from "node:child_process";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { EventsRepository } from "../events/events.repository.js";
-import type { MercadoPagoService } from "../mercadopago/mercadopago.service.js";
-import type { ResolvedPosnet } from "../mercadopago/posnet-resolver.service.js";
-import type { PrinterService } from "../printer/printer.service.js";
 import {
   getMigrationsStatus,
   isDegraded,
@@ -31,23 +25,6 @@ export type SystemHealth = {
   serverStartedAt: number;
 };
 
-export type SystemStatus = {
-  internet: { connected: boolean };
-  localDb: { connected: boolean };
-  posnet: {
-    connected: boolean;
-    configured: boolean;
-    paired: boolean;
-    deviceId: string | null;
-    message: string;
-    details: unknown;
-  };
-  printer: ReturnType<PrinterService["getStatus"]>;
-  eventDetails: { id: string; status: string; orderCounter: number } | null;
-  serverStartedAt: number;
-  migrations: MigrationsStatus;
-};
-
 /**
  * Lógica de negocio de `/api/system` — antes vivía inline en los route handlers de
  * system.controller.ts (sin capa Service, la única excepción a Controller→Service→
@@ -55,17 +32,6 @@ export type SystemStatus = {
  */
 export class SystemService {
   constructor(
-    private eventsRepo: EventsRepository,
-    private mpService: MercadoPagoService,
-    private printerService: PrinterService,
-    private localDb: SupabaseClient,
-    /**
-     * T18 (gestion-posnets): el device del bloque `posnet` sale del
-     * PosnetResolver — la MISMA verdad que el cobro (caja → device activo, env
-     * como último recurso) — nunca más de `env.MP_POS_DEVICE_ID` directo.
-     * app.ts inyecta `peek()` (sin efectos: reportar no es cobrar).
-     */
-    private resolvePosnetForStatus: () => Promise<ResolvedPosnet>,
     /** Solo para accept-drift — conexión directa a Postgres (mismo que el runner). */
     private migrationsRepo?: PgMigrationsRepository,
   ) {}
@@ -94,10 +60,9 @@ export class SystemService {
   }
 
   /**
-   * Liviano (lee un singleton en memoria, sin I/O) — a diferencia de
-   * getStatus(), que hace fetchs con timeout y está rate-limiteado. Lo
-   * pollea el banner de migraciones de /admin. El singleton se lee directo
-   * (sin DI): lo escribe solo el runner del boot y es el diseño del estado.
+   * Liviano (lee un singleton en memoria, sin I/O). Lo pollea el banner de
+   * migraciones de /admin. El singleton se lee directo (sin DI): lo escribe
+   * solo el runner del boot y es el diseño del estado.
    */
   getHealth(): SystemHealth {
     const migrations = getMigrationsStatus();
@@ -127,125 +92,5 @@ export class SystemService {
   /** F1.c — re-evaluación on-demand del preflight (nunca lanza). */
   async refreshMpFallback(): Promise<MpFallbackStatus> {
     return runMpFallbackPreflight();
-  }
-
-  async checkInternet(): Promise<boolean> {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch("https://1.1.1.1", { method: "HEAD", signal: controller.signal });
-      clearTimeout(timeout);
-      return res.ok;
-    } catch {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2000);
-        const res = await fetch("https://api.mercadopago.com", { method: "HEAD", signal: controller.signal });
-        clearTimeout(timeout);
-        return res.ok;
-      } catch {
-        return false;
-      }
-    }
-  }
-
-  async getStatus(): Promise<SystemStatus> {
-    const internetPromise = this.checkInternet();
-
-    // Local Database Check
-    let localDbConnected = false;
-    try {
-      const { error } = await this.localDb.from("users").select("id").limit(1);
-      localDbConnected = !error;
-    } catch {}
-
-    // Posnet Check — vía PosnetResolver (T18): el mismo device que usaría el
-    // cobro. `configured` = hay un device resoluble (caja o env-fallback);
-    // "caja sin Posnet vinculado" llega como estado con el mensaje del 409 del
-    // resolver, nunca como un error del endpoint.
-    let posnetConfigured = false;
-    let posnetConnected = false;
-    let posnetDeviceId: string | null = null;
-    let posnetMessage = "No configurado";
-    let posnetDetails: unknown = null;
-    try {
-      const resolved = await this.resolvePosnetForStatus();
-      posnetConfigured = true;
-      posnetDeviceId = resolved.deviceId;
-      try {
-        const check = await this.mpService.checkDeviceConnection(resolved.deviceId);
-        posnetConnected = check.connected;
-        posnetMessage = check.message;
-        posnetDetails = check.device || null;
-      } catch (err) {
-        posnetConnected = false;
-        posnetMessage =
-          err instanceof Error ? err.message : "Error al conectar con Posnet API";
-      }
-      if (resolved.source === "env") {
-        // D2: cobrar por la env es el último recurso y tiene que ser VISIBLE.
-        posnetMessage =
-          `${posnetMessage} — Se cobra por MP_POS_DEVICE_ID de la env (último recurso): ` +
-          "vinculá el Posnet a la caja desde /admin → Pagos.";
-      }
-    } catch (err) {
-      posnetMessage =
-        err instanceof Error ? err.message : "No se pudo resolver el Posnet de la caja.";
-    }
-
-    const internetConnected = await internetPromise;
-
-    // Current Night Event check
-    let eventDetails: SystemStatus["eventDetails"] = null;
-    try {
-      const active = await this.eventsRepo.getActive();
-      if (active) {
-        eventDetails = {
-          id: active.id,
-          status: active.status,
-          orderCounter: active.orderCounter || 0,
-        };
-      }
-    } catch {}
-
-    return {
-      internet: { connected: internetConnected },
-      localDb: { connected: localDbConnected },
-      posnet: {
-        connected: posnetConnected,
-        configured: posnetConfigured,
-        paired: posnetConnected,
-        deviceId: posnetDeviceId,
-        message: posnetMessage,
-        details: posnetDetails,
-      },
-      printer: this.printerService.getStatus(),
-      eventDetails,
-      serverStartedAt,
-      migrations: getMigrationsStatus(),
-    };
-  }
-
-  /** Apaga docker compose + supabase CLI y sale del proceso. No devuelve — quien llama ya respondió al cliente antes de invocar esto. */
-  shutdown(initiatedBy: string): void {
-    console.log("[SystemService] ⚠️ Shutdown initiated by user:", initiatedBy);
-    exec("docker compose down", (errorDocker, stdoutDocker, stderrDocker) => {
-      if (errorDocker) {
-        console.error(`[SystemService] Error executing docker compose down: ${errorDocker.message}`);
-      }
-      console.log(`[SystemService] Docker compose output: ${stdoutDocker || stderrDocker}`);
-
-      exec("pnpm exec supabase stop", (errorSupa, stdoutSupa, stderrSupa) => {
-        if (errorSupa) {
-          console.error(`[SystemService] Error executing supabase stop: ${errorSupa.message}`);
-        }
-        console.log(`[SystemService] Supabase stop output: ${stdoutSupa || stderrSupa}`);
-
-        setTimeout(() => {
-          console.log("[SystemService] Exiting Node process...");
-          process.exit(0);
-        }, 1000);
-      });
-    });
   }
 }

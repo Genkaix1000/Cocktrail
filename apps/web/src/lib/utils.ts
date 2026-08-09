@@ -32,10 +32,7 @@ export function randomId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-export const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
 /** "14 jul" */
 export function formatShortDate(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+  return new Date(ts).toLocaleDateString("es-AR", { day: "numeric", month: "short" });
 }

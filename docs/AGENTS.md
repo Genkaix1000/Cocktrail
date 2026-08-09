@@ -35,7 +35,7 @@ Por eso, los skills que queremos que Claude use los **copiamos** a `.claude/skil
 | `design-taste-frontend`, `gpt-taste`, `minimalist-ui`, `full-output-enforcement` | ⬜ solo en `.agents/skills` | `Leonxlnx/taste-skill` | Estética/UI del frontend. Copiar a `.claude/skills/` si se quiere usarlas en UI (ojo: `full-output-enforcement` cambia el comportamiento de salida). |
 
 - **Agregar una skill nueva (versionada)**: `npx -y skills add <owner/repo> --skill <nombre> --agent claude-code` (actualiza `.agents/skills/` + `skills-lock.json`), y luego `cp -r .agents/skills/<nombre> .claude/skills/<nombre>` para que Claude la detecte.
-- **Routing**: qué agente/skill usar según la tarea está en `CLAUDE.md` §4.
+- **Routing**: qué agente/skill usar según la tarea está en `docs/ARCHITECTURE.md` §4.
 
 ---
 

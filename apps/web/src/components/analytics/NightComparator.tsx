@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { UnifiedNightDay } from "@/lib/analytics";
 import { formatNightDateLong, formatEventDuration } from "@/lib/analytics";
-import { formatHm, formatMoney, MONTHS_SHORT } from "@/lib/utils";
+import { formatHm, formatMoney } from "@/lib/utils";
 import { displayRevenue } from "@cocktrail/shared";
 
 type Props = {
@@ -23,10 +23,11 @@ type Props = {
   onRedirectToLogs: (ts: number) => void;
 };
 
-const WEEKDAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 function formatNightDate(ts: number): string {
   const d = new Date(ts);
-  return `${WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+  const wd = d.toLocaleDateString("es-AR", { weekday: "short" }).replace(/[.,]/g, "");
+  const mo = d.toLocaleDateString("es-AR", { month: "short" });
+  return `${wd} ${d.getDate()} ${mo}`;
 }
 
 function getDurationMs(e: UnifiedNightDay): number | null {

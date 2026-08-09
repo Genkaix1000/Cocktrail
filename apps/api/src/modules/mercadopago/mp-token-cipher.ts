@@ -1,25 +1,11 @@
 import { env } from "../../config/env.js";
 import { decryptSecret, encryptSecret } from "../../shared/crypto/aes-gcm.js";
 
-/**
- * Cifrado de los tokens del seller. F0: la Edge Function escribe con
- * `cocktrail/mp-token/v1`. `MP_HANDOFF_INFO` queda por si hay blobs residuales
- * del buzón deprecated.
- */
+/** Cifrado de los tokens del seller (`cocktrail/mp-token/v1`). */
 export const MP_TOKEN_INFO = "cocktrail/mp-token/v1";
-export const MP_HANDOFF_INFO = "cocktrail/mp-handoff/v1";
 
 /** key_version que escribe este código. NULL en DB = texto claro legacy. */
 export const MP_TOKEN_KEY_VERSION = 1;
-
-/** Payload del buzón de traspaso (JSON en claro antes de cifrar) — contrato con la Edge Function. */
-export type HandoffPayload = {
-  user_id: string;
-  access_token: string;
-  refresh_token: string | null;
-  /** ISO string. */
-  expires_at: string;
-};
 
 /**
  * Error tipado: hay un blob cifrado pero ninguna clave lo abre
@@ -99,28 +85,4 @@ export function decryptTokenForBackfill(
     }
     throw new SellerTokenDecryptError(userId);
   }
-}
-
-/** Descifra el payload del buzón de traspaso (cifrado por la Edge Function con MP_HANDOFF_KEY). */
-export function decryptHandoff(payloadEnc: string): HandoffPayload {
-  if (!env.MP_HANDOFF_KEY) {
-    throw new Error(
-      "MP_HANDOFF_KEY no está configurada en apps/api/.env — sin ella no se puede " +
-        "leer el buzón de traspaso del OAuth. Debe ser la MISMA que el secret de la Edge Function.",
-    );
-  }
-  let json: string;
-  try {
-    json = decryptSecret(payloadEnc, env.MP_HANDOFF_KEY, MP_HANDOFF_INFO);
-  } catch {
-    throw new Error(
-      "Handoff ilegible: verificá que MP_HANDOFF_KEY sea idéntica en apps/api/.env " +
-        "y en los secrets de la Edge Function (supabase secrets set MP_HANDOFF_KEY=...).",
-    );
-  }
-  const payload = JSON.parse(json) as HandoffPayload;
-  if (!payload.user_id || !payload.access_token || !payload.expires_at) {
-    throw new Error("Handoff inválido: el payload descifrado no tiene user_id/access_token/expires_at.");
-  }
-  return payload;
 }

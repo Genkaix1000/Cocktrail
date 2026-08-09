@@ -55,7 +55,7 @@ const POSNET_RECHAZO_POR_DETALLE: Record<string, string> = {
 
 /** La caja no tiene Posnet activo vinculado (409 POSNET_NOT_LINKED del resolver). */
 /** Noche de prueba: MP queda bloqueado (C1). Defensa en profundidad — el server rechaza con 409. */
-export const NOCHE_PRUEBA_SOLO_EFECTIVO_MSG = "Noche de prueba: solo efectivo.";
+const NOCHE_PRUEBA_SOLO_EFECTIVO_MSG = "Noche de prueba: solo efectivo.";
 
 const POSNET_NOT_LINKED_MSG =
   "Esta caja no tiene Posnet vinculado — vinculá un lector desde /admin → PDV y Posnets " +

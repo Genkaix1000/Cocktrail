@@ -42,10 +42,8 @@ const EnvSchema = z.object({
   // MP_TOKEN_SECRET: ikm del cifrado de tokens del seller (si falta, AUTH_SECRET).
   // Misma clave en la Edge Function `mp-auth-callback` (F0).
   // MP_TOKEN_SECRET_PREVIOUS: clave anterior durante una rotación (se re-cifra en boot).
-  // MP_HANDOFF_KEY: deprecated F0 (buzón mercadopago_seller_handoff ya no se escribe).
   MP_TOKEN_SECRET: z.string().min(32, "MP_TOKEN_SECRET debe tener al menos 32 caracteres").optional(),
   MP_TOKEN_SECRET_PREVIOUS: z.string().min(32).optional(),
-  MP_HANDOFF_KEY: z.string().min(32, "MP_HANDOFF_KEY debe tener al menos 32 caracteres").optional(),
 
   // Mercado Pago — OAuth (multi-seller, Fase 1). Credenciales de la app Cocktrail.
   // Para el split prod/test, apuntar estas 3 a las credenciales del entorno activo.

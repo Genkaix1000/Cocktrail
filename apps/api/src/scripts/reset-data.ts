@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Tablas que se vacían en un reset: lo TRANSACCIONAL (cobros, noches,
- * usuarios, auditoría). `night_events` arrastra `orders`, `cash_sales`
- * (y transitivamente `tickets`) por ON DELETE CASCADE — no hace falta
+ * usuarios, auditoría). `night_events` arrastra `orders` (y
+ * transitivamente `tickets`) por ON DELETE CASCADE — no hace falta
  * listarlas aparte.
  *
  * El ORDEN importa: `mp_orders.event_id` referencia `night_events(id)`
@@ -90,7 +90,7 @@ if (isMainModule) {
   // Una sola base (Supabase Cloud): el reset SIEMPRE pide confirmación tipeada,
   // no hay más un target "local" descartable donde saltearla con --yes.
   console.log(`\n⚠️  Vas a vaciar la base ${env.SUPABASE_URL}.`);
-  console.log(`   Tablas: ${TABLES_TO_RESET.join(", ")} (orders/tickets/cash_sales caen por CASCADE de night_events).`);
+  console.log(`   Tablas: ${TABLES_TO_RESET.join(", ")} (orders/tickets caen por CASCADE de night_events).`);
   console.log(
     "   NO se toca la config operativa: mercadopago_sellers, mercadopago_cajas, " +
       "mercadopago_cajas_devices, drinks, bars, app_config — se puede seguir cobrando después del reset.\n",

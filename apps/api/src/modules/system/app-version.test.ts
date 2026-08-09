@@ -60,6 +60,9 @@ describe("buildAppVersionInfo", () => {
       },
     });
 
+    expect(info.version).toBe("0.1.0");
+    expect(info.channel).toBe("beta");
+    expect(info.label).toBe("0.1.0-beta");
     expect(info.deploy.provider).toBe("render");
     expect(info.deploy.service).toBe("bosko");
     expect(info.deploy.commitShort).toBe("abcdef0");
@@ -67,8 +70,11 @@ describe("buildAppVersionInfo", () => {
     expect(info.deploy.externalUrl).toBe("https://bosko.onrender.com");
     expect(info.runtime.uptimeSec).toBeGreaterThanOrEqual(65);
     expect(info.migrations.lastApplied).toBe("20260101000000_init.sql");
-    expect(info.version).toMatch(/^\d+\.\d+\.\d+/);
-    expect(info.label).toContain(info.version);
+    // Si el runner corre desde el monorepo, el CHANGELOG de 0.1.0 se resuelve.
+    if (info.releaseNotes) {
+      expect(info.releaseNotes.version).toBe("0.1.0");
+      expect(info.releaseNotes.highlights.length).toBeGreaterThan(0);
+    }
   });
 
   it("en desarrollo sin Render reporta provider local", () => {

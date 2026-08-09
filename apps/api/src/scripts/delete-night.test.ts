@@ -119,14 +119,13 @@ function makeClient(tablas: Record<string, unknown[]>) {
 }
 
 describe("collectNightDump", () => {
-  it("junta la noche, pedidos, tickets, cobros MP y ventas en efectivo sin duplicar cobros", async () => {
+  it("junta la noche, pedidos, tickets y cobros MP sin duplicar cobros", async () => {
     const client = makeClient({
       night_events: [{ id: PREVIEW.eventId, status: "cerrado" }],
       orders: [{ id: "o1", mp_order_id: "mp1" }, { id: "o2", mp_order_id: null }],
       tickets: [{ id: "t1", order_id: "o1" }],
       // La misma fila vuelve por event_id y por el pedido que la referencia.
       mp_orders: [{ id: "mp1" }],
-      cash_sales: [{ id: "c1" }],
     });
 
     const dump = await collectNightDump(client, PREVIEW.eventId, PREVIEW);
@@ -135,7 +134,7 @@ describe("collectNightDump", () => {
     expect(dump.orders).toHaveLength(2);
     expect(dump.tickets).toHaveLength(1);
     expect(dump.mpOrders).toEqual([{ id: "mp1" }]);
-    expect(dump.cashSales).toHaveLength(1);
+    expect(dump.cashSales).toEqual([]);
   });
 });
 

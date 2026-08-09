@@ -156,11 +156,6 @@ export async function collectNightDump(
     (fila: { id: string }, i, todas) => todas.findIndex((o: { id: string }) => o.id === fila.id) === i,
   );
 
-  const cashSales = await client.from("cash_sales").select("*").eq("event_id", eventId);
-  if (cashSales.error) {
-    throw new Error(`No se pudieron leer las ventas en efectivo: ${cashSales.error.message}`);
-  }
-
   return {
     generadoEn: new Date().toISOString(),
     resumen: preview,
@@ -168,7 +163,7 @@ export async function collectNightDump(
     orders: orders.data ?? [],
     tickets: tickets.data ?? [],
     mpOrders,
-    cashSales: cashSales.data ?? [],
+    cashSales: [],
   };
 }
 

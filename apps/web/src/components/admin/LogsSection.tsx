@@ -49,14 +49,8 @@ type Props = {
   isBosko: boolean;
 };
 
-const MONTH_NAMES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-
 const formatMonthYear = (ts: number) => {
-  const d = new Date(ts);
-  return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+  return new Date(ts).toLocaleDateString("es-AR", { month: "long", year: "numeric" });
 };
 
 const formatDayMonth = (ts: number) => {

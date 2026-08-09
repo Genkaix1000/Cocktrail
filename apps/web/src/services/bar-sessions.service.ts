@@ -1,5 +1,4 @@
 import { apiFetch } from "./api-client";
-export { setActiveBarContext } from "@/lib/bar-context";
 
 export type BarSession = {
   id: string;

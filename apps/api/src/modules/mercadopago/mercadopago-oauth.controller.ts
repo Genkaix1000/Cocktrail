@@ -38,15 +38,6 @@ export function createMercadoPagoOAuthController(service: MercadoPagoOAuthServic
     }
   });
 
-  // POST /api/mercadopago/oauth/pull-seller — deprecated F0 (no-op).
-  router.post("/oauth/pull-seller", authMiddleware, requireRole("admin"), async (_req, res, next) => {
-    try {
-      res.json(await service.pullSellerFromCloud());
-    } catch (err) {
-      next(err);
-    }
-  });
-
   // DELETE /api/mercadopago/oauth/seller — desvincular (wipe) (admin).
   router.delete("/oauth/seller", authMiddleware, requireRole("admin"), async (_req, res, next) => {
     try {

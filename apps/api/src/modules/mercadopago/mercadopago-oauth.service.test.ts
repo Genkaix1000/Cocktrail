@@ -295,26 +295,6 @@ describe("MercadoPagoOAuthService", () => {
     });
   });
 
-  // ── F0 — handoff deprecated; unlink limpia residuales ──
-
-  describe("pullSellerFromCloud", () => {
-    it("F0 deprecated → siempre no-op, no toca sellers ni Cloud", async () => {
-      const cloud = makeCloudDb();
-      const svc = new MercadoPagoOAuthService(
-        statesRepo as unknown as OAuthStatesRepository,
-        sellersRepo as unknown as MercadoPagoSellersRepository,
-        CONFIG,
-        cloud.db,
-      );
-      await expect(svc.pullSellerFromCloud()).resolves.toMatchObject({
-        pulled: false,
-        reason: expect.stringContaining("Deprecated"),
-      });
-      expect(sellersRepo.upsert).not.toHaveBeenCalled();
-      expect(cloud.state.ops).toHaveLength(0);
-    });
-  });
-
   describe("unlinkSeller", () => {
     function makeService(cloud: ReturnType<typeof makeCloudDb> | null) {
       return new MercadoPagoOAuthService(
@@ -325,17 +305,15 @@ describe("MercadoPagoOAuthService", () => {
       );
     }
 
-    it("wipe + limpieza handoffs/bars → cloudCleaned: true", async () => {
+    it("wipe + limpieza bars.seller_user_id → cloudCleaned: true", async () => {
       sellersRepo.wipeAllTokens.mockResolvedValue(["seller-1"]);
       const cloud = makeCloudDb();
-      cloud.state.results.push({ data: null, error: null }); // delete handoffs
       cloud.state.results.push({ data: null, error: null }); // update bars
 
       const result = await makeService(cloud).unlinkSeller();
 
       expect(result).toEqual({ ok: true, cloudCleaned: true });
       expect(sellersRepo.wipeAllTokens).toHaveBeenCalledTimes(1);
-      expect(cloud.state.ops.find((op) => op.table === "mercadopago_seller_handoff")?.method).toBe("delete");
       expect(cloud.state.ops.find((op) => op.table === "bars")?.payload).toEqual({ seller_user_id: null });
     });
 
@@ -356,21 +334,9 @@ describe("MercadoPagoOAuthService", () => {
   });
 
   describe("getSellerStatus", () => {
-    it("sin seller → linked false; no intenta pull (F0)", async () => {
-      const cloud = makeCloudDb();
-      const svc = new MercadoPagoOAuthService(
-        statesRepo as unknown as OAuthStatesRepository,
-        sellersRepo as unknown as MercadoPagoSellersRepository,
-        CONFIG,
-        cloud.db,
-      );
-      const pullSpy = vi.spyOn(svc, "pullSellerFromCloud");
-
-      const res = await svc.getSellerStatus("BARRA-01");
-
+    it("sin seller → linked false", async () => {
+      const res = await service.getSellerStatus("BARRA-01");
       expect(res.linked).toBe(false);
-      expect(pullSpy).not.toHaveBeenCalled();
-      expect(cloud.state.ops).toHaveLength(0);
     });
 
     it("con seller activo → linked true", async () => {

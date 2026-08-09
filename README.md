@@ -42,9 +42,9 @@ docker compose down     # baja el stack local (agregá -v para borrar también e
 ## Resetear datos (dejar la base limpia)
 
 `pnpm --filter cocktrail-api db:reset -- --target=local|cloud` vacía `night_events`, `orders`,
-`tickets`, `cash_sales`, `users` y `audit_logs` (noches, pedidos, tickets, ventas en efectivo y
-usuarios custom creados desde `/admin`). **No toca** `drinks` (la carta) ni `app_config` — es
-contenido real del local, no dato de prueba. Ver `apps/api/src/scripts/reset-data.ts`.
+`tickets`, `users` y `audit_logs` (noches, pedidos, tickets y usuarios custom creados desde
+`/admin`). **No toca** `drinks` (la carta) ni `app_config` — es contenido real del local, no
+dato de prueba. Ver `apps/api/src/scripts/reset-data.ts`.
 
 ```bash
 pnpm --filter cocktrail-api db:reset -- --target=local            # pide confirmación tipeada
@@ -72,9 +72,8 @@ pnpm --filter cocktrail-api db:reset -- --target=cloud            # SIEMPRE pide
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — arquitectura real (fuente de verdad).
 - [`docs/ROADMAP.md`](./docs/ROADMAP.md) — fases, pendientes, riesgos/deuda.
 - [`docs/DEPLOY.md`](./docs/DEPLOY.md) — desplegar en la PC del boliche (Docker + app + LAN).
-- [`docs/mp/`](./docs/mp/) — referencia Mercado Pago (OAuth, Stores/POS, Orders QR/Point, webhooks). Empezá por [`docs/mp/INDEX.md`](./docs/mp/INDEX.md).
-- [`docs/fases-mp/`](./docs/fases-mp/) — plan de implementación MP por fases ([`INDEX`](./docs/fases-mp/INDEX.md)).
 - [`docs/specs/`](./docs/specs/README.md) — specs de features (SDD nativo), organizadas por fase. El índice completo está en [`docs/specs/README.md`](./docs/specs/README.md).
 - [`docs/plans/`](./docs/plans/) — planes técnicos, con las mismas subcarpetas por fase que `docs/specs/`.
 - [`docs/AGENTS.md`](./docs/AGENTS.md) — subagents y skills.
-- [`AGENTS.md`](./AGENTS.md) / [`CLAUDE.md`](./CLAUDE.md) — reglas para agentes de IA.
+- [`AGENTS.md`](./AGENTS.md) — reglas para agentes de IA.
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — constitución del proyecto (reemplaza a CLAUDE.md).

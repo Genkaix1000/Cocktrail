@@ -16,8 +16,8 @@ export async function findEmptyNightIds(client: SupabaseClient): Promise<string[
 }
 
 /**
- * `orders`/`tickets`/`cash_sales` caen por ON DELETE CASCADE — no hace
- * falta borrarlas aparte (y de hecho no deberían existir para una noche con
+ * `orders`/`tickets` caen por ON DELETE CASCADE — no hace falta
+ * borrarlas aparte (y de hecho no deberían existir para una noche con
  * order_counter = 0).
  */
 export async function deleteEmptyNights(client: SupabaseClient, ids: string[]): Promise<number> {

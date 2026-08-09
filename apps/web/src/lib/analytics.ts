@@ -84,6 +84,9 @@ export type UnifiedNightDay = {
     debitoTotal: number;
     debitoCount: number;
     drinksSold: DrinkSold[];
+    mpFeeTotal?: number;
+    netTotal?: number;
+    mpFeesPending?: number;
   };
   orderCounter: number;
 };
@@ -144,15 +147,9 @@ export function formatDuration(ms: number | null): string {
   return `${hours}h ${remainMins}m`;
 }
 
-const NIGHT_MONTH_NAMES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-];
-
 /** "14 de julio" — usado en el detalle de una noche (Historial) y en el subtítulo del Dashboard cuando no hay noche abierta. */
 export function formatNightDateLong(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getDate()} de ${NIGHT_MONTH_NAMES[d.getMonth()]}`;
+  return new Date(ts).toLocaleDateString("es-AR", { day: "numeric", month: "long" });
 }
 
 // ─────────────────────── B4: Hourly Heatmap Data ───────────────────────
@@ -434,7 +431,7 @@ export function computeMonthlyBreakdown(historyEvents: EventSummary[]): {
       const d = new Date(monthStart);
       return {
         monthStart,
-        monthLabel: `${NIGHT_MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`,
+        monthLabel: `${monthLong(d)} ${d.getFullYear()}`,
         nightsCount: acc.nightsCount,
         total: acc.total,
       };
@@ -501,7 +498,7 @@ export function groupNightsByDay(historyEvents: EventSummary[]): UnifiedNightDay
     const drinksSold = Object.values(drinksMap).sort((a, b) => b.qty - a.qty);
 
     const d = new Date(latestClosedAt);
-    const monthLabel = `${NIGHT_MONTH_NAMES_CAP[d.getMonth()]} ${d.getFullYear()}`;
+    const monthLabel = `${monthLongCap(d)} ${d.getFullYear()}`;
 
     return {
       dateKey,
@@ -529,10 +526,14 @@ export function groupNightsByDay(historyEvents: EventSummary[]): UnifiedNightDay
   });
 }
 
-const NIGHT_MONTH_NAMES_CAP = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
+function monthLongCap(d: Date): string {
+  const s = d.toLocaleDateString("es-AR", { month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function monthLong(d: Date): string {
+  return d.toLocaleDateString("es-AR", { month: "long" });
+}
 
 /** startedAt→closedAt en formato "4h 12m" / "45m" — usado en el detalle de noche (Historial) y el export a PDF. */
 export function formatEventDuration(startedAt: number, closedAt?: number): string {

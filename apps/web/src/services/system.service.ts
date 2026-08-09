@@ -28,9 +28,45 @@ export type SystemHealth = {
   mpFallback?: MpFallbackHealth;
 };
 
+export type ReleaseNotes = {
+  version: string;
+  date: string | null;
+  highlights: string[];
+};
+
+export type AppVersionInfo = {
+  version: string;
+  channel: string;
+  label: string;
+  environment: string;
+  deploy: {
+    provider: "render" | "local" | "unknown";
+    service: string | null;
+    commit: string | null;
+    commitShort: string | null;
+    branch: string | null;
+    externalUrl: string | null;
+  };
+  runtime: {
+    node: string;
+    serverStartedAt: number;
+    uptimeSec: number;
+  };
+  migrations: {
+    state: string;
+    pendingCount: number;
+    lastApplied: string | null;
+  };
+  releaseNotes: ReleaseNotes | null;
+};
+
 export const systemService = {
   getHealth() {
     return apiFetch<SystemHealth>("/api/system/health");
+  },
+
+  getVersion() {
+    return apiFetch<AppVersionInfo>("/api/system/version");
   },
 
   /** Acepta drift legítimo (checksum disco → registrado). Admin only. */

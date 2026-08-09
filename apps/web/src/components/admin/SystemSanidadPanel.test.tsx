@@ -43,6 +43,10 @@ describe("SystemSanidadPanel", () => {
       email: null,
       linkedAt: null,
       displayName: "Test",
+      userId: "seller-1",
+      expiresAt: null,
+      hasAccessToken: true,
+      hasRefreshToken: true,
     });
   });
 
@@ -60,6 +64,10 @@ describe("SystemSanidadPanel", () => {
       email: null,
       linkedAt: null,
       displayName: null,
+      userId: null,
+      expiresAt: null,
+      hasAccessToken: false,
+      hasRefreshToken: false,
     });
 
     render(<SystemSanidadPanel onGoToPagos={onGoToPagos} />);

@@ -14,7 +14,6 @@ vi.mock("@/services/mercadopago.service", () => ({
     getOAuthUrl: vi.fn(),
     getSellerStatus: vi.fn(),
     unlinkSeller: vi.fn(),
-    pullSeller: vi.fn(),
     getMpHealth: vi.fn(),
     listWebhookEvents: vi.fn(),
     listRecentOrders: vi.fn(),

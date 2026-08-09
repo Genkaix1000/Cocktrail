@@ -11,8 +11,6 @@ import { nativeBridgeTransport } from "./transports/native-bridge";
 import { webUsbTransport } from "./transports/webusb";
 import type { PrinterTransport } from "./types";
 
-export { getStoredBleDeviceId };
-
 export function selectTransport(): PrinterTransport | null {
   if (nativeBridgeTransport.isAvailable()) return nativeBridgeTransport;
   if (bleS1Transport.isAvailable() && getStoredBleDeviceId() !== null) return bleS1Transport;
