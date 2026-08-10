@@ -17,6 +17,7 @@ import HistorialSection from "@/components/caja/HistorialSection";
 import MetricasSection from "@/components/caja/MetricasSection";
 import CajaSidebar from "@/components/caja/Sidebar";
 import { HelpCenterProvider } from "@/components/help/HelpCenterProvider";
+import { hasNativeBleBridge } from "@/lib/printing/transports/native-ble-s1";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
 
 const PRINTER_PROMPT_SEEN_KEY = "cocktrail:printer-prompt-seen";
@@ -64,11 +65,11 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     printerStatus,
     testPrint,
     printerTestMessage,
-    clearPrinterTestMessage,
     reprintTicket,
     printTicket,
     pairPrinterDevice,
     connectPrinter,
+    reconnecting,
     printerPaired,
     printError,
     reprinting,
@@ -83,6 +84,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [printerPromptOpen, setPrinterPromptOpen] = useState(false);
   const [pairingPrinter, setPairingPrinter] = useState(false);
+  const [autoPairSeconds, setAutoPairSeconds] = useState(3);
 
   const [openNightKeyword, setOpenNightKeyword] = useState("");
   const [openNightError, setOpenNightError] = useState<string | null>(null);
@@ -142,6 +144,24 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     setPairingPrinter(true);
     void pairing.finally(() => setPairingPrinter(false));
   }
+
+  // Solo el APK puede escanear sin gesto del navegador. En la web el botón
+  // sigue siendo obligatorio porque Web Bluetooth bloquea el selector automático.
+  useEffect(() => {
+    if (!printerPromptOpen || pairingPrinter || !hasNativeBleBridge()) return;
+    setAutoPairSeconds(3);
+    const countdown = window.setInterval(() => {
+      setAutoPairSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1_000);
+    const startPairing = window.setTimeout(() => {
+      setPairingPrinter(true);
+      void pairPrinterDevice().finally(() => setPairingPrinter(false));
+    }, 3_000);
+    return () => {
+      window.clearInterval(countdown);
+      window.clearTimeout(startPairing);
+    };
+  }, [printerPromptOpen, pairingPrinter, pairPrinterDevice]);
 
   const activeNightOrders = useMemo(() => {
     if (!event) return orders;
@@ -205,6 +225,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     testPrint,
     pairPrinterDevice,
     connectPrinter,
+    reconnecting,
     printerPaired,
     printerTestMessage,
     posnetLevel,
@@ -233,22 +254,6 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
       cajaConfig={cajaHelpConfig}
     >
       <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
-        {printerTestMessage && (
-          <div
-            role="alert"
-            className="fixed bottom-4 left-3 right-3 md:left-auto md:right-4 md:max-w-md z-[10002] rounded-2xl border border-[var(--danger-line)] bg-[var(--danger-soft)] px-4 py-3 shadow-card flex items-start gap-3"
-          >
-            <p className="flex-1 text-sm text-[var(--danger-base)] leading-snug">{printerTestMessage}</p>
-            <button
-              type="button"
-              onClick={clearPrinterTestMessage}
-              className="shrink-0 p-1 rounded-full text-[var(--danger-base)] cursor-pointer"
-              aria-label="Cerrar"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        )}
         <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {((event && closeModalOpen) || summary) && (
           <CloseNightModal
@@ -303,6 +308,11 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
                   <Printer size={16} />
                   {pairingPrinter ? "Vinculando…" : "Vincular impresora"}
                 </button>
+                {!pairingPrinter && hasNativeBleBridge() && (
+                  <p className="text-xs text-[var(--text-secondary)] text-center">
+                    Buscaremos una impresora automáticamente en {autoPairSeconds} s.
+                  </p>
+                )}
                 {printerTestMessage && (
                   <p className="text-xs text-[var(--danger-base)] text-center leading-snug">
                     {printerTestMessage}

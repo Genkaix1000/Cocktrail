@@ -9,13 +9,11 @@ import {
   TrendingUp,
   ChevronLeft,
   ChevronRight,
-  HelpCircle,
 } from "lucide-react";
 import { useState } from "react";
 
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
-import { buildPrinterDebugReport } from "@/lib/printing/debug-report";
 import type { PosnetLevel } from "@/hooks/usePosnetStatus";
 import type { NightEvent } from "@cocktrail/shared";
 
@@ -45,6 +43,7 @@ type Props = {
   connectPrinter: () => void | Promise<void>;
   /** Vinculada alguna vez: alcanza con reconectar, no hay que elegirla de nuevo. */
   printerPaired: boolean;
+  reconnecting: boolean;
   printerTestMessage: string | null;
   posnetLevel: PosnetLevel;
   posnetMessage: string | null;
@@ -106,6 +105,7 @@ export default function CajaSidebar({
   pairPrinterDevice,
   connectPrinter,
   printerPaired,
+  reconnecting,
   printerTestMessage,
   posnetLevel,
   posnetMessage,
@@ -115,55 +115,14 @@ export default function CajaSidebar({
   onToggleCollapse = () => {},
 }: Props) {
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const [printerDebug, setPrinterDebug] = useState<string | null>(null);
-  const [printerDebugBusy, setPrinterDebugBusy] = useState(false);
-  const [printerDebugCopied, setPrinterDebugCopied] = useState(false);
-  const [printerDebugServerLogged, setPrinterDebugServerLogged] = useState(false);
   const collapsed = isCollapsed && !isDrawer;
   const canCloseNight = !!currentUser?.permissions?.closeNight && event?.status === "activo";
 
-  async function openPrinterDebug() {
-    setPrinterDebugBusy(true);
-    setPrinterDebugCopied(false);
-    setPrinterDebugServerLogged(false);
-    try {
-      setPrinterDebug(await buildPrinterDebugReport());
-    } catch (err) {
-      setPrinterDebug(`ERROR al armar el reporte: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setPrinterDebugBusy(false);
-    }
-  }
-
-  async function copyPrinterDebug() {
-    if (!printerDebug) return;
-    try {
-      await navigator.clipboard.writeText(printerDebug);
-      setPrinterDebugCopied(true);
-    } catch {
-      setPrinterDebugCopied(false);
-    }
-  }
-
-  async function logPrinterDebugToServer() {
-    if (!printerDebug) return;
-    setPrinterDebugServerLogged(false);
-    try {
-      const res = await fetch("/debug/printer", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-        body: printerDebug,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setPrinterDebugServerLogged(true);
-    } catch (err) {
-      setPrinterDebug(
-        `${printerDebug}\n\n---\nNo se pudo mandar al server: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-
-  const printerLevel: "ok" | "bad" = printerStatus?.connected ? "ok" : "bad";
+  const printerLevel: "ok" | "warn" | "bad" = printerStatus?.connected
+    ? "ok"
+    : printerPaired
+      ? "warn"
+      : "bad";
   const posnetTone: "ok" | "warn" | "bad" | "neutral" =
     posnetLevel === "blocked"
       ? "bad"
@@ -321,20 +280,25 @@ export default function CajaSidebar({
                     else if (printerPaired) void connectPrinter();
                     else void pairPrinterDevice();
                   }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative ${deviceChip(printerLevel)}`}
+                  disabled={reconnecting}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center border cursor-pointer active:scale-95 transition-all relative disabled:opacity-60 ${deviceChip(printerLevel)}`}
                   title={
                     printerTestMessage ??
                     (printerStatus?.connected
                       ? "Impresora OK"
                       : printerPaired
-                        ? "Conectar impresora"
+                        ? reconnecting
+                          ? "Reconectando impresora"
+                          : "Conectar impresora"
                         : "Vincular impresora")
                   }
                   aria-label={
                     printerStatus?.connected
                       ? "Probar impresora"
                       : printerPaired
-                        ? "Conectar impresora"
+                        ? reconnecting
+                          ? "Reconectando impresora"
+                          : "Conectar impresora"
                         : "Vincular impresora"
                   }
                 >
@@ -342,16 +306,6 @@ export default function CajaSidebar({
                   {printerTestMessage && (
                     <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--danger-base)]" />
                   )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void openPrinterDebug()}
-                  disabled={printerDebugBusy}
-                  className="w-10 h-8 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer"
-                  title="Debug impresora"
-                  aria-label="Debug impresora"
-                >
-                  <HelpCircle size={14} />
                 </button>
                 {hasLinkedDevice !== false && (
                   <div
@@ -371,18 +325,14 @@ export default function CajaSidebar({
                       className={`flex items-center gap-1.5 text-[11px] font-semibold ${deviceTone(printerLevel)}`}
                     >
                       <Printer size={13} />
-                      {printerStatus?.connected ? "Impresora OK" : "Sin impresora"}
+                      {printerStatus?.connected
+                        ? "Impresora OK"
+                        : reconnecting
+                          ? "Reconectando…"
+                          : printerPaired
+                            ? "Impresora vinculada"
+                            : "Sin impresora"}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void openPrinterDebug()}
-                      disabled={printerDebugBusy}
-                      className="p-1 rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer disabled:opacity-50"
-                      title="Debug impresora (copiar reporte)"
-                      aria-label="Debug impresora"
-                    >
-                      <HelpCircle size={13} />
-                    </button>
                   </div>
                   {printerStatus?.connected ? (
                     <button type="button" onClick={testPrint} className={`${secondaryBtn} mt-2`}>
@@ -390,8 +340,13 @@ export default function CajaSidebar({
                     </button>
                   ) : printerPaired ? (
                     <>
-                      <button type="button" onClick={connectPrinter} className={`${secondaryBtn} mt-2`}>
-                        Conectar
+                      <button
+                        type="button"
+                        onClick={connectPrinter}
+                        disabled={reconnecting}
+                        className={`${secondaryBtn} mt-2`}
+                      >
+                        {reconnecting ? "Reconectando…" : "Conectar"}
                       </button>
                       <button
                         type="button"
@@ -427,44 +382,6 @@ export default function CajaSidebar({
               </div>
             )}
           </div>
-
-          {printerDebug && (
-            <div className="fixed inset-0 z-[10003] flex items-end sm:items-center justify-center bg-black/70 p-3 pointer-events-auto">
-              <div
-                role="dialog"
-                aria-label="Debug impresora"
-                className="w-full max-w-lg rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 flex flex-col gap-3 shadow-card"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Debug impresora</h3>
-                  <button
-                    type="button"
-                    onClick={() => setPrinterDebug(null)}
-                    className="text-[11px] text-[var(--text-tertiary)] underline cursor-pointer"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-                <pre className="text-[10px] leading-snug text-[var(--text-secondary)] whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto bosko-scroll font-mono rounded-xl bg-[var(--bg-panel)] p-3 border border-[var(--border-subtle)]">
-                  {printerDebug}
-                </pre>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <button type="button" onClick={() => void copyPrinterDebug()} className={secondaryBtn}>
-                    {printerDebugCopied ? "Copiado — pegalo en el chat" : "Copiar reporte"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void logPrinterDebugToServer()}
-                    className={secondaryBtn}
-                  >
-                    {printerDebugServerLogged
-                      ? "Listo — mirá la terminal del server"
-                      : "Log en consola del server"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {canCloseNight && (
             <button

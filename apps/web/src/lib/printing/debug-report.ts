@@ -3,7 +3,7 @@
  */
 
 import { printerManager } from "./manager";
-import { getStoredBleDeviceId } from "./transports/ble-s1";
+import { getBleChunkSizeOverride, getStoredBleDeviceId } from "./transports/ble-s1";
 import { nativeBridgeTransport } from "./transports/native-bridge";
 import { webUsbTransport } from "./transports/webusb";
 import { selectTransport } from "./select-transport";
@@ -62,6 +62,7 @@ export async function buildPrinterDebugReport(): Promise<string> {
 
   const storedId = getStoredBleDeviceId();
   lines.push(`localStorage ble-id: ${storedId ?? "(none)"}`);
+  lines.push(`ble-chunk: ${getBleChunkSizeOverride() ?? "(default 64)"}`);
 
   if (bleApi && typeof nav.bluetooth?.getDevices === "function") {
     try {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import SistemaSection from "./SistemaSection";
 
@@ -43,13 +44,18 @@ beforeEach(() => {
 });
 
 describe("SistemaSection", () => {
-  it("muestra el título y la descarga del APK", async () => {
+  it("muestra el título y permite instalar la PWA desde Sistema", async () => {
+    const user = userEvent.setup();
     render(<SistemaSection />);
     expect(screen.getByText("Sistema")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Descargar app/i })).toHaveAttribute(
-      "href",
-      "/miboliche-caja.apk",
-    );
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const event = Object.assign(new Event("beforeinstallprompt"), {
+      prompt,
+      userChoice: Promise.resolve({ outcome: "accepted", platform: "web" }),
+    });
+    window.dispatchEvent(event);
+    await user.click(await screen.findByRole("button", { name: "Instalar app" }));
+    expect(prompt).toHaveBeenCalled();
     expect(screen.getByText("Servidor")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Usar Render \(bosko-7xsy\)/i })).toBeInTheDocument();
     await waitFor(() => expect(mocked.getVersion).toHaveBeenCalled());

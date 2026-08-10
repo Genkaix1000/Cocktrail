@@ -36,6 +36,7 @@ export function usePrinterStatus() {
   const [printerTestMessage, setPrinterTestMessage] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [reprinting, setReprinting] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   // Contrato del hook viejo: null hasta el primer refresh (mensaje vacío =
   // el manager todavía no consultó nada).
@@ -50,10 +51,50 @@ export function usePrinterStatus() {
 
   useEffect(() => {
     void refreshPrinterStatus();
-    // Solo reporta estado (el manager no conecta la BLE al refrescar).
-    const interval = setInterval(() => void refreshPrinterStatus(), 30000);
+    // Detecta rápidamente una S1 dormida o desconectada; el efecto de abajo
+    // decide si corresponde reconectarla (refresh nunca abre un selector).
+    const interval = setInterval(() => void refreshPrinterStatus(), 3_000);
     return () => clearInterval(interval);
   }, [refreshPrinterStatus]);
+
+  // Una S1 ya vinculada puede dormirse o perder señal. Recuperarla no requiere
+  // selector ni interacción del usuario, así que reintentamos de forma acotada.
+  useEffect(() => {
+    if (snapshot.phase !== "paired" || snapshot.connected) {
+      setReconnecting(false);
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const delays = [0, 2_000, 5_000];
+
+    const reconnect = async (attempt: number) => {
+      if (cancelled) return;
+      setReconnecting(true);
+      try {
+        await printerManager.connect();
+      } catch {
+        // El estado queda en paired; el siguiente intento usa el mismo vínculo.
+      }
+      if (cancelled || printerManager.getSnapshot().connected) {
+        if (!cancelled) setReconnecting(false);
+        return;
+      }
+      const nextAttempt = attempt + 1;
+      if (nextAttempt >= delays.length) {
+        setReconnecting(false);
+        return;
+      }
+      timer = setTimeout(() => void reconnect(nextAttempt), delays[nextAttempt]!);
+    };
+
+    void reconnect(0);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [snapshot.connected, snapshot.phase]);
 
   const pairPrinterDevice = useCallback(async () => {
     // Nada de setState antes de pair(): en Android Chrome se come el gesto y
@@ -143,6 +184,7 @@ export function usePrinterStatus() {
     refreshPrinterStatus,
     pairPrinterDevice,
     connectPrinter,
+    reconnecting,
     printTicket,
     testPrint,
     printerTestMessage,

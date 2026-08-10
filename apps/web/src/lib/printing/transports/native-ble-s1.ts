@@ -5,8 +5,11 @@
 
 import { renderTicketBitmap } from "../raster";
 import { buildS1Sequence } from "../s1-protocol";
-import { getBleChunkSizeOverride } from "./ble-s1";
 import type { PrinterTransport, TransportPrintPayload } from "../types";
+
+// El GATT nativo no negocia el MTU, así que conserva el mínimo BLE (23 - 3).
+// Web Bluetooth sí fue validado con 64 bytes y mantiene su propio override.
+export const NATIVE_BLE_CHUNK_BYTES = 20;
 
 type NativeBleBridge = {
   blePair: () => string;
@@ -66,7 +69,7 @@ export const nativeBleS1Transport: PrinterTransport = {
     const bridge = nativeBle();
     if (!bridge) throw new Error("No está el puente nativo. Abrí la app miBoliche Caja.");
     const bitmap = renderTicketBitmap(payload.ticketContent);
-    const steps = buildS1Sequence(bitmap, { chunkSize: getBleChunkSizeOverride() });
+    const steps = buildS1Sequence(bitmap, { chunkSize: NATIVE_BLE_CHUNK_BYTES });
     const json = JSON.stringify(
       steps.map((step) => ({
         b: bytesToBase64(step.bytes),

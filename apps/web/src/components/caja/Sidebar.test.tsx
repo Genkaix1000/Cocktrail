@@ -48,6 +48,7 @@ const baseProps = {
   pairPrinterDevice: vi.fn(),
   connectPrinter: vi.fn(),
   printerPaired: false,
+  reconnecting: false,
   printerTestMessage: null as string | null,
   posnetLevel: "ok" as const,
   posnetMessage: "Posnet listo.",
@@ -198,6 +199,19 @@ describe("CajaSidebar", () => {
     await user.click(screen.getByRole("button", { name: "Conectar impresora" }));
     expect(connectPrinter).toHaveBeenCalled();
     expect(pairPrinterDevice).not.toHaveBeenCalled();
+  });
+
+  it("muestra reconectando y no permite otro intento manual mientras recupera conexión", () => {
+    render(
+      <CajaSidebar
+        {...baseProps}
+        printerStatus={{ connected: false, message: "vinculada" }}
+        printerPaired
+        reconnecting
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Reconectando…" })).toBeDisabled();
   });
 
   it("muestra Cerrar sesión en el rail GENERAL", () => {

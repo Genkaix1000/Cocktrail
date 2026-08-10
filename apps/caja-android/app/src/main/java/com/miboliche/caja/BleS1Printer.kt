@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
@@ -155,10 +156,8 @@ class BleS1Printer(private val activity: Activity) {
             } catch (_: Exception) {
                 return "Chunk BLE inválido."
             }
-            char.value = bytes
-            char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             val wrote = try {
-                gatt.writeCharacteristic(char)
+                writeNoResponse(gatt, char, bytes)
             } catch (e: SecurityException) {
                 return "Falta permiso de Bluetooth para imprimir."
             }
@@ -173,6 +172,34 @@ class BleS1Printer(private val activity: Activity) {
             }
         }
         return "ok"
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun writeNoResponse(gatt: BluetoothGatt, char: BluetoothGattCharacteristic, bytes: ByteArray): Boolean {
+        // WRITE_TYPE_NO_RESPONSE no garantiza onCharacteristicWrite. El
+        // protocolo JS serializa chunks de 20 bytes y sus pausas; si Android
+        // informa la cola ocupada, reintentamos brevemente antes de fallar.
+        repeat(WRITE_QUEUE_RETRIES) {
+            val queued = if (Build.VERSION.SDK_INT >= 33) {
+                gatt.writeCharacteristic(
+                    char,
+                    bytes,
+                    BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+                ) == BluetoothStatusCodes.SUCCESS
+            } else {
+                char.value = bytes
+                char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                gatt.writeCharacteristic(char)
+            }
+            if (queued) return true
+            try {
+                Thread.sleep(WRITE_QUEUE_RETRY_DELAY_MS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+        return false
     }
 
     @SuppressLint("MissingPermission")
@@ -308,7 +335,8 @@ class BleS1Printer(private val activity: Activity) {
         private const val SCAN_TIMEOUT_MS = 12_000L
         private const val CONNECT_TIMEOUT_MS = 8_000L
         private const val REQ_BLE = 4401
-
+        private const val WRITE_QUEUE_RETRIES = 3
+        private const val WRITE_QUEUE_RETRY_DELAY_MS = 10L
         private val SERVICE_UUID: UUID = uuidFromShort(0xff00)
         private val WRITE_UUID: UUID = uuidFromShort(0xff02)
 

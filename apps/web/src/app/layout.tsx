@@ -13,10 +13,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "miBoliche",
   description: "Ventas, cobros y cierre de noche del boliche",
+  manifest: "/manifest.webmanifest",
 
   icons: {
-    icon: "/icon-192.png",
-    shortcut: "/icon-192.png",
+    icon: "/miboliche-mark.svg",
+    shortcut: "/miboliche-mark.svg",
     apple: "/icon-192.png",
   },
 };

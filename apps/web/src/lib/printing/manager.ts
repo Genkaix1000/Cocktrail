@@ -87,6 +87,7 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
   const queue = createPrintQueue();
   const listeners = new Set<() => void>();
   let snapshot: PrinterSnapshot = INITIAL_SNAPSHOT;
+  let connecting: Promise<void> | null = null;
 
   function setSnapshot(next: PrinterSnapshot): void {
     // Misma referencia si no cambió nada: useSyncExternalStore no re-renderiza.
@@ -182,20 +183,24 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
    * ahorro de energía, así que hace falta poder despertarla a mano antes de
    * empezar a vender, sin pasar otra vez por el selector del navegador.
    */
-  async function connect(): Promise<void> {
+  function connect(): Promise<void> {
     if (typeof window === "undefined") throw new Error(NO_SUPPORT_MESSAGE);
     const transport = deps.selectTransport();
     if (!transport) throw new Error(NO_SUPPORT_MESSAGE);
     if (!transport.connect) {
-      await refresh();
-      return;
+      return refresh();
     }
+    if (connecting) return connecting;
     setSnapshot({ ...snapshot, message: "Conectando con la impresora…" });
-    try {
-      await transport.connect();
-    } finally {
-      await refresh();
-    }
+    connecting = (async () => {
+      try {
+        await transport.connect!();
+      } finally {
+        await refresh();
+        connecting = null;
+      }
+    })();
+    return connecting;
   }
 
   function print(payload: TransportPrintPayload, meta?: PrintMeta): Promise<void> {

@@ -9,14 +9,18 @@ vi.mock("../raster", () => ({
   }),
 }));
 
-vi.mock("../s1-protocol", () => ({
-  buildS1Sequence: () => [
+const { buildS1Sequence } = vi.hoisted(() => ({
+  buildS1Sequence: vi.fn(() => [
     { bytes: new Uint8Array([1, 2, 3]), delayAfterMs: 10 },
     { bytes: new Uint8Array([4]), delayAfterMs: 0 },
-  ],
+  ]),
 }));
 
-import { nativeBleS1Transport } from "./native-ble-s1";
+vi.mock("../s1-protocol", () => ({
+  buildS1Sequence,
+}));
+
+import { NATIVE_BLE_CHUNK_BYTES, nativeBleS1Transport } from "./native-ble-s1";
 import type { TicketContent } from "@cocktrail/shared";
 
 const ticket: TicketContent = {
@@ -31,7 +35,7 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     bleIsPaired: vi.fn(() => true),
     bleIsConnected: vi.fn(() => false),
     bleConnect: vi.fn(() => "ok"),
-    blePrintSteps: vi.fn(() => "ok"),
+    blePrintSteps: vi.fn((_json: string) => "ok"),
     ...overrides,
   };
   (window as unknown as Record<string, unknown>).MiBolichePrinter = bridge;
@@ -66,5 +70,9 @@ describe("nativeBleS1Transport", () => {
     expect(steps).toHaveLength(2);
     expect(steps[0]).toEqual({ b: btoa("\x01\x02\x03"), d: 10 });
     expect(steps[1]).toEqual({ b: btoa("\x04"), d: 0 });
+    expect(buildS1Sequence).toHaveBeenCalledWith(
+      expect.anything(),
+      { chunkSize: NATIVE_BLE_CHUNK_BYTES },
+    );
   });
 });

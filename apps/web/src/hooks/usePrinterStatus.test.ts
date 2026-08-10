@@ -13,6 +13,7 @@ vi.mock("@/lib/printing/manager", () => ({
     getSnapshot: vi.fn(),
     refresh: vi.fn(),
     pair: vi.fn(),
+    connect: vi.fn(),
     print: vi.fn(),
   },
 }));
@@ -66,6 +67,7 @@ beforeEach(() => {
   mockedManager.getSnapshot.mockImplementation(() => snapshot);
   mockedManager.refresh.mockResolvedValue(undefined);
   mockedManager.pair.mockResolvedValue(undefined);
+  mockedManager.connect.mockResolvedValue(undefined);
   mockedManager.print.mockResolvedValue(undefined);
 });
 
@@ -111,6 +113,22 @@ describe("usePrinterStatus — snapshot del manager", () => {
       connected: false,
       message: "Impresora Bluetooth vinculada. Se conecta al imprimir.",
     });
+  });
+
+  it("reconecta automáticamente una Bluetooth ya vinculada", async () => {
+    const { result } = renderHook(() => usePrinterStatus());
+
+    act(() => {
+      setSnapshot({
+        phase: "paired",
+        connected: false,
+        message: "Impresora Bluetooth vinculada.",
+        transportId: "ble-s1",
+      });
+    });
+
+    await waitFor(() => expect(mockedManager.connect).toHaveBeenCalledTimes(1));
+    expect(result.current.reconnecting).toBe(true);
   });
 });
 
