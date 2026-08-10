@@ -10,7 +10,7 @@ export type TransportPrintPayload = {
   ticketContent: TicketContent;
 };
 
-export type TransportId = "native" | "webusb" | "ble-s1";
+export type TransportId = "native" | "webusb" | "ble-s1" | "native-ble-s1";
 
 export type PrinterTransport = {
   id: TransportId;
