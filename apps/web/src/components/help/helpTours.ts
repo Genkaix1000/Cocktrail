@@ -36,9 +36,46 @@ function step(
   };
 }
 
-function isStandalone(): boolean {
+export function isAppInstalledOrDownloaded(): boolean {
   if (typeof window === "undefined") return false;
-  return window.matchMedia("(display-mode: standalone)").matches;
+
+  // 1. Android APK shell bridge
+  const bridge = (window as Window & { MiBolichePrinter?: { print?: unknown } }).MiBolichePrinter;
+  if (typeof bridge?.print === "function") return true;
+
+  // 2. Modern PWA display modes
+  if (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    window.matchMedia("(display-mode: minimal-ui)").matches ||
+    window.matchMedia("(display-mode: window-controls-overlay)").matches
+  ) {
+    return true;
+  }
+
+  // 3. iOS standalone mode
+  if ((navigator as Navigator & { standalone?: boolean }).standalone === true) {
+    return true;
+  }
+
+  // 4. Android TWA / PWA referrer
+  if (document.referrer.startsWith("android-app://")) {
+    return true;
+  }
+
+  // 5. Explicitly stored flag when user downloaded APK or installed app
+  try {
+    if (
+      localStorage.getItem("app_downloaded") === "true" ||
+      localStorage.getItem("pwa_installed") === "true"
+    ) {
+      return true;
+    }
+  } catch {
+    /* private mode */
+  }
+
+  return false;
 }
 
 /** True si ya vio first-visit o el tour viejo (no re-mostrar panel). */
@@ -70,7 +107,7 @@ export type AdminNightConfig = {
 function adminGeneralSteps(cfg: AdminNightConfig): TourStep[] {
   const steps: TourStep[] = [];
 
-  if (!isStandalone()) {
+  if (!isAppInstalledOrDownloaded()) {
     steps.push(
       step({
         id: "general-install",
@@ -518,7 +555,7 @@ function cajaGeneralSteps(cfg: {
 }): TourStep[] {
   const steps: TourStep[] = [];
 
-  if (!isStandalone()) {
+  if (!isAppInstalledOrDownloaded()) {
     steps.push(
       step({
         id: "caja-install",
@@ -666,6 +703,7 @@ export type CajaHelpConfig = {
   hasMetricas: boolean;
   canCloseNight: boolean;
   hasLinkedDevice: boolean | null;
+  onEnsureSidebarExpanded?: () => void;
 };
 
 export function getCategories(

@@ -19,6 +19,8 @@ type Props = {
   warning?: ReactNode;
   /** Texto del botón de hold (default: "Confirmar"). */
   confirmLabel?: string;
+  /** Deshabilita el hold (ej. mientras carga el detalle del warning). */
+  disabled?: boolean;
 };
 
 /**
@@ -33,6 +35,7 @@ export default function SafeDeleteModal({
   typeLabel = "este elemento",
   warning,
   confirmLabel = "Confirmar",
+  disabled,
 }: Props) {
   const [holding, setHolding] = useState(false);
   const confirmedRef = useRef(false);
@@ -47,7 +50,7 @@ export default function SafeDeleteModal({
   }
 
   function startHold() {
-    if (confirmedRef.current) return;
+    if (confirmedRef.current || disabled) return;
     setHolding(true);
     timerRef.current = setTimeout(() => {
       confirmedRef.current = true;
@@ -135,6 +138,7 @@ export default function SafeDeleteModal({
           <button
             type="button"
             aria-label={`${confirmLabel}. Mantené presionado para confirmar.`}
+            disabled={disabled}
             onPointerDown={(e) => {
               e.preventDefault();
               e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -144,7 +148,7 @@ export default function SafeDeleteModal({
             onPointerCancel={clearHold}
             onLostPointerCapture={clearHold}
             onContextMenu={(e) => e.preventDefault()}
-            className="relative flex-1 h-12 overflow-hidden rounded-xl text-xs uppercase tracking-[0.08em] font-semibold text-white select-none cursor-pointer touch-none border border-danger-line bg-danger/25 active:scale-[0.99] transition-transform"
+            className="relative flex-1 h-12 overflow-hidden rounded-xl text-xs uppercase tracking-[0.08em] font-semibold text-white select-none cursor-pointer touch-none border border-danger-line bg-danger/25 active:scale-[0.99] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
           >
             <span
               aria-hidden

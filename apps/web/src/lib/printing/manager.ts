@@ -14,6 +14,7 @@ import {
   getStoredBleDeviceId,
   setBleDisconnectListener,
 } from "./transports/ble-s1";
+import { hasNativeBleBridge, nativeBleS1Transport } from "./transports/native-ble-s1";
 import type {
   PrinterSnapshot,
   PrinterTransport,
@@ -42,6 +43,8 @@ type ManagerDeps = {
   bleTransport: PrinterTransport;
   getStoredBleDeviceId: () => string | null;
   setBleDisconnectListener: (listener: (() => void) | null) => void;
+  hasNativeBle: () => boolean;
+  nativeBleIsPaired: () => boolean;
 };
 
 const INITIAL_SNAPSHOT: PrinterSnapshot = {
@@ -59,12 +62,25 @@ function sameSnapshot(a: PrinterSnapshot, b: PrinterSnapshot): boolean {
   );
 }
 
+function nativeBleIsPaired(): boolean {
+  if (typeof window === "undefined") return false;
+  const bridge = (window as Window & { MiBolichePrinter?: { bleIsPaired?: () => boolean } })
+    .MiBolichePrinter;
+  try {
+    return !!bridge?.bleIsPaired?.();
+  } catch {
+    return false;
+  }
+}
+
 export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): PrinterManager {
   const deps: ManagerDeps = {
     selectTransport,
     bleTransport: bleS1Transport,
     getStoredBleDeviceId,
     setBleDisconnectListener,
+    hasNativeBle: hasNativeBleBridge,
+    nativeBleIsPaired,
     ...overrides,
   };
 
@@ -86,7 +102,7 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
 
     const transport = deps.selectTransport();
     if (!transport) {
-      if (deps.bleTransport.isAvailable()) {
+      if (deps.bleTransport.isAvailable() || deps.hasNativeBle()) {
         setSnapshot({ phase: "none", connected: false, message: NOT_PAIRED_MESSAGE });
       } else {
         setSnapshot({ phase: "unsupported", connected: false, message: NO_SUPPORT_MESSAGE });
@@ -108,7 +124,14 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
         message: "Impresora conectada.",
         transportId: transport.id,
       });
-    } else if (transport.id === "ble-s1") {
+    } else if (transport.id === "ble-s1" && deps.getStoredBleDeviceId()) {
+      setSnapshot({
+        phase: "paired",
+        connected: false,
+        message: "Impresora Bluetooth vinculada. Se conecta al imprimir.",
+        transportId: transport.id,
+      });
+    } else if (transport.id === "native-ble-s1" && deps.nativeBleIsPaired()) {
       setSnapshot({
         phase: "paired",
         connected: false,
@@ -119,8 +142,7 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
       setSnapshot({
         phase: "none",
         connected: false,
-        message:
-          "APK = solo USB. Enchufá la ticketera USB, o abrí Chrome con HTTPS para la S1 Bluetooth.",
+        message: "Enchufá la ticketera USB o vinculá la S1 Bluetooth.",
         transportId: transport.id,
       });
     } else {
@@ -137,14 +159,18 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
     if (typeof window === "undefined") throw new Error(NO_SUPPORT_MESSAGE);
     const transport = deps.selectTransport();
 
-    if (transport?.id === "native") {
+    // En APK sin USB: vincular S1 nativa.
+    if (transport?.id === "native-ble-s1") {
+      await nativeBleS1Transport.pair();
+    } else if (transport?.id === "native") {
       await transport.pair();
     } else if (deps.bleTransport.isAvailable() && deps.getStoredBleDeviceId() === null) {
-      // Flujo comandera: si hay Bluetooth y la S1 no está vinculada, el botón
-      // «Vincular» apunta a la S1 aunque el fallback elegido fuera WebUSB.
+      // Flujo comandera Chrome: Vincular apunta a la S1.
       await deps.bleTransport.pair();
     } else if (transport) {
       await transport.pair();
+    } else if (deps.hasNativeBle()) {
+      await nativeBleS1Transport.pair();
     } else {
       throw new Error(NO_SUPPORT_MESSAGE);
     }

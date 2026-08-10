@@ -61,6 +61,13 @@ services:
       - key: FRONTEND_URL
         sync: false
 
+      # --- Cloudflare Turnstile (login) ---
+      # Secret: solo backend. Site key: pública (build-time Next).
+      - key: CF_TURNSTILE_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY
+        sync: false
+
       # --- Versión de producto (Sistema → Versión) ---
       # Defaults en código: 0.1.0 / beta. Override acá si un deploy necesita otro tag.
       - key: APP_VERSION

@@ -45,6 +45,18 @@ const nextConfig: NextConfig = {
   // sirve Next: sin esto, /login y /caja viajan sin ninguna.
   async headers() {
     const seguridad = [
+      {
+        key: "Content-Security-Policy",
+        value: [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          "font-src 'self' https://fonts.gstatic.com",
+          "img-src 'self' data: blob: https://images.unsplash.com",
+          "connect-src 'self' wss: https://challenges.cloudflare.com",
+          "frame-src https://challenges.cloudflare.com",
+        ].join("; "),
+      },
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -64,7 +76,16 @@ const nextConfig: NextConfig = {
     }
     return [{ source: "/:path*", headers: seguridad }];
   },
-  allowedDevOrigins: ["192.168.0.11", "localhost:3000", "*.local"],
+  allowedDevOrigins: [
+    "192.168.0.10",
+    "192.168.0.11",
+    "192.168.0.*",
+    "192.168.1.*",
+    "192.168.*",
+    "10.0.*",
+    "localhost:3000",
+    "*.local",
+  ],
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },

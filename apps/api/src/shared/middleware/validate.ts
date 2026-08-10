@@ -23,6 +23,8 @@ export function validate(schema: z.Schema) {
 export const LoginSchema = z.object({
   username: z.string().min(1, "Usuario requerido").max(50, "Usuario demasiado largo").trim(),
   password: z.string().min(1, "Contraseña requerida").max(128, "Contraseña demasiado larga"),
+  // validate() reemplaza req.body por result.data — sin esto el token se pierde.
+  cfTurnstileToken: z.string().min(1).max(2048).optional(),
 });
 
 // 2. Esquema para crear un pedido
@@ -129,7 +131,7 @@ export const UpdateDrinkSchema = z.object({
 // 9. Esquema para crear un usuario de staff
 export const CreateUserSchema = z.object({
   username: z.string().min(1, "Usuario requerido").max(50, "Usuario demasiado largo").trim(),
-  password: z.string().min(4, "Contraseña demasiado corta").max(128, "Contraseña demasiado larga"),
+  password: z.string().min(8, "Contraseña demasiado corta (mínimo 8 caracteres)").max(128, "Contraseña demasiado larga"),
   role: z.enum(["admin", "caja"], {
     errorMap: () => ({ message: "Rol inválido" }),
   }),
@@ -157,7 +159,7 @@ export const UpdateConfigSchema = z.object({
 // 11. Esquema para editar un usuario de staff
 export const UpdateUserSchema = z.object({
   username: z.string().min(1, "Usuario requerido").max(50, "Usuario demasiado largo").trim().optional(),
-  password: z.string().min(4, "Contraseña demasiado corta").max(128, "Contraseña demasiado larga").optional(),
+  password: z.string().min(8, "Contraseña demasiado corta (mínimo 8 caracteres)").max(128, "Contraseña demasiado larga").optional(),
   role: z.enum(["admin", "caja"], {
     errorMap: () => ({ message: "Rol inválido" }),
   }).optional(),

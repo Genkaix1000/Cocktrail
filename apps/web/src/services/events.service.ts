@@ -105,10 +105,10 @@ export const eventsService = {
    * revalida el server contra la fecha real de la noche: la confirmación
    * tipeada no es solo cosmética de la UI.
    */
-  deleteNight(id: string, fecha: string, password: string) {
+  deleteNight(id: string, fecha: string) {
     return apiFetch<NightDeletionResult>(`/api/events/${encodeURIComponent(id)}`, {
       method: "DELETE",
-      body: { password, fecha },
+      body: { fecha },
     });
   },
 

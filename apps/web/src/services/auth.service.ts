@@ -15,10 +15,11 @@ type MeResponse = {
 } | null;
 
 export const authService = {
-  login(username: string, password: string) {
+  login(username: string, password: string, cfTurnstileToken?: string) {
     return apiFetch<LoginResponse>("/api/auth/login", {
       method: "POST",
-      body: { username, password },
+      // apiFetch ya hace JSON.stringify — no wrappear de nuevo.
+      body: { username, password, ...(cfTurnstileToken ? { cfTurnstileToken } : {}) },
     });
   },
 

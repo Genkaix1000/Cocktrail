@@ -368,6 +368,7 @@ export default function AdminClient({
         >
           {collapsed ? (
             <button
+              data-tour-nav="collapse"
               type="button"
               onClick={toggleSidebarCollapsed}
               className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--accent-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
@@ -380,6 +381,7 @@ export default function AdminClient({
             <>
               <BrandLogo size="md" />
               <button
+                data-tour-nav="collapse"
                 type="button"
                 onClick={toggleSidebarCollapsed}
                 className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"

@@ -57,6 +57,9 @@ const EnvSchema = z.object({
   MP_WEBHOOK_SECRET: z.string().optional(),
   // Ventana de frescura del `ts` de la firma de webhooks (anti-replay), en segundos.
   MP_WEBHOOK_TS_TOLERANCE_SECONDS: z.coerce.number().positive().default(300),
+
+  // Cloudflare Turnstile (login bot protection). Sin secret → se saltea en non-prod.
+  CF_TURNSTILE_SECRET_KEY: z.string().optional(),
 });
 
 function loadEnv() {

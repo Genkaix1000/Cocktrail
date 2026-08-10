@@ -56,7 +56,7 @@ type Props = {
 };
 
 const sectionLabelClass =
-  "px-4 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--text-tertiary)] mb-0.5";
+  "px-4 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--text-tertiary)] mb-0.5 transition-all duration-200";
 
 function navBtnClass(active: boolean, collapsed: boolean) {
   const tone = active
@@ -188,44 +188,35 @@ export default function CajaSidebar({
       className={`
         shrink-0 flex flex-col print:hidden relative overflow-hidden
         bg-[var(--bg-panel)] text-[var(--text-primary)]
-        rounded-[24px] shadow-card transition-[width] duration-300 ease-in-out
+        rounded-[24px] shadow-card transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] will-change-[width]
         ${collapsed ? "w-[76px]" : "w-[260px]"}
         ${isDrawer ? "h-full" : "h-full hidden md:flex"}
       `}
     >
       <div
-        className={`flex items-center shrink-0 w-full pt-4 pb-2 ${
+        className={`flex items-center shrink-0 w-full pt-4 pb-2 transition-all duration-200 ${
           collapsed ? "justify-center px-2" : "justify-between px-4"
         }`}
       >
-        {collapsed ? (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--accent-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
-            title="Expandir menú"
-            aria-label="Expandir menú"
-          >
-            <ChevronRight size={18} strokeWidth={2} />
-          </button>
-        ) : (
-          <>
-            <BrandLogo size="md" />
-            <button data-tour-nav="collapse"
-              type="button"
-              onClick={onToggleCollapse}
-              className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
-              title="Colapsar menú"
-              aria-label="Colapsar menú"
-            >
-              <ChevronLeft size={16} />
-            </button>
-          </>
-        )}
+        <div className={`transition-all duration-200 ${collapsed ? "opacity-0 max-w-0 overflow-hidden pointer-events-none" : "opacity-100 max-w-[160px]"}`}>
+          <BrandLogo size="md" />
+        </div>
+        <button
+          data-tour-nav="collapse"
+          type="button"
+          onClick={onToggleCollapse}
+          className={`rounded-xl flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-all cursor-pointer shrink-0 ${
+            collapsed ? "w-10 h-10 text-[var(--accent-primary)]" : "p-1.5"
+          }`}
+          title={collapsed ? "Expandir menú" : "Colapsar menú"}
+          aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
+        >
+          {collapsed ? <ChevronRight size={18} strokeWidth={2} /> : <ChevronLeft size={16} />}
+        </button>
       </div>
 
       <div
-        className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-2 ${
+        className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-2 transition-all duration-200 ${
           collapsed ? "gap-2 px-1 pb-[200px]" : "gap-4 pb-[260px]"
         }`}
       >

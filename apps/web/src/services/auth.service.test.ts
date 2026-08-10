@@ -26,6 +26,17 @@ describe("authService", () => {
     expect(result).toBe(expected);
   });
 
+  it("login incluye cfTurnstileToken cuando se pasa", async () => {
+    mockedApiFetch.mockResolvedValueOnce({ username: "admin", role: "admin" });
+
+    await authService.login("admin", "1234", "turnstile-token");
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/auth/login", {
+      method: "POST",
+      body: { username: "admin", password: "1234", cfTurnstileToken: "turnstile-token" },
+    });
+  });
+
   it("logout hace POST a /api/auth/logout", async () => {
     mockedApiFetch.mockResolvedValueOnce({ ok: true });
 

@@ -302,7 +302,7 @@ app.use(cors({
 // 3. Limitador de solicitudes general (Rate Limiter)
 app.use(generalLimiter);
 
-app.use(express.json());
+app.use(express.json({ limit: "16kb" }));
 app.use(cookieParser());
 
 // Health check

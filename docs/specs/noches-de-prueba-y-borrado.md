@@ -274,15 +274,15 @@ del panel y al script de línea de comandos.
 | `supabase/migrations/20260808120000_delete_night.sql` | Las 4 funciones: `night_mp_order_ids`, `preview_night`, `delete_night`, `find_nights_by_ar_date`. SQL completo ya diseñado y revisado (ver **Cambios de datos**). |
 | `apps/api/src/modules/events/night-deletion.service.ts` | `preview(eventId)` y `delete(eventId, expectedArDate, operator)` — envuelven los `supabase.rpc(...)`. |
 | `apps/api/src/scripts/delete-night.ts` | CLI. `pnpm --filter cocktrail-api db:delete-night <fecha|--id uuid>`. |
-| `apps/web/src/components/admin/DeleteNightModal.tsx` | Confirmación: resumen de lo que se pierde + escribir la fecha + contraseña. |
+| `apps/web/src/components/admin/HistorialSection.tsx` | Confirmación de borrado con `SafeDeleteModal`: resumen de lo que se pierde + mantener-apretado + toast con Deshacer (DELETE diferido). Reemplaza a `DeleteNightModal`. |
 
 **Modificados**
 
 | Archivo:línea | Cambio |
 |---|---|
-| `apps/api/src/modules/events/events.controller.ts` | `GET /api/events/:id/deletion-preview` y `DELETE /api/events/:id`, ambos `requireRole("admin")` + `authenticate(username, password)` como en `/event/close:56`. |
+| `apps/api/src/modules/events/events.controller.ts` | `GET /api/events/:id/deletion-preview` y `DELETE /api/events/:id`, ambos `requireRole("admin")`. El DELETE validó la contraseña como `/event/close`; desde el 2026-08-10 se eliminó la re-auth por contraseña para habilitar mantener-apretado + deshacer (la fecha sigue validada en el server). |
 | `apps/web/src/components/admin/HistorialSection.tsx:58` | Acción "eliminar noche" por noche cerrada, visible solo para `role === "admin"`. |
-| `apps/web/src/services/events.service.ts` | `getDeletionPreview(id)` y `deleteNight(id, fecha, password)`. |
+| `apps/web/src/services/events.service.ts` | `getDeletionPreview(id)` y `deleteNight(id, fecha)`. |
 | `apps/api/package.json:10` | Script `db:delete-night`. |
 
 ---

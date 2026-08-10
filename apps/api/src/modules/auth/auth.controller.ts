@@ -10,6 +10,26 @@ import type { Role } from "@cocktrail/shared";
 /** Marcador público para que la app Android distinga este server de cualquier HTTP en :3000. */
 export const SERVER_FINGERPRINT = { app: "cocktrail" as const };
 
+async function verifyTurnstile(token: string | undefined): Promise<boolean> {
+  const secret = process.env.CF_TURNSTILE_SECRET_KEY;
+  if (!secret) {
+    // Sin secret configurado, permitir (dev/local). En prod fallá cerrado.
+    return process.env.NODE_ENV !== "production";
+  }
+  if (!token) return false;
+  try {
+    const form = new URLSearchParams({ secret, response: token });
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: form,
+    });
+    const data = (await res.json()) as { success?: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
 type AuthControllerOptions = {
   onLogout?: (user: { username: string; role: Role }) => Promise<void>;
   /** Función que persiste la versión de sesión en DB. */
@@ -30,7 +50,13 @@ export function createAuthController(
   // POST /api/auth/login
   router.post("/login", loginLimiter, validate(LoginSchema), async (req, res, next) => {
     try {
-      const { username, password } = req.body;
+      const { username, password, cfTurnstileToken } = req.body;
+
+      const turnstileOk = await verifyTurnstile(cfTurnstileToken);
+      if (!turnstileOk) {
+        res.status(400).json({ error: "Verificación de seguridad fallida. Reintentá." });
+        return;
+      }
 
       const result = await authenticate(username, password, usersRepo);
       if (!result) {

@@ -134,20 +134,15 @@ export function createEventsController(
     "/events/:id",
     authMiddleware,
     requireRole("admin"),
-    loginLimiter, // re-auth por password: mismo techo que /login
     async (req, res, next) => {
       try {
-        const { password, fecha } = req.body;
-        if (!password) throw new BadRequest("Contraseña requerida para confirmar el borrado.");
+        const { fecha } = req.body;
         if (typeof fecha !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
           throw new BadRequest("Escribí la fecha de la noche (AAAA-MM-DD) para confirmar.");
         }
 
         const username = req.session?.username;
         if (!username) throw new Unauthorized();
-
-        const verified = await authenticate(username, password, usersRepo);
-        if (!verified) throw new BadRequest("Contraseña incorrecta.");
 
         // `fecha` va como guarda al servidor: si no coincide con el día argentino real
         // de la noche, la función aborta sin tocar nada. La confirmación tipeada de la

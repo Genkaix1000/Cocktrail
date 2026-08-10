@@ -219,6 +219,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
       hasMetricas: hasPermission("metricas"),
       canCloseNight: Boolean(currentUser.permissions?.closeNight),
       hasLinkedDevice: posnetHealth?.hasLinkedDevice ?? null,
+      onEnsureSidebarExpanded: () => setIsSidebarCollapsed(false),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hasPermission is stable per render
     [currentUser.permissions, posnetHealth?.hasLinkedDevice],

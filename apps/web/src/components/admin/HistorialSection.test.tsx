@@ -1,12 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, renderHook, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import HistorialSection from "./HistorialSection";
+import { HOLD_CONFIRM_MS } from "@/components/shared/SafeDeleteModal";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 import { useTheme } from "@/components/ThemeProvider";
 import { exportHistorialPdf } from "@/lib/pdfExport";
-import { eventsService } from "@/services/events.service";
+import { eventsService, type NightDeletionPreview } from "@/services/events.service";
 
 import type { EventSummary, EventTotals, Role } from "@cocktrail/shared";
 
@@ -98,6 +99,36 @@ function makeProps(overrides: Partial<Parameters<typeof HistorialSection>[0]> = 
     ...overrides,
   };
 }
+
+function makePreview(overrides: Partial<NightDeletionPreview> = {}): NightDeletionPreview {
+  return {
+    eventId: "evt-1",
+    status: "cerrado",
+    fechaAr: "2026-08-07",
+    keyword: "TEQUILA",
+    startedAt: "2026-08-07T23:00:00.000Z",
+    closedAt: "2026-08-08T06:00:00.000Z",
+    pedidos: 12,
+    pedidosCancelados: 1,
+    totalFacturado: 48500,
+    tickets: 12,
+    cashSales: 0,
+    cashSalesMonto: 0,
+    mpOrders: 0,
+    mpOrdersCobrados: 0,
+    mpMontoCobrado: 0,
+    mpSinEventId: 0,
+    ...overrides,
+  };
+}
+
+function mockPreview(id = "evt-1") {
+  vi.mocked(eventsService.getDeletionPreview).mockResolvedValue(makePreview({ eventId: id }));
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("HistorialSection", () => {
   it("renderiza sin crashear con datos mínimos", () => {
@@ -198,33 +229,119 @@ describe("HistorialSection", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("al tocar eliminar abre la confirmación de esa noche", async () => {
+    it("al tocar eliminar abre la confirmación y pide el detalle de esa noche", async () => {
       const user = userEvent.setup();
       const night = makeNight({ id: "evt-42" });
-      vi.mocked(eventsService.getDeletionPreview).mockResolvedValue({
-        eventId: "evt-42",
-        status: "cerrado",
-        fechaAr: "2026-08-07",
-        keyword: "TEQUILA",
-        startedAt: "2026-08-07T23:00:00.000Z",
-        closedAt: "2026-08-08T06:00:00.000Z",
-        pedidos: 5,
-        pedidosCancelados: 0,
-        totalFacturado: 15000,
-        tickets: 5,
-        cashSales: 0,
-        cashSalesMonto: 0,
-        mpOrders: 0,
-        mpOrdersCobrados: 0,
-        mpMontoCobrado: 0,
-        mpSinEventId: 0,
-      });
+      mockPreview("evt-42");
 
       render(<HistorialSection {...makeProps({ historyEvents: [night], role: "admin" })} />);
       await user.click(screen.getByRole("button", { name: /Eliminar la noche del/i }));
 
-      expect(await screen.findByRole("dialog", { name: /Eliminar noche/i })).toBeInTheDocument();
+      expect(
+        await screen.findByRole("alertdialog", { name: /Eliminar noche/i }),
+      ).toBeInTheDocument();
       expect(eventsService.getDeletionPreview).toHaveBeenCalledWith("evt-42");
+    });
+
+    it("la confirmación muestra qué se pierde y advierte de los cobros MP", async () => {
+      const user = userEvent.setup();
+      const night = makeNight({ id: "evt-42" });
+      vi.mocked(eventsService.getDeletionPreview).mockResolvedValue(
+        makePreview({ eventId: "evt-42", mpOrdersCobrados: 3, mpMontoCobrado: 21000 }),
+      );
+
+      render(<HistorialSection {...makeProps({ historyEvents: [night], role: "admin" })} />);
+      await user.click(screen.getByRole("button", { name: /Eliminar la noche del/i }));
+
+      expect(await screen.findByText("Total facturado")).toBeInTheDocument();
+      expect(screen.getByText("$48.500")).toBeInTheDocument();
+      expect(screen.getByText("12 (1 cancelados)")).toBeInTheDocument();
+      expect(screen.getByText(/cobros?\s*real/i)).toBeInTheDocument();
+      expect(screen.getAllByText("$21.000").length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("tras hold muestra toast con Deshacer y solo entonces borra en API", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const night = makeNight({ id: "evt-42" });
+      mockPreview("evt-42");
+      vi.mocked(eventsService.deleteNight).mockResolvedValue({
+        ...makePreview({ eventId: "evt-42" }),
+        borrado: {
+          orders: 12,
+          tickets: 12,
+          cashSales: 0,
+          mpOrders: 0,
+          webhooksNeutralizados: 0,
+          mpOrdersDesligados: 0,
+        },
+        operator: "manuel",
+      });
+
+      render(<HistorialSection {...makeProps({ historyEvents: [night], role: "admin" })} />);
+      fireEvent.click(screen.getByRole("button", { name: /Eliminar la noche del/i }));
+      await act(async () => {});
+
+      const hold = screen.getByRole("button", { name: /Borrar la noche\. Mantené/i });
+      expect(hold).toBeEnabled();
+      expect(eventsService.deleteNight).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(hold);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOLD_CONFIRM_MS + 100);
+      });
+
+      expect(screen.getByText(/Noche eliminada/i)).toBeInTheDocument();
+      expect(eventsService.deleteNight).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+      await act(async () => {});
+      expect(eventsService.deleteNight).toHaveBeenCalledWith("evt-42", "2026-08-07");
+    });
+
+    it("Deshacer restaura la noche en la lista sin llamar a la API", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const night = makeNight({ id: "evt-42" });
+      mockPreview("evt-42");
+
+      render(<HistorialSection {...makeProps({ historyEvents: [night], role: "admin" })} />);
+      fireEvent.click(screen.getByRole("button", { name: /Eliminar la noche del/i }));
+      await act(async () => {});
+
+      const hold = screen.getByRole("button", { name: /Borrar la noche\. Mantené/i });
+      fireEvent.pointerDown(hold);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOLD_CONFIRM_MS + 100);
+      });
+
+      expect(screen.getByText(/Noche eliminada/i)).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /Eliminar la noche del/i }),
+      ).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Deshacer/i }));
+
+      expect(
+        screen.getByRole("button", { name: /Eliminar la noche del/i }),
+      ).toBeInTheDocument();
+      expect(eventsService.deleteNight).not.toHaveBeenCalled();
+    });
+
+    it("si el detalle falla, el hold queda deshabilitado", async () => {
+      const user = userEvent.setup();
+      const night = makeNight({ id: "evt-42" });
+      vi.mocked(eventsService.getDeletionPreview).mockRejectedValue(
+        new Error("Noche inexistente"),
+      );
+
+      render(<HistorialSection {...makeProps({ historyEvents: [night], role: "admin" })} />);
+      await user.click(screen.getByRole("button", { name: /Eliminar la noche del/i }));
+
+      expect(await screen.findByText("Noche inexistente")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Borrar la noche\. Mantené/i }),
+      ).toBeDisabled();
     });
   });
 

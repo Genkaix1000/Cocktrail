@@ -19,13 +19,14 @@ import androidx.appcompat.app.AppCompatActivity
 import org.json.JSONObject
 
 /**
- * Shell de caja: WebView a pantalla completa + impresión USB nativa.
+ * Shell de caja: WebView a pantalla completa + impresión USB/BLE nativa.
  * Por defecto apunta a la nube (Render). LAN solo si la nube falla o
  * el operador lo pide desde Sistema / connect.html.
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var printer: UsbEscPosPrinter
+    private lateinit var blePrinter: BleS1Printer
     private val main = Handler(Looper.getMainLooper())
     private var operationId = 0
     private var connectPageReady = false
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity() {
 
         printer = UsbEscPosPrinter(this)
         printer.register()
+        blePrinter = BleS1Printer(this)
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -133,7 +135,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun enablePrinterBridge() {
         webView.removeJavascriptInterface("MiBolichePrinter")
-        webView.addJavascriptInterface(PrinterBridge(printer), "MiBolichePrinter")
+        webView.addJavascriptInterface(PrinterBridge(printer, blePrinter), "MiBolichePrinter")
     }
 
     private fun disablePrinterBridge() {

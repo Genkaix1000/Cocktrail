@@ -1,12 +1,68 @@
 "use client";
 
-import { Lock, LogIn, Moon, Shield, Banknote, Sun } from "lucide-react";
+import { Eye, EyeOff, Lock, LogIn, Moon, Shield, Banknote, Sun } from "lucide-react";
+import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
 import { authService } from "@/services/auth.service";
 import { ApiError } from "@/services/api-client";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: string | HTMLElement,
+        options: {
+          sitekey: string;
+          callback: (token: string) => void;
+          "error-callback"?: () => void;
+          "expired-callback"?: () => void;
+        },
+      ) => string;
+      remove: (widgetId: string) => void;
+    };
+  }
+}
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY;
+
+async function getTurnstileToken(): Promise<string | undefined> {
+  if (!TURNSTILE_SITE_KEY) return undefined;
+
+  const turnstile = await new Promise<NonNullable<Window["turnstile"]>>((resolve, reject) => {
+    const started = Date.now();
+    const tick = () => {
+      if (window.turnstile) {
+        resolve(window.turnstile);
+        return;
+      }
+      if (Date.now() - started > 10_000) {
+        reject(new Error("Turnstile no cargó. Reintentá."));
+        return;
+      }
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+
+  const container = document.getElementById("turnstile-container");
+  if (!container) throw new Error("Contenedor Turnstile no encontrado");
+  container.replaceChildren();
+
+  return new Promise<string>((resolve, reject) => {
+    const widgetId = turnstile.render("#turnstile-container", {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: (token) => {
+        turnstile.remove(widgetId);
+        resolve(token);
+      },
+      "error-callback": () => reject(new Error("Falló la verificación de seguridad")),
+      "expired-callback": () => reject(new Error("Verificación expirada, reintentá")),
+    });
+  });
+}
 
 export default function LoginPage() {
   return (
@@ -41,6 +97,7 @@ function LoginForm() {
   const { isDark, toggleDark } = useTheme();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,12 +117,15 @@ function LoginForm() {
     setError(null);
 
     try {
-      const data = await authService.login(username, password);
+      const cfTurnstileToken = await getTurnstileToken();
+      const data = await authService.login(username, password, cfTurnstileToken);
       const dest = redirect ?? (data.role === "admin" ? "/admin" : "/caja");
       router.push(dest);
       router.refresh();
     } catch (err) {
       if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (err instanceof Error) {
         setError(err.message);
       } else {
         setError("Error de red");
@@ -77,6 +137,12 @@ function LoginForm() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
+      {TURNSTILE_SITE_KEY ? (
+        <Script
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+          strategy="lazyOnload"
+        />
+      ) : null}
       <div className="flex flex-col flex-1 min-h-0 p-3 md:p-4 gap-3 md:gap-4">
         <header className="h-14 md:h-16 px-4 md:px-5 shrink-0 flex items-center justify-between bg-[var(--bg-panel)] md:rounded-[20px] shadow-card">
           <div className="flex items-center gap-3 min-w-0">
@@ -189,17 +255,30 @@ function LoginForm() {
                   <span className="text-[12px] font-medium text-[var(--text-secondary)]">
                     Contraseña
                   </span>
-                  <input
-                    id="password-input"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] rounded-xl px-4 py-3.5 text-[var(--text-primary)] outline-none transition-colors text-[15px] placeholder:text-[var(--text-tertiary)]"
-                    placeholder="Ingresá tu clave o PIN"
-                  />
+                  <div className="relative">
+                    <input
+                      id="password-input"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] rounded-xl px-4 py-3.5 pr-12 text-[var(--text-primary)] outline-none transition-colors text-[15px] placeholder:text-[var(--text-tertiary)]"
+                      placeholder="Ingresá tu clave o PIN"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                      aria-pressed={showPassword}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />}
+                    </button>
+                  </div>
                 </label>
+
+                <div id="turnstile-container" />
 
                 <button
                   type="submit"

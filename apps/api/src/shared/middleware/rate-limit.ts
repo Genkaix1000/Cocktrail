@@ -1,7 +1,20 @@
-import { rateLimit } from "express-rate-limit";
+import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 
 function limiter(windowMs: number, max: number, message: string) {
-  return rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false, message: { error: message } });
+  return rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: message },
+    // CF+Render: req.ip con trust proxy:1 ve el hop de Render, no el cliente.
+    // CF-Connecting-IP es la IP real; fallback a req.ip (LAN/dev).
+    keyGenerator: (req) => {
+      const cf = req.headers["cf-connecting-ip"];
+      const ip = (typeof cf === "string" && cf) || req.ip || "unknown";
+      return ipKeyGenerator(ip);
+    },
+  });
 }
 
 const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";

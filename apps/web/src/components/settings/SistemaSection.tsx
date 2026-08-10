@@ -29,7 +29,7 @@ const STEPS = [
   "Tocá «Descargar app» y confirmá la instalación.",
   "Si el celular avisa que la descarga es de otro origen, aceptá igual: la app la genera este sistema.",
   "Abrí miBoliche Caja desde el escritorio de la tablet.",
-  "Enchufá la impresora y tocá «Permitir» cuando aparezca el aviso.",
+  "USB: enchufá la ticketera. Bluetooth S1: en Caja tocá «Vincular impresora».",
 ];
 
 function formatUptime(sec: number): string {
@@ -63,7 +63,7 @@ function VersionRow({ label, value }: { label: string; value: string }) {
 
 /**
  * Sección "Sistema" de Configuración en /admin — app de caja para la tablet
- * (WebView + impresión USB nativa) + versión / deploy.
+ * (WebView + impresión USB/BLE nativa) + versión / deploy.
  */
 export default function SistemaSection() {
   const [version, setVersion] = useState<AppVersionInfo | null>(null);
@@ -135,13 +135,20 @@ export default function SistemaSection() {
           </div>
 
           <p className="relative text-[13px] text-white/70 leading-relaxed mt-4">
-            Se abre a pantalla completa, sin navegador, y usa la impresora enchufada a la tablet.
-            Se conecta a la nube; el WiFi local es opcional desde esta sección.
+            Se abre a pantalla completa, sin navegador. Imprime por USB o Bluetooth S1 y
+            se conecta a la nube; el WiFi local es opcional desde esta sección.
           </p>
 
           <a
             href={CAJA_APK_HREF}
             download="miboliche-caja.apk"
+            onClick={() => {
+              try {
+                localStorage.setItem("app_downloaded", "true");
+              } catch {
+                /* private mode */
+              }
+            }}
             className="relative mt-4 h-10 w-full rounded-full bg-white text-[#16321F] hover:brightness-95 flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer active:scale-[0.98]"
           >
             <Download size={15} strokeWidth={2} />

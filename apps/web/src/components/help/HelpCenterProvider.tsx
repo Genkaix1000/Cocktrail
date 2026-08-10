@@ -80,6 +80,7 @@ function HelpBridge({
         const steps = cat.steps;
         if (steps.length === 0) return;
 
+        cajaConfig?.onEnsureSidebarExpanded?.();
         const startCtx = await cat.onStart?.();
         cleanupRef.current = startCtx != null
           ? async () => { await cat.onEnd?.(startCtx); }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   History,
   TrendingUp,
@@ -8,13 +8,14 @@ import {
   Download,
   Trash2,
   ShieldAlert,
+  Loader2,
 } from "lucide-react";
 
 import MetricCard from "@/components/shared/MetricCard";
 import NightRecords from "@/components/analytics/NightRecords";
 import NightComparator from "@/components/analytics/NightComparator";
 import Toast from "@/components/shared/Toast";
-import DeleteNightModal from "@/components/admin/DeleteNightModal";
+import SafeDeleteModal from "@/components/shared/SafeDeleteModal";
 import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 
 import { groupNightsByDay, formatNightDateLong } from "@/lib/analytics";
@@ -22,6 +23,7 @@ import { exportHistorialPdf } from "@/lib/pdfExport";
 import { useTheme } from "@/components/ThemeProvider";
 import { formatShortDate, formatHm, plural } from "@/lib/utils";
 
+import { eventsService, type NightDeletionPreview } from "@/services/events.service";
 import type { AdminAnalytics } from "@/hooks/useAdminAnalytics";
 import type { UnifiedNightDay } from "@/lib/analytics";
 import type { EventSummary, Role } from "@cocktrail/shared";
@@ -44,6 +46,12 @@ type Props = {
 
 const cardShell =
   "bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-card";
+
+const DELETE_UNDO_MS = 5000;
+
+function formatMonto(value: number): string {
+  return `$${Math.round(value).toLocaleString("es-AR")}`;
+}
 
 // "Esta Semana" (semana calendario, lun-dom) y "Este Mes" (desde el día 1)
 // son ventanas distintas que pueden solaparse solo parcialmente — al
@@ -77,7 +85,95 @@ export default function HistorialSection({
   const { logoUrl, useLogoUrl, textLogoValue } = useTheme();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [nightToDelete, setNightToDelete] = useState<EventSummary | null>(null);
+  const [deleteNight, setDeleteNight] = useState<EventSummary | null>(null);
+  const [deletePreview, setDeletePreview] = useState<NightDeletionPreview | null>(null);
+  const [deleteLoadError, setDeleteLoadError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteUndo, setDeleteUndo] = useState(false);
+  const [hiddenNightIds, setHiddenNightIds] = useState<Set<string>>(() => new Set());
+
+  const pendingDeleteRef = useRef<{
+    id: string;
+    fechaAr: string;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!deleteNight) return;
+    let cancelled = false;
+    setDeletePreview(null);
+    setDeleteLoadError(null);
+    eventsService
+      .getDeletionPreview(deleteNight.id)
+      .then((data) => {
+        if (!cancelled) setDeletePreview(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled)
+          setDeleteLoadError(
+            err instanceof Error ? err.message : "No se pudo cargar el detalle de la noche.",
+          );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deleteNight]);
+
+  useEffect(() => {
+    return () => {
+      const pending = pendingDeleteRef.current;
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingDeleteRef.current = null;
+    };
+  }, []);
+
+  async function commitDelete(id: string, fechaAr: string) {
+    try {
+      await eventsService.deleteNight(id, fechaAr);
+      onNightDeleted();
+    } catch (err) {
+      setHiddenNightIds((ids) => {
+        const next = new Set(ids);
+        next.delete(id);
+        return next;
+      });
+      setDeleteError(err instanceof Error ? err.message : "No se pudo borrar la noche.");
+    }
+  }
+
+  /** Hold confirmado: esconde la noche, toast con Deshacer, DELETE diferido. */
+  function scheduleDelete(night: EventSummary, fechaAr: string) {
+    if (pendingDeleteRef.current) {
+      void commitDelete(pendingDeleteRef.current.id, pendingDeleteRef.current.fechaAr);
+      pendingDeleteRef.current = null;
+    }
+    setHiddenNightIds((ids) => new Set(ids).add(night.id));
+    setDeleteNight(null);
+    setDeleteError(null);
+    setDeleteUndo(true);
+
+    const timer = setTimeout(() => {
+      pendingDeleteRef.current = null;
+      setDeleteUndo(false);
+      void commitDelete(night.id, fechaAr);
+    }, DELETE_UNDO_MS);
+
+    pendingDeleteRef.current = { id: night.id, fechaAr, timer };
+  }
+
+  function handleUndoDelete() {
+    const pending = pendingDeleteRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingDeleteRef.current = null;
+    setHiddenNightIds((ids) => {
+      const next = new Set(ids);
+      next.delete(pending.id);
+      return next;
+    });
+    setDeleteUndo(false);
+  }
 
   // `Date.now()` es impuro: se fija una sola vez al montar para calcular los
   // rangos de fecha de "Esta Semana"/"Este Mes" sin variar en renders
@@ -191,16 +287,53 @@ export default function HistorialSection({
           </div>
 
           {role === "admin" && historyEvents.length > 0 && (
-            <DangerZone nights={historyEvents} onDelete={setNightToDelete} />
+            <DangerZone
+              nights={historyEvents}
+              hiddenIds={hiddenNightIds}
+              onDelete={setDeleteNight}
+            />
           )}
         </div>
       )}
 
-      {nightToDelete && (
-        <DeleteNightModal
-          eventId={nightToDelete.id}
-          onClose={() => setNightToDelete(null)}
-          onDeleted={onNightDeleted}
+      {deleteError && (
+        <Toast variant="error" message={deleteError} onClose={() => setDeleteError(null)} />
+      )}
+
+      {deleteUndo && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast
+            variant="success"
+            message="Noche eliminada"
+            duration={DELETE_UNDO_MS}
+            action={{ label: "Deshacer", onClick: handleUndoDelete }}
+            onClose={() => setDeleteUndo(false)}
+          />
+        </div>
+      )}
+
+      {deleteNight && (
+        <SafeDeleteModal
+          onClose={() => setDeleteNight(null)}
+          onConfirm={() => {
+            if (!deletePreview) return;
+            scheduleDelete(deleteNight, deletePreview.fechaAr);
+          }}
+          disabled={!deletePreview || Boolean(deleteLoadError)}
+          title="Eliminar noche"
+          confirmLabel="Borrar la noche"
+          warning={
+            deleteLoadError ? (
+              <span className="text-danger font-semibold">{deleteLoadError}</span>
+            ) : deletePreview ? (
+              <DeleteNightWarning preview={deletePreview} />
+            ) : (
+              <span className="flex items-center gap-2 text-ink-400">
+                <Loader2 size={14} className="animate-spin" />
+                Cargando el detalle de la noche…
+              </span>
+            )
+          }
         />
       )}
     </div>
@@ -211,20 +344,24 @@ export default function HistorialSection({
  * Borrado de noches (D1). Vive apartado y con estética de peligro a propósito:
  * el caso de uso real es "me olvidé de tildar prueba", no algo que se haga
  * seguido. Cada fila es una sesión cerrada — el borrado es de a una noche.
+ * Confirmar es hold-to-confirm (SafeDeleteModal) + toast con Deshacer, el
+ * mismo patrón que el cancel de tickets en caja.
  */
 function DangerZone({
   nights,
+  hiddenIds,
   onDelete,
 }: {
   nights: EventSummary[];
+  hiddenIds: Set<string>;
   onDelete: (night: EventSummary) => void;
 }) {
   const closedNights = useMemo(
     () =>
       [...nights]
-        .filter((n) => n.status === "cerrado")
+        .filter((n) => n.status === "cerrado" && !hiddenIds.has(n.id))
         .sort((a, b) => (b.closedAt ?? b.startedAt) - (a.closedAt ?? a.startedAt)),
-    [nights],
+    [nights, hiddenIds],
   );
 
   if (closedNights.length === 0) return null;
@@ -283,5 +420,76 @@ function DangerZone({
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * Resumen de lo que se pierde (D3) + advertencia de cobros MP (D5), que
+ * muestra el SafeDeleteModal de borrado. El borrado nunca es silencioso.
+ */
+function DeleteNightWarning({ preview }: { preview: NightDeletionPreview }) {
+  const hasMpCobros = preview.mpOrdersCobrados > 0;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs leading-relaxed">
+        Vas a borrar la noche y <strong className="text-danger font-semibold">todo</strong> lo que
+        cuelga de ella: pedidos, tickets y cobros.
+      </p>
+      <dl className="flex flex-col gap-1.5">
+        <Row label="Fecha" value={preview.fechaAr} />
+        {preview.keyword && <Row label="Palabra clave" value={preview.keyword} />}
+        <Row
+          label="Pedidos"
+          value={
+            preview.pedidosCancelados > 0
+              ? `${preview.pedidos} (${preview.pedidosCancelados} cancelados)`
+              : String(preview.pedidos)
+          }
+        />
+        <Row label="Tickets" value={String(preview.tickets)} />
+        <Row label="Total facturado" value={formatMonto(preview.totalFacturado)} danger />
+        <Row
+          label="Cobros MP"
+          value={`${preview.mpOrdersCobrados} · ${formatMonto(preview.mpMontoCobrado)}`}
+        />
+      </dl>
+      {hasMpCobros && (
+        <p className="text-xs leading-relaxed text-danger font-medium">
+          Esta noche tiene <strong>{preview.mpOrdersCobrados}</strong> cobro
+          {preview.mpOrdersCobrados === 1 ? "" : "s"} real
+          {preview.mpOrdersCobrados === 1 ? "" : "es"} de Mercado Pago por{" "}
+          <strong>{formatMonto(preview.mpMontoCobrado)}</strong>. Se borran también: después de
+          esto no queda registro de esos cobros en el sistema.
+          {preview.mpSinEventId > 0 &&
+            ` ${preview.mpSinEventId} de esos cobros son viejos y no tienen la noche anotada: se detectaron por la venta asociada.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  danger,
+}: {
+  label: string;
+  value: string;
+  danger?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="font-semibold text-[10px] uppercase tracking-wider text-ink-500 font-mono">
+        {label}
+      </dt>
+      <dd
+        className={`font-mono tabular font-bold text-right ${
+          danger ? "text-danger" : "text-ink-50"
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }

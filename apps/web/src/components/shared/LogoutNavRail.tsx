@@ -50,9 +50,7 @@ export function LogoutNavRail({
     return (
       <div
         ref={rootRef}
-        className={`relative mx-auto w-10 h-10 overflow-hidden rounded-xl transition-colors duration-[260ms] ${
-          confirm ? "bg-[var(--danger-soft)]" : "bg-transparent"
-        }`}
+        className="relative mx-auto w-10 h-10 overflow-hidden rounded-xl bg-transparent"
       >
         <button
           type="button"
@@ -85,7 +83,7 @@ export function LogoutNavRail({
               e.stopPropagation();
               onConfirm();
             }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer"
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer hover:brightness-110 active:scale-95 transition-all"
           >
             <Check size={14} />
           </button>
@@ -97,16 +95,14 @@ export function LogoutNavRail({
   return (
     <div
       ref={rootRef}
-      className={`relative mx-2 h-9 overflow-hidden rounded-xl transition-colors duration-[260ms] ${
-        confirm ? "bg-[var(--danger-soft)]" : "bg-transparent hover:bg-[var(--bg-surface)]/60"
-      }`}
+      className="relative w-full h-9 overflow-hidden rounded-xl bg-transparent hover:bg-[var(--bg-surface)]/60 transition-colors duration-[260ms]"
     >
       <button
         type="button"
         aria-expanded={confirm}
         aria-label="Cerrar sesión"
         onClick={onAsk}
-        className={`${slide} gap-2.5 pl-2 pr-3 text-left text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer bg-transparent ${
+        className={`${slide} gap-2.5 pl-4 pr-3 text-left text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer bg-transparent ${
           confirm
             ? "-translate-x-full opacity-0 pointer-events-none"
             : "translate-x-0 opacity-100"
@@ -117,7 +113,7 @@ export function LogoutNavRail({
       </button>
 
       <div
-        className={`${slide} justify-between gap-2 pl-3 pr-1.5 ${
+        className={`${slide} justify-between gap-2 pl-4 pr-1.5 ${
           confirm
             ? "translate-x-0 opacity-100"
             : "translate-x-full opacity-0 pointer-events-none"
@@ -148,7 +144,7 @@ export function LogoutNavRail({
               e.stopPropagation();
               onConfirm();
             }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer"
+            className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer hover:brightness-110 active:scale-95 transition-all"
           >
             <Check size={12} />
           </button>

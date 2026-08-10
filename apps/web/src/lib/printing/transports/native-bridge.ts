@@ -1,7 +1,6 @@
 /**
- * Transporte del puente nativo de la app Android (`window.MiBolichePrinter`):
- * la app maneja el USB, acá solo le pasamos los bytes ESC/POS en base64.
- * En el WebView del APK no hay Web Bluetooth ni WebUSB — este es el único.
+ * Transporte del puente nativo del APK (`window.MiBolichePrinter`):
+ * USB ESC/POS. La S1 Bluetooth va por native-ble-s1.
  */
 
 import type { PrinterTransport, TransportPrintPayload } from "../types";
@@ -38,11 +37,8 @@ export const nativeBridgeTransport: PrinterTransport = {
     }
     const before = native.isConnected();
     native.requestPermission();
-    // Sin device USB el bridge no muestra diálogo: decir la verdad al toque.
     if (!before && !native.isConnected()) {
-      throw new Error(
-        "APK = solo USB. No hay ticketera enchufada. Para la S1 Bluetooth abrí Chrome con HTTPS (no esta app).",
-      );
+      throw new Error("No hay ticketera USB enchufada.");
     }
   },
 

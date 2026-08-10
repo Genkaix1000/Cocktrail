@@ -3,6 +3,7 @@ import {
   HELP_GENERAL_SEEN_KEY,
   getCategories,
   hasSeenHelpGeneral,
+  isAppInstalledOrDownloaded,
   markHelpGeneralSeen,
 } from "./helpTours";
 
@@ -21,6 +22,30 @@ describe("helpTours storage", () => {
   it("migra tour lineal viejo como seen", () => {
     localStorage.setItem("cocktrail_tour_seen_admin", "1");
     expect(hasSeenHelpGeneral()).toBe(true);
+  });
+});
+
+describe("isAppInstalledOrDownloaded", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("retorna true cuando app_downloaded está en localStorage", () => {
+    expect(isAppInstalledOrDownloaded()).toBe(false);
+    localStorage.setItem("app_downloaded", "true");
+    expect(isAppInstalledOrDownloaded()).toBe(true);
+  });
+
+  it("omite el paso de instalación en el onboarding cuando la app está descargada", () => {
+    localStorage.setItem("app_downloaded", "true");
+
+    const adminGeneral = getCategories("admin").find((c) => c.id === "general")!;
+    const adminIds = adminGeneral.steps.map((s) => s.id);
+    expect(adminIds).not.toContain("general-install");
+
+    const cajaGeneral = getCategories("caja").find((c) => c.id === "general")!;
+    const cajaIds = cajaGeneral.steps.map((s) => s.id);
+    expect(cajaIds).not.toContain("caja-install");
   });
 });
 

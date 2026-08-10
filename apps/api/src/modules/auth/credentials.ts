@@ -70,10 +70,21 @@ export async function authenticate(
     }
   }
 
-  // 2. Fallback system users (dev defaults — plaintext comparison, no upgrade)
+  // 2. Fallback system users (env vars — comparación timing-safe).
+  // Estos usuarios solo existen en dev (env.ts bloquea los defaults en prod).
   const u = USERS[username];
-  if (u && u.password === password) {
-    return { user: { username, role: u.role } };
+  if (u) {
+    const expected = Buffer.from(u.password, "utf8");
+    const actual = Buffer.from(password, "utf8");
+    // timingSafeEqual exige misma longitud — el padding evita leakear el largo.
+    const maxLen = Math.max(expected.length, actual.length);
+    const a = Buffer.alloc(maxLen);
+    const b = Buffer.alloc(maxLen);
+    expected.copy(a);
+    actual.copy(b);
+    if (timingSafeEqual(a, b) && expected.length === actual.length) {
+      return { user: { username, role: u.role } };
+    }
   }
 
   return null;

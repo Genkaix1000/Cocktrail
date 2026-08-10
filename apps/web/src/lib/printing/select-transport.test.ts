@@ -3,10 +3,23 @@ import { afterEach, describe, expect, it } from "vitest";
 import { selectTransport } from "./select-transport";
 import { BLE_PRINTER_ID_KEY } from "./transports/ble-s1";
 
-function stubNative() {
+function stubNativeUsb(connected = true) {
   (window as unknown as Record<string, unknown>).MiBolichePrinter = {
     print: () => "ok",
-    isConnected: () => true,
+    isConnected: () => connected,
+    requestPermission: () => {},
+    blePair: () => "ok",
+    bleIsPaired: () => false,
+    bleIsConnected: () => false,
+    bleConnect: () => "ok",
+    blePrintSteps: () => "ok",
+  };
+}
+
+function stubNativeUsbOnly(connected = true) {
+  (window as unknown as Record<string, unknown>).MiBolichePrinter = {
+    print: () => "ok",
+    isConnected: () => connected,
     requestPermission: () => {},
   };
 }
@@ -26,12 +39,22 @@ afterEach(() => {
 });
 
 describe("selectTransport", () => {
-  it("el puente nativo gana siempre (en el WebView del APK no hay BLE)", () => {
-    stubNative();
+  it("APK con USB enchufado usa el puente USB", () => {
+    stubNativeUsb(true);
     stubNavigatorProp("bluetooth");
     stubNavigatorProp("usb");
     localStorage.setItem(BLE_PRINTER_ID_KEY, "dev-1");
 
+    expect(selectTransport()?.id).toBe("native");
+  });
+
+  it("APK sin USB usa BLE nativo S1", () => {
+    stubNativeUsb(false);
+    expect(selectTransport()?.id).toBe("native-ble-s1");
+  });
+
+  it("APK viejo sin blePair y sin USB sigue en native", () => {
+    stubNativeUsbOnly(false);
     expect(selectTransport()?.id).toBe("native");
   });
 
