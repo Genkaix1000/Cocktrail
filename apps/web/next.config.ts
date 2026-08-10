@@ -52,7 +52,7 @@ const nextConfig: NextConfig = {
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' data: blob: https://images.unsplash.com",
+          "img-src 'self' data: blob: https://images.unsplash.com https://api.qrserver.com",
           "connect-src 'self' wss: https://challenges.cloudflare.com",
           "frame-src https://challenges.cloudflare.com",
         ].join("; "),
