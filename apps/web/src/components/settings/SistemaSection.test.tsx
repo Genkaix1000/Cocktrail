@@ -50,7 +50,8 @@ describe("SistemaSection", () => {
       "href",
       "/miboliche-caja.apk",
     );
-    expect(screen.queryByText("Servidor")).not.toBeInTheDocument();
+    expect(screen.getByText("Servidor")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Usar Render \(bosko-7xsy\)/i })).toBeInTheDocument();
     await waitFor(() => expect(mocked.getVersion).toHaveBeenCalled());
   });
 
@@ -64,15 +65,16 @@ describe("SistemaSection", () => {
     expect(screen.getByText("Panel de versión en Sistema.")).toBeInTheDocument();
   });
 
-  it("en el shell APK muestra el switch de servidor", async () => {
+  it("en el shell APK marca app Android en el bloque Servidor", async () => {
     (window as Window & { MiBolichePrinter?: { print: () => string } }).MiBolichePrinter = {
       print: () => "ok",
     };
     try {
       render(<SistemaSection />);
-      expect(await screen.findByText("Servidor")).toBeInTheDocument();
+      expect(await screen.findByText(/· app Android/)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Buscar en WiFi local/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Usar nube/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Usar nube \(miboliche\.online\)/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Usar Render \(bosko-7xsy\)/i })).toBeInTheDocument();
     } finally {
       delete (window as Window & { MiBolichePrinter?: unknown }).MiBolichePrinter;
     }

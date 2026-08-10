@@ -189,12 +189,30 @@ export const bleS1Transport: PrinterTransport = {
   async pair(): Promise<void> {
     const api = bluetooth();
     if (!api) {
-      throw new Error("Este navegador no tiene Web Bluetooth. Abrí Chrome con HTTPS.");
+      throw new Error(
+        "Sin Web Bluetooth. En Chrome abrí chrome://flags → activá “Experimental Web Platform features” (y en Linux también “Web Bluetooth New Permissions Backend”), reiniciá Chrome y reabrí la PWA.",
+      );
     }
-    const device = await api.requestDevice({
-      filters: [{ namePrefix: S1_NAME_PREFIX }],
-      optionalServices: [S1_SERVICE],
-    });
+    let device: BluetoothDevice;
+    try {
+      device = await api.requestDevice({
+        filters: [{ namePrefix: S1_NAME_PREFIX }],
+        optionalServices: [S1_SERVICE],
+      });
+    } catch (err) {
+      if (err instanceof DOMException) {
+        if (err.name === "NotAllowedError") {
+          throw new Error(
+            "Chrome bloqueó el selector Bluetooth. Tocá otra vez «Vincular» (tiene que ser un toque directo).",
+          );
+        }
+        if (err.name === "NotFoundError") {
+          // Canceló el diálogo, o no hay ninguna PPS1 a la vista.
+          throw new Error("No se eligió impresora. Encendé la S1 y buscá un nombre PPS1…");
+        }
+      }
+      throw err instanceof Error ? err : new Error(String(err));
+    }
     try {
       window.localStorage.setItem(BLE_PRINTER_ID_KEY, device.id);
     } catch {

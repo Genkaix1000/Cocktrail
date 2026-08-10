@@ -64,6 +64,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     printerStatus,
     testPrint,
     printerTestMessage,
+    clearPrinterTestMessage,
     reprintTicket,
     printTicket,
     pairPrinterDevice,
@@ -108,6 +109,8 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
   });
 
   // Aviso tipo onboarding si la caja abre sin impresora vinculada.
+  // No pelear con el tour (?): si el tour está por salir, igual el modal de
+  // impresora tiene prioridad y el error de pair tiene que verse.
   useEffect(() => {
     if (event?.status !== "activo") return;
     if (printerStatus === null) return; // todavía no sabemos
@@ -132,14 +135,12 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     }
   }
 
-  async function handlePairPrinterFromPrompt() {
+  function handlePairPrinterFromPrompt() {
+    // pair() tiene que arrancar en el mismo turno del toque (Web Bluetooth).
+    // setState de “Vinculando…” va DESPUÉS de disparar el promise.
+    const pairing = pairPrinterDevice();
     setPairingPrinter(true);
-    try {
-      await pairPrinterDevice();
-      // Si vinculó, el effect cierra el modal; si canceló/falló, queda abierto.
-    } finally {
-      setPairingPrinter(false);
-    }
+    void pairing.finally(() => setPairingPrinter(false));
   }
 
   const activeNightOrders = useMemo(() => {
@@ -231,6 +232,22 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
       cajaConfig={cajaHelpConfig}
     >
       <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
+        {printerTestMessage && (
+          <div
+            role="alert"
+            className="fixed bottom-4 left-3 right-3 md:left-auto md:right-4 md:max-w-md z-[10002] rounded-2xl border border-[var(--danger-line)] bg-[var(--danger-soft)] px-4 py-3 shadow-card flex items-start gap-3"
+          >
+            <p className="flex-1 text-sm text-[var(--danger-base)] leading-snug">{printerTestMessage}</p>
+            <button
+              type="button"
+              onClick={clearPrinterTestMessage}
+              className="shrink-0 p-1 rounded-full text-[var(--danger-base)] cursor-pointer"
+              aria-label="Cerrar"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
         <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {((event && closeModalOpen) || summary) && (
           <CloseNightModal
@@ -245,7 +262,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
         )}
 
         {printerPromptOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
             <div
               role="dialog"
               aria-labelledby="printer-prompt-title"
@@ -275,13 +292,21 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
               <div className="flex flex-col gap-2.5">
                 <button
                   type="button"
-                  onClick={() => void handlePairPrinterFromPrompt()}
+                  onClick={() => {
+                    if (pairingPrinter) return;
+                    handlePairPrinterFromPrompt();
+                  }}
                   disabled={pairingPrinter}
                   className="w-full h-12 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98] transition-all"
                 >
                   <Printer size={16} />
                   {pairingPrinter ? "Vinculando…" : "Vincular impresora"}
                 </button>
+                {printerTestMessage && (
+                  <p className="text-xs text-[var(--danger-base)] text-center leading-snug">
+                    {printerTestMessage}
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={dismissPrinterPrompt}

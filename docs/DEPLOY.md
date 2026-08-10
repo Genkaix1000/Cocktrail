@@ -136,6 +136,18 @@ mkcert) o el flag
 `chrome://flags/#unsafely-treat-insecure-origin-as-secure`. Ver
 `apps/caja-android/README.md`.
 
+### Impresora Bluetooth (S1) desde la PWA
+
+En **Android** Chrome trae Web Bluetooth sin flags. En **Linux** (y Windows
+viejos) hace falta activar flags y reiniciar Chrome — la PWA instalada usa el
+mismo perfil, así que sin el flag `navigator.bluetooth` no existe y Vincular
+no abre nada:
+
+1. `chrome://flags/#enable-experimental-web-platform-features` → **Enabled**
+2. `chrome://flags/#enable-web-bluetooth-new-permissions-backend` → **Enabled**
+   (reconectar sin volver a pedir la impresora)
+3. Relaunch Chrome → cerrá y abrí de nuevo la PWA
+
 ---
 
 ## 6. Reset / limpieza

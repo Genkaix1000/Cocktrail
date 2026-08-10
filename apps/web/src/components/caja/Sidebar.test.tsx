@@ -180,6 +180,26 @@ describe("CajaSidebar", () => {
     expect(pairPrinterDevice).toHaveBeenCalled();
   });
 
+  it("sidebar colapsado con impresora vinculada llama a Conectar, no a Vincular", async () => {
+    const user = userEvent.setup();
+    const connectPrinter = vi.fn();
+    const pairPrinterDevice = vi.fn();
+    render(
+      <CajaSidebar
+        {...baseProps}
+        isCollapsed
+        printerStatus={{ connected: false, message: "vinculada" }}
+        printerPaired
+        connectPrinter={connectPrinter}
+        pairPrinterDevice={pairPrinterDevice}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Conectar impresora" }));
+    expect(connectPrinter).toHaveBeenCalled();
+    expect(pairPrinterDevice).not.toHaveBeenCalled();
+  });
+
   it("muestra Cerrar sesión en el rail GENERAL", () => {
     render(<CajaSidebar {...baseProps} />);
 

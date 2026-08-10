@@ -36,7 +36,14 @@ export const nativeBridgeTransport: PrinterTransport = {
     if (!native) {
       throw new Error("No está el puente nativo. Abrí la app miBoliche Caja.");
     }
+    const before = native.isConnected();
     native.requestPermission();
+    // Sin device USB el bridge no muestra diálogo: decir la verdad al toque.
+    if (!before && !native.isConnected()) {
+      throw new Error(
+        "APK = solo USB. No hay ticketera enchufada. Para la S1 Bluetooth abrí Chrome con HTTPS (no esta app).",
+      );
+    }
   },
 
   async print(payload: TransportPrintPayload): Promise<void> {

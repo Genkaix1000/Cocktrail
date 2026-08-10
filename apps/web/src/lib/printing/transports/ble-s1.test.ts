@@ -65,7 +65,7 @@ describe("getStoredBleDeviceId", () => {
 
 describe("bleS1Transport.pair", () => {
   it("sin Web Bluetooth rechaza con mensaje claro", async () => {
-    await expect(bleS1Transport.pair()).rejects.toThrow(/Web Bluetooth/);
+    await expect(bleS1Transport.pair()).rejects.toThrow(/chrome:\/\/flags/);
   });
 
   it("pide device por prefijo PPS1 + servicio 0xff00 y guarda el id", async () => {
@@ -85,6 +85,15 @@ describe("bleS1Transport.pair", () => {
       "gattserverdisconnected",
       expect.any(Function),
     );
+  });
+
+  it("NotAllowedError explica que hace falta un toque directo", async () => {
+    stubBluetooth({
+      requestDevice: vi.fn(async () => {
+        throw new DOMException("User gesture required", "NotAllowedError");
+      }),
+    });
+    await expect(bleS1Transport.pair()).rejects.toThrow(/toque directo/);
   });
 
   it("vinculada NO implica conectada (honestidad de estado)", async () => {

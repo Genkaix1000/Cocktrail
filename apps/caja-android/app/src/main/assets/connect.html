@@ -352,6 +352,7 @@
 
           <div class="actions">
             <button id="cloud" class="primary" type="button">Usar servidor en la nube</button>
+            <button id="render" class="connect" type="button">Usar Render (bosko-7xsy)</button>
             <button id="retry" class="connect" type="button" disabled>Buscando en WiFi…</button>
           </div>
 
@@ -384,12 +385,19 @@
       const progress = document.getElementById("progress");
       const icon = document.getElementById("status-icon");
       const cloud = document.getElementById("cloud");
+      const renderBtn = document.getElementById("render");
       const retry = document.getElementById("retry");
       const input = document.getElementById("server");
       const form = document.getElementById("manual");
 
       cloud.addEventListener("click", () => {
         location.href = "miboliche://cloud";
+      });
+
+      renderBtn.addEventListener("click", () => {
+        location.href =
+          "miboliche://connect?server=" +
+          encodeURIComponent("https://bosko-7xsy.onrender.com");
       });
 
       retry.addEventListener("click", () => {
@@ -414,6 +422,7 @@
           icon.classList.toggle("searching", searching);
           icon.classList.toggle("error", state === "error");
           cloud.disabled = searching;
+          renderBtn.disabled = searching;
           retry.disabled = searching;
           retry.textContent =
             state === "connecting"

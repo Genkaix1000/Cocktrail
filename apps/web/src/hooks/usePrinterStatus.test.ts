@@ -228,7 +228,9 @@ describe("usePrinterStatus — testPrint y pair", () => {
   it("criterio de aceptación 2: en entorno sin soporte, Vincular muestra el mensaje del manager", async () => {
     // El manager rechaza pair() con el mensaje de entorno sin soporte.
     mockedManager.pair.mockRejectedValue(
-      new Error("Abrí la app miBoliche Caja, o Chrome con HTTPS para Bluetooth/USB."),
+      new Error(
+        "Sin Web Bluetooth. En Chrome → chrome://flags activá “Experimental Web Platform features”.",
+      ),
     );
     const { result } = renderHook(() => usePrinterStatus());
 
@@ -237,9 +239,7 @@ describe("usePrinterStatus — testPrint y pair", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.printerTestMessage).toBe(
-        "Abrí la app miBoliche Caja, o Chrome con HTTPS para Bluetooth/USB.",
-      );
+      expect(result.current.printerTestMessage).toMatch(/chrome:\/\/flags/);
     });
   });
 

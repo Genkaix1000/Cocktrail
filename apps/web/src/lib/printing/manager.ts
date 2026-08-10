@@ -21,7 +21,7 @@ import type {
 } from "./types";
 
 export const NO_SUPPORT_MESSAGE =
-  "Abrí la app miBoliche Caja, o Chrome con HTTPS para Bluetooth/USB.";
+  "Sin Web Bluetooth. En Chrome → chrome://flags activá “Experimental Web Platform features” y “Web Bluetooth New Permissions Backend”, reiniciá Chrome y volvé a abrir la PWA.";
 const NOT_PAIRED_MESSAGE = "Sin impresora vinculada. Tocá «Vincular impresora».";
 
 export type PrintMeta = { orderId?: string; label?: string };
@@ -113,6 +113,14 @@ export function createPrinterManager(overrides: Partial<ManagerDeps> = {}): Prin
         phase: "paired",
         connected: false,
         message: "Impresora Bluetooth vinculada. Se conecta al imprimir.",
+        transportId: transport.id,
+      });
+    } else if (transport.id === "native") {
+      setSnapshot({
+        phase: "none",
+        connected: false,
+        message:
+          "APK = solo USB. Enchufá la ticketera USB, o abrí Chrome con HTTPS para la S1 Bluetooth.",
         transportId: transport.id,
       });
     } else {

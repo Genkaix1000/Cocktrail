@@ -6,6 +6,8 @@ import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 import { systemService, type AppVersionInfo } from "@/services/system.service";
 
 const CAJA_APK_HREF = "/miboliche-caja.apk";
+/** Staging / servicio Render directo (además del dominio miboliche.online). */
+const RENDER_CAJA_URL = "https://bosko-7xsy.onrender.com";
 
 /** True solo dentro del WebView de miBoliche Caja (puente nativo). */
 function isCajaApkShell(): boolean {
@@ -270,49 +272,75 @@ export default function SistemaSection() {
         </div>
       </div>
 
-      {inApkShell && (
-        <div
-          data-tour="sistema-servidor"
-          className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-card"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent-primary)] shrink-0">
-              <Wifi size={16} strokeWidth={1.8} aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Servidor</h3>
-              <p className="text-[12px] text-[var(--text-tertiary)] truncate">
-                Conectado a {serverOrigin || "…"}
-              </p>
-            </div>
+      <div
+        data-tour="sistema-servidor"
+        className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-card"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent-primary)] shrink-0">
+            <Wifi size={16} strokeWidth={1.8} aria-hidden />
           </div>
-          <p className="mt-3 text-[13px] text-[var(--text-secondary)] leading-relaxed">
-            Por defecto usás la nube. Si necesitás la PC del local (misma WiFi), buscá en la red.
-          </p>
-          <div className="mt-4 flex flex-col sm:flex-row gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = "miboliche://discover";
-              }}
-              className="h-10 px-4 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
-            >
-              <Wifi size={14} strokeWidth={2} aria-hidden />
-              Buscar en WiFi local
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = "miboliche://cloud";
-              }}
-              className="h-10 px-4 rounded-full bg-[var(--accent-primary)] text-white hover:brightness-95 flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
-            >
-              <Cloud size={14} strokeWidth={2} aria-hidden />
-              Usar nube
-            </button>
+          <div className="min-w-0">
+            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Servidor</h3>
+            <p className="text-[12px] text-[var(--text-tertiary)] truncate">
+              Conectado a {serverOrigin || "…"}
+              {inApkShell ? " · app Android" : ""}
+            </p>
           </div>
         </div>
-      )}
+        <p className="mt-3 text-[13px] text-[var(--text-secondary)] leading-relaxed">
+          Elegí a qué backend apunta la caja: dominio, Render directo, o PC en la WiFi (solo app
+          Android).
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (inApkShell) {
+                window.location.href = "miboliche://cloud";
+              } else {
+                window.location.href = "https://miboliche.online";
+              }
+            }}
+            className="h-10 px-4 rounded-full bg-[var(--accent-primary)] text-white hover:brightness-95 flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
+          >
+            <Cloud size={14} strokeWidth={2} aria-hidden />
+            Usar nube (miboliche.online)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (inApkShell) {
+                window.location.href =
+                  "miboliche://connect?server=" + encodeURIComponent(RENDER_CAJA_URL);
+              } else {
+                window.location.href = RENDER_CAJA_URL;
+              }
+            }}
+            className="h-10 px-4 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
+            title={RENDER_CAJA_URL}
+          >
+            <Server size={14} strokeWidth={2} aria-hidden />
+            Usar Render (bosko-7xsy)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (inApkShell) {
+                window.location.href = "miboliche://discover";
+              } else {
+                window.alert(
+                  "Buscar en WiFi solo funciona dentro de la app Android (APK). En Chrome abrí la IP local a mano (https://192.168.x.x:…).",
+                );
+              }
+            }}
+            className="h-10 px-4 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
+          >
+            <Wifi size={14} strokeWidth={2} aria-hidden />
+            Buscar en WiFi local
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

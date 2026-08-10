@@ -56,22 +56,30 @@ export function usePrinterStatus() {
   }, [refreshPrinterStatus]);
 
   const pairPrinterDevice = useCallback(async () => {
-    setPrinterTestMessage(null);
+    // Nada de setState antes de pair(): en Android Chrome se come el gesto y
+    // requestDevice no abre el selector.
     try {
       await printerManager.pair();
+      setPrinterTestMessage(null);
     } catch (err) {
-      // Incluye el entorno sin soporte: el mensaje del manager dice qué usar.
+      const raw = err instanceof Error ? err.message : "No se pudo vincular la impresora.";
+      const standalone =
+        typeof window !== "undefined" &&
+        (window.matchMedia("(display-mode: standalone)").matches ||
+          (navigator as Navigator & { standalone?: boolean }).standalone === true);
       setPrinterTestMessage(
-        err instanceof Error ? err.message : "No se pudo vincular la impresora.",
+        standalone
+          ? `${raw} Si no abrió el selector: Ajustes → apps → miBoliche → Permisos (Dispositivos cercanos / Ubicación) en Permitir. Mientras, vinculá desde la pestaña de Chrome (misma URL) y volvé a la PWA.`
+          : raw,
       );
     }
   }, []);
 
   /** Despierta la impresora ya vinculada (la Bluetooth se apaga sola). */
   const connectPrinter = useCallback(async () => {
-    setPrinterTestMessage(null);
     try {
       await printerManager.connect();
+      setPrinterTestMessage(null);
     } catch (err) {
       setPrinterTestMessage(
         err instanceof Error ? err.message : "No se pudo conectar con la impresora.",
@@ -138,6 +146,7 @@ export function usePrinterStatus() {
     printTicket,
     testPrint,
     printerTestMessage,
+    clearPrinterTestMessage: () => setPrinterTestMessage(null),
     reprintTicket,
     printError,
     reprinting,
