@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminClient from "./AdminClient";
+import LoadingScreen from "@/components/shared/LoadingScreen";
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
 import type { EventTotals, NightEvent, Order, Role } from "@cocktrail/shared";
@@ -64,11 +65,7 @@ export default function AdminPage() {
   }, [router]);
 
   if (loading || !currentUser) {
-    return (
-      <main className="min-h-screen bg-ink-950 text-ink-50 flex items-center justify-center">
-        <p className="text-ink-400 text-sm animate-pulse">Cargando panel…</p>
-      </main>
-    );
+    return <LoadingScreen label="Cargando panel…" />;
   }
 
   return (

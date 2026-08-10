@@ -134,11 +134,15 @@ describe("displayRevenue / withLiveMpFees", () => {
       total: 2000,
       mpFeeTotal: 100,
       netTotal: 1900,
+      mpQrPaid: 1950,
+      mpDebitoPaid: 0,
     };
     const merged = withLiveMpFees(live, snapshot);
     expect(merged.total).toBe(2500);
     expect(merged.mpFeeTotal).toBe(100);
     expect(merged.netTotal).toBe(2400); // 500 efectivo + 1900 mp neto
+    expect(merged.mpQrPaid).toBe(1950);
+    expect(merged.mpDebitoPaid).toBe(0);
   });
 });
 

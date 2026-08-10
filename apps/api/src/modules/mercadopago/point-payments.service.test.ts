@@ -79,7 +79,13 @@ describe("PointPaymentsService", () => {
       findByAttemptId: vi.fn(),
       findProcessedPendingFees: vi.fn().mockResolvedValue([]),
       listRecent: vi.fn().mockResolvedValue([]),
-      sumFeesForEvent: vi.fn().mockResolvedValue({ mpFeeTotal: 0, mpNetTotal: 0, pendingFees: 0 }),
+      sumFeesForEvent: vi.fn().mockResolvedValue({
+        mpFeeTotal: 0,
+        mpNetTotal: 0,
+        pendingFees: 0,
+        mpQrPaid: 0,
+        mpDebitoPaid: 0,
+      }),
       update: vi.fn().mockImplementation(async (_id, patch) => {
         row = { ...(row as MpOrder), ...patch } as MpOrder;
         return row;

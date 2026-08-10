@@ -189,11 +189,6 @@ export default function AdminClient({
     [orders, serverTotals],
   );
 
-  const pendingDeliveries = useMemo(
-    () => orders.filter((o) => o.status === "pendiente").length,
-    [orders],
-  );
-
   const isNightOpen = event?.status === "activo";
   const lastNight = historyEvents[0] ?? null;
   const dashboardTotals = useMemo(
@@ -485,7 +480,6 @@ export default function AdminClient({
         {((modalOpen && event) || summary) && (
           <CloseNightModal
             totals={totals}
-            pendingDeliveries={pendingDeliveries}
             startedAt={event?.startedAt ?? summary?.startedAt ?? 0}
             summary={summary}
             isTest={event?.isTest ?? false}

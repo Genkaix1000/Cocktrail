@@ -525,3 +525,50 @@ body {
   filter: brightness(0) saturate(100%) invert(1);
   opacity: 0.9;
 }
+
+/* ──────────────────────────────────────────────────────────
+   LoadingScreen — anillo + barra indeterminada
+   ────────────────────────────────────────────────────────── */
+@keyframes loadingScreenSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes loadingScreenDash {
+  0%   { stroke-dasharray: 12 150; stroke-dashoffset: 0; }
+  50%  { stroke-dasharray: 70 150; stroke-dashoffset: -40; }
+  100% { stroke-dasharray: 12 150; stroke-dashoffset: -162; }
+}
+@keyframes loadingScreenBar {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+@keyframes loadingScreenGlow {
+  0%, 100% { opacity: 0.35; transform: scale(0.92); }
+  50%      { opacity: 0.7;  transform: scale(1.08); }
+}
+@keyframes loadingScreenDot {
+  0%, 100% { opacity: 0.45; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+.loading-screen-ambient {
+  background:
+    radial-gradient(ellipse 55% 40% at 50% 42%, color-mix(in oklab, var(--accent-primary) 18%, transparent), transparent 70%),
+    radial-gradient(ellipse 40% 30% at 70% 70%, color-mix(in oklab, var(--accent-bright) 8%, transparent), transparent 65%);
+}
+.loading-screen-ring {
+  transform-origin: center;
+  animation: loadingScreenSpin 1.35s linear infinite;
+}
+.loading-screen-ring-arc {
+  transform-origin: center;
+  stroke-dasharray: 40 150;
+  animation: loadingScreenDash 1.5s ease-in-out infinite;
+}
+.loading-screen-bar {
+  animation: loadingScreenBar 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.loading-screen-glow {
+  animation: loadingScreenGlow 2.4s ease-in-out infinite;
+}
+.loading-screen-dot {
+  animation: loadingScreenDot 1.6s ease-in-out infinite;
+}

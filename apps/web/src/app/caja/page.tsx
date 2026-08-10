@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CajaClient from "./CajaClient";
 import CajaSessionOnboarding from "@/components/caja/CajaSessionOnboarding";
+import LoadingScreen from "@/components/shared/LoadingScreen";
 import { drinksService } from "@/services/drinks.service";
 import { drinkCategoriesService } from "@/services/drink-categories.service";
 import { authService } from "@/services/auth.service";
@@ -265,11 +266,9 @@ export default function CajaPage() {
 
   if (loading || autoJoining || (activeBarId && loadedBarId !== activeBarId)) {
     return (
-      <main className="min-h-[100dvh] bg-ink-950 text-ink-50 flex items-center justify-center">
-        <p className="text-ink-400 text-sm animate-pulse">
-          {activeSession || autoJoining ? "Conectando caja..." : "Buscando cajas..."}
-        </p>
-      </main>
+      <LoadingScreen
+        label={activeSession || autoJoining ? "Conectando caja…" : "Buscando cajas…"}
+      />
     );
   }
 

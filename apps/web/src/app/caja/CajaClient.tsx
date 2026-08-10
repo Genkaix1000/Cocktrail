@@ -192,11 +192,6 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     [activeNightOrders, serverTotals],
   );
 
-  const pendingDeliveries = useMemo(
-    () => activeNightOrders.filter((o) => o.status === "pendiente").length,
-    [activeNightOrders],
-  );
-
   const hasPermission = (key: keyof CurrentUser["permissions"]) => {
     if (currentUser.role === "admin") return true;
     return !!currentUser.permissions?.[key];
@@ -258,7 +253,6 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
         {((event && closeModalOpen) || summary) && (
           <CloseNightModal
             totals={totals}
-            pendingDeliveries={pendingDeliveries}
             startedAt={event?.startedAt ?? summary?.startedAt ?? 0}
             summary={summary}
             isTest={event?.isTest ?? false}

@@ -128,6 +128,10 @@ export type EventTotals = {
   netTotal?: number;
   /** Cobros MP processed aún sin neto de la API. */
   mpFeesPending?: number;
+  /** Bruto real cobrado por MP QR (mp_orders.paid_amount). Fallback: qrTotal. */
+  mpQrPaid?: number;
+  /** Bruto real cobrado por Point/tarjeta (mp_orders.paid_amount). Fallback: debitoTotal. */
+  mpDebitoPaid?: number;
 };
 
 export type EventSummary = NightEvent & {
@@ -292,5 +296,7 @@ export function withLiveMpFees(
     mpFeeTotal: snapshot.mpFeeTotal ?? 0,
     netTotal: live.efectivoTotal + Math.max(0, snapshotMpNet),
     mpFeesPending: snapshot.mpFeesPending,
+    ...(snapshot.mpQrPaid != null ? { mpQrPaid: snapshot.mpQrPaid } : {}),
+    ...(snapshot.mpDebitoPaid != null ? { mpDebitoPaid: snapshot.mpDebitoPaid } : {}),
   };
 }

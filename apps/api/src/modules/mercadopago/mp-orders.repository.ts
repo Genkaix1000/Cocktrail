@@ -97,6 +97,10 @@ export type MpEventFeeTotals = {
   /** Suma de netos ready; si pending, usa paid_amount como techo hasta completar. */
   mpNetTotal: number;
   pendingFees: number;
+  /** Bruto cobrado por MP QR (suma paid_amount type=qr). */
+  mpQrPaid: number;
+  /** Bruto cobrado por Point/tarjeta (suma paid_amount type=point). */
+  mpDebitoPaid: number;
 };
 
 type MpOrderRow = {
@@ -341,7 +345,7 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
   async sumFeesForEvent(eventId: string): Promise<MpEventFeeTotals> {
     const { data, error } = await supabase
       .from("mp_orders")
-      .select("paid_amount, net_received_amount, mp_fee_amount, fee_status, status")
+      .select("paid_amount, net_received_amount, mp_fee_amount, fee_status, status, type")
       .eq("event_id", eventId)
       .eq("status", "processed");
 
@@ -353,11 +357,16 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
     let mpFeeTotal = 0;
     let mpNetTotal = 0;
     let pendingFees = 0;
+    let mpQrPaid = 0;
+    let mpDebitoPaid = 0;
     for (const row of data ?? []) {
       const feeStatus = (row.fee_status as MpFeeStatus | null) ?? "none";
       const paid = row.paid_amount == null ? 0 : Number(row.paid_amount);
       const net = row.net_received_amount == null ? null : Number(row.net_received_amount);
       const fee = row.mp_fee_amount == null ? null : Number(row.mp_fee_amount);
+      const type = row.type as MpOrderType | null;
+      if (type === "qr") mpQrPaid += paid;
+      else if (type === "point") mpDebitoPaid += paid;
       if (feeStatus === "ready" && fee != null && net != null) {
         mpFeeTotal += fee;
         mpNetTotal += net;
@@ -366,7 +375,7 @@ export class SupabaseMpOrdersRepository implements MpOrdersRepository {
         mpNetTotal += paid;
       }
     }
-    return { mpFeeTotal, mpNetTotal, pendingFees };
+    return { mpFeeTotal, mpNetTotal, pendingFees, mpQrPaid, mpDebitoPaid };
   }
 
   async update(orderIdMp: string, patch: MpOrderUpdate): Promise<MpOrder> {

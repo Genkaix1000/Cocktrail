@@ -21,6 +21,8 @@ export type MpNightFeeLookup = (eventId: string) => Promise<{
   mpFeeTotal: number;
   mpNetTotal: number;
   pendingFees: number;
+  mpQrPaid: number;
+  mpDebitoPaid: number;
 }>;
 
 export class EventsService {
@@ -65,6 +67,8 @@ export class EventsService {
         mpFeeTotal: fees.mpFeeTotal,
         netTotal,
         mpFeesPending: fees.pendingFees,
+        mpQrPaid: fees.mpQrPaid,
+        mpDebitoPaid: fees.mpDebitoPaid,
       };
     } catch (err) {
       const code = (err as { code?: string })?.code;

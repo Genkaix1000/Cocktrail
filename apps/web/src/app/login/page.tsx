@@ -5,6 +5,7 @@ import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/shared/BrandLogo";
+import LoadingScreen from "@/components/shared/LoadingScreen";
 import { useTheme } from "@/components/ThemeProvider";
 import { authService } from "@/services/auth.service";
 import { ApiError } from "@/services/api-client";
@@ -51,13 +52,7 @@ function waitForTurnstile(timeoutMs = 10_000): Promise<NonNullable<Window["turns
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-screen items-center justify-center bg-[var(--bg-app)]">
-          <p className="text-[var(--text-secondary)] text-sm animate-pulse">Cargando…</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingScreen label="Cargando…" />}>
       <LoginForm />
     </Suspense>
   );
