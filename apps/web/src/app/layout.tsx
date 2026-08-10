@@ -13,13 +13,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "miBoliche",
   description: "Ventas, cobros y cierre de noche del boliche",
-  manifest: "/manifest.webmanifest",
-  // Instalada en la tablet abre sin barra del navegador, como una app.
-  appleWebApp: {
-    capable: true,
-    title: "miBoliche",
-    statusBarStyle: "black-translucent",
-  },
+
   icons: {
     icon: "/icon-192.png",
     shortcut: "/icon-192.png",
