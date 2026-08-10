@@ -20,7 +20,8 @@ import org.json.JSONObject
 
 /**
  * Shell de caja: WebView a pantalla completa + impresión USB nativa.
- * El servidor se descubre solo en la LAN (ServerFinder) — la IP no se hardcodea.
+ * Por defecto apunta a la nube (Render). LAN solo si la nube falla o
+ * el operador lo pide desde Sistema / connect.html.
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
@@ -29,7 +30,7 @@ class MainActivity : AppCompatActivity() {
     private var operationId = 0
     private var connectPageReady = false
     private var pendingState = "searching"
-    private var pendingMessage = SEARCHING_MESSAGE
+    private var pendingMessage = BOOT_MESSAGE
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,7 +47,7 @@ class MainActivity : AppCompatActivity() {
             settings.mediaPlaybackRequiresUserGesture = false
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-            addJavascriptInterface(PrinterBridge(printer), "MiBolichePrinter")
+            // MiBolichePrinter se inyecta solo tras probe OK (loadServer), no en connect.html.
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(
@@ -56,7 +57,8 @@ class MainActivity : AppCompatActivity() {
                     val uri = request.url
                     if (uri.scheme != APP_SCHEME) return false
                     when (uri.host) {
-                        "discover" -> startDiscovery()
+                        "discover" -> startLanDiscovery()
+                        "cloud" -> connectCloud()
                         "connect" -> connectManually(uri.getQueryParameter("server").orEmpty())
                     }
                     return true
@@ -93,7 +95,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(webView)
-        startDiscovery()
+        bootstrap()
     }
 
     override fun onResume() {
@@ -125,7 +127,84 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadServer(base: String) {
         connectPageReady = false
+        enablePrinterBridge()
         webView.loadUrl("${base.trimEnd('/')}${prefs().getString(KEY_PATH, null) ?: "/login"}")
+    }
+
+    private fun enablePrinterBridge() {
+        webView.removeJavascriptInterface("MiBolichePrinter")
+        webView.addJavascriptInterface(PrinterBridge(printer), "MiBolichePrinter")
+    }
+
+    private fun disablePrinterBridge() {
+        webView.removeJavascriptInterface("MiBolichePrinter")
+    }
+
+    /**
+     * Arranque: saved → nube → pantalla de conexión (LAN/manual).
+     * No barre la LAN sola: eso es opt-in.
+     */
+    private fun bootstrap() {
+        val currentOperation = ++operationId
+        showConnectionPage("searching", BOOT_MESSAGE)
+        Thread {
+            val saved = savedServer()?.takeIf { ServerFinder.isServer(it) }
+            if (saved != null) {
+                main.post {
+                    if (currentOperation != operationId) return@post
+                    loadServer(saved)
+                }
+                return@Thread
+            }
+            // Free tier de Render puede tardar en despertar: timeout más largo que el LAN.
+            if (ServerFinder.isServer(DEFAULT_CLOUD_URL, CLOUD_PROBE_TIMEOUT_MS)) {
+                main.post {
+                    if (currentOperation != operationId) return@post
+                    saveServer(DEFAULT_CLOUD_URL)
+                    loadServer(DEFAULT_CLOUD_URL)
+                }
+                return@Thread
+            }
+            main.post {
+                if (currentOperation != operationId) return@post
+                showConnectionPage("error", CLOUD_FAILED_MESSAGE)
+            }
+        }.start()
+    }
+
+    /** Solo escaneo LAN — no reusa saved (puede ser la nube). */
+    private fun startLanDiscovery() {
+        val currentOperation = ++operationId
+        showConnectionPage("searching", SEARCHING_MESSAGE)
+        Thread {
+            val found = ServerFinder.discover()
+            main.post {
+                if (currentOperation != operationId) return@post
+                if (found == null) {
+                    showConnectionPage("error", NOT_FOUND_MESSAGE)
+                } else {
+                    saveServer(found)
+                    loadServer(found)
+                }
+            }
+        }.start()
+    }
+
+    private fun connectCloud() {
+        val currentOperation = ++operationId
+        showConnectionPage("connecting", "Comprobando $DEFAULT_CLOUD_URL…")
+        Thread {
+            val connected = ServerFinder.isServer(DEFAULT_CLOUD_URL, CLOUD_PROBE_TIMEOUT_MS)
+            main.post {
+                if (currentOperation != operationId) return@post
+                if (connected) {
+                    saveServer(DEFAULT_CLOUD_URL)
+                    loadServer(DEFAULT_CLOUD_URL)
+                } else {
+                    showConnectionPage("error", CLOUD_FAILED_MESSAGE)
+                }
+            }
+        }.start()
     }
 
     /**
@@ -157,24 +236,6 @@ class MainActivity : AppCompatActivity() {
             main.post {
                 if (currentOperation != operationId) return@post
                 showConnectionPage("error", LOAD_FAILED_MESSAGE)
-            }
-        }.start()
-    }
-
-    private fun startDiscovery() {
-        val currentOperation = ++operationId
-        showConnectionPage("searching", SEARCHING_MESSAGE)
-        Thread {
-            val saved = savedServer()
-            val found = saved?.takeIf { ServerFinder.isServer(it) } ?: ServerFinder.discover()
-            main.post {
-                if (currentOperation != operationId) return@post
-                if (found == null) {
-                    showConnectionPage("error", NOT_FOUND_MESSAGE)
-                } else {
-                    saveServer(found)
-                    loadServer(found)
-                }
             }
         }.start()
     }
@@ -211,8 +272,9 @@ class MainActivity : AppCompatActivity() {
         val uri = Uri.parse(value)
         val scheme = uri.scheme?.takeIf { it == "http" || it == "https" } ?: return null
         val host = uri.host ?: return null
-        val port = if (uri.port == -1) ServerFinder.PORT else uri.port
-        return "$scheme://$host:$port"
+        if (uri.port != -1) return "$scheme://$host:${uri.port}"
+        // https → puerto 443 implícito; http sin puerto → :3000 (dev LAN).
+        return if (scheme == "https") "$scheme://$host" else "$scheme://$host:${ServerFinder.PORT}"
     }
 
     // ---------- pantalla local de conexión ----------
@@ -220,6 +282,7 @@ class MainActivity : AppCompatActivity() {
     private fun showConnectionPage(state: String, message: String) {
         pendingState = state
         pendingMessage = message
+        disablePrinterBridge()
         if (connectPageReady && webView.url?.startsWith(CONNECT_PAGE) == true) {
             applyConnectState()
         } else {
@@ -253,22 +316,28 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_PATH = "last_path"
         private const val APP_SCHEME = "miboliche"
         private const val CONNECT_PAGE = "file:///android_asset/connect.html"
+        const val DEFAULT_CLOUD_URL = "https://miboliche.online"
+        private const val CLOUD_PROBE_TIMEOUT_MS = 20_000
 
         // ~20s de tolerancia (isServer corta a 2.5s por intento) — cubre el
         // microcorte de WiFi sin dejar colgada una tablet con el server caído.
         private const val RECONNECT_ATTEMPTS = 5
         private const val RECONNECT_DELAY_MS = 1500L
 
+        private const val BOOT_MESSAGE =
+            "Conectando con el servidor en la nube…"
         private const val RECONNECTING_MESSAGE =
             "Se cortó la conexión con el servidor. Reintentando…"
         private const val SEARCHING_MESSAGE =
             "Estamos buscando la computadora del local en esta red. Puede tardar unos segundos."
+        private const val CLOUD_FAILED_MESSAGE =
+            "No se pudo conectar a la nube. Buscá el servidor en el WiFi del local o escribí la dirección a mano."
         private const val NOT_FOUND_MESSAGE =
             "No encontramos el servidor. Revisá que la computadora esté encendida y conectada al mismo WiFi."
         private const val LOAD_FAILED_MESSAGE =
             "Perdimos la conexión con el servidor. Puede que la computadora esté apagada o haya cambiado de dirección."
         private const val MANUAL_MESSAGE =
-            "Buscá automáticamente o escribí la dirección de la computadora del local."
+            "Usá la nube, buscá en el WiFi del local o escribí la dirección a mano."
         private const val INVALID_ADDRESS_MESSAGE =
             "La dirección no es válida. Usá un formato como 192.168.0.16."
         private const val ADDRESS_FAILED_MESSAGE =

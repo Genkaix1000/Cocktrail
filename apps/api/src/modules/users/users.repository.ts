@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { randomBytes, scryptSync } from "node:crypto";
 import type { Role } from "@cocktrail/shared";
 
 // ── Types ──
@@ -22,13 +22,16 @@ export interface UsersRepository {
   findByUsername(username: string): Promise<StaffUser | undefined>;
   create(user: StaffUser): Promise<StaffUser>;
   update(user: StaffUser): Promise<StaffUser>;
+  updatePassword(username: string, passwordHash: string): Promise<void>;
   delete(id: string): Promise<boolean>;
 }
 
 // ── Helpers ──
 
 function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString("base64")}$${derived.toString("base64")}`;
 }
 
 export { hashPassword };
@@ -147,6 +150,18 @@ export class SupabaseUsersRepository implements UsersRepository {
     }
 
     return mapRowToUser(data);
+  }
+
+  async updatePassword(username: string, passwordHash: string): Promise<void> {
+    const { error } = await supabase
+      .from("users")
+      .update({ password_hash: passwordHash })
+      .eq("username", username);
+
+    if (error) {
+      console.error("[SupabaseUsersRepository] Error updating password:", error);
+      throw error;
+    }
   }
 
   async delete(id: string): Promise<boolean> {

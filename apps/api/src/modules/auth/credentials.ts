@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import type { Role } from "@cocktrail/shared";
 import { env } from "../../config/env.js";
 import type { UsersRepository } from "../users/users.repository.js";
@@ -13,31 +13,70 @@ export type AuthenticatedUser = {
   role: Role;
 };
 
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_SALT_LEN = 16;
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(SCRYPT_SALT_LEN);
+  const derived = await new Promise<Buffer>((resolve, reject) =>
+    scrypt(password, salt, SCRYPT_KEYLEN, (err, key) =>
+      err ? reject(err) : resolve(key),
+    ),
+  );
+  return `scrypt$${salt.toString("base64")}$${derived.toString("base64")}`;
 }
+
+function isLegacySha256(hash: string): boolean {
+  return !hash.startsWith("scrypt$") && /^[a-f0-9]{64}$/.test(hash);
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (isLegacySha256(stored)) {
+    const legacy = createHash("sha256").update(password).digest("hex");
+    return legacy === stored;
+  }
+  const parts = stored.split("$");
+  if (parts.length !== 3 || parts[0] !== "scrypt") return false;
+  const salt = Buffer.from(parts[1]!, "base64");
+  const hash = Buffer.from(parts[2]!, "base64");
+  const derived = await new Promise<Buffer>((resolve, reject) =>
+    scrypt(password, salt, SCRYPT_KEYLEN, (err, key) =>
+      err ? reject(err) : resolve(key),
+    ),
+  );
+  return timingSafeEqual(derived, hash);
+}
+
+export type AuthResult = {
+  user: AuthenticatedUser;
+  /** true si el password se verificó con el hash legado y debe re-hashearse. */
+  migrated?: boolean;
+};
 
 export async function authenticate(
   username: string,
   password: string,
   usersRepo?: UsersRepository,
-): Promise<AuthenticatedUser | null> {
-  // 1. Check database users if repo is provided
+): Promise<AuthResult | null> {
+  // 1. Database users
   if (usersRepo) {
     const dbUser = await usersRepo.findByUsername(username);
     if (dbUser) {
-      const inputHash = hashPassword(password);
-      if (dbUser.passwordHash === inputHash) {
-        return { username: dbUser.username, role: dbUser.role };
+      const valid = await verifyPassword(password, dbUser.passwordHash);
+      if (valid) {
+        const migrated = isLegacySha256(dbUser.passwordHash);
+        return { user: { username: dbUser.username, role: dbUser.role }, migrated };
       }
     }
   }
 
-  // 2. Check fallback system users
+  // 2. Fallback system users (dev defaults — plaintext comparison, no upgrade)
   const u = USERS[username];
   if (u && u.password === password) {
-    return { username, role: u.role };
+    return { user: { username, role: u.role } };
   }
 
   return null;
 }
+
+export { hashPassword };

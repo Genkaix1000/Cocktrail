@@ -1,13 +1,19 @@
 import { Router } from "express";
 import { authenticate } from "./credentials.js";
-import { buildSessionCookie, buildClearCookie, COOKIE_NAME, verifySession } from "./session.js";
+import { buildSessionCookie, buildClearCookie, COOKIE_NAME, verifySession, getSessionVersion, setSessionVersion } from "./session.js";
+import { authMiddleware, requireRole } from "./auth.middleware.js";
 import { validate, LoginSchema } from "../../shared/middleware/validate.js";
 import { loginLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import type { Role } from "@cocktrail/shared";
 
+/** Marcador público para que la app Android distinga este server de cualquier HTTP en :3000. */
+export const SERVER_FINGERPRINT = { app: "cocktrail" as const };
+
 type AuthControllerOptions = {
   onLogout?: (user: { username: string; role: Role }) => Promise<void>;
+  /** Función que persiste la versión de sesión en DB. */
+  persistSessionVersion?: (version: number) => Promise<void>;
 };
 
 export function createAuthController(
@@ -16,17 +22,30 @@ export function createAuthController(
 ): Router {
   const router = Router();
 
-  // POST /api/auth/login — la protección contra fuerza bruta es loginLimiter
-  // (rate limit por IP); se sacó el captcha matemático: sistema 100% LAN, sin
-  // exposición a bots externos, no justificaba la fricción/mantenimiento extra.
+  // GET /api/auth/fingerprint — probe LAN/cloud (sin auth)
+  router.get("/fingerprint", (_req, res) => {
+    res.json(SERVER_FINGERPRINT);
+  });
+
+  // POST /api/auth/login
   router.post("/login", loginLimiter, validate(LoginSchema), async (req, res, next) => {
     try {
       const { username, password } = req.body;
 
-      const user = await authenticate(username, password, usersRepo);
-      if (!user) {
+      const result = await authenticate(username, password, usersRepo);
+      if (!result) {
         res.status(400).json({ error: "Credenciales inválidas" });
         return;
+      }
+      const { user, migrated } = result;
+
+      // Auto-migrate SHA-256 legacy hash to scrypt on successful login
+      if (migrated) {
+        const { hashPassword } = await import("./credentials.js");
+        const newHash = await hashPassword(password);
+        usersRepo.updatePassword(username, newHash).catch((err) =>
+          console.warn("[auth] Failed to migrate password hash for", username, err),
+        );
       }
 
       res.setHeader("Set-Cookie", buildSessionCookie(user.username, user.role));
@@ -35,6 +54,26 @@ export function createAuthController(
       next(err);
     }
   });
+
+  // POST /api/auth/invalidate-sessions — admin only (DoS si queda abierto)
+  router.post(
+    "/invalidate-sessions",
+    authMiddleware,
+    requireRole("admin"),
+    async (_req, res, next) => {
+      try {
+        const nextVersion = getSessionVersion() + 1;
+        setSessionVersion(nextVersion);
+        if (options.persistSessionVersion) {
+          await options.persistSessionVersion(nextVersion);
+        }
+        console.log(`[auth] Session version bumped to ${nextVersion}. All active sessions invalidated.`);
+        res.json({ ok: true, version: nextVersion });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   // POST /api/auth/logout
   router.post("/logout", async (req, res, next) => {

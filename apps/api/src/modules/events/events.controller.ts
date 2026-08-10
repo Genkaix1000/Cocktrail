@@ -3,6 +3,7 @@ import type { EventsService } from "./events.service.js";
 import type { NightDeletionService } from "./night-deletion.service.js";
 import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
 import { validate, ThemeSchema } from "../../shared/middleware/validate.js";
+import { loginLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import { authenticate } from "../auth/credentials.js";
 import { logAction } from "../audit-logs/audit-logs.service.js";
@@ -38,6 +39,7 @@ export function createEventsController(
     "/event/close",
     authMiddleware,
     requireRole("admin", "caja"),
+    loginLimiter, // re-auth por password: mismo techo que /login
     async (req, res, next) => {
       try {
         const { password } = req.body;
@@ -132,6 +134,7 @@ export function createEventsController(
     "/events/:id",
     authMiddleware,
     requireRole("admin"),
+    loginLimiter, // re-auth por password: mismo techo que /login
     async (req, res, next) => {
       try {
         const { password, fecha } = req.body;

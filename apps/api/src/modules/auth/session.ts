@@ -11,9 +11,19 @@ export type SignedCookie = {
   maxAgeSeconds: number;
 };
 
+let currentSessionVersion = 1;
+
+export function setSessionVersion(v: number): void {
+  currentSessionVersion = v;
+}
+
+export function getSessionVersion(): number {
+  return currentSessionVersion;
+}
+
 export function signSession(username: string, role: Role): SignedCookie {
   const expiresAt = Date.now() + TTL_MS;
-  const payload = `${role}.${username}.${expiresAt}`;
+  const payload = `${role}.${username}.${expiresAt}.${currentSessionVersion}`;
   const sig = createHmac("sha256", env.AUTH_SECRET)
     .update(payload)
     .digest("hex");
@@ -34,14 +44,17 @@ const ROLES = new Set<Role>(["admin", "caja"]);
 export function verifySession(raw: string | undefined): Session | null {
   if (!raw) return null;
   const parts = raw.split(".");
-  if (parts.length !== 4) return null;
-  const [role, username, expRaw, sig] = parts;
+  if (parts.length !== 5) return null;
+  const [role, username, expRaw, verRaw, sig] = parts;
   if (!ROLES.has(role as Role)) return null;
   const expiresAt = Number(expRaw);
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
 
+  const version = Number(verRaw);
+  if (!Number.isFinite(version) || version !== currentSessionVersion) return null;
+
   const expected = createHmac("sha256", env.AUTH_SECRET)
-    .update(`${role}.${username}.${expRaw}`)
+    .update(`${role}.${username}.${expRaw}.${verRaw}`)
     .digest("hex");
 
   if (sig.length !== expected.length) return null;

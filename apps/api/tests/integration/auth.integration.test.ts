@@ -1,10 +1,55 @@
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
+import { SERVER_FINGERPRINT } from "../../src/modules/auth/auth.controller.js";
+import { getSessionVersion, setSessionVersion } from "../../src/modules/auth/session.js";
 import { cleanUsers, createTestAdmin, signTestSession } from "../setup/db-helpers.js";
 
 afterEach(async () => {
   await cleanUsers();
+});
+
+describe("GET /api/auth/fingerprint", () => {
+  it("devuelve el marcador público sin auth", async () => {
+    const res = await request(app).get("/api/auth/fingerprint");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(SERVER_FINGERPRINT);
+  });
+});
+
+describe("POST /api/auth/invalidate-sessions", () => {
+  afterEach(() => {
+    // El bump es global en proceso: no ensuciar el resto de la suite.
+    setSessionVersion(1);
+  });
+
+  it("sin sesión responde 401", async () => {
+    const res = await request(app).post("/api/auth/invalidate-sessions");
+    expect(res.status).toBe(401);
+  });
+
+  it("caja no puede invalidar sesiones", async () => {
+    const cookie = signTestSession("caja-test", "caja");
+    const res = await request(app).post("/api/auth/invalidate-sessions").set("Cookie", cookie);
+    expect(res.status).toBe(403);
+  });
+
+  it("admin invalida y las cookies previas dejan de verificar", async () => {
+    const beforeVersion = getSessionVersion();
+    const cookie = signTestSession("admin-test", "admin");
+    const before = await request(app).get("/api/auth/me").set("Cookie", cookie);
+    expect(before.status).toBe(200);
+    expect(before.body.username).toBe("admin-test");
+
+    const res = await request(app).post("/api/auth/invalidate-sessions").set("Cookie", cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.version).toBe(beforeVersion + 1);
+
+    const after = await request(app).get("/api/auth/me").set("Cookie", cookie);
+    expect(after.status).toBe(200);
+    expect(after.body).toBeNull();
+  });
 });
 
 describe("POST /api/auth/login", () => {

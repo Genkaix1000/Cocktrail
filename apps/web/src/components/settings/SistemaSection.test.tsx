@@ -50,6 +50,7 @@ describe("SistemaSection", () => {
       "href",
       "/miboliche-caja.apk",
     );
+    expect(screen.queryByText("Servidor")).not.toBeInTheDocument();
     await waitFor(() => expect(mocked.getVersion).toHaveBeenCalled());
   });
 
@@ -61,5 +62,19 @@ describe("SistemaSection", () => {
     expect(screen.getByText("Local")).toBeInTheDocument();
     expect(screen.getByText("Novedades de esta versión")).toBeInTheDocument();
     expect(screen.getByText("Panel de versión en Sistema.")).toBeInTheDocument();
+  });
+
+  it("en el shell APK muestra el switch de servidor", async () => {
+    (window as Window & { MiBolichePrinter?: { print: () => string } }).MiBolichePrinter = {
+      print: () => "ok",
+    };
+    try {
+      render(<SistemaSection />);
+      expect(await screen.findByText("Servidor")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Buscar en WiFi local/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Usar nube/i })).toBeInTheDocument();
+    } finally {
+      delete (window as Window & { MiBolichePrinter?: unknown }).MiBolichePrinter;
+    }
   });
 });

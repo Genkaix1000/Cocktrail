@@ -1,14 +1,12 @@
 # miBoliche Caja — shell Android
 
 WebView a pantalla completa de `/login` + impresión USB nativa
-(`window.MiBolichePrinter`). Sin Chrome y sin HTTPS.
+(`window.MiBolichePrinter`). Sin Chrome y sin HTTPS local.
 
-El servidor **no se hardcodea**: al primer arranque la app barre el /24 de la
-tablet buscando quién responde `/api/auth/me` (ver `ServerFinder.kt`). Si no lo
-encuentra, muestra la pantalla Bosko local de `assets/connect.html` y ofrece
-buscar de nuevo o escribir la dirección a mano (la muestra `/admin` → Sistema).
-La pantalla vive dentro del APK, así que funciona aunque el server no responda;
-la operación del sistema sigue requiriendo conexión.
+Por defecto la app se conecta a la **nube** (`https://miboliche.online`).
+Si la nube no responde, muestra `assets/connect.html` para buscar un servidor
+en la LAN (`ServerFinder`) o escribir la IP a mano. Desde `/admin` → Sistema
+(en el WebView) también se puede cambiar entre nube y WiFi local.
 
 Ante un corte, el shell reintenta el server guardado ~20s antes de mostrar esa
 pantalla, y al volver reabre la última ruta visitada (no `/login`): un microcorte
@@ -35,8 +33,9 @@ gradle wrapper --gradle-version 8.11.1
 ## Uso en la tablet
 
 1. Bajar e instalar el APK desde Sistema.
-2. Abrir **miBoliche Caja** → busca el servidor sola.
+2. Abrir **miBoliche Caja** → conecta a la nube sola.
 3. Enchufar la ticketera → aceptar el permiso USB (conviene "usar siempre").
+4. (Opcional) En Sistema → **Buscar en WiFi local** para apuntar a una PC del local.
 
 Long-press en cualquier parte de la pantalla reabre el cambio de servidor.
 

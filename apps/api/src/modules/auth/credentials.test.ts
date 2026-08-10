@@ -10,6 +10,7 @@ function makeUsersRepo(overrides?: Partial<UsersRepository>): UsersRepository {
     findByUsername: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updatePassword: vi.fn(),
     delete: vi.fn(),
     ...overrides,
   };
@@ -29,35 +30,58 @@ function makeDbUser(overrides?: Partial<StaffUser>): StaffUser {
 describe("authenticate", () => {
   it("autentica un usuario de la DB con password correcta", async () => {
     const repo = makeUsersRepo({ findByUsername: vi.fn().mockResolvedValue(makeDbUser()) });
-    const user = await authenticate("cajera1", "secreto123", repo);
-    expect(user).toEqual({ username: "cajera1", role: "caja" });
+    const result = await authenticate("cajera1", "secreto123", repo);
+    expect(result?.user).toEqual({ username: "cajera1", role: "caja" });
+    expect(result?.migrated).toBe(false);
+  });
+
+  it("detecta hash legado y marca migrated=true", async () => {
+    const { createHash } = await import("node:crypto");
+    const legacyHash = createHash("sha256").update("secreto123").digest("hex");
+    const repo = makeUsersRepo({
+      findByUsername: vi.fn().mockResolvedValue(makeDbUser({ passwordHash: legacyHash })),
+    });
+    const result = await authenticate("cajera1", "secreto123", repo);
+    expect(result?.user).toEqual({ username: "cajera1", role: "caja" });
+    expect(result?.migrated).toBe(true);
   });
 
   it("rechaza un usuario de la DB con password incorrecta", async () => {
     const repo = makeUsersRepo({ findByUsername: vi.fn().mockResolvedValue(makeDbUser()) });
-    const user = await authenticate("cajera1", "password-incorrecta", repo);
-    expect(user).toBeNull();
+    const result = await authenticate("cajera1", "password-incorrecta", repo);
+    expect(result).toBeNull();
+  });
+
+  it("rechaza hash legado con password incorrecta", async () => {
+    const { createHash } = await import("node:crypto");
+    const legacyHash = createHash("sha256").update("secreto123").digest("hex");
+    const repo = makeUsersRepo({
+      findByUsername: vi.fn().mockResolvedValue(makeDbUser({ passwordHash: legacyHash })),
+    });
+    const result = await authenticate("cajera1", "wrong", repo);
+    expect(result).toBeNull();
   });
 
   it("cae al fallback de env cuando el usuario no está en la DB (admin/admin)", async () => {
     const repo = makeUsersRepo({ findByUsername: vi.fn().mockResolvedValue(undefined) });
-    const user = await authenticate("admin", "admin", repo);
-    expect(user).toEqual({ username: "admin", role: "admin" });
+    const result = await authenticate("admin", "admin", repo);
+    expect(result?.user).toEqual({ username: "admin", role: "admin" });
+    expect(result?.migrated).toBeUndefined();
   });
 
   it("rechaza un usuario que no existe ni en DB ni en el fallback", async () => {
     const repo = makeUsersRepo({ findByUsername: vi.fn().mockResolvedValue(undefined) });
-    const user = await authenticate("no-existe", "cualquiera", repo);
-    expect(user).toBeNull();
+    const result = await authenticate("no-existe", "cualquiera", repo);
+    expect(result).toBeNull();
   });
 
   it("funciona sin repo (solo fallback de env)", async () => {
-    const user = await authenticate("caja", "caja");
-    expect(user).toEqual({ username: "caja", role: "caja" });
+    const result = await authenticate("caja", "caja");
+    expect(result?.user).toEqual({ username: "caja", role: "caja" });
   });
 
   it("ya NO acepta la credencial hardcodeada cajavip/cajavip (R5 resuelta)", async () => {
-    const user = await authenticate("cajavip", "cajavip");
-    expect(user).toBeNull();
+    const result = await authenticate("cajavip", "cajavip");
+    expect(result).toBeNull();
   });
 });

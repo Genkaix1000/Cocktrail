@@ -56,9 +56,8 @@ services:
         sync: false
 
       # --- URL pública ---
-      # FRONTEND_URL: la URL del servicio (https://barqr.onrender.com). Se usa para
-      # CORS y para armar links. Render la expone en RENDER_EXTERNAL_URL, pero se
-      # deja explícita para poder apuntar a un dominio propio sin tocar código.
+      # FRONTEND_URL: URL pública (prod: https://miboliche.online detrás de CF).
+      # CORS y links. Render también expone RENDER_EXTERNAL_URL; esta va explícita.
       - key: FRONTEND_URL
         sync: false
 

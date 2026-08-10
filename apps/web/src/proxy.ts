@@ -26,13 +26,16 @@ async function verifySessionEdge(
 ): Promise<{ role: string; username: string; expiresAt: number } | null> {
   if (!raw) return null;
   const parts = raw.split(".");
-  if (parts.length !== 4) return null;
+  // role.username.expiresAt.sessionVersion.sig — la versión la aplica el API;
+  // acá solo validamos firma + expiry (Edge no tiene el contador en memoria).
+  if (parts.length !== 5) return null;
 
-  const [role, username, expRaw, sig] = parts;
+  const [role, username, expRaw, verRaw, sig] = parts;
   if (!ROLES.has(role)) return null;
 
   const expiresAt = Number(expRaw);
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+  if (!Number.isFinite(Number(verRaw))) return null;
 
   // Sin secreto no se valida nada: cae cerrado. Un fallback acá significaría
   // que un despliegue mal configurado acepta cookies firmadas con un secreto
@@ -53,7 +56,7 @@ async function verifySessionEdge(
     ["sign"],
   );
 
-  const payload = `${role}.${username}.${expRaw}`;
+  const payload = `${role}.${username}.${expRaw}.${verRaw}`;
   const signatureBuffer = await crypto.subtle.sign(
     "HMAC",
     key,

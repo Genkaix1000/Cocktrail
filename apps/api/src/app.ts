@@ -7,6 +7,7 @@ import { generalLimiter } from "./shared/middleware/rate-limit.js";
 
 // Controllers
 import { createAuthController } from "./modules/auth/auth.controller.js";
+import { setSessionVersion, getSessionVersion } from "./modules/auth/session.js";
 import { createDrinksController } from "./modules/drinks/drinks.controller.js";
 import { createDrinkCategoriesController } from "./modules/drinks/categories.controller.js";
 import { createOrdersController } from "./modules/orders/orders.controller.js";
@@ -315,11 +316,14 @@ import { createSystemController } from "./modules/system/system.controller.js";
 app.use(
   "/api/auth",
   createAuthController(usersRepo, {
-    // D6: la identidad la deriva el service de la sesión autenticada,
-    // así que el logout libera la caja de verdad (antes solo soltaba la
-    // identidad ficticia "…:default", nunca la de la pestaña real).
     onLogout: async (user) => {
       await barSessionsService.leave(user);
+    },
+    persistSessionVersion: async (version) => {
+      await supabase.from("app_config").upsert(
+        { key: "session_version", value: String(version) },
+        { onConflict: "key" },
+      );
     },
   }),
 );

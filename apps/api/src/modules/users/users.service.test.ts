@@ -9,6 +9,7 @@ function makeRepo(overrides?: Partial<UsersRepository>): UsersRepository {
     findByUsername: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updatePassword: vi.fn(),
     delete: vi.fn(),
     ...overrides,
   };

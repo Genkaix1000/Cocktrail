@@ -44,8 +44,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
       JWT_EXP: ${JWT_EXPIRY:-3600}
     ports:
-      # Acceso directo a Postgres (psql/debug). No lo usa el backend.
-      - ${POSTGRES_EXTERNAL_PORT:-54322}:5432
+      # Acceso directo a Postgres (psql/debug). Bind a localhost: la base no
+      # debe ser accesible desde otros dispositivos de la red del local.
+      - 127.0.0.1:${POSTGRES_EXTERNAL_PORT:-54322}:5432
     volumes:
       - cocktrail_db_data:/var/lib/postgresql/data
       # Los init-scripts solo dejan roles y JWT (corren ÚNICAMENTE en el primer
@@ -106,7 +107,8 @@ services:
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
     ports:
       # ESTE es el endpoint que usa el backend: SUPABASE_URL=http://127.0.0.1:54321
-      - ${KONG_HTTP_PORT:-54321}:8000/tcp
+      # Bind a localhost: solo el backend local necesita acceso.
+      - 127.0.0.1:${KONG_HTTP_PORT:-54321}:8000/tcp
     volumes:
       - ./supabase/docker/kong.yml:/home/kong/kong.yml:ro,Z
 

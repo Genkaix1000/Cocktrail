@@ -1,6 +1,7 @@
 import { env } from "./config/env.js";
 import { app, eventsService, mpWebhooksService, mpSellersRepo } from "./app.js";
 import { supabase } from "./shared/supabase.js";
+import { setSessionVersion } from "./modules/auth/session.js";
 import { runMpFallbackPreflight } from "./modules/mercadopago/mp-fallback-preflight.js";
 import { runMigrations } from "./infra/migrations/migration-runner.js";
 import { PgMigrationsRepository } from "./infra/migrations/pg-migrations.repository.js";
@@ -120,6 +121,18 @@ async function boot() {
   // Pasos comunes al camino feliz y al retry-loop: el runner corre después de
   // verificar conexión y ANTES de que nada lea el schema.
   async function initializeDatabaseCore() {
+    // Cargar session version desde DB antes de que el auth funcione
+    try {
+      const { data } = await supabase
+        .from("app_config")
+        .select("value")
+        .eq("key", "session_version")
+        .maybeSingle();
+      if (data) setSessionVersion(Number(data.value) || 1);
+    } catch {
+      // Fallback: version 1 (default)
+    }
+
     await runMigrationsFailOpen();
 
     // Webhooks de MP que quedaron persistidos sin procesar (el proceso murió

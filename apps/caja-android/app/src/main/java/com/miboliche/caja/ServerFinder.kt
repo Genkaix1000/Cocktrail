@@ -11,14 +11,16 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Encuentra el servidor en la LAN sin pedirle la IP al usuario: barre el /24 de
- * la tablet buscando quien responda el endpoint público de la app.
+ * la tablet buscando quien responda el fingerprint público de la app.
  *
  * ponytail: escaneo /24 con pool fijo. Si alguna vez hay varias subredes o /16,
  * pasar a mDNS (NsdManager) + advertising en el server.
  */
 object ServerFinder {
     const val PORT = 3000
-    private const val PROBE_PATH = "/api/auth/me"
+    private const val PROBE_PATH = "/api/auth/fingerprint"
+    /** Debe coincidir con SERVER_FINGERPRINT.app en auth.controller.ts */
+    private const val FINGERPRINT_MARKER = "\"app\":\"cocktrail\""
 
     fun localIpv4(): String? {
         for (iface in NetworkInterface.getNetworkInterfaces()) {
@@ -84,9 +86,10 @@ object ServerFinder {
                 readTimeout = timeoutMs
                 instanceFollowRedirects = false
             }
-            // 200 = sin sesión devuelve null; 401 = existe pero pide login.
-            // Cualquiera de las dos prueba que es nuestro server, no otro equipo.
-            conn.responseCode in intArrayOf(200, 401)
+            if (conn.responseCode != 200) return false
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            // Compactamos espacios por si el JSON viene pretty-printed.
+            body.replace("\\s".toRegex(), "").contains(FINGERPRINT_MARKER)
         } catch (_: Exception) {
             false
         } finally {

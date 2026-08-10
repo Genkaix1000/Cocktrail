@@ -217,7 +217,8 @@
         box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.22);
       }
 
-      .primary:disabled {
+      .primary:disabled,
+      .connect:disabled {
         cursor: wait;
         opacity: 0.45;
       }
@@ -346,15 +347,16 @@
           </div>
 
           <h1>Conectar con el servidor</h1>
-          <p id="message">Estamos buscando la computadora del local en esta red.</p>
+          <p id="message">Conectando con el servidor en la nube…</p>
           <div id="progress" class="progress"><span></span></div>
 
           <div class="actions">
-            <button id="retry" class="primary" type="button" disabled>Buscando servidor…</button>
+            <button id="cloud" class="primary" type="button">Usar servidor en la nube</button>
+            <button id="retry" class="connect" type="button" disabled>Buscando en WiFi…</button>
           </div>
 
           <form id="manual" class="manual">
-            <label for="server">Dirección del servidor</label>
+            <label for="server">Dirección del servidor local</label>
             <div class="input-row">
               <input
                 id="server"
@@ -368,22 +370,27 @@
               <button class="connect" type="submit">Conectar</button>
             </div>
             <p class="hint">
-              Podés encontrar esta dirección abriendo miBoliche desde la computadora del local.
+              Por defecto la app usa la nube. El WiFi local solo hace falta si querés apuntar a una PC del local.
             </p>
           </form>
         </div>
       </section>
 
-      <footer>La tablet y la computadora deben estar conectadas a la misma red WiFi.</footer>
+      <footer>Si usás WiFi local, la tablet y la PC tienen que estar en la misma red.</footer>
     </main>
 
     <script>
       const message = document.getElementById("message");
       const progress = document.getElementById("progress");
       const icon = document.getElementById("status-icon");
+      const cloud = document.getElementById("cloud");
       const retry = document.getElementById("retry");
       const input = document.getElementById("server");
       const form = document.getElementById("manual");
+
+      cloud.addEventListener("click", () => {
+        location.href = "miboliche://cloud";
+      });
 
       retry.addEventListener("click", () => {
         location.href = "miboliche://discover";
@@ -406,14 +413,15 @@
           progress.classList.toggle("hidden", !searching);
           icon.classList.toggle("searching", searching);
           icon.classList.toggle("error", state === "error");
+          cloud.disabled = searching;
           retry.disabled = searching;
           retry.textContent =
             state === "connecting"
               ? "Comprobando dirección…"
               : searching
-                ? "Buscando servidor…"
-                : "Buscar de nuevo";
-          if (savedServer && !input.value) {
+                ? "Buscando en WiFi…"
+                : "Buscar en WiFi local";
+          if (savedServer && !input.value && !/^https:\/\//.test(savedServer)) {
             input.value = savedServer.replace(/^https?:\/\//, "");
           }
         },
