@@ -10,15 +10,24 @@ pick_java_home() {
     echo "$JAVA_HOME"
     return
   fi
-  local candidates=(
-    "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-    "/usr/lib/jvm/default"
-    "/usr/lib/jvm/default-runtime"
-    "/usr/lib/jvm/java-17-openjdk"
-    "/usr/lib/jvm/java-21-openjdk"
-  )
   local c
-  for c in "${candidates[@]}"; do
+  # Prefer portable Temurin under .tools (Linux without system JDK 17).
+  shopt -s nullglob
+  for c in "$ROOT"/.tools/jdk-17*; do
+    if [[ -x "$c/bin/java" ]]; then
+      echo "$c"
+      shopt -u nullglob
+      return
+    fi
+  done
+  shopt -u nullglob
+  for c in \
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+    "/usr/lib/jvm/java-17-openjdk" \
+    "/usr/lib/jvm/java-21-openjdk" \
+    "/usr/lib/jvm/default" \
+    "/usr/lib/jvm/default-runtime"
+  do
     if [[ -x "$c/bin/java" ]]; then
       echo "$c"
       return
