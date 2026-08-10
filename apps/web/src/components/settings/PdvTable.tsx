@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Copy,
   Check,
   CreditCard,
-  ExternalLink,
+  Download,
   Link2,
   Loader2,
+  Printer,
   QrCode,
   RotateCw,
   Unlink,
@@ -16,6 +17,153 @@ import {
 import type { CajaRow, DeviceRow } from "@/services/pdv.service";
 import BoskoSelect from "@/components/shared/BoskoSelect";
 import { barDisplayLabel, barVisualIcon, barVisualKind } from "@/lib/bar-visual";
+
+function printQrImage(src: string) {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  Object.assign(iframe.style, {
+    position: "fixed",
+    right: "0",
+    bottom: "0",
+    width: "0",
+    height: "0",
+    border: "0",
+  });
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    return;
+  }
+  doc.open();
+  doc.write(
+    `<!doctype html><title>QR</title><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#fff"><img src="${src.replace(/"/g, "&quot;")}" style="max-width:90vw;max-height:90vh" /></body>`,
+  );
+  doc.close();
+  const cleanup = () => iframe.remove();
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } finally {
+      setTimeout(cleanup, 800);
+    }
+  };
+}
+
+async function downloadQrImage(src: string, filename: string) {
+  try {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error("fetch failed");
+    const blob = await res.blob();
+    const file = new File([blob], filename, { type: blob.type || "image/png" });
+    if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    // CORS / WebView: la imagen sigue visible; long-press para guardar.
+  }
+}
+
+function QrPreviewModal({
+  src,
+  label,
+  onClose,
+}: {
+  src: string;
+  label: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const filename = `qr-${label.replace(/\s+/g, "-").toLowerCase()}.png`;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(src);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="qr-preview-title"
+        className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] w-full max-w-sm rounded-[22px] p-5 shadow-2xl animate-in slide-in-from-bottom-10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 id="qr-preview-title" className="text-[15px] font-semibold text-[var(--text-primary)] truncate">
+            QR · {label}
+          </h2>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] inline-flex items-center justify-center cursor-pointer"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 flex items-center justify-center border border-[var(--border-subtle)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={`Código QR de ${label}`} className="w-full max-w-[260px] h-auto" />
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => void downloadQrImage(src, filename)}
+            className="h-10 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Download size={14} />
+            Guardar
+          </button>
+          <button
+            type="button"
+            onClick={() => printQrImage(src)}
+            className="h-10 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Printer size={14} />
+            Imprimir
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyUrl()}
+            className="h-10 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "OK" : "URL"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   cajas: CajaRow[];
@@ -56,6 +204,7 @@ export default function PdvTable({
   const [linkFormCajaId, setLinkFormCajaId] = useState<string | null>(null);
   const [deviceIdDraft, setDeviceIdDraft] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
+  const [qrPreview, setQrPreview] = useState<{ src: string; label: string } | null>(null);
 
   const linkableDevices = availableDevices.filter((d) => !d.isActive);
 
@@ -111,6 +260,14 @@ export default function PdvTable({
   }
 
   return (
+    <>
+    {qrPreview ? (
+      <QrPreviewModal
+        src={qrPreview.src}
+        label={qrPreview.label}
+        onClose={() => setQrPreview(null)}
+      />
+    ) : null}
     <ul className="flex flex-col gap-3 list-none m-0 p-0">
       {cajas.map((caja) => {
         const linking = linkingCajaId === caja.id;
@@ -123,6 +280,7 @@ export default function PdvTable({
         const Icon = barVisualIcon(kind);
         const enabled = caja.barEnabled !== false;
         const toggling = togglingBarId === caja.barId;
+        const barLabel = barDisplayLabel(caja.barCode ?? caja.externalPosId, caja.storeName);
 
         return (
           <li
@@ -151,7 +309,7 @@ export default function PdvTable({
                 <div className="min-w-0 space-y-2 pt-0.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-[16px] font-semibold tracking-tight text-[var(--text-primary)] leading-none">
-                      {barDisplayLabel(caja.barCode ?? caja.externalPosId, caja.storeName)}
+                      {barLabel}
                     </h3>
                     {hasPosnet ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[var(--bg-panel)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
@@ -201,8 +359,8 @@ export default function PdvTable({
                       aria-checked={enabled}
                       aria-label={
                         enabled
-                          ? `Deshabilitar ${barDisplayLabel(caja.barCode ?? caja.externalPosId)}`
-                          : `Habilitar ${barDisplayLabel(caja.barCode ?? caja.externalPosId)}`
+                          ? `Deshabilitar ${barLabel}`
+                          : `Habilitar ${barLabel}`
                       }
                       disabled={toggling}
                       onClick={() => void onToggleEnabled(caja, !enabled)}
@@ -229,15 +387,14 @@ export default function PdvTable({
                       {copiedId === caja.id ? <Check size={13} /> : <Copy size={13} />}
                       {copiedId === caja.id ? "Copiado" : "Copiar URL"}
                     </button>
-                    <a
-                      href={caja.qrImage}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="h-9 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] inline-flex items-center gap-1.5 transition-colors"
+                    <button
+                      type="button"
+                      onClick={() => setQrPreview({ src: caja.qrImage!, label: barLabel })}
+                      className="h-9 px-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <ExternalLink size={13} />
+                      <QrCode size={13} />
                       Ver QR
-                    </a>
+                    </button>
                   </>
                 ) : onRecoverQr ? (
                   <button
@@ -349,5 +506,6 @@ export default function PdvTable({
         );
       })}
     </ul>
+    </>
   );
 }

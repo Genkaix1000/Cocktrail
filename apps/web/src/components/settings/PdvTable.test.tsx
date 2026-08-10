@@ -137,12 +137,17 @@ describe("PdvTable", () => {
     expect(props.onUnlinkDevice).toHaveBeenCalledWith(DEVICE);
   });
 
-  it("expone Copiar URL y Ver QR cuando hay imagen", () => {
+  it("expone Copiar URL y Ver QR cuando hay imagen", async () => {
+    const user = userEvent.setup();
     renderTable();
     expect(screen.getByRole("button", { name: /Copiar URL/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Ver QR/i })).toHaveAttribute(
-      "href",
+    await user.click(screen.getByRole("button", { name: /Ver QR/i }));
+    expect(screen.getByRole("dialog", { name: /QR/i })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Código QR/i })).toHaveAttribute(
+      "src",
       "https://mp.example/qr.png",
     );
+    expect(screen.getByRole("button", { name: /Guardar/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Imprimir/i })).toBeInTheDocument();
   });
 });

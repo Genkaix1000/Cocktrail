@@ -121,16 +121,32 @@ class MainActivity : AppCompatActivity() {
         prefs().edit().putString(KEY_SERVER, base.trimEnd('/')).apply()
     }
 
-    /** Última pantalla abierta: al reconectar se vuelve ahí, no al login. */
+    /**
+     * Última pantalla abierta: al reconectar se vuelve ahí, no al login.
+     * Solo paths del mismo host (si no, un QR externo de MP contaminaba
+     * last_path y al reabrir la app cargaba miboliche.online/<ruta-mp> → 404).
+     */
     private fun savePath(url: String) {
-        val path = Uri.parse(url).path?.takeIf { it.isNotEmpty() } ?: return
+        val uri = Uri.parse(url)
+        val base = savedServer() ?: return
+        if (uri.host != Uri.parse(base).host) return
+        val path = uri.path?.takeIf { it.isNotEmpty() && it != "/" } ?: return
+        if (path.startsWith("/api") || path.startsWith("/_next") || path.contains('.')) return
         prefs().edit().putString(KEY_PATH, path).apply()
+    }
+
+    /** Descarta last_path basura (QR externo, assets) ya guardada en prefs viejas. */
+    private fun restorePath(): String {
+        val path = prefs().getString(KEY_PATH, null) ?: return "/login"
+        if (APP_PATH_PREFIXES.any { path == it || path.startsWith("$it/") }) return path
+        prefs().edit().remove(KEY_PATH).apply()
+        return "/login"
     }
 
     private fun loadServer(base: String) {
         connectPageReady = false
         enablePrinterBridge()
-        webView.loadUrl("${base.trimEnd('/')}${prefs().getString(KEY_PATH, null) ?: "/login"}")
+        webView.loadUrl("${base.trimEnd('/')}${restorePath()}")
     }
 
     private fun enablePrinterBridge() {
@@ -319,6 +335,7 @@ class MainActivity : AppCompatActivity() {
         private const val APP_SCHEME = "miboliche"
         private const val CONNECT_PAGE = "file:///android_asset/connect.html"
         const val DEFAULT_CLOUD_URL = "https://miboliche.online"
+        private val APP_PATH_PREFIXES = listOf("/login", "/caja", "/admin", "/settings", "/help")
         private const val CLOUD_PROBE_TIMEOUT_MS = 20_000
 
         // ~20s de tolerancia (isServer corta a 2.5s por intento) — cubre el

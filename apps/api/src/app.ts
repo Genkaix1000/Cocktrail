@@ -267,7 +267,15 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https://images.unsplash.com", "https://api.qrserver.com"],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "https://images.unsplash.com",
+        "https://api.qrserver.com",
+        "https://www.mercadopago.com",
+        "https://*.mercadopago.com",
+        "https://*.mlstatic.com",
+      ],
       // En producción, solo el propio origen; los rangos de red local son para
       // el dev server accedido desde otro dispositivo.
       connectSrc: env.NODE_ENV === "production"
