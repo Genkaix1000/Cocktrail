@@ -17,6 +17,7 @@ import HistorialSection from "@/components/caja/HistorialSection";
 import MetricasSection from "@/components/caja/MetricasSection";
 import CajaSidebar from "@/components/caja/Sidebar";
 import { HelpCenterProvider } from "@/components/help/HelpCenterProvider";
+import { DemoBanner } from "@/components/shared/DemoBanner";
 import { hasNativeBleBridge } from "@/lib/printing/transports/native-ble-s1";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
 
@@ -249,6 +250,7 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
       cajaConfig={cajaHelpConfig}
     >
       <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
+        <DemoBanner />
         <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {((event && closeModalOpen) || summary) && (
           <CloseNightModal

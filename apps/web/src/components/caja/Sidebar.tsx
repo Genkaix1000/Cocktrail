@@ -8,7 +8,6 @@ import {
   CreditCard,
   TrendingUp,
   ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -157,26 +156,37 @@ export default function CajaSidebar({
           collapsed ? "justify-center px-2" : "justify-between px-4"
         }`}
       >
-        <div className={`transition-all duration-200 ${collapsed ? "opacity-0 max-w-0 overflow-hidden pointer-events-none" : "opacity-100 max-w-[160px]"}`}>
-          <BrandLogo size="md" />
-        </div>
-        <button
-          data-tour-nav="collapse"
-          type="button"
-          onClick={onToggleCollapse}
-          className={`rounded-xl flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-all cursor-pointer shrink-0 ${
-            collapsed ? "w-10 h-10 text-[var(--accent-primary)]" : "p-1.5"
-          }`}
-          title={collapsed ? "Expandir menú" : "Colapsar menú"}
-          aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
-        >
-          {collapsed ? <ChevronRight size={18} strokeWidth={2} /> : <ChevronLeft size={16} />}
-        </button>
+        {collapsed ? (
+          <button
+            data-tour-nav="collapse"
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[var(--bg-surface)] transition-all cursor-pointer"
+            title="Expandir menú"
+            aria-label="Expandir menú"
+          >
+            <BrandLogo variant="mark" size="sm" />
+          </button>
+        ) : (
+          <>
+            <BrandLogo variant="lockup" size="md" className="max-w-[160px]" />
+            <button
+              data-tour-nav="collapse"
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-1.5 rounded-xl flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-all cursor-pointer shrink-0"
+              title="Colapsar menú"
+              aria-label="Colapsar menú"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </>
+        )}
       </div>
 
       <div
-        className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-2 transition-all duration-200 ${
-          collapsed ? "gap-2 px-1 pb-[200px]" : "gap-4 pb-[260px]"
+        className={`flex-1 min-h-0 overflow-y-auto flex flex-col no-scrollbar pt-2 transition-all duration-200 ${
+          collapsed ? "gap-2 px-1 pb-2" : "gap-4 pb-2"
         }`}
       >
         <div className="flex flex-col">
@@ -257,11 +267,11 @@ export default function CajaSidebar({
       </div>
 
       <div
-        className={`absolute bottom-0 left-0 right-0 z-20 pointer-events-none ${
-          collapsed ? "p-2 pb-4" : "px-3 pt-3 pb-5"
+        className={`shrink-0 z-10 ${
+          collapsed ? "p-2 pb-3" : "px-3 pt-2 pb-4"
         }`}
       >
-        <div className="pointer-events-auto flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <div
             data-tour="caja-dispositivos"
             className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] ${

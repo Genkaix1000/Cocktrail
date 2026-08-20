@@ -20,12 +20,9 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
-    // El cliente pega same-origin a /api (NEXT_PUBLIC_API_URL vacío) para que la
-    // cookie de sesión quede en el mismo host que la app. Este rewrite reenvía
-    // esas requests al backend (server→server, mismo host). Configurable por
-    // API_PROXY_TARGET para no hardcodear el puerto; default 3001 (convención).
-    // 127.0.0.1 y no localhost: en el contenedor, localhost puede resolver a
-    // ::1 mientras la API escucha en IPv4.
+    if (process.env.NEXT_PUBLIC_DEMO_STATIC === "1") {
+      return [];
+    }
     const apiTarget = process.env.API_PROXY_TARGET || "http://127.0.0.1:3001";
     return [
       {

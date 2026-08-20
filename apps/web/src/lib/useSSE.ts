@@ -8,6 +8,7 @@ import type {
   Theme,
   CustomTheme,
 } from "@cocktrail/shared";
+import { isDemoStatic } from "@/demo/store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -55,6 +56,11 @@ export function useSSE(handlers: DomainEventHandlers, options?: Options): void {
   const { onOpen } = options ?? {};
 
   useEffect(() => {
+    if (isDemoStatic()) {
+      onOpen?.();
+      return;
+    }
+
     const es = new EventSource(`${API_URL}/api/events`, { withCredentials: true });
 
     const subscriptions: Array<{

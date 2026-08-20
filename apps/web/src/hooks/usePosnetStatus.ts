@@ -22,7 +22,7 @@ export function derivePosnetStatus(health: MpHealth | null): {
   level: PosnetLevel;
   message: string;
 } {
-  if (!health) {
+  if (!health?.checks) {
     return { level: "unknown", message: "No se pudo consultar el estado del Posnet." };
   }
   const { singleSeller, deviceOwnership, deviceMode, cajaProvisioned } = health.checks;

@@ -1873,6 +1873,45 @@ export default function VentaSection({
 
                     {paymentMethod === "debito" && (
                       <div className="flex flex-col gap-4">
+                        {paymentIntentState === "DEMO" ? (
+                          <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="py-8 flex flex-col items-center text-center gap-3 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl px-4">
+                              <div className="w-14 h-14 rounded-2xl bg-[var(--accent-surface)] text-[var(--accent-primary)] flex items-center justify-center">
+                                <CreditCard size={26} />
+                              </div>
+                              <p className="text-sm font-bold text-[var(--text-primary)]">
+                                Demo · sin Posnet real
+                              </p>
+                              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed max-w-sm">
+                                Acá iría el cobro al lector. En la demo podés simular la compra y seguir el flujo.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              onClick={() => void confirmOrder()}
+                              className="w-full h-12 rounded-xl bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-[var(--accent-primary-hover)] disabled:opacity-50 cursor-pointer active:scale-[0.98]"
+                            >
+                              {submitting ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <Sparkles size={16} />
+                              )}
+                              Simular compra
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentMethod(null);
+                                setPaymentIntentState(null);
+                              }}
+                              className="w-full h-11 rounded-xl border border-[var(--border-subtle)] text-[var(--text-secondary)] text-[12px] font-semibold cursor-pointer"
+                            >
+                              Volver
+                            </button>
+                          </div>
+                        ) : (
+                        <>
                         <div className={`py-10 flex flex-col items-center text-center gap-4 bg-ink-950 border border-ink-800 rounded-2xl ${paymentIntentState === "ON_TERMINAL" ? "" : "animate-pulse"}`}>
                           <Loader2 size={48} className="text-accent animate-spin" />
                           <div className="flex flex-col gap-1.5">
@@ -2050,11 +2089,60 @@ export default function VentaSection({
                             )}
                           </div>
                         )}
+                        </>
+                        )}
                       </div>
                     )}
 
                     {paymentMethod === "qr" && (
                       <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+                        {paymentIntentState === "DEMO" ? (
+                          <div className="flex flex-col gap-4">
+                            <div className="flex items-baseline gap-1.5 justify-center">
+                              <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+                                Total
+                              </span>
+                              <span className="text-2xl font-black tabular text-[var(--accent-primary)] tracking-tight">
+                                ${totalPrice.toLocaleString("es-AR")}
+                              </span>
+                            </div>
+                            <div className="py-8 flex flex-col items-center text-center gap-3 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl px-4">
+                              <div className="w-14 h-14 rounded-2xl bg-[var(--accent-surface)] text-[var(--accent-primary)] flex items-center justify-center">
+                                <QrCode size={26} />
+                              </div>
+                              <p className="text-sm font-bold text-[var(--text-primary)]">
+                                Demo · sin QR real
+                              </p>
+                              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed max-w-sm">
+                                Acá se mostraría el código QR de Mercado Pago. Simulá la compra para continuar.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              onClick={() => void confirmOrder()}
+                              className="w-full h-12 rounded-xl bg-[var(--accent-primary)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-[var(--accent-primary-hover)] disabled:opacity-50 cursor-pointer active:scale-[0.98]"
+                            >
+                              {submitting ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <Sparkles size={16} />
+                              )}
+                              Simular compra
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentMethod(null);
+                                setPaymentIntentState(null);
+                              }}
+                              className="w-full h-11 rounded-xl border border-[var(--border-subtle)] text-[var(--text-secondary)] text-[12px] font-semibold cursor-pointer"
+                            >
+                              Volver
+                            </button>
+                          </div>
+                        ) : (
+                        <>
                         <div className="flex flex-col items-center text-center gap-4">
                           <div className="flex items-baseline gap-1.5">
                             <span className="text-[11px] font-medium uppercase tracking-wider text-ink-400">Total</span>
@@ -2142,6 +2230,8 @@ export default function VentaSection({
                           >
                             Volver Atrás
                           </button>
+                        )}
+                        </>
                         )}
                       </div>
                     )}

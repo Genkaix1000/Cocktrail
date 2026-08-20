@@ -1,4 +1,5 @@
 import { ACTIVE_BAR_STORAGE_KEY } from "@/lib/bar-context";
+import { isDemoStatic } from "@/demo/store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -24,11 +25,18 @@ export class ApiError extends Error {
  * Fetch centralizado contra el backend. Cuando NEXT_PUBLIC_API_URL está vacío,
  * los fetches van a rutas relativas (proxy local). Cuando tiene un valor,
  * van al backend externo. Cero cambios en los componentes.
+ *
+ * Con NEXT_PUBLIC_DEMO_STATIC=1 no hay red: responde el router in-memory.
  */
 export async function apiFetch<T>(
   path: string,
   opts: RequestOptions = {},
 ): Promise<T> {
+  if (isDemoStatic()) {
+    const { demoFetch } = await import("@/demo/api");
+    return demoFetch<T>(path, opts);
+  }
+
   const { method = "GET", body, headers = {}, signal = AbortSignal.timeout(15_000) } = opts;
   const activeBarId =
     typeof window !== "undefined"
@@ -52,7 +60,6 @@ export async function apiFetch<T>(
     throw new ApiError(res.status, err.error ?? `HTTP ${res.status}`, err);
   }
 
-  // Algunos endpoints devuelven null (ej. GET /api/auth/me sin sesión)
   const text = await res.text();
   if (!text) return null as T;
   return JSON.parse(text) as T;

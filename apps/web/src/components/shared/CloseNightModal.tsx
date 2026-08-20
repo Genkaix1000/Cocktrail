@@ -52,7 +52,7 @@ function triggerConfetti(): () => void {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
-  const colors = ["#10b981", "#06b6d4", "#fbbf24", "#ec4899", "#3b82f6"];
+  const colors = ["#6d5ef9", "#a6a1ff", "#fbbf24", "#ec4899", "#4cc9f0"];
   type Particle = {
     x: number;
     y: number;
@@ -222,7 +222,7 @@ export default function CloseNightModal({
                 isSummary
                   ? esPrueba
                     ? "bg-amber-soft border-amber-line"
-                    : "bg-green-soft border-green-line"
+                    : "bg-[var(--accent-surface)] border-[var(--accent-line)]"
                   : "bg-amber-soft border-amber-line"
               }`}
             >
@@ -230,7 +230,7 @@ export default function CloseNightModal({
                 esPrueba ? (
                   <AlertTriangle size={18} className="text-amber" />
                 ) : (
-                  <CheckCircle2 size={18} className="text-green" />
+                  <CheckCircle2 size={18} className="text-[var(--accent-primary)]" />
                 )
               ) : (
                 <AlertTriangle size={18} className="text-amber" />
@@ -493,21 +493,21 @@ function channelMix(totals: EventTotals): { channels: Channel[]; bruto: number; 
       label: "Efectivo",
       value: efectivo,
       count: totals.efectivoCount,
-      color: "var(--success-base, #10b981)",
+      color: "var(--accent-bright, #a6a1ff)",
     },
     {
       key: "qr",
       label: "QR",
       value: qr,
       count: totals.qrCount,
-      color: "var(--accent-bright, #06b6d4)",
+      color: "var(--accent-primary, #6d5ef9)",
     },
     {
       key: "debito",
       label: "Tarjeta",
       value: tarjeta,
       count: totals.debitoCount,
-      color: "var(--accent-primary, #3b82f6)",
+      color: "var(--accent-featured-deep, #4338ca)",
     },
   ];
   const bruto = efectivo + qr + tarjeta;

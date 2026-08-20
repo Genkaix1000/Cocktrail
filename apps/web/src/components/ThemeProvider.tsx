@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useSSE } from "@/lib/useSSE";
+import { apiFetch } from "@/services/api-client";
+import { isDemoStatic } from "@/demo/store";
 import type { Theme, CustomTheme } from "@cocktrail/shared";
 
 type ThemeContextType = {
@@ -16,6 +18,9 @@ type ThemeContextType = {
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+const DEFAULT_LOGO = "/miboliche-mark.svg";
+const DEFAULT_NAME = "miBoliche";
 
 export function useTheme() {
   const context = useContext(ThemeContext);
@@ -45,17 +50,64 @@ const getIsDarkKey = () => {
   return `cocktrail_is_dark_${role}`;
 };
 
+function applyThemePayload(
+  data: {
+    theme?: string;
+    customTheme?: CustomTheme | null;
+    useLogoUrl?: boolean;
+    logoUrl?: string;
+    logoSize?: number;
+    textLogoValue?: string;
+    textLogoSize?: number;
+  },
+  setters: {
+    setTheme: (t: Theme) => void;
+    setCustomTheme: (c: CustomTheme | null) => void;
+    setUseLogoUrl: (v: boolean) => void;
+    setLogoUrl: (v: string) => void;
+    setLogoSize: (v: number) => void;
+    setTextLogoValue: (v: string) => void;
+    setTextLogoSize: (v: number) => void;
+  },
+) {
+  if (!data?.theme) return;
+  const newTheme = data.theme as Theme;
+  const customThemeData = data.customTheme ?? null;
+  const logo = data.logoUrl || DEFAULT_LOGO;
+  const name = data.textLogoValue || DEFAULT_NAME;
+
+  setters.setTheme(newTheme);
+  setters.setCustomTheme(customThemeData);
+  setters.setUseLogoUrl(data.useLogoUrl !== false);
+  setters.setLogoUrl(logo);
+  setters.setLogoSize(Number(data.logoSize ?? 56));
+  setters.setTextLogoValue(name);
+  setters.setTextLogoSize(Number(data.textLogoSize ?? 26));
+
+  localStorage.setItem("cocktrail_theme", newTheme);
+  localStorage.setItem("cocktrail_use_logo_url", String(data.useLogoUrl !== false));
+  localStorage.setItem("cocktrail_logo_url", logo);
+  localStorage.setItem("cocktrail_logo_size", String(data.logoSize ?? 56));
+  localStorage.setItem("cocktrail_text_logo_value", name);
+  localStorage.setItem("cocktrail_text_logo_size", String(data.textLogoSize ?? 26));
+  if (customThemeData) {
+    localStorage.setItem("cocktrail_custom_theme", JSON.stringify(customThemeData));
+  } else {
+    localStorage.removeItem("cocktrail_custom_theme");
+  }
+}
+
 export function ThemeProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [theme, setTheme] = useState<Theme>("bosko");
+  const [theme, setTheme] = useState<Theme>("miboliche");
   const [customTheme, setCustomTheme] = useState<CustomTheme | null>(null);
   const [useLogoUrl, setUseLogoUrl] = useState<boolean>(true);
-  const [logoUrl, setLogoUrl] = useState<string>("/bosko.webp");
+  const [logoUrl, setLogoUrl] = useState<string>(DEFAULT_LOGO);
   const [logoSize, setLogoSize] = useState<number>(56);
-  const [textLogoValue, setTextLogoValue] = useState<string>("Bosko");
+  const [textLogoValue, setTextLogoValue] = useState<string>(DEFAULT_NAME);
   const [textLogoSize, setTextLogoSize] = useState<number>(26);
   const [isDark, setIsDark] = useState<boolean>(true);
 
@@ -71,35 +123,30 @@ export function ThemeProvider({
     }
   };
 
-  // Cargar localmente al montar para evitar delay y consultar al backend
   useEffect(() => {
-    // 1. Cargar desde localStorage si existe
-    const cached = (localStorage.getItem("cocktrail_theme") || "bosko") as Theme;
+    const cached = (localStorage.getItem("cocktrail_theme") || "miboliche") as Theme;
     const cachedCustom = localStorage.getItem("cocktrail_custom_theme");
     const customThemeVal = cachedCustom ? JSON.parse(cachedCustom) : null;
 
     const cachedUseLogo = localStorage.getItem("cocktrail_use_logo_url") !== "false";
-    const cachedLogoUrl = localStorage.getItem("cocktrail_logo_url") || "/bosko.webp";
+    const cachedLogoUrl = localStorage.getItem("cocktrail_logo_url") || DEFAULT_LOGO;
     const cachedLogoSize = Number(localStorage.getItem("cocktrail_logo_size") || "56");
-    const cachedTextLogo = localStorage.getItem("cocktrail_text_logo_value") || "Bosko";
+    const cachedTextLogo = localStorage.getItem("cocktrail_text_logo_value") || DEFAULT_NAME;
     const cachedTextLogoSize = Number(localStorage.getItem("cocktrail_text_logo_size") || "26");
 
     const key = getIsDarkKey();
-    const cachedIsDark = localStorage.getItem(key) !== "false"; // Default true
+    const cachedIsDark = localStorage.getItem(key) !== "false";
 
     if (cached) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial desde localStorage (fetch-on-mount), mismo patrón ya usado en el resto del repo
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial desde localStorage
       setTheme(cached);
     }
-    if (customThemeVal) {
-      setCustomTheme(customThemeVal);
-    }
+    if (customThemeVal) setCustomTheme(customThemeVal);
     setUseLogoUrl(cachedUseLogo);
     setLogoUrl(cachedLogoUrl);
     setLogoSize(cachedLogoSize);
     setTextLogoValue(cachedTextLogo);
     setTextLogoSize(cachedTextLogoSize);
-
     setIsDark(cachedIsDark);
     if (cachedIsDark) {
       document.documentElement.classList.add("dark");
@@ -107,39 +154,38 @@ export function ThemeProvider({
       document.documentElement.classList.remove("dark");
     }
 
-    // 2. Sincronizar con el backend
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-    fetch(`${apiBase}/api/theme`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch theme");
-        return res.json();
-      })
+    // Demo: forzar marca miBoliche (pisa cache Bosko del localStorage).
+    if (isDemoStatic()) {
+      localStorage.setItem("cocktrail_theme", "miboliche");
+      localStorage.setItem("cocktrail_logo_url", DEFAULT_LOGO);
+      localStorage.setItem("cocktrail_text_logo_value", DEFAULT_NAME);
+      localStorage.setItem("cocktrail_use_logo_url", "true");
+      setTheme("miboliche");
+      setLogoUrl(DEFAULT_LOGO);
+      setTextLogoValue(DEFAULT_NAME);
+      setUseLogoUrl(true);
+      return;
+    }
+
+    apiFetch<{
+      theme?: string;
+      customTheme?: CustomTheme | null;
+      useLogoUrl?: boolean;
+      logoUrl?: string;
+      logoSize?: number;
+      textLogoValue?: string;
+      textLogoSize?: number;
+    }>("/api/theme")
       .then((data) => {
-        if (data && data.theme) {
-          const newTheme = data.theme;
-          const customThemeData = data.customTheme;
-
-          setTheme(newTheme);
-          setCustomTheme(customThemeData || null);
-          setUseLogoUrl(data.useLogoUrl !== false);
-          setLogoUrl(data.logoUrl || "/bosko.webp");
-          setLogoSize(Number(data.logoSize ?? 56));
-          setTextLogoValue(data.textLogoValue || "Bosko");
-          setTextLogoSize(Number(data.textLogoSize ?? 26));
-
-          localStorage.setItem("cocktrail_theme", newTheme);
-          localStorage.setItem("cocktrail_use_logo_url", String(data.useLogoUrl !== false));
-          localStorage.setItem("cocktrail_logo_url", data.logoUrl || "/bosko.webp");
-          localStorage.setItem("cocktrail_logo_size", String(data.logoSize ?? 56));
-          localStorage.setItem("cocktrail_text_logo_value", data.textLogoValue || "Bosko");
-          localStorage.setItem("cocktrail_text_logo_size", String(data.textLogoSize ?? 26));
-
-          if (customThemeData) {
-            localStorage.setItem("cocktrail_custom_theme", JSON.stringify(customThemeData));
-          } else {
-            localStorage.removeItem("cocktrail_custom_theme");
-          }
-        }
+        applyThemePayload(data, {
+          setTheme,
+          setCustomTheme,
+          setUseLogoUrl,
+          setLogoUrl,
+          setLogoSize,
+          setTextLogoValue,
+          setTextLogoSize,
+        });
       })
       .catch((err) => {
         console.error("Error loading theme from API:", err);
@@ -148,34 +194,31 @@ export function ThemeProvider({
 
   useSSE({
     "theme.changed": (data) => {
-      const typedTheme = data.theme as Theme;
-      const customThemeData = data.customTheme;
-
-      setTheme(typedTheme);
-      setCustomTheme(customThemeData || null);
-      setUseLogoUrl(data.useLogoUrl !== false);
-      setLogoUrl(data.logoUrl || "/bosko.webp");
-      setLogoSize(Number(data.logoSize ?? 56));
-      setTextLogoValue(data.textLogoValue || "Bosko");
-      setTextLogoSize(Number(data.textLogoSize ?? 26));
-
-      localStorage.setItem("cocktrail_theme", typedTheme);
-      localStorage.setItem("cocktrail_use_logo_url", String(data.useLogoUrl !== false));
-      localStorage.setItem("cocktrail_logo_url", data.logoUrl || "/bosko.webp");
-      localStorage.setItem("cocktrail_logo_size", String(data.logoSize ?? 56));
-      localStorage.setItem("cocktrail_text_logo_value", data.textLogoValue || "Bosko");
-      localStorage.setItem("cocktrail_text_logo_size", String(data.textLogoSize ?? 26));
-
-      if (customThemeData) {
-        localStorage.setItem("cocktrail_custom_theme", JSON.stringify(customThemeData));
-      } else {
-        localStorage.removeItem("cocktrail_custom_theme");
-      }
-    }
+      applyThemePayload(data, {
+        setTheme,
+        setCustomTheme,
+        setUseLogoUrl,
+        setLogoUrl,
+        setLogoSize,
+        setTextLogoValue,
+        setTextLogoSize,
+      });
+    },
   });
 
   return (
-    <ThemeContext.Provider value={{ theme, useLogoUrl, logoUrl, logoSize, textLogoValue, textLogoSize, isDark, toggleDark }}>
+    <ThemeContext.Provider
+      value={{
+        theme,
+        useLogoUrl,
+        logoUrl,
+        logoSize,
+        textLogoValue,
+        textLogoSize,
+        isDark,
+        toggleDark,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

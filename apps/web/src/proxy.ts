@@ -79,6 +79,11 @@ async function verifySessionEdge(
 
 export default async function proxy(request: NextRequest) {
   try {
+    // Demo estática: la “sesión” vive en localStorage; el Edge no la ve.
+    if (process.env.NEXT_PUBLIC_DEMO_STATIC === "1") {
+      return NextResponse.next();
+    }
+
     const { pathname } = request.nextUrl;
 
     const session = await verifySessionEdge(

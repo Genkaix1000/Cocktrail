@@ -9,8 +9,6 @@ import {
   FileText,
   CloudDownload,
   ChevronLeft,
-  ChevronRight,
-  Power,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
@@ -23,6 +21,8 @@ import { AppTopbar } from "@/components/shared/AppTopbar";
 import { NightActionCard } from "@/components/shared/NightActionCard";
 import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
 import { HelpCenterProvider } from "@/components/help/HelpCenterProvider";
+import { DemoBanner } from "@/components/shared/DemoBanner";
+import { isDemoStatic } from "@/demo/store";
 
 import { computeTotals, withLiveMpFees } from "@cocktrail/shared";
 import { useEventState } from "@/hooks/useEventState";
@@ -32,6 +32,7 @@ import { authService } from "@/services/auth.service";
 
 import CartaSection from "@/components/settings/CartaSection";
 import PagosSection from "@/components/settings/PagosSection";
+import PagosSectionDemo from "@/components/settings/PagosSectionDemo";
 import PdvSection from "@/components/settings/PdvSection";
 import UsuariosSection from "@/components/settings/UsuariosSection";
 import SistemaSection from "@/components/settings/SistemaSection";
@@ -366,15 +367,15 @@ export default function AdminClient({
               data-tour-nav="collapse"
               type="button"
               onClick={toggleSidebarCollapsed}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--accent-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
+              className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
               title="Expandir menú"
               aria-label="Expandir menú"
             >
-              <ChevronRight size={18} strokeWidth={2} />
+              <BrandLogo variant="mark" size="sm" />
             </button>
           ) : (
             <>
-              <BrandLogo size="md" />
+              <BrandLogo variant="lockup" size="md" />
               <button
                 data-tour-nav="collapse"
                 type="button"
@@ -390,8 +391,8 @@ export default function AdminClient({
         </div>
 
         <div
-          className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-2 ${
-            collapsed ? "gap-2 px-1 pb-[88px]" : "gap-4 pb-[180px]"
+          className={`flex-1 min-h-0 overflow-y-auto flex flex-col no-scrollbar pt-2 ${
+            collapsed ? "gap-2 px-1 pb-2" : "gap-4 pb-2"
           }`}
         >
           <div className="flex flex-col">
@@ -406,7 +407,8 @@ export default function AdminClient({
 
           <div className="flex flex-col">
             {!collapsed && <p className={sectionLabelClass}>General</p>}
-            {renderNavButton({ id: "sistema", label: "Sistema", icon: CloudDownload }, collapsed)}
+            {!isDemoStatic() &&
+              renderNavButton({ id: "sistema", label: "Sistema", icon: CloudDownload }, collapsed)}
 
             <LogoutNavRail
               collapsed={collapsed}
@@ -419,47 +421,29 @@ export default function AdminClient({
         </div>
 
         <div
-          className={`absolute bottom-0 left-0 right-0 z-20 pointer-events-none ${
-            collapsed ? "p-2 pb-4" : "px-3 pt-3 pb-5"
-          }`}
+          className={`shrink-0 z-10 ${collapsed ? "p-2 pb-3" : "px-3 pt-2 pb-4"}`}
         >
-          <div className="pointer-events-auto">
-            {collapsed ? (
-              <button
-                type="button"
-                title={isNightOpen ? "Cerrar noche" : "Abrir noche"}
-                onClick={() => {
-                  if (isNightOpen) setModalOpen(true);
-                  else setOpenNightOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full h-11 rounded-xl bg-[var(--accent-primary)] text-white flex items-center justify-center cursor-pointer hover:bg-[var(--accent-primary-hover)] transition-colors"
-              >
-                <Power size={16} strokeWidth={2} />
-              </button>
-            ) : (
-              <NightActionCard
-                nightOpen={isNightOpen}
-                subtitle={nightSubtitle}
-                onCloseNight={() => {
-                  setModalOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-                onOpenNight={() => {
-                  setOpenNightOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-                onEditKeyword={
-                  isNightOpen
-                    ? () => {
-                        setEditKeywordOpen(true);
-                        setMobileMenuOpen(false);
-                      }
-                    : undefined
-                }
-              />
-            )}
-          </div>
+          <NightActionCard
+            compact={collapsed}
+            nightOpen={isNightOpen}
+            subtitle={nightSubtitle}
+            onCloseNight={() => {
+              setModalOpen(true);
+              setMobileMenuOpen(false);
+            }}
+            onOpenNight={() => {
+              setOpenNightOpen(true);
+              setMobileMenuOpen(false);
+            }}
+            onEditKeyword={
+              isNightOpen
+                ? () => {
+                    setEditKeywordOpen(true);
+                    setMobileMenuOpen(false);
+                  }
+                : undefined
+            }
+          />
         </div>
       </aside>
     );
@@ -468,6 +452,7 @@ export default function AdminClient({
   return (
     <HelpCenterProvider role="admin" onNavigateTab={handleTabChange} adminNightConfig={{ hasActiveNight: isNightOpen }}>
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-app)]">
+      <DemoBanner />
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full md:p-3 md:gap-4">
         {editKeywordOpen && event && (
           <OpenNightModal
@@ -567,9 +552,13 @@ export default function AdminClient({
 
               {isPagosTab && (
                 <div key="pagos" className="animate-dashboard-in">
-                  <PagosSection>
-                    <PdvSection />
-                  </PagosSection>
+                  {isDemoStatic() ? (
+                    <PagosSectionDemo />
+                  ) : (
+                    <PagosSection>
+                      <PdvSection />
+                    </PagosSection>
+                  )}
                 </div>
               )}
 
@@ -579,7 +568,7 @@ export default function AdminClient({
                 </div>
               )}
 
-              {activeTab === "sistema" && (
+              {activeTab === "sistema" && !isDemoStatic() && (
                 <div key="sistema" className="animate-dashboard-in">
                   <SistemaSection />
                 </div>

@@ -2,9 +2,8 @@
 @import "tw-animate-css";
 
 /* ──────────────────────────────────────────────────────────
-   COCKTRAIL · Skin Bosko
-   Tokens light/dark (docs/design/design.md). Tipografía Inter.
-   --ink-* se mapea a los semánticos para no romper clases legacy.
+   miBoliche · Demo skin (light/dark)
+   Acento violeta #6D5EF9 · tipografía Inter · shell Bosko
    ────────────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────── */
@@ -32,15 +31,15 @@
   --text-secondary: #6B7280;
   --text-tertiary: #9CA3AF;
   --text-on-accent: #FFFFFF;
-  --text-accent: #155339;
+  --text-accent: #6d5ef9;
 
-  --accent-primary: #155339;
-  --accent-primary-hover: #0E3A27;
-  --accent-bright: #10B981;
-  --accent-surface: #E6F4ED;
-  --accent-text: #155339;
-  --accent-featured: #155339;
-  --accent-featured-deep: #0F382C;
+  --accent-primary: #6d5ef9;
+  --accent-primary-hover: #5a4ce0;
+  --accent-bright: #8b7ffb;
+  --accent-surface: #ede9fe;
+  --accent-text: #4c3fd4;
+  --accent-featured: #6d5ef9;
+  --accent-featured-deep: #4338ca;
 
   --success: #10b981;
   --danger: #ef4444;
@@ -107,15 +106,15 @@
   --text-secondary: #9CA3AF;
   --text-tertiary: #6B7280;
   --text-on-accent: #FFFFFF;
-  --text-accent: #34D399;
+  --text-accent: #a6a1ff;
 
-  --accent-primary: #10B981;
-  --accent-primary-hover: #059669;
-  --accent-bright: #34D399;
-  --accent-surface: #0F382C;
-  --accent-text: #34D399;
-  --accent-featured: #10B981;
-  --accent-featured-deep: #0F382C;
+  --accent-primary: #6d5ef9;
+  --accent-primary-hover: #7c6efb;
+  --accent-bright: #a6a1ff;
+  --accent-surface: #1a1830;
+  --accent-text: #c4befd;
+  --accent-featured: #6d5ef9;
+  --accent-featured-deep: #2a2166;
 
   --ink-950: var(--bg-app);
   --ink-925: var(--bg-panel);

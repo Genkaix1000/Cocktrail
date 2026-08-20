@@ -18,6 +18,7 @@ import {
   type PosIntentVerdict,
 } from "@/services/mercadopago.service";
 import { ordersService } from "@/services/orders.service";
+import { isDemoStatic } from "@/demo/store";
 import type { Drink, Order, PaymentMethod, TicketContent } from "@cocktrail/shared";
 
 type CartEntry = { drink: Drink; qty: number };
@@ -258,6 +259,7 @@ export function useCheckout({
 
       resetPaymentAttempt();
       setLatestOrder(order);
+      setPaymentIntentState(null);
       clearCart();
       if (order.ticketData && printTicket) {
         try {
@@ -570,6 +572,15 @@ export function useCheckout({
 
   const startPosnetPayment = useCallback(async (method: PosnetMethod, opts?: { isAutoRetry?: boolean }) => {
     if (isSubmittingRef.current || submitting || totalItems === 0) return;
+    if (isDemoStatic()) {
+      setPaymentMethod(method);
+      setPosnetStatus("idle");
+      setPaymentIntentState("DEMO");
+      setPosnetErrorMessage(null);
+      setQrImage(null);
+      setCurrentIntentId(null);
+      return;
+    }
     if (isTestNight) {
       setPosnetStatus("error");
       setPosnetErrorMessage(NOCHE_PRUEBA_SOLO_EFECTIVO_MSG);
@@ -681,6 +692,15 @@ export function useCheckout({
 
   const startQrPayment = useCallback(async () => {
     if (isSubmittingRef.current || submitting || totalItems === 0) return;
+    if (isDemoStatic()) {
+      setPaymentMethod("qr");
+      setPosnetStatus("idle");
+      setPaymentIntentState("DEMO");
+      setPosnetErrorMessage(null);
+      setQrImage(null);
+      setCurrentIntentId(null);
+      return;
+    }
     if (isTestNight) {
       setPaymentMethod(null);
       setPosnetStatus("error");

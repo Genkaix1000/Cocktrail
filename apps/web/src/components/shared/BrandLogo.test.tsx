@@ -11,10 +11,13 @@ vi.mock("@/components/ThemeProvider", () => ({
 const mockedUseThemeSafe = vi.mocked(useThemeSafe);
 
 describe("BrandLogo", () => {
-  it("usa el fallback 'Cocktrail' cuando no hay ThemeProvider en el árbol", () => {
+  it("usa el logo miBoliche cuando no hay ThemeProvider en el árbol", () => {
     mockedUseThemeSafe.mockReturnValue(undefined);
     render(<BrandLogo />);
-    expect(screen.getByText("Cocktrail")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "miBoliche" })).toHaveAttribute(
+      "src",
+      "/miboliche-mark.svg",
+    );
   });
 
   it("renderiza el texto del logo cuando useLogoUrl es false", () => {
@@ -46,5 +49,23 @@ describe("BrandLogo", () => {
     });
     render(<BrandLogo />);
     expect(screen.getByRole("img", { name: "Bosko" })).toHaveAttribute("src", "/bosko.webp");
+  });
+
+  it("variant lockup usa el wordmark horizontal", () => {
+    mockedUseThemeSafe.mockReturnValue({
+      theme: "miboliche",
+      useLogoUrl: true,
+      logoUrl: "/miboliche-mark.svg",
+      logoSize: 56,
+      textLogoValue: "miBoliche",
+      textLogoSize: 26,
+      isDark: true,
+      toggleDark: vi.fn(),
+    });
+    render(<BrandLogo variant="lockup" />);
+    expect(screen.getByRole("img", { name: "miBoliche" })).toHaveAttribute(
+      "src",
+      "/miboliche-horizontal.svg",
+    );
   });
 });
