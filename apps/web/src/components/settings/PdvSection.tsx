@@ -543,7 +543,7 @@ export default function PdvSection() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
-        <div className={`flex-1 w-full min-w-0 ${panelOpen ? "" : "max-w-5xl"}`}>
+        <div className="flex-1 w-full min-w-0">
           <PdvTable
             cajas={cajas}
             loadError={loadError}

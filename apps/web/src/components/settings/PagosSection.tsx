@@ -199,7 +199,7 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <div data-tour="pagos-section" className="max-w-5xl flex flex-col gap-5">
+    <div data-tour="pagos-section" className="w-full min-w-0 flex flex-col gap-5">
       <div data-tour="pagos-header" className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">

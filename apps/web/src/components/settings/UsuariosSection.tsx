@@ -7,6 +7,7 @@ import {
   type SafeUser,
   type CreateUserInput,
 } from "@/services/users.service";
+import { ApiError } from "@/services/api-client";
 import type { Role } from "@cocktrail/shared";
 import Toast from "@/components/shared/Toast";
 import { SectionHelpButton } from "@/components/help/SectionHelpButton";
@@ -22,6 +23,19 @@ import {
 } from "./staffCrud";
 
 const DELETE_UNDO_MS = 5000;
+
+function formatUsersApiError(err: unknown): string {
+  if (!(err instanceof ApiError)) {
+    return err instanceof Error ? err.message : "Error al guardar usuario";
+  }
+  const details = (err.data as { details?: Record<string, string[] | undefined> } | undefined)
+    ?.details;
+  if (details) {
+    const first = Object.values(details).flat().find(Boolean);
+    if (first) return first;
+  }
+  return err.message || "Error al guardar usuario";
+}
 
 const EMPTY_COL_FILTERS: StaffColumnFilters = {
   user: "",
@@ -179,6 +193,10 @@ export default function UsuariosSection() {
       setFormError("La contraseña es requerida para nuevos usuarios");
       return;
     }
+    if (editUser.password && editUser.password.trim().length > 0 && editUser.password.trim().length < 8) {
+      setFormError("La contraseña debe tener al menos 8 caracteres");
+      return;
+    }
     setSaving(true);
     setFormError("");
     try {
@@ -204,7 +222,7 @@ export default function UsuariosSection() {
       closeModal();
       setSaved(true);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Error al guardar usuario");
+      setFormError(formatUsersApiError(err));
     } finally {
       setSaving(false);
     }
@@ -256,7 +274,7 @@ export default function UsuariosSection() {
   ];
 
   return (
-    <div className="flex flex-col gap-8 max-w-5xl">
+    <div className="flex flex-col gap-8 w-full min-w-0">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">

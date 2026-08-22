@@ -93,7 +93,7 @@ export default function UserFormDrawer({
             value={isEditSystemUser ? "••••••••" : editUser.password || ""}
             onChange={(e) => onPasswordChange(e.target.value)}
             className={isEditSystemUser ? inputDisabledCls : inputCls}
-            placeholder={isEditSystemUser ? "" : editUser.id ? "Opcional" : "Mínimo 4 caracteres"}
+            placeholder={isEditSystemUser ? "" : editUser.id ? "Opcional" : "Mínimo 8 caracteres"}
           />
         </div>
 

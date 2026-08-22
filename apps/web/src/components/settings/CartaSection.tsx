@@ -442,7 +442,7 @@ export default function CartaSection() {
   ];
 
   return (
-    <div className="flex flex-col gap-8 max-w-5xl">
+    <div className="flex flex-col gap-8 w-full min-w-0">
       <div data-tour="carta-header" className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
