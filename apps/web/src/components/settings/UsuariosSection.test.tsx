@@ -150,7 +150,7 @@ describe("UsuariosSection", () => {
 
     await user.click(screen.getByRole("button", { name: /Nuevo usuario/i }));
     await user.type(screen.getByPlaceholderText("nombre_operador"), "falla_user");
-    await user.type(screen.getByPlaceholderText("Mínimo 4 caracteres"), "clave123");
+    await user.type(screen.getByPlaceholderText("Mínimo 8 caracteres"), "clave123");
     await user.click(screen.getByRole("button", { name: /^Crear$/i }));
 
     expect(await screen.findByText("Network error")).toBeInTheDocument();
