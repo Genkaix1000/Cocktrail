@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Shield, X } from "lucide-react";
 import type { CreateUserInput } from "@/services/users.service";
 import type { Role } from "@cocktrail/shared";
@@ -29,6 +30,73 @@ const inputCls =
 const inputDisabledCls =
   "w-full h-10 px-3.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl text-sm text-[var(--text-tertiary)] cursor-not-allowed opacity-70";
 
+function PasswordSecurityHint({
+  password,
+  username,
+}: {
+  password: string;
+  username: string;
+}) {
+  const lenOk = password.length >= 8;
+  const hasLetter = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(password);
+  const hasDigit = /\d/.test(password);
+  const notUsername =
+    !username.trim() || password.toLowerCase() !== username.trim().toLowerCase();
+  const notTrivial = !/^(12345678|password|qwerty|abcdefgh|11111111|00000000)$/i.test(
+    password,
+  );
+
+  const checks: { ok: boolean; label: string }[] = [
+    { ok: lenOk, label: "Al menos 8 caracteres" },
+    { ok: hasLetter && hasDigit, label: "Combiná letras y números" },
+    { ok: notUsername, label: "Distinta del nombre de usuario" },
+    { ok: notTrivial || password.length === 0, label: "Evitá claves obvias (12345678, password…)" },
+  ];
+
+  return (
+    <div
+      className="mt-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3.5 py-3 space-y-2.5"
+      role="note"
+      aria-live="polite"
+    >
+      <p className="text-[12px] font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+        <Shield size={13} className="text-[var(--accent-text)] shrink-0" aria-hidden />
+        Consejos de seguridad
+      </p>
+      <ul className="space-y-1.5">
+        {checks.map((c) => (
+          <li
+            key={c.label}
+            className={`text-[12px] leading-snug flex items-start gap-2 ${
+              password.length === 0
+                ? "text-[var(--text-secondary)]"
+                : c.ok
+                  ? "text-[var(--success-base)]"
+                  : "text-[var(--text-secondary)]"
+            }`}
+          >
+            <span
+              className={`mt-0.5 inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
+                password.length === 0
+                  ? "bg-[var(--border-strong)]"
+                  : c.ok
+                    ? "bg-[var(--success-base)]"
+                    : "bg-[var(--text-tertiary)]"
+              }`}
+              aria-hidden
+            />
+            <span>{c.label}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed pt-0.5 border-t border-[var(--border-subtle)]">
+        No reutilices tu clave personal. Cada cajero debería tener la suya; no la compartas por
+        chat ni la anotes en la caja.
+      </p>
+    </div>
+  );
+}
+
 export default function UserFormDrawer({
   editUser,
   error,
@@ -40,6 +108,9 @@ export default function UserFormDrawer({
   onSave,
 }: Props) {
   const isEditSystemUser = !!(editUser.username && isSystemUser(editUser.username));
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const showPasswordHint =
+    !isEditSystemUser && (passwordFocused || !!(editUser.password && editUser.password.length > 0));
 
   return (
     <div
@@ -76,6 +147,7 @@ export default function UserFormDrawer({
             onChange={(e) => onUsernameChange(e.target.value)}
             className={isEditSystemUser ? inputDisabledCls : inputCls}
             placeholder="nombre_operador"
+            autoComplete="off"
           />
         </div>
 
@@ -92,9 +164,18 @@ export default function UserFormDrawer({
             disabled={isEditSystemUser}
             value={isEditSystemUser ? "••••••••" : editUser.password || ""}
             onChange={(e) => onPasswordChange(e.target.value)}
+            onFocus={() => setPasswordFocused(true)}
+            onBlur={() => setPasswordFocused(false)}
             className={isEditSystemUser ? inputDisabledCls : inputCls}
-            placeholder={isEditSystemUser ? "" : editUser.id ? "Opcional" : "Mínimo 8 caracteres"}
+            placeholder={isEditSystemUser ? "" : editUser.id ? "Opcional · mín. 8" : "Mínimo 8 caracteres"}
+            autoComplete="new-password"
           />
+          {showPasswordHint && (
+            <PasswordSecurityHint
+              password={editUser.password || ""}
+              username={editUser.username || ""}
+            />
+          )}
         </div>
 
         <div>
