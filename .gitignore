@@ -12,6 +12,10 @@ build/
 **/.env
 **/.env.*
 !**/.env.example
+# credenciales de deploy cloud (nombre no matchea .env.*)
+bosko.env
+**/bosko.env
+*.env.local
 
 # tooling local
 .tools/

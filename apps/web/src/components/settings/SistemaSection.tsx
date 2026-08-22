@@ -33,6 +33,7 @@ function formatUptime(sec: number): string {
 }
 
 function providerLabel(provider: AppVersionInfo["deploy"]["provider"]): string {
+  if (provider === "koyeb") return "Koyeb";
   if (provider === "render") return "Render";
   if (provider === "local") return "Local";
   return "Desconocido";

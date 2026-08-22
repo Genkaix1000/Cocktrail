@@ -40,7 +40,7 @@ export type AppVersionInfo = {
   label: string;
   environment: string;
   deploy: {
-    provider: "render" | "local" | "unknown";
+    provider: "koyeb" | "render" | "local" | "unknown";
     service: string | null;
     commit: string | null;
     commitShort: string | null;

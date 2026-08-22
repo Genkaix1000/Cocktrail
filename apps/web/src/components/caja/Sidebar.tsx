@@ -14,8 +14,10 @@ import { useState } from "react";
 
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
+import { NightActionCard } from "@/components/shared/NightActionCard";
 import type { PosnetLevel } from "@/hooks/usePosnetStatus";
 import type { NightEvent } from "@cocktrail/shared";
+import { formatHm } from "@/lib/utils";
 
 type CurrentUser = {
   role: string;
@@ -37,6 +39,8 @@ type Props = {
   currentUser: CurrentUser | null;
   event: NightEvent | null;
   setCloseModalOpen: (open: boolean) => void;
+  setOpenNightOpen?: (open: boolean) => void;
+  setEditKeywordOpen?: (open: boolean) => void;
   printerStatus: { connected: boolean; message: string } | null;
   testPrint: () => void | Promise<void>;
   pairPrinterDevice: () => void | Promise<void>;
@@ -100,6 +104,8 @@ export default function CajaSidebar({
   currentUser,
   event,
   setCloseModalOpen,
+  setOpenNightOpen,
+  setEditKeywordOpen,
   printerStatus,
   testPrint,
   pairPrinterDevice,
@@ -116,7 +122,9 @@ export default function CajaSidebar({
 }: Props) {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const collapsed = isCollapsed && !isDrawer;
-  const canCloseNight = !!currentUser?.permissions?.closeNight && event?.status === "activo";
+  const isNightOpen = event?.status === "activo";
+  const canCloseNight = !!currentUser?.permissions?.closeNight && isNightOpen;
+  const nightSubtitle = event?.startedAt ? `Desde ${formatHm(event.startedAt)} hs` : undefined;
 
   const printerLevel: "ok" | "warn" | "bad" = printerStatus?.connected
     ? "ok"
@@ -383,22 +391,71 @@ export default function CajaSidebar({
             )}
           </div>
 
-          {canCloseNight && (
-            <button
-              data-tour="caja-cerrar"
-              type="button"
-              onClick={() => {
+          {collapsed ? (
+            isNightOpen ? (
+              canCloseNight && (
+                <button
+                  data-tour="caja-cerrar"
+                  type="button"
+                  title="Cerrar noche"
+                  onClick={() => {
+                    setCloseModalOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full h-11 rounded-xl bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] flex items-center justify-center hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Power size={16} strokeWidth={2} />
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                title="Abrir noche"
+                onClick={() => {
+                  setOpenNightOpen?.(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full h-11 rounded-xl bg-[var(--accent-primary)] text-white flex items-center justify-center cursor-pointer hover:bg-[var(--accent-primary-hover)] transition-colors"
+              >
+                <Power size={16} strokeWidth={2} />
+              </button>
+            )
+          ) : isNightOpen ? (
+            canCloseNight && (
+              <NightActionCard
+                nightOpen={true}
+                subtitle={nightSubtitle}
+                onCloseNight={() => {
+                  setCloseModalOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                onOpenNight={() => {
+                  setOpenNightOpen?.(true);
+                  setMobileMenuOpen(false);
+                }}
+                onEditKeyword={
+                  currentUser?.role === "admin"
+                    ? () => {
+                        setEditKeywordOpen?.(true);
+                        setMobileMenuOpen(false);
+                      }
+                    : undefined
+                }
+              />
+            )
+          ) : (
+            <NightActionCard
+              nightOpen={false}
+              subtitle={nightSubtitle}
+              onCloseNight={() => {
                 setCloseModalOpen(true);
                 setMobileMenuOpen(false);
               }}
-              className={`w-full rounded-xl bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] flex items-center justify-center hover:brightness-110 active:scale-95 transition-all cursor-pointer ${
-                collapsed ? "h-11" : "h-10 gap-1.5 text-[12px] font-semibold"
-              }`}
-              title="Cerrar noche"
-            >
-              <Power size={14} strokeWidth={2} />
-              {!collapsed && <span>Cerrar noche</span>}
-            </button>
+              onOpenNight={() => {
+                setOpenNightOpen?.(true);
+                setMobileMenuOpen(false);
+              }}
+            />
           )}
         </div>
       </div>

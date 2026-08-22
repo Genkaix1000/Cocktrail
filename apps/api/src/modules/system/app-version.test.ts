@@ -5,6 +5,12 @@ const ENV_KEYS = [
   "APP_VERSION",
   "APP_CHANNEL",
   "NODE_ENV",
+  "KOYEB_APP_NAME",
+  "KOYEB_SERVICE_ID",
+  "KOYEB_SERVICE_NAME",
+  "KOYEB_GIT_SHA",
+  "KOYEB_GIT_BRANCH",
+  "KOYEB_PUBLIC_DOMAIN",
   "RENDER",
   "RENDER_SERVICE_ID",
   "RENDER_SERVICE_NAME",
@@ -37,20 +43,16 @@ function setEnv(key: (typeof ENV_KEYS)[number], value: string | undefined) {
 }
 
 describe("buildAppVersionInfo", () => {
-  it("arma label beta 0.1.0 y detecta Render por env", () => {
+  it("arma label beta 0.1.0 y detecta Koyeb por env", () => {
     setEnv("APP_VERSION", undefined);
     setEnv("APP_CHANNEL", undefined);
     setEnv("NODE_ENV", "production");
-    setEnv("RENDER", "true");
-    setEnv("RENDER_SERVICE_NAME", "bosko");
-    setEnv("RENDER_GIT_COMMIT", "abcdef0123456789");
-    setEnv("RENDER_GIT_BRANCH", "develop");
-    setEnv("RENDER_EXTERNAL_URL", "https://bosko.onrender.com");
+    setEnv("KOYEB_APP_NAME", "bosko");
+    setEnv("KOYEB_SERVICE_NAME", "bosko");
+    setEnv("KOYEB_GIT_SHA", "abcdef0123456789");
+    setEnv("KOYEB_GIT_BRANCH", "develop");
+    setEnv("KOYEB_PUBLIC_DOMAIN", "bosko-cipher.koyeb.app");
 
-    // Re-import would be needed if constants were cached — APP_VERSION is read
-    // at module load. buildAppVersionInfo uses process.env for deploy; version
-    // constants are module-level. Test deploy fields + migrations here; version
-    // defaults are covered by the live module values (0.1.0/beta).
     const info = buildAppVersionInfo({
       serverStartedAt: Date.now() - 65_000,
       migrations: {
@@ -63,21 +65,22 @@ describe("buildAppVersionInfo", () => {
     expect(info.version).toBe("0.1.0");
     expect(info.channel).toBe("beta");
     expect(info.label).toBe("0.1.0-beta");
-    expect(info.deploy.provider).toBe("render");
+    expect(info.deploy.provider).toBe("koyeb");
     expect(info.deploy.service).toBe("bosko");
     expect(info.deploy.commitShort).toBe("abcdef0");
     expect(info.deploy.branch).toBe("develop");
-    expect(info.deploy.externalUrl).toBe("https://bosko.onrender.com");
+    expect(info.deploy.externalUrl).toBe("https://bosko-cipher.koyeb.app");
     expect(info.runtime.uptimeSec).toBeGreaterThanOrEqual(65);
     expect(info.migrations.lastApplied).toBe("20260101000000_init.sql");
-    // Si el runner corre desde el monorepo, el CHANGELOG de 0.1.0 se resuelve.
     if (info.releaseNotes) {
       expect(info.releaseNotes.version).toBe("0.1.0");
       expect(info.releaseNotes.highlights.length).toBeGreaterThan(0);
     }
   });
 
-  it("en desarrollo sin Render reporta provider local", () => {
+  it("en desarrollo sin host cloud reporta provider local", () => {
+    setEnv("KOYEB_APP_NAME", undefined);
+    setEnv("KOYEB_SERVICE_ID", undefined);
     setEnv("RENDER", undefined);
     setEnv("RENDER_SERVICE_ID", undefined);
     setEnv("NODE_ENV", "development");

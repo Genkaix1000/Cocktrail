@@ -2,10 +2,11 @@
 # (Next standalone, puerto público). El navegador solo habla con Next, que
 # reenvía /api a localhost — la misma topología que en desarrollo.
 #
-# Por qué un solo servicio y no dos: con URLs *.onrender.com los subdominios no
-# comparten cookies (onrender.com está en la Public Suffix List), serían dos
-# arranques en frío, y el SSE cruzaría un proxy de más. El bus de eventos es un
-# EventEmitter en proceso, así que separar no daría escalabilidad igual.
+# Un solo servicio a propósito: cookies de sesión, SSE y el EventEmitter in-process
+# no bancan dos contenedores sin rediseño.
+#
+# Deploy canónico en Render: runtime Node vía render.yaml (no esta imagen).
+# El Dockerfile queda para otro host o para reproducir prod en local.
 #
 # Node 24: la API importa @cocktrail/shared, que expone TypeScript directo
 # (packages/shared/package.json → exports: ./src/domain.ts). Node lo carga con
@@ -17,6 +18,11 @@ WORKDIR /repo
 
 # ---------- build ----------
 FROM base AS build
+
+# NEXT_PUBLIC_* se inlinean en el build de Next; Koyeb inyecta env del service
+# como build-args si están declarados como ARG.
+ARG NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/
@@ -68,7 +74,7 @@ COPY --from=build /repo/apps/web/public ./apps/web/public
 
 COPY --from=build /repo/scripts/start-cloud.mjs ./scripts/start-cloud.mjs
 
-# Render inyecta PORT; Next escucha ahí y la API queda solo hacia adentro.
+# El host inyecta PORT; Next escucha ahí y la API queda solo hacia adentro.
 ENV API_PORT=3001
 ENV API_PROXY_TARGET=http://127.0.0.1:3001
 EXPOSE 10000

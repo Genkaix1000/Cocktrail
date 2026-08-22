@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Arranca los dos procesos del contenedor y los trata como una sola unidad: si
- * uno muere, el otro no sirve de nada, así que se baja todo y Render reinicia.
+ * uno muere, el otro no sirve de nada, así que se baja todo y el host reinicia.
  *
  * - API (Express): puerto interno, solo alcanzable desde el propio contenedor.
- * - Web (Next standalone): el puerto público que asigna Render.
+ * - Web (Next standalone): el puerto público que inyecta el host (PORT).
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";

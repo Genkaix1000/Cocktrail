@@ -7,8 +7,8 @@ import { useEventState } from "@/hooks/useEventState";
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
 import CloseNightModal from "@/components/shared/CloseNightModal";
+import OpenNightModal from "@/components/admin/OpenNightModal";
 import { AppTopbar } from "@/components/shared/AppTopbar";
-import { TestNightBanner } from "@/components/shared/TestNightBanner";
 import { computeTotals, withLiveMpFees } from "@cocktrail/shared";
 import { usePrinterStatus } from "@/hooks/usePrinterStatus";
 import { usePosnetStatus } from "@/hooks/usePosnetStatus";
@@ -82,29 +82,11 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
   );
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [openNightOpen, setOpenNightOpen] = useState(false);
+  const [editKeywordOpen, setEditKeywordOpen] = useState(false);
   const [printerPromptOpen, setPrinterPromptOpen] = useState(false);
   const [pairingPrinter, setPairingPrinter] = useState(false);
   const [autoPairSeconds, setAutoPairSeconds] = useState(3);
-
-  const [openNightKeyword, setOpenNightKeyword] = useState("");
-  const [openNightError, setOpenNightError] = useState<string | null>(null);
-  const [openingNight, setOpeningNight] = useState(false);
-
-  async function handleOpenNightSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!openNightKeyword.trim()) return;
-    setOpeningNight(true);
-    setOpenNightError(null);
-    try {
-      await eventsService.openEvent(openNightKeyword.trim());
-      router.refresh();
-      window.location.reload();
-    } catch (err) {
-      setOpenNightError(err instanceof Error ? err.message : "Error al abrir la noche");
-    } finally {
-      setOpeningNight(false);
-    }
-  }
 
   const { event, orders, summary, serverTotals, setSummary, upsertOrder } = useEventState({
     onEventClosed: () => setCloseModalOpen(true),
@@ -216,6 +198,8 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
     currentUser,
     event,
     setCloseModalOpen,
+    setOpenNightOpen,
+    setEditKeywordOpen,
     printerStatus,
     testPrint,
     pairPrinterDevice,
@@ -258,6 +242,30 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
             isTest={event?.isTest ?? false}
             onConfirm={handleCloseConfirm}
             onClose={handleCloseModalClose}
+          />
+        )}
+
+        {openNightOpen && (
+          <OpenNightModal
+            mode="open"
+            onClose={() => setOpenNightOpen(false)}
+            onSubmit={() => {
+              setOpenNightOpen(false);
+              router.refresh();
+              window.location.reload();
+            }}
+          />
+        )}
+
+        {editKeywordOpen && event && (
+          <OpenNightModal
+            mode="edit"
+            onClose={() => setEditKeywordOpen(false)}
+            onSubmit={() => {
+              setEditKeywordOpen(false);
+              router.refresh();
+            }}
+            currentKeyword={event.keyword}
           />
         )}
 
@@ -342,7 +350,6 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
 
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
           <div className="flex flex-col gap-3 md:gap-4 p-3 md:p-0 min-h-0 flex-1">
-            {event?.isTest && <TestNightBanner />}
             <header className="h-14 md:h-16 px-4 md:px-5 shrink-0 print:hidden flex items-center gap-3 bg-[var(--bg-panel)] md:rounded-[20px] shadow-card">
               <AppTopbar
                 breadcrumbs={breadcrumbs}
@@ -367,43 +374,10 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
                   <h2 className="text-[28px] md:text-[32px] font-bold text-[var(--text-primary)] tracking-tight mb-2">
                     Caja Cerrada
                   </h2>
-                  <p className="text-[var(--text-secondary)] text-sm max-w-sm mb-8 leading-relaxed">
+                  <p className="text-[var(--text-secondary)] text-sm max-w-sm leading-relaxed">
                     No hay ninguna noche activa en el sistema. Para empezar a cobrar, es necesario
                     iniciar una nueva jornada.
                   </p>
-
-                  <div className="w-full max-w-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-card flex flex-col gap-4 text-left animate-in zoom-in-95 duration-200">
-                    <h3 className="font-semibold text-sm text-[var(--text-primary)]">
-                      Abrir Caja / Noche
-                    </h3>
-                    {openNightError && (
-                      <div className="bg-[var(--danger-soft)] border border-[var(--danger-line)] text-[var(--danger-base)] rounded-xl px-3 py-2.5 text-xs">
-                        {openNightError}
-                      </div>
-                    )}
-                    <form onSubmit={handleOpenNightSubmit} className="flex flex-col gap-3">
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
-                          Palabra Clave (Keyword)
-                        </span>
-                        <input
-                          type="text"
-                          required
-                          value={openNightKeyword}
-                          onChange={(e) => setOpenNightKeyword(e.target.value.toLowerCase())}
-                          placeholder="ej: gin, tonic, campari..."
-                          className="w-full h-11 bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] rounded-xl px-3 text-sm text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-tertiary)] font-mono"
-                        />
-                      </label>
-                      <button
-                        type="submit"
-                        disabled={openingNight}
-                        className="w-full h-11 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all mt-1 bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)]"
-                      >
-                        {openingNight ? "Iniciando..." : "Abrir Noche / Evento"}
-                      </button>
-                    </form>
-                  </div>
                 </div>
               ) : (
                 <>

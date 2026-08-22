@@ -6,6 +6,9 @@
 # los ajustes que sí necesita la imagen. El Dockerfile queda como alternativa
 # (otro hosting, o reproducir el entorno localmente).
 #
+# Free + keep-alive: el workflow .github/workflows/keep-alive-render.yml pings
+# /health sáb 12:30 → dom 08:00 ART. Fuera de eso duerme (ahorra las 750 h/mes).
+#
 # Las variables marcadas `sync: false` NO se versionan: se cargan en el
 # dashboard (Environment) o por la API. Lista completa abajo.
 services:

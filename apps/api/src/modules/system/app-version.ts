@@ -13,7 +13,7 @@ export type AppVersionInfo = {
   label: string;
   environment: "production" | "development" | "test" | string;
   deploy: {
-    provider: "render" | "local" | "unknown";
+    provider: "koyeb" | "render" | "local" | "unknown";
     service: string | null;
     commit: string | null;
     /** Primeros 7 del commit, o null. */
@@ -41,6 +41,7 @@ function shortSha(sha: string | null | undefined): string | null {
 }
 
 function detectProvider(): AppVersionInfo["deploy"]["provider"] {
+  if (process.env.KOYEB_SERVICE_ID || process.env.KOYEB_APP_NAME) return "koyeb";
   if (process.env.RENDER === "true" || process.env.RENDER_SERVICE_ID) return "render";
   if (process.env.NODE_ENV === "development") return "local";
   return "unknown";
@@ -53,15 +54,18 @@ export function buildAppVersionInfo(input: {
   const version = process.env.APP_VERSION?.trim() || "0.1.0";
   const channel = process.env.APP_CHANNEL?.trim() || "beta";
   const commit =
+    process.env.KOYEB_GIT_SHA?.trim() ||
     process.env.RENDER_GIT_COMMIT?.trim() ||
     process.env.GIT_COMMIT?.trim() ||
     process.env.COMMIT_SHA?.trim() ||
     null;
   const branch =
+    process.env.KOYEB_GIT_BRANCH?.trim() ||
     process.env.RENDER_GIT_BRANCH?.trim() ||
     process.env.GIT_BRANCH?.trim() ||
     null;
   const applied = input.migrations.appliedNow;
+  const koyebUrl = process.env.KOYEB_PUBLIC_DOMAIN?.trim();
 
   return {
     version,
@@ -70,11 +74,15 @@ export function buildAppVersionInfo(input: {
     environment: process.env.NODE_ENV || "development",
     deploy: {
       provider: detectProvider(),
-      service: process.env.RENDER_SERVICE_NAME?.trim() || null,
+      service:
+        process.env.KOYEB_SERVICE_NAME?.trim() ||
+        process.env.RENDER_SERVICE_NAME?.trim() ||
+        null,
       commit,
       commitShort: shortSha(commit),
       branch,
       externalUrl:
+        (koyebUrl ? `https://${koyebUrl}` : null) ||
         process.env.RENDER_EXTERNAL_URL?.trim() ||
         process.env.FRONTEND_URL?.trim() ||
         null,

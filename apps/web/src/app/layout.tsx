@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
 
   icons: {
-    icon: "/miboliche-mark.svg",
-    shortcut: "/miboliche-mark.svg",
-    apple: "/icon-192.png",
+    icon: "/navicon.png",
+    shortcut: "/navicon.png",
+    apple: "/navicon.png",
   },
 };
 

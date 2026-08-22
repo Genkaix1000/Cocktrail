@@ -1,0 +1,37 @@
+# Mantiene despierto el Web Service free de Render solo en la ventana de
+# pruebas del boliche: sáb 12:30 → dom 08:00 (America/Argentina/Buenos_Aires).
+#
+# Fuera de esa ventana el servicio duerme y no consume las 750 h/mes.
+# Dentro: ~19.5 h/semana ≈ 80 h/mes — sobra margen.
+#
+# Secret requerido (repo → Settings → Secrets → Actions):
+#   KEEP_ALIVE_URL = https://<servicio>.onrender.com/health
+#
+# El schedule de GitHub corre en UTC y solo en la rama default del repo.
+
+name: keep-alive-render
+
+on:
+  schedule:
+    # sáb 15:30–23:50 UTC (= 12:30–20:50 ART)
+    - cron: "30/10 15 * * 6"
+    - cron: "*/10 16-23 * * 6"
+    # dom 00:00–10:50 UTC (= 21:00 sáb – 07:50 ART) + 11:00 UTC (= 08:00 ART)
+    - cron: "*/10 0-10 * * 0"
+    - cron: "0 11 * * 0"
+  workflow_dispatch: # disparo manual para probar
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake Render
+        env:
+          URL: ${{ secrets.KEEP_ALIVE_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "Falta el secret KEEP_ALIVE_URL"
+            exit 1
+          fi
+          # Un GET alcanza: Render cuenta inbound HTTP y reinicia el idle timer.
+          curl -fsS --max-time 90 -o /dev/null -w "%{http_code}\n" "$URL"

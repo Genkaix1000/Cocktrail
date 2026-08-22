@@ -131,6 +131,27 @@ describe("CajaSidebar", () => {
     expect(screen.queryByText("Cerrar noche")).not.toBeInTheDocument();
   });
 
+  it("muestra el botón Abrir noche cuando no hay evento activo y clickearlo llama a setOpenNightOpen", async () => {
+    const user = userEvent.setup();
+    const setOpenNightOpen = vi.fn();
+    const setMobileMenuOpen = vi.fn();
+
+    render(
+      <CajaSidebar
+        {...baseProps}
+        event={makeEvent({ status: "cerrado" })}
+        setOpenNightOpen={setOpenNightOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Abrir noche/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Abrir noche/i }));
+
+    expect(setOpenNightOpen).toHaveBeenCalledWith(true);
+    expect(setMobileMenuOpen).toHaveBeenCalledWith(false);
+  });
+
   it("clickear Cerrar noche abre el modal y cierra el drawer", async () => {
     const user = userEvent.setup();
     const setCloseModalOpen = vi.fn();
