@@ -198,6 +198,11 @@ serve(async (req: Request) => {
     const params = new URLSearchParams({ linked: "true" })
     if (bar_id) params.set("barId", bar_id)
 
+    console.log(
+      `[mp-auth-callback] Seller vinculado: ${sellerUserId}` +
+        (bar_id ? ` bar=${bar_id}` : ""),
+    )
+
     return Response.redirect(`${siteUrl}/admin?tab=pagos&${params.toString()}`, 302)
   } catch (error: any) {
     console.error("mp-auth-callback error:", error.message)
