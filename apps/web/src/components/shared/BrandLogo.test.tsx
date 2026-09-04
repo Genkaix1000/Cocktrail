@@ -26,6 +26,7 @@ describe("BrandLogo", () => {
       textLogoValue: "Bosko",
       textLogoSize: 26,
       isDark: true,
+      brandingReady: true,
       toggleDark: vi.fn(),
     });
     render(<BrandLogo />);
@@ -42,6 +43,7 @@ describe("BrandLogo", () => {
       textLogoValue: "Bosko",
       textLogoSize: 26,
       isDark: true,
+      brandingReady: true,
       toggleDark: vi.fn(),
     });
     render(<BrandLogo />);

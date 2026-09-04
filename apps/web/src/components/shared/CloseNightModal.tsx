@@ -3,7 +3,7 @@
 import { AlertTriangle, CheckCircle2, Loader2, X, Clock } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { formatHm } from "@/lib/utils";
-import { formatDuration } from "@/lib/analytics";
+import { formatDuration, paymentChannelColor } from "@/lib/analytics";
 import type { EventSummary, EventTotals } from "@cocktrail/shared";
 
 type Props = {
@@ -493,21 +493,21 @@ function channelMix(totals: EventTotals): { channels: Channel[]; bruto: number; 
       label: "Efectivo",
       value: efectivo,
       count: totals.efectivoCount,
-      color: "var(--success-base, #10b981)",
+      color: paymentChannelColor("efectivo"),
     },
     {
       key: "qr",
       label: "QR",
       value: qr,
       count: totals.qrCount,
-      color: "var(--accent-bright, #06b6d4)",
+      color: paymentChannelColor("qr"),
     },
     {
       key: "debito",
       label: "Tarjeta",
       value: tarjeta,
       count: totals.debitoCount,
-      color: "var(--accent-primary, #3b82f6)",
+      color: paymentChannelColor("debito"),
     },
   ];
   const bruto = efectivo + qr + tarjeta;

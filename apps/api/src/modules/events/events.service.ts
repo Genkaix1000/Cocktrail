@@ -356,7 +356,7 @@ export class EventsService {
       brandName: "Bosko",
       logoUrl: "/bosko.webp",
       customTheme: null,
-      clubId: "cocktrail_club_01",
+      clubId: "club-1",
       clubName: "Bosko Club",
       useLogoUrl: true,
       logoSize: 56,

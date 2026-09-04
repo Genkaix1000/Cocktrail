@@ -51,6 +51,17 @@ export type PaymentBreakdown = {
   color: string;
 };
 
+/** Colores semánticos por canal — alineados a tokens miBoliche. */
+export const PAYMENT_CHANNEL_COLORS: Record<string, string> = {
+  efectivo: "var(--success-base)",
+  qr: "var(--channel-qr)",
+  debito: "var(--channel-card)",
+};
+
+export function paymentChannelColor(method: string): string {
+  return PAYMENT_CHANNEL_COLORS[method] ?? "var(--text-tertiary)";
+}
+
 export type NightRecord = {
   type: "star_drink";
   label: string;

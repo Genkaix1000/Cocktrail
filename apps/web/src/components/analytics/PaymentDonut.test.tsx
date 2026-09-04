@@ -23,12 +23,12 @@ describe("PaymentDonut", () => {
     expect(screen.getByText("40%")).toBeInTheDocument();
   });
 
-  it("con total real $0, muestra los métodos en cero sin puntos de color activo", () => {
+  it("con total real $0, muestra los métodos en cero sin arcos de color", () => {
     const breakdown: PaymentBreakdown[] = [
-      { method: "efectivo", label: "Efectivo", total: 0, count: 0, pct: 0, color: "#10b981" },
-      { method: "tarjeta", label: "Tarjeta", total: 0, count: 0, pct: 0, color: "#3b82f6" },
-      { method: "qr", label: "Transferencia / QR", total: 0, count: 0, pct: 0, color: "#a855f7" },
-      { method: "otros", label: "Otros", total: 0, count: 0, pct: 0, color: "#f97316" },
+      { method: "efectivo", label: "Efectivo", total: 0, count: 0, pct: 0, color: "var(--success-base)" },
+      { method: "tarjeta", label: "Tarjeta", total: 0, count: 0, pct: 0, color: "var(--channel-card)" },
+      { method: "qr", label: "Transferencia / QR", total: 0, count: 0, pct: 0, color: "var(--channel-qr)" },
+      { method: "otros", label: "Otros", total: 0, count: 0, pct: 0, color: "var(--text-tertiary)" },
     ];
     const { container } = render(<PaymentDonut breakdown={breakdown} total={0} />);
 
@@ -37,12 +37,7 @@ describe("PaymentDonut", () => {
     expect(screen.getByText("Sin ventas")).toBeInTheDocument();
     expect(screen.getAllByText("0%").length).toBeGreaterThanOrEqual(4);
 
-    const solidDots = container.querySelectorAll('[style*="accent-primary"], [style*="accent-bright"]');
-    expect(solidDots.length).toBe(0);
-
-    const coloredArcs = container.querySelectorAll(
-      'circle[stroke="#10b981"], circle[stroke="#3b82f6"], circle[stroke="#a855f7"], circle[stroke="#f97316"]',
-    );
+    const coloredArcs = container.querySelectorAll("circle[stroke='var(--success-base)'], circle[stroke='var(--channel-qr)'], circle[stroke='var(--channel-card)']");
     expect(coloredArcs.length).toBe(0);
   });
 });

@@ -12,10 +12,20 @@ type ThemeContextType = {
   textLogoValue: string;
   textLogoSize: number;
   isDark: boolean;
+  brandingReady: boolean;
   toggleDark: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+const BOSKO_BRANDING = {
+  theme: "bosko" as Theme,
+  useLogoUrl: true,
+  logoUrl: "/bosko.webp",
+  logoSize: 56,
+  textLogoValue: "Bosko",
+  textLogoSize: 26,
+};
 
 export function useTheme() {
   const context = useContext(ThemeContext);
@@ -45,19 +55,70 @@ const getIsDarkKey = () => {
   return `cocktrail_is_dark_${role}`;
 };
 
+function readIsDark(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(getIsDarkKey()) !== "false";
+}
+
+function applyBrandingToStorage(data: {
+  theme: Theme;
+  useLogoUrl?: boolean;
+  logoUrl?: string;
+  logoSize?: number;
+  textLogoValue?: string;
+  textLogoSize?: number;
+  customTheme?: CustomTheme | null;
+}) {
+  localStorage.setItem("cocktrail_theme", data.theme);
+  localStorage.setItem("cocktrail_use_logo_url", String(data.useLogoUrl !== false));
+  localStorage.setItem("cocktrail_logo_url", data.logoUrl || BOSKO_BRANDING.logoUrl);
+  localStorage.setItem("cocktrail_logo_size", String(data.logoSize ?? BOSKO_BRANDING.logoSize));
+  localStorage.setItem("cocktrail_text_logo_value", data.textLogoValue || BOSKO_BRANDING.textLogoValue);
+  localStorage.setItem("cocktrail_text_logo_size", String(data.textLogoSize ?? BOSKO_BRANDING.textLogoSize));
+  if (data.customTheme) {
+    localStorage.setItem("cocktrail_custom_theme", JSON.stringify(data.customTheme));
+  } else {
+    localStorage.removeItem("cocktrail_custom_theme");
+  }
+}
+
+function brandingFromApi(data: Record<string, unknown>) {
+  return {
+    theme: data.theme as Theme,
+    customTheme: (data.customTheme as CustomTheme | null) || null,
+    useLogoUrl: data.useLogoUrl !== false,
+    logoUrl: (data.logoUrl as string) || BOSKO_BRANDING.logoUrl,
+    logoSize: Number(data.logoSize ?? BOSKO_BRANDING.logoSize),
+    textLogoValue: (data.textLogoValue as string) || BOSKO_BRANDING.textLogoValue,
+    textLogoSize: Number(data.textLogoSize ?? BOSKO_BRANDING.textLogoSize),
+  };
+}
+
 export function ThemeProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [theme, setTheme] = useState<Theme>("bosko");
+  const [theme, setTheme] = useState<Theme>(BOSKO_BRANDING.theme);
   const [customTheme, setCustomTheme] = useState<CustomTheme | null>(null);
-  const [useLogoUrl, setUseLogoUrl] = useState<boolean>(true);
-  const [logoUrl, setLogoUrl] = useState<string>("/bosko.webp");
-  const [logoSize, setLogoSize] = useState<number>(56);
-  const [textLogoValue, setTextLogoValue] = useState<string>("Bosko");
-  const [textLogoSize, setTextLogoSize] = useState<number>(26);
-  const [isDark, setIsDark] = useState<boolean>(true);
+  const [useLogoUrl, setUseLogoUrl] = useState<boolean>(BOSKO_BRANDING.useLogoUrl);
+  const [logoUrl, setLogoUrl] = useState<string>(BOSKO_BRANDING.logoUrl);
+  const [logoSize, setLogoSize] = useState<number>(BOSKO_BRANDING.logoSize);
+  const [textLogoValue, setTextLogoValue] = useState<string>(BOSKO_BRANDING.textLogoValue);
+  const [textLogoSize, setTextLogoSize] = useState<number>(BOSKO_BRANDING.textLogoSize);
+  const [isDark, setIsDark] = useState<boolean>(readIsDark);
+  const [brandingReady, setBrandingReady] = useState(false);
+
+  const applyBranding = (data: ReturnType<typeof brandingFromApi>) => {
+    setTheme(data.theme);
+    setCustomTheme(data.customTheme);
+    setUseLogoUrl(data.useLogoUrl);
+    setLogoUrl(data.logoUrl);
+    setLogoSize(data.logoSize);
+    setTextLogoValue(data.textLogoValue);
+    setTextLogoSize(data.textLogoSize);
+    applyBrandingToStorage(data);
+  };
 
   const toggleDark = () => {
     const nextDark = !isDark;
@@ -71,43 +132,11 @@ export function ThemeProvider({
     }
   };
 
-  // Cargar localmente al montar para evitar delay y consultar al backend
   useEffect(() => {
-    // 1. Cargar desde localStorage si existe
-    const cached = (localStorage.getItem("cocktrail_theme") || "bosko") as Theme;
-    const cachedCustom = localStorage.getItem("cocktrail_custom_theme");
-    const customThemeVal = cachedCustom ? JSON.parse(cachedCustom) : null;
+    const dark = readIsDark();
+    setIsDark(dark);
+    document.documentElement.classList.toggle("dark", dark);
 
-    const cachedUseLogo = localStorage.getItem("cocktrail_use_logo_url") !== "false";
-    const cachedLogoUrl = localStorage.getItem("cocktrail_logo_url") || "/bosko.webp";
-    const cachedLogoSize = Number(localStorage.getItem("cocktrail_logo_size") || "56");
-    const cachedTextLogo = localStorage.getItem("cocktrail_text_logo_value") || "Bosko";
-    const cachedTextLogoSize = Number(localStorage.getItem("cocktrail_text_logo_size") || "26");
-
-    const key = getIsDarkKey();
-    const cachedIsDark = localStorage.getItem(key) !== "false"; // Default true
-
-    if (cached) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial desde localStorage (fetch-on-mount), mismo patrón ya usado en el resto del repo
-      setTheme(cached);
-    }
-    if (customThemeVal) {
-      setCustomTheme(customThemeVal);
-    }
-    setUseLogoUrl(cachedUseLogo);
-    setLogoUrl(cachedLogoUrl);
-    setLogoSize(cachedLogoSize);
-    setTextLogoValue(cachedTextLogo);
-    setTextLogoSize(cachedTextLogoSize);
-
-    setIsDark(cachedIsDark);
-    if (cachedIsDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-
-    // 2. Sincronizar con el backend
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
     fetch(`${apiBase}/api/theme`)
       .then((res) => {
@@ -115,67 +144,37 @@ export function ThemeProvider({
         return res.json();
       })
       .then((data) => {
-        if (data && data.theme) {
-          const newTheme = data.theme;
-          const customThemeData = data.customTheme;
-
-          setTheme(newTheme);
-          setCustomTheme(customThemeData || null);
-          setUseLogoUrl(data.useLogoUrl !== false);
-          setLogoUrl(data.logoUrl || "/bosko.webp");
-          setLogoSize(Number(data.logoSize ?? 56));
-          setTextLogoValue(data.textLogoValue || "Bosko");
-          setTextLogoSize(Number(data.textLogoSize ?? 26));
-
-          localStorage.setItem("cocktrail_theme", newTheme);
-          localStorage.setItem("cocktrail_use_logo_url", String(data.useLogoUrl !== false));
-          localStorage.setItem("cocktrail_logo_url", data.logoUrl || "/bosko.webp");
-          localStorage.setItem("cocktrail_logo_size", String(data.logoSize ?? 56));
-          localStorage.setItem("cocktrail_text_logo_value", data.textLogoValue || "Bosko");
-          localStorage.setItem("cocktrail_text_logo_size", String(data.textLogoSize ?? 26));
-
-          if (customThemeData) {
-            localStorage.setItem("cocktrail_custom_theme", JSON.stringify(customThemeData));
-          } else {
-            localStorage.removeItem("cocktrail_custom_theme");
-          }
-        }
+        if (data?.theme) applyBranding(brandingFromApi(data));
       })
       .catch((err) => {
         console.error("Error loading theme from API:", err);
+      })
+      .finally(() => {
+        setBrandingReady(true);
       });
   }, []);
 
   useSSE({
     "theme.changed": (data) => {
-      const typedTheme = data.theme as Theme;
-      const customThemeData = data.customTheme;
-
-      setTheme(typedTheme);
-      setCustomTheme(customThemeData || null);
-      setUseLogoUrl(data.useLogoUrl !== false);
-      setLogoUrl(data.logoUrl || "/bosko.webp");
-      setLogoSize(Number(data.logoSize ?? 56));
-      setTextLogoValue(data.textLogoValue || "Bosko");
-      setTextLogoSize(Number(data.textLogoSize ?? 26));
-
-      localStorage.setItem("cocktrail_theme", typedTheme);
-      localStorage.setItem("cocktrail_use_logo_url", String(data.useLogoUrl !== false));
-      localStorage.setItem("cocktrail_logo_url", data.logoUrl || "/bosko.webp");
-      localStorage.setItem("cocktrail_logo_size", String(data.logoSize ?? 56));
-      localStorage.setItem("cocktrail_text_logo_value", data.textLogoValue || "Bosko");
-      localStorage.setItem("cocktrail_text_logo_size", String(data.textLogoSize ?? 26));
-
-      if (customThemeData) {
-        localStorage.setItem("cocktrail_custom_theme", JSON.stringify(customThemeData));
-      } else {
-        localStorage.removeItem("cocktrail_custom_theme");
-      }
-    }
+      applyBranding(brandingFromApi(data as Record<string, unknown>));
+      setBrandingReady(true);
+    },
   });
 
   return (
-    <ThemeContext.Provider value={{ theme, useLogoUrl, logoUrl, logoSize, textLogoValue, textLogoSize, isDark, toggleDark }}>
+    <ThemeContext.Provider
+      value={{
+        theme,
+        useLogoUrl,
+        logoUrl,
+        logoSize,
+        textLogoValue,
+        textLogoSize,
+        isDark,
+        brandingReady,
+        toggleDark,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

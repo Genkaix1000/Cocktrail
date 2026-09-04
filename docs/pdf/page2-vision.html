@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>miBoliche — Nuestra Visión (Página 2)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      background-color: #FFFFFF;
+      color: #07070A;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Ambient Glows */
+    .ambient-glow-1 {
+      position: absolute;
+      top: -10%;
+      right: -10%;
+      width: 350mm;
+      height: 350mm;
+      background: radial-gradient(circle, rgba(109, 94, 249, 0.04) 0%, rgba(109, 94, 249, 0) 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Subtle Grid Background Pattern */
+    .grid-pattern {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(to right, rgba(0, 0, 0, 0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.025) 1px, transparent 1px);
+      background-size: 14mm 14mm;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Main Container */
+    .page-container {
+      position: relative;
+      z-index: 10;
+      width: 210mm;
+      height: 297mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Upper Section */
+    .upper-content {
+      padding: 14mm 18mm 0 18mm;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      border-bottom: 1.5px solid #EBEAED;
+      padding-bottom: 4.5mm;
+    }
+    .logo-container {
+      display: flex;
+      align-items: center;
+    }
+    .logo-svg {
+      height: 8.5mm;
+      width: auto;
+      color: #07070A;
+    }
+
+    /* Standard Section Header Format */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 4mm;
+      margin-top: 5mm;
+      margin-bottom: 1.2mm;
+    }
+    .sec-number {
+      font-size: 32pt;
+      font-weight: 900;
+      line-height: 0.85;
+      letter-spacing: -0.06em;
+      color: #E2E0FD;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .sec-title {
+      font-size: 14pt;
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.035em;
+      color: #6D5EF9;
+      text-transform: uppercase;
+    }
+    .accent-line {
+      width: 100%;
+      height: 2px;
+      background: #6D5EF9;
+      margin-bottom: 4mm;
+    }
+
+    /* Vision Pillars */
+    .vision-pillars {
+      display: flex;
+      flex-direction: column;
+      gap: 3mm;
+    }
+    .pillar-card {
+      display: flex;
+      gap: 3.5mm;
+      align-items: flex-start;
+      background: #FAFAFC;
+      border: 1px solid #EBEAED;
+      border-radius: 3.5mm;
+      padding: 3mm 3.8mm;
+    }
+    .pillar-icon-badge {
+      width: 7.5mm;
+      height: 7.5mm;
+      border-radius: 2.2mm;
+      background: #F3F0FF;
+      border: 1px solid #D8D2FF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 0.5mm;
+      color: #6D5EF9;
+    }
+    .pillar-text {
+      flex: 1;
+    }
+    .pillar-title {
+      font-size: 9.8pt;
+      font-weight: 700;
+      color: #07070A;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.6mm;
+    }
+    .pillar-desc {
+      font-size: 8.5pt;
+      line-height: 1.42;
+      color: #555562;
+      font-weight: 400;
+    }
+    .pillar-desc strong {
+      color: #07070A;
+      font-weight: 600;
+    }
+
+    /* Edge-to-Edge Hero Image Footer */
+    .photo-footer-bleed {
+      position: relative;
+      width: 210mm;
+      height: 125mm;
+      overflow: hidden;
+      margin: 0;
+      background-color: #07070A;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-top: 1px solid #EBEAED;
+    }
+    .photo-bg-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 25%;
+      filter: saturate(1.05) brightness(0.95);
+      z-index: 1;
+    }
+    .photo-gradient-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 25mm;
+      background: linear-gradient(180deg, rgba(7, 7, 10, 0.8) 0%, rgba(7, 7, 10, 0) 100%);
+      z-index: 2;
+      pointer-events: none;
+    }
+    .photo-gradient-bottom {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 45mm;
+      background: linear-gradient(0deg, rgba(7, 7, 10, 0.96) 0%, rgba(7, 7, 10, 0.75) 45%, rgba(7, 7, 10, 0) 100%);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* Overlay Bar inside the bleeding photo */
+    .photo-inner-content {
+      position: relative;
+      z-index: 3;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 0 18mm 5mm 18mm;
+    }
+    .photo-caption-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 4mm;
+    }
+    .photo-caption-title {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: -0.02em;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    }
+    .photo-caption-sub {
+      font-size: 8.5pt;
+      color: #C4B5FD;
+      font-weight: 500;
+      margin-top: 0.5mm;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    }
+    .mode-chips {
+      display: flex;
+      gap: 2mm;
+    }
+    .mode-chip {
+      background: rgba(13, 12, 22, 0.75);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      padding: 1.8mm 3.5mm;
+      border-radius: 3.5mm;
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: #FFFFFF;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Progress Bar */
+    .progress-track {
+      width: 100%;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      margin-bottom: 3.5mm;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6D5EF9 0%, #A855F7 100%);
+      border-radius: 2px;
+    }
+
+    /* Footer Row */
+    .footer-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      font-size: 8pt;
+      color: #A1A1AA;
+      font-weight: 400;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 2.5mm;
+    }
+    .footer-highlight {
+      color: #FFFFFF;
+      font-weight: 600;
+    }
+    .page-number {
+      color: #FFFFFF;
+      font-weight: 600;
+      font-size: 8.5pt;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow-1"></div>
+  <div class="grid-pattern"></div>
+
+  <div class="page-container">
+
+    <!-- Upper Section -->
+    <div class="upper-content">
+
+      <!-- Header -->
+      <header class="header">
+        <div class="logo-container">
+          <svg class="logo-svg" viewBox="0 0 1600 500" fill="currentColor">
+            <g transform="translate(100, 50) scale(0.53)">
+              <g transform="translate(-85.5,-122.3)" fill="#07070A">
+                <path d="m 492.63091,122.30158 -6.72517,5.2e-4 a 59.195648,58.393841 0 0 0 -51.43252,48.22651 v 9.93169 9.60045 48.55724 50.00367 8.15454 8.02483 a 59.065071,58.396896 0 0 0 53.92643,50.13234 h 4.23126 4.90668 13.49375 a 196.26587,196.26587 0 0 0 0.17053,0.89142 143.28516,145.28969 0 0 1 12.99146,-0.59841 143.28516,145.28969 0 0 1 26.59579,2.52491 143.28516,145.28969 0 0 1 58.15769,25.61756 143.28516,145.28969 0 0 1 29.68811,29.72221 143.28516,145.28969 0 0 1 15.11742,25.37262 143.28516,145.28969 0 0 1 10.78849,32.78559 143.28516,145.28969 0 0 1 2.56419,18.78645 143.28516,145.28969 0 0 1 0.3731,10.4805 143.28516,145.28969 0 0 1 -0.3731,10.4805 v 0.26406 a 196.26587,196.26587 0 0 1 -0.0186,-0.004 143.28516,145.28969 0 0 1 -2.46961,18.15031 143.28516,145.28969 0 0 1 -25.70334,58.15769 h 28.19156 58.1582 58.15666 58.15821 58.15769 58.15821 v -3.09542 a 227.54489,227.54489 0 0 0 -24.66517,-55.06227 227.54489,227.54489 0 0 0 -33.49304,-42.05686 227.54489,227.54489 0 0 0 -18.11672,-16.10135 227.54489,227.54489 0 0 0 -31.97583,-21.3496 196.26587,196.26587 0 0 0 26.18858,-36.8086 196.26587,196.26587 0 0 0 20.89795,-58.15769 196.26587,196.26587 0 0 0 3.00602,-23.77788 V 305.7865 a 196.26587,196.26587 0 0 0 -0.7922,-9.01082 196.26587,196.26587 0 0 0 -15.7763,-58.1582 196.26587,196.26587 0 0 0 -39.74021,-58.15769 h -1.84898 v -1.84485 a 196.26587,196.26587 0 0 0 -58.15821,-39.57071 196.26587,196.26587 0 0 0 -58.15666,-15.6714 196.26587,196.26587 0 0 0 -15.21354,-1.07125 H 697.7109 667.10502 608.94681 550.78912 499.76381 Z m 146.28255,465.26359 c -8.4699,11.47683 -18.56817,21.61951 -29.96665,30.09842 -17.25589,12.83605 -37.12832,21.58955 -58.15769,25.61756 -7.18263,1.3758 -14.45855,2.19226 -21.76405,2.44223 -1.61001,0.0551 -3.22082,0.0827 -4.83174,0.0827 -1.6111,-2e-5 -3.22209,-0.0276 -4.83227,-0.0827 h -7.14788 -19.58227 v 0.0543 c -7.63412,0.0197 -15.19242,1.49347 -22.2591,4.3403 -18.77494,7.56382 -32.31906,24.06892 -35.89859,43.74668 v 10.01645 10.59418 47.56299 27.54974 19.72386 10.88461 11.66544 c 4.85237,24.26382 24.71052,42.88838 49.57165,46.49225 h 8.58604 8.708 49.45021 58.15769 58.15821 58.1582 c 11.90286,0.10337 7.41614,0.0672 18.67845,0.0672 14.66498,-10e-6 25.08606,-3.15507 39.47821,-5.9707 20.19358,-3.95065 39.75799,-10.62209 58.15821,-19.83186 17.38845,-8.70325 33.5896,-19.59948 48.20739,-32.42231 3.40837,-2.98991 6.72662,-6.08102 9.9503,-9.2692 14.67901,-14.51709 27.31408,-30.96435 37.5574,-48.88901 8.70289,-15.22897 15.61573,-31.41315 20.60081,-48.23013 0.97473,-3.28824 1.87499,-6.5981 2.70009,-9.92704 4.43881,-17.90903 6.68289,-36.29148 6.6828,-54.7424 1.1e-4,-1.13848 -0.008,-2.27694 -0.0253,-3.41529 -0.29526,-19.67042 -3.14017,-39.21951 -8.46356,-58.15821 h -0.894 -58.15821 -58.15769 -58.15821 -58.15666 -58.1582 z" />
+                <path d="m 85.526046,122.3021 v 16.94211 41.21609 58.15769 58.15821 58.15717 58.15769 58.15821 51.19068 6.96753 36.41638 21.74131 58.15821 58.15769 58.15717 14.87868 a 207.40115,207.40115 0 0 0 34.085254,43.27953 207.40115,207.40115 0 0 0 24.07295,20.06544 207.40115,207.40115 0 0 0 58.15769,28.95637 207.40115,207.40115 0 0 0 49.07194,9.13588 h 9.08627 17.21084 a 207.40115,207.40115 0 0 0 40.94685,-6.76186 207.40115,207.40115 0 0 0 58.15717,-25.82427 v -25.57156 -58.15821 -58.15717 -58.15769 -58.15821 -58.15769 -32.43471 -25.7235 -58.15821 -58.15769 -23.97424 a 208.46976,208.54492 0 0 1 -1.39578,23.97424 208.46976,208.54492 0 0 0 1.39578,-24.09155 208.46976,208.54492 0 0 0 -2.80034,-34.06562 208.46976,208.54492 0 0 0 -18.69188,-58.15821 208.46976,208.54492 0 0 0 -36.66495,-52.27794 208.46976,208.54492 0 0 0 -5.87819,-5.87975 208.46976,208.54492 0 0 0 -52.2795,-36.68096 208.46976,208.54492 0 0 0 -58.15821,-18.69033 208.46976,208.54492 0 0 0 -32.53444,-2.78691 h -2.92437 -22.69888 z" />
+              </g>
+            </g>
+            <text x="620" y="320" font-family="'Inter', sans-serif" font-weight="700" font-size="220" fill="#07070A" letter-spacing="-12">miBoliche</text>
+          </svg>
+        </div>
+      </header>
+
+      <!-- Standard Section Header Format -->
+      <main>
+        <div class="section-header">
+          <div class="sec-number">02</div>
+          <h1 class="sec-title">Nuestra Visión.</h1>
+        </div>
+        <div class="accent-line"></div>
+
+        <div class="vision-pillars">
+          <!-- Pilar 1 -->
+          <div class="pillar-card">
+            <div class="pillar-icon-badge">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+            </div>
+            <div class="pillar-text">
+              <h2 class="pillar-title">Un ecosistema versátil para boliches, bares y gastronomía</h2>
+              <p class="pillar-desc">
+                <strong>miBoliche se adapta al ritmo de cada espacio.</strong> Permite que las meseras tomen comandas al instante desde una tablet en las mesas, o que los clientes pidan y paguen directamente desde su celular escaneando el código QR.
+              </p>
+            </div>
+          </div>
+
+          <!-- Pilar 2 -->
+          <div class="pillar-card">
+            <div class="pillar-icon-badge">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </div>
+            <div class="pillar-text">
+              <h2 class="pillar-title">Servicio ágil y sin interrupciones</h2>
+              <p class="pillar-desc">
+                <strong>Diseñado para el ritmo de las horas pico.</strong> Los pedidos llegan de inmediato a la barra o a la cocina, eliminando filas, demoras y asegurando que la atención y el cobro nunca se detengan.
+              </p>
+            </div>
+          </div>
+
+          <!-- Pilar 3 -->
+          <div class="pillar-card">
+            <div class="pillar-icon-badge">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <div class="pillar-text">
+              <h2 class="pillar-title">Métricas claras, rentabilidad y foco en las personas</h2>
+              <p class="pillar-desc">
+                <strong>Transformamos el movimiento diario en información clara y en tiempo real.</strong> Cierre de caja transparente, reportes en vivo y una experiencia de trabajo ágil para que tu equipo rinda al máximo.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+
+    </div>
+
+    <!-- Edge-to-Edge Bleed Photo Footer -->
+    <footer class="photo-footer-bleed">
+      <img src="./images/vision_tablet.jpg" alt="Atención gastronómica y nocturna con tablet" class="photo-bg-img" />
+      <div class="photo-gradient-top"></div>
+      <div class="photo-gradient-bottom"></div>
+
+      <!-- Inner Content over Bleed -->
+      <div class="photo-inner-content">
+        <div class="photo-caption-row">
+          <div>
+            <div class="photo-caption-title">Atención Dinámica & Presencial</div>
+            <div class="photo-caption-sub">Comandas en mesa, barras ágiles y autogestión sin fricción</div>
+          </div>
+          <div class="mode-chips">
+            <span class="mode-chip">Tablets</span>
+            <span class="mode-chip">Celulares</span>
+            <span class="mode-chip">QR Móvil</span>
+          </div>
+        </div>
+
+        <!-- Progress Bar & Footer -->
+        <div class="progress-track">
+          <div class="progress-fill" style="width: 28.6%;"></div>
+        </div>
+        <div class="footer-bar">
+          <div class="footer-left">
+            <span class="footer-highlight">miBoliche</span>
+            <span>•</span>
+            <span>Plataforma para Boliches, Eventos y Gastronomía</span>
+          </div>
+          <div class="page-number">
+            <span>Página 02</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+</body>
+</html>

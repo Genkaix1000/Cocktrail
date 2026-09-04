@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>miBoliche — Cierre & Propuesta a Medida (Página 7)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      background-color: #07070A;
+      color: #FAFAFA;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Ambient Gradients */
+    .ambient-glow-1 {
+      position: absolute;
+      top: 15%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 480mm;
+      height: 480mm;
+      background: radial-gradient(circle, rgba(109, 94, 249, 0.18) 0%, rgba(109, 94, 249, 0) 65%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .ambient-glow-2 {
+      position: absolute;
+      bottom: -15%;
+      right: -10%;
+      width: 400mm;
+      height: 400mm;
+      background: radial-gradient(circle, rgba(147, 51, 234, 0.12) 0%, rgba(147, 51, 234, 0) 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Subtle Grid Background Pattern */
+    .grid-pattern {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 14mm 14mm;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Main Container */
+    .page-container {
+      position: relative;
+      z-index: 10;
+      width: 210mm;
+      height: 297mm;
+      padding: 14mm 18mm 12mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 4.5mm;
+    }
+    .logo-container {
+      display: flex;
+      align-items: center;
+    }
+    .logo-svg {
+      height: 8.5mm;
+      width: auto;
+      color: #FFFFFF;
+    }
+    .header-tag {
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #A29AFF;
+      opacity: 0.95;
+    }
+
+    /* Center Visual Stage (Phone + Ribbon Waveform) */
+    .stage-container {
+      position: relative;
+      width: 100%;
+      height: 140mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1mm;
+    }
+
+    /* Dynamic Brand Neon Wave Ribbon */
+    .ribbon-svg {
+      position: absolute;
+      width: 185mm;
+      height: auto;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      filter: drop-shadow(0 0 20px rgba(109, 94, 249, 0.55));
+      pointer-events: none;
+    }
+
+    /* Phone Mockup */
+    .phone-wrapper {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .phone-img {
+      height: 125mm;
+      width: auto;
+      filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 35px rgba(109, 94, 249, 0.25));
+      transform: translateY(-2mm);
+    }
+
+    /* Ground Shadow */
+    .phone-shadow-ground {
+      position: absolute;
+      bottom: 2mm;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 75mm;
+      height: 12mm;
+      background: radial-gradient(ellipse, rgba(0, 0, 0, 0.9) 0%, rgba(109, 94, 249, 0.2) 40%, transparent 75%);
+      border-radius: 50%;
+      z-index: 2;
+    }
+
+    /* Bottom Closing Content */
+    .closing-content {
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 1mm;
+    }
+    .closing-eyebrow {
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #8C7EFF;
+      margin-bottom: 2mm;
+    }
+    .closing-title {
+      font-size: 22pt;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: #FFFFFF;
+      line-height: 1.15;
+      margin-bottom: 3mm;
+      max-width: 168mm;
+    }
+    .closing-title span.accent {
+      color: #8C7EFF;
+      text-shadow: 0 0 30px rgba(109, 94, 249, 0.45);
+    }
+    .closing-desc {
+      font-size: 9.3pt;
+      line-height: 1.48;
+      color: #A1A1AA;
+      font-weight: 400;
+      max-width: 155mm;
+      margin-bottom: 4mm;
+    }
+    .closing-desc strong {
+      color: #FAFAFA;
+      font-weight: 600;
+    }
+
+    /* Value Proposition Chips */
+    .value-chips {
+      display: flex;
+      gap: 2.5mm;
+      justify-content: center;
+    }
+    .value-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 1.8mm 3.5mm;
+      border-radius: 50px;
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: #E4E4E7;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+    }
+    .value-chip-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #8C7EFF;
+      box-shadow: 0 0 6px #8C7EFF;
+    }
+
+    /* Progress Bar */
+    .progress-track {
+      width: 100%;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      margin-bottom: 3.5mm;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6D5EF9 0%, #A855F7 100%);
+      border-radius: 2px;
+    }
+
+    /* Footer */
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      font-size: 8pt;
+      color: #71717A;
+      font-weight: 400;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 2.5mm;
+    }
+    .footer-highlight {
+      color: #A29AFF;
+      font-weight: 600;
+    }
+    .page-number {
+      color: #E4E4E7;
+      font-weight: 600;
+      font-size: 8.5pt;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow-1"></div>
+  <div class="ambient-glow-2"></div>
+  <div class="grid-pattern"></div>
+
+  <div class="page-container">
+
+    <!-- Top Header -->
+    <header class="header">
+      <div class="logo-container">
+        <svg class="logo-svg" viewBox="0 0 1600 500" fill="currentColor">
+          <g transform="translate(100, 50) scale(0.53)">
+            <g transform="translate(-85.5,-122.3)" fill="#FAFAFA">
+              <path d="m 492.63091,122.30158 -6.72517,5.2e-4 a 59.195648,58.393841 0 0 0 -51.43252,48.22651 v 9.93169 9.60045 48.55724 50.00367 8.15454 8.02483 a 59.065071,58.396896 0 0 0 53.92643,50.13234 h 4.23126 4.90668 13.49375 a 196.26587,196.26587 0 0 0 0.17053,0.89142 143.28516,145.28969 0 0 1 12.99146,-0.59841 143.28516,145.28969 0 0 1 26.59579,2.52491 143.28516,145.28969 0 0 1 58.15769,25.61756 143.28516,145.28969 0 0 1 29.68811,29.72221 143.28516,145.28969 0 0 1 15.11742,25.37262 143.28516,145.28969 0 0 1 10.78849,32.78559 143.28516,145.28969 0 0 1 2.56419,18.78645 143.28516,145.28969 0 0 1 0.3731,10.4805 143.28516,145.28969 0 0 1 -0.3731,10.4805 v 0.26406 a 196.26587,196.26587 0 0 1 -0.0186,-0.004 143.28516,145.28969 0 0 1 -2.46961,18.15031 143.28516,145.28969 0 0 1 -25.70334,58.15769 h 28.19156 58.1582 58.15666 58.15821 58.15769 58.15821 v -3.09542 a 227.54489,227.54489 0 0 0 -24.66517,-55.06227 227.54489,227.54489 0 0 0 -33.49304,-42.05686 227.54489,227.54489 0 0 0 -18.11672,-16.10135 227.54489,227.54489 0 0 0 -31.97583,-21.3496 196.26587,196.26587 0 0 0 26.18858,-36.8086 196.26587,196.26587 0 0 0 20.89795,-58.15769 196.26587,196.26587 0 0 0 3.00602,-23.77788 V 305.7865 a 196.26587,196.26587 0 0 0 -0.7922,-9.01082 196.26587,196.26587 0 0 0 -15.7763,-58.1582 196.26587,196.26587 0 0 0 -39.74021,-58.15769 h -1.84898 v -1.84485 a 196.26587,196.26587 0 0 0 -58.15821,-39.57071 196.26587,196.26587 0 0 0 -58.15666,-15.6714 196.26587,196.26587 0 0 0 -15.21354,-1.07125 H 697.7109 667.10502 608.94681 550.78912 499.76381 Z m 146.28255,465.26359 c -8.4699,11.47683 -18.56817,21.61951 -29.96665,30.09842 -17.25589,12.83605 -37.12832,21.58955 -58.15769,25.61756 -7.18263,1.3758 -14.45855,2.19226 -21.76405,2.44223 -1.61001,0.0551 -3.22082,0.0827 -4.83174,0.0827 -1.6111,-2e-5 -3.22209,-0.0276 -4.83227,-0.0827 h -7.14788 -19.58227 v 0.0543 c -7.63412,0.0197 -15.19242,1.49347 -22.2591,4.3403 -18.77494,7.56382 -32.31906,24.06892 -35.89859,43.74668 v 10.01645 10.59418 47.56299 27.54974 19.72386 10.88461 11.66544 c 4.85237,24.26382 24.71052,42.88838 49.57165,46.49225 h 8.58604 8.708 49.45021 58.15769 58.15821 58.1582 c 11.90286,0.10337 7.41614,0.0672 18.67845,0.0672 14.66498,-10e-6 25.08606,-3.15507 39.47821,-5.9707 20.19358,-3.95065 39.75799,-10.62209 58.15821,-19.83186 17.38845,-8.70325 33.5896,-19.59948 48.20739,-32.42231 3.40837,-2.98991 6.72662,-6.08102 9.9503,-9.2692 14.67901,-14.51709 27.31408,-30.96435 37.5574,-48.88901 8.70289,-15.22897 15.61573,-31.41315 20.60081,-48.23013 0.97473,-3.28824 1.87499,-6.5981 2.70009,-9.92704 4.43881,-17.90903 6.68289,-36.29148 6.6828,-54.7424 1.1e-4,-1.13848 -0.008,-2.27694 -0.0253,-3.41529 -0.29526,-19.67042 -3.14017,-39.21951 -8.46356,-58.15821 h -0.894 -58.15821 -58.15769 -58.15821 -58.15666 -58.1582 z" />
+              <path d="m 85.526046,122.3021 v 16.94211 41.21609 58.15769 58.15821 58.15717 58.15769 58.15821 51.19068 6.96753 36.41638 21.74131 58.15821 58.15769 58.15717 14.87868 a 207.40115,207.40115 0 0 0 34.085254,43.27953 207.40115,207.40115 0 0 0 24.07295,20.06544 207.40115,207.40115 0 0 0 58.15769,28.95637 207.40115,207.40115 0 0 0 49.07194,9.13588 h 9.08627 17.21084 a 207.40115,207.40115 0 0 0 40.94685,-6.76186 207.40115,207.40115 0 0 0 58.15717,-25.82427 v -25.57156 -58.15821 -58.15717 -58.15769 -58.15821 -58.15769 -32.43471 -25.7235 -58.15821 -58.15769 -23.97424 a 208.46976,208.54492 0 0 1 -1.39578,23.97424 208.46976,208.54492 0 0 0 1.39578,-24.09155 208.46976,208.54492 0 0 0 -2.80034,-34.06562 208.46976,208.54492 0 0 0 -18.69188,-58.15821 208.46976,208.54492 0 0 0 -36.66495,-52.27794 208.46976,208.54492 0 0 0 -5.87819,-5.87975 208.46976,208.54492 0 0 0 -52.2795,-36.68096 208.46976,208.54492 0 0 0 -58.15821,-18.69033 208.46976,208.54492 0 0 0 -32.53444,-2.78691 h -2.92437 -22.69888 z" />
+            </g>
+          </g>
+          <text x="620" y="320" font-family="'Inter', sans-serif" font-weight="700" font-size="220" fill="#FAFAFA" letter-spacing="-12">miBoliche</text>
+        </svg>
+      </div>
+      <div class="header-tag">
+        
+      </div>
+    </header>
+
+    <!-- Center Stage -->
+    <div class="stage-container">
+      <svg class="ribbon-svg" viewBox="0 0 900 450" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#6D5EF9" stop-opacity="0.2" />
+            <stop offset="25%" stop-color="#8C7EFF" stop-opacity="0.95" />
+            <stop offset="50%" stop-color="#EC4899" stop-opacity="1" />
+            <stop offset="75%" stop-color="#8B5CF6" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="#6D5EF9" stop-opacity="0.2" />
+          </linearGradient>
+          <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <path d="M 20 280 Q 220 50 450 220 T 880 180" 
+              stroke="url(#neonGradient)" 
+              stroke-width="18" 
+              stroke-linecap="round" 
+              opacity="0.3" 
+              filter="url(#neonGlow)" />
+
+        <path d="M 30 280 C 180 80, 320 80, 450 230 C 580 380, 720 100, 870 180" 
+              stroke="url(#neonGradient)" 
+              stroke-width="7" 
+              stroke-linecap="round" />
+        
+        <path d="M 30 300 C 180 100, 320 100, 450 250 C 580 400, 720 120, 870 200" 
+              stroke="url(#neonGradient)" 
+              stroke-width="7" 
+              stroke-linecap="round" 
+              opacity="0.85" />
+      </svg>
+
+      <div class="phone-wrapper">
+        <img src="./images/phone.png" alt="miBoliche Terminal Móvil en iPhone" class="phone-img" />
+        <div class="phone-shadow-ground"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Closing Statement -->
+    <main class="closing-content">
+      <span class="closing-eyebrow">07 // El Momento de Evolucionar es Ahora</span>
+      <h1 class="closing-title">
+        Modernizá tu local: la noche y la gastronomía <span class="accent">están evolucionando.</span> No te quedes atrás.
+      </h1>
+      <p class="closing-desc">
+        Que no te frene un presupuesto ni el miedo al cambio tecnológico. <strong>Trabajamos a medida en base a lo que tengas y a lo que busques potenciar en tu negocio.</strong>
+      </p>
+
+      <div class="value-chips">
+        <div class="value-chip">
+          <span class="value-chip-dot"></span>
+          <span>Adaptación a tu presupuesto</span>
+        </div>
+        <div class="value-chip">
+          <span class="value-chip-dot"></span>
+          <span>Puesta en marcha en 24 hs</span>
+        </div>
+        <div class="value-chip">
+          <span class="value-chip-dot"></span>
+          <span>Acompañamiento y soporte continuo</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Progress Bar & Footer -->
+    <div style="width: 100%;">
+      <div class="progress-track">
+        <div class="progress-fill" style="width: 100%;"></div>
+      </div>
+      <footer class="footer">
+        <div class="footer-left">
+          <span class="footer-highlight">miBoliche</span>
+          <span>•</span>
+          <span>Plataforma para Boliches, Eventos y Gastronomía</span>
+        </div>
+        <div class="page-number">
+          <span>Página 07</span>
+        </div>
+      </footer>
+    </div>
+
+  </div>
+
+</body>
+</html>

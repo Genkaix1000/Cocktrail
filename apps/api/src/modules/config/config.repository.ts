@@ -50,7 +50,7 @@ const DEFAULT_CONFIG: AppConfig = {
     accessToken: "",
     sandbox: false,
   },
-  clubId: "cocktrail_club_01",
+  clubId: "club-1",
   clubName: "Bosko Club",
   useLogoUrl: true,
   logoSize: 56,

@@ -2,45 +2,40 @@
 @import "tw-animate-css";
 
 /* ──────────────────────────────────────────────────────────
-   COCKTRAIL · Skin Bosko
-   Tokens light/dark (docs/design/design.md). Tipografía Inter.
-   --ink-* se mapea a los semánticos para no romper clases legacy.
+   MIBOLICHE · THEME SYSTEM
+   Tokens light/dark sincronizados con Guía de Marca miBoliche.
    ────────────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────── */
-/* BOSKO · LIGHT                                             */
+/* MIBOLICHE · LIGHT                                          */
 /* ────────────────────────────────────────────────────────── */
 :root {
-  /*
-    Jerarquía light (ref Bosko):
-      --bg-app     = fondo página (más blanco)
-      --bg-panel   = topbar / sidebar / canvas dashboard (blanco gris)
-      --bg-surface = cards KPI / widgets (mismo blanco que el fondo)
-    Anidar dentro de una card → otra vez --bg-panel.
-  */
-  --bg-app: #FFFFFF;
+  --bg-app: #FAFAFA;
   --bg-primary: var(--bg-app);
-  --bg-panel: #F4F5F6;
+  --bg-panel: #ECECF0;
   --bg-surface: #FFFFFF;
-  --bg-surface-elevated: var(--bg-panel);
-  --bg-input: var(--bg-panel);
+  --bg-surface-elevated: #ECECF0;
+  --bg-input: #ECECF0;
 
-  --border-subtle: #E5E7EB;
-  --border-strong: #D1D5DB;
+  --border-subtle: #E2E1EE;
+  --border-strong: #CBC9DC;
 
-  --text-primary: #111827;
-  --text-secondary: #6B7280;
-  --text-tertiary: #9CA3AF;
+  --text-primary: #07070A;
+  --text-secondary: #5F5E6E;
+  --text-tertiary: #8E8D9C;
   --text-on-accent: #FFFFFF;
-  --text-accent: #155339;
+  --text-accent: #6D5EF9;
 
-  --accent-primary: #155339;
-  --accent-primary-hover: #0E3A27;
-  --accent-bright: #10B981;
-  --accent-surface: #E6F4ED;
-  --accent-text: #155339;
-  --accent-featured: #155339;
-  --accent-featured-deep: #0F382C;
+  --accent-primary: #6D5EF9;
+  --accent-primary-hover: #5848E6;
+  --accent-bright: #6D5EF9;
+  --accent-surface: #EFEFFD;
+  --accent-text: #6D5EF9;
+  --accent-featured: #6D5EF9;
+  --accent-featured-deep: #4839C7;
+
+  --channel-qr: var(--accent-primary);
+  --channel-card: #3B82F6;
 
   --success: #10b981;
   --danger: #ef4444;
@@ -89,33 +84,35 @@
 }
 
 /* ────────────────────────────────────────────────────────── */
-/* BOSKO · DARK                                              */
+/* MIBOLICHE · DARK                                           */
 /* ────────────────────────────────────────────────────────── */
 .dark {
-  /* app = más profundo; panel = chrome; surface = cards elevadas */
-  --bg-app: #111315;
+  --bg-app: #07070A;
   --bg-primary: var(--bg-app);
-  --bg-panel: #1A1D21;
-  --bg-surface: #22262C;
-  --bg-surface-elevated: #2A2F36;
+  --bg-panel: #0E0E14;
+  --bg-surface: #14141E;
+  --bg-surface-elevated: #1C1B28;
   --bg-input: var(--bg-surface);
 
-  --border-subtle: #2D323B;
-  --border-strong: #374151;
+  --border-subtle: #232230;
+  --border-strong: #343346;
 
-  --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-tertiary: #6B7280;
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AD;
+  --text-tertiary: #727182;
   --text-on-accent: #FFFFFF;
-  --text-accent: #34D399;
+  --text-accent: #8C7EFF;
 
-  --accent-primary: #10B981;
-  --accent-primary-hover: #059669;
-  --accent-bright: #34D399;
-  --accent-surface: #0F382C;
-  --accent-text: #34D399;
-  --accent-featured: #10B981;
-  --accent-featured-deep: #0F382C;
+  --accent-primary: #6D5EF9;
+  --accent-primary-hover: #7C6EFB;
+  --accent-bright: #A29AFF;
+  --accent-surface: #1D1A38;
+  --accent-text: #8C7EFF;
+  --accent-featured: #6D5EF9;
+  --accent-featured-deep: #2B2566;
+
+  --channel-qr: var(--accent-primary);
+  --channel-card: #60A5FA;
 
   --ink-950: var(--bg-app);
   --ink-925: var(--bg-panel);
@@ -155,8 +152,8 @@
   --danger-soft: #451212;
   --danger-line: color-mix(in oklab, var(--danger) 25%, transparent);
 
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
-  --shadow-card-hover: 0 6px 28px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.45);
+  --shadow-card-hover: 0 6px 28px rgba(0, 0, 0, 0.55);
 }
 
 /* ────────────────────────────────────────────────────────── */

@@ -9,7 +9,6 @@ import {
   FileText,
   CloudDownload,
   ChevronLeft,
-  ChevronRight,
   Power,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -42,6 +41,7 @@ import { TestNightBanner } from "@/components/shared/TestNightBanner";
 import HistorialSection from "@/components/admin/HistorialSection";
 import LogsSection from "@/components/admin/LogsSection";
 import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
+import { paymentChannelColor } from "@/lib/analytics";
 import { formatHm } from "@/lib/utils";
 
 import type {
@@ -211,7 +211,7 @@ export default function AdminClient({
         total: effectiveEfectivo,
         count: dashboardTotals.efectivoCount,
         pct: total > 0 ? Math.round((effectiveEfectivo / total) * 100) : 0,
-        color: "#10b981",
+        color: paymentChannelColor("efectivo"),
       },
       {
         method: "qr",
@@ -219,7 +219,7 @@ export default function AdminClient({
         total: effectiveQR,
         count: dashboardTotals.qrCount,
         pct: total > 0 ? Math.round((effectiveQR / total) * 100) : 0,
-        color: "#a855f7",
+        color: paymentChannelColor("qr"),
       },
       {
         method: "debito",
@@ -227,7 +227,7 @@ export default function AdminClient({
         total: effectiveDebito,
         count: dashboardTotals.debitoCount,
         pct: total > 0 ? Math.round((effectiveDebito / total) * 100) : 0,
-        color: "#3b82f6",
+        color: paymentChannelColor("debito"),
       },
     ];
 
@@ -311,8 +311,8 @@ export default function AdminClient({
   const navBtnClass = (tab: string, activeOverride?: boolean) => {
     const active = activeOverride ?? (tab === "pdv" ? isPagosTab : activeTab === tab);
     return active
-      ? "relative text-[var(--accent-text)] font-semibold before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-6 before:w-[5px] before:rounded-r-[6px] before:bg-[var(--accent-primary)]"
-      : "text-[var(--text-tertiary)] font-normal hover:text-[var(--text-secondary)]";
+      ? "text-[var(--accent-text)] font-semibold bg-[var(--accent-surface)] rounded-xl"
+      : "text-[var(--text-tertiary)] font-normal hover:text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]/70 rounded-xl";
   };
 
   function renderNavButton(item: NavItem, collapsed: boolean) {
@@ -325,8 +325,8 @@ export default function AdminClient({
         data-tour-nav={item.id}
         title={collapsed ? item.label : undefined}
         onClick={() => (item.onClick ? item.onClick() : handleTabChange(item.id))}
-        className={`w-full flex items-center text-left transition-colors duration-150 cursor-pointer bg-transparent ${
-          collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 pl-4 pr-3 py-1.5"
+        className={`flex items-center text-left transition-colors duration-150 cursor-pointer ${
+          collapsed ? "w-10 h-10 mx-auto justify-center" : "w-[calc(100%-16px)] mx-2 gap-2.5 px-3 py-2"
         } ${navBtnClass(item.id)}`}
       >
         <Icon
@@ -357,8 +357,8 @@ export default function AdminClient({
         `}
       >
         <div
-          className={`flex items-center shrink-0 w-full pt-4 pb-2 ${
-            collapsed ? "justify-center px-2" : "justify-between px-4"
+          className={`flex items-center shrink-0 w-full transition-all duration-200 border-b border-[var(--border-subtle)]/50 ${
+            collapsed ? "justify-center px-2 py-2" : "justify-between gap-2 px-3 pt-2.5 pb-1.5"
           }`}
         >
           {collapsed ? (
@@ -366,31 +366,31 @@ export default function AdminClient({
               data-tour-nav="collapse"
               type="button"
               onClick={toggleSidebarCollapsed}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--accent-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
+              className="w-9 h-9 rounded-xl flex items-center justify-center bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)] hover:shadow-sm transition-all cursor-pointer group"
               title="Expandir menú"
               aria-label="Expandir menú"
             >
-              <ChevronRight size={18} strokeWidth={2} />
+              <BrandLogo size="xs" iconOnly className="group-hover:scale-105 transition-transform" />
             </button>
           ) : (
             <>
-              <BrandLogo size="md" />
+              <BrandLogo size="sm" />
               <button
                 data-tour-nav="collapse"
                 type="button"
                 onClick={toggleSidebarCollapsed}
-                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] border border-transparent hover:border-[var(--border-subtle)] transition-all cursor-pointer shrink-0"
                 title="Colapsar menú"
                 aria-label="Colapsar menú"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={15} strokeWidth={2} />
               </button>
             </>
           )}
         </div>
 
         <div
-          className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-2 ${
+          className={`flex-1 overflow-y-auto flex flex-col no-scrollbar pt-1.5 ${
             collapsed ? "gap-2 px-1 pb-[88px]" : "gap-4 pb-[180px]"
           }`}
         >
@@ -433,7 +433,8 @@ export default function AdminClient({
                   else setOpenNightOpen(true);
                   setMobileMenuOpen(false);
                 }}
-                className="w-full h-11 rounded-xl bg-[var(--accent-primary)] text-white flex items-center justify-center cursor-pointer hover:bg-[var(--accent-primary-hover)] transition-colors"
+                className="w-full h-11 rounded-xl text-white flex items-center justify-center cursor-pointer hover:brightness-110 transition-all"
+                style={{ background: "linear-gradient(165deg, #6D5EF9 0%, #4839C7 55%, #2B2566 100%)" }}
               >
                 <Power size={16} strokeWidth={2} />
               </button>

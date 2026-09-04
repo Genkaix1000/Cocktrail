@@ -314,6 +314,7 @@ describe("HistorialSection", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(HOLD_CONFIRM_MS + 100);
       });
+      fireEvent.pointerUp(hold);
 
       expect(screen.getByText(/Noche eliminada/i)).toBeInTheDocument();
       expect(
@@ -326,6 +327,7 @@ describe("HistorialSection", () => {
         screen.getByRole("button", { name: /Eliminar la noche del/i }),
       ).toBeInTheDocument();
       expect(eventsService.deleteNight).not.toHaveBeenCalled();
+      vi.useRealTimers();
     });
 
     it("si el detalle falla, el hold queda deshabilitado", async () => {

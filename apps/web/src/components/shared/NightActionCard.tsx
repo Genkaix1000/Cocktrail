@@ -1,6 +1,7 @@
 "use client";
 
-import { KeyRound, Power, Moon } from "lucide-react";
+import type { ReactNode } from "react";
+import { KeyRound, Power } from "lucide-react";
 
 type Props = {
   nightOpen: boolean;
@@ -9,6 +10,43 @@ type Props = {
   onEditKeyword?: () => void;
   subtitle?: string;
 };
+
+const NIGHT_CARD_BG_OPEN =
+  "linear-gradient(165deg, #6D5EF9 0%, #4839C7 28%, #1D1A38 62%, #07070A 100%)";
+const NIGHT_CARD_BG_CLOSED =
+  "linear-gradient(165deg, #4839C7 0%, #2B2566 38%, #14141E 72%, #07070A 100%)";
+
+function NightCardShell({
+  bg,
+  children,
+}: {
+  bg: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      data-tour="night-card"
+      className="relative overflow-hidden rounded-2xl p-4 text-white"
+      style={{ background: bg }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          backgroundSize: "14px 14px",
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -top-8 -right-6 h-28 w-28 rounded-full opacity-40"
+        style={{ background: "radial-gradient(circle, rgba(162,154,255,0.45) 0%, transparent 70%)" }}
+        aria-hidden
+      />
+      {children}
+    </div>
+  );
+}
 
 /**
  * Card CTA de noche (pie del sidebar). Widget flotante con margen —
@@ -23,24 +61,7 @@ export function NightActionCard({
 }: Props) {
   if (nightOpen) {
     return (
-      <div
-        data-tour="night-card"
-        className="relative overflow-hidden rounded-2xl p-4 text-white"
-        style={{
-          background:
-            "linear-gradient(160deg, #0F382C 0%, #111315 55%, #1A1D21 100%)",
-        }}
-      >
-        <div
-          className="pointer-events-none absolute inset-0 opacity-40"
-          style={{
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg width='120' height='80' viewBox='0 0 120 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 40 Q30 10 60 40 T120 40' fill='none' stroke='%2310B981' stroke-width='1.2' opacity='0.35'/%3E%3Cpath d='M0 55 Q30 25 60 55 T120 55' fill='none' stroke='%2310B981' stroke-width='1' opacity='0.2'/%3E%3C/svg%3E\")",
-            backgroundSize: "100% 100%",
-          }}
-          aria-hidden
-        />
-        <Moon size={16} strokeWidth={1.8} className="relative text-white/80 mb-2" />
+      <NightCardShell bg={NIGHT_CARD_BG_OPEN}>
         <p className="relative text-[14px] font-semibold leading-snug">Noche en curso</p>
         {subtitle ? (
           <p className="relative text-[12px] text-white/55 mt-0.5 truncate">{subtitle}</p>
@@ -51,7 +72,7 @@ export function NightActionCard({
           type="button"
           data-tour="night-close-btn"
           onClick={onCloseNight}
-          className="relative mt-3 w-full h-9 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-white flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer active:scale-[0.98]"
+          className="relative mt-3 w-full h-9 rounded-full bg-white text-[#2B2566] hover:bg-white/90 flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer active:scale-[0.98]"
         >
           <Power size={14} strokeWidth={2} />
           Cerrar noche
@@ -66,29 +87,12 @@ export function NightActionCard({
             Clave de la noche
           </button>
         )}
-      </div>
+      </NightCardShell>
     );
   }
 
   return (
-    <div
-      data-tour="night-card"
-      className="relative overflow-hidden rounded-2xl p-4 text-white"
-      style={{
-        background:
-          "linear-gradient(160deg, #155339 0%, #0F382C 50%, #111315 100%)",
-      }}
-    >
-      <div
-        className="pointer-events-none absolute inset-0 opacity-35"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg width='120' height='80' viewBox='0 0 120 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 40 Q30 10 60 40 T120 40' fill='none' stroke='%2334D399' stroke-width='1.2' opacity='0.4'/%3E%3Cpath d='M0 55 Q30 25 60 55 T120 55' fill='none' stroke='%2334D399' stroke-width='1' opacity='0.22'/%3E%3C/svg%3E\")",
-          backgroundSize: "100% 100%",
-        }}
-        aria-hidden
-      />
-      <Moon size={16} strokeWidth={1.8} className="relative text-white/80 mb-2" />
+    <NightCardShell bg={NIGHT_CARD_BG_CLOSED}>
       <p className="relative text-[14px] font-semibold leading-snug">Abrir noche</p>
       <p className="relative text-[12px] text-white/55 mt-0.5 leading-snug">
         Con la palabra clave para empezar a operar.
@@ -102,6 +106,6 @@ export function NightActionCard({
         <Power size={14} strokeWidth={2} />
         Abrir noche
       </button>
-    </div>
+    </NightCardShell>
   );
 }
