@@ -28,7 +28,84 @@ export type Drink = {
   categoryId?: string | null;
   /** Orden dentro de su categoría; menor = más arriba. 0/undefined = sin preferencia (al final). */
   sortOrder?: number;
+  /** Ventana horaria de vigencia (promos temporales). */
+  scheduleEnabled?: boolean;
+  /** HH:MM local. */
+  scheduleFrom?: string | null;
+  /** HH:MM local; puede ser menor que from (cruza medianoche). */
+  scheduleUntil?: string | null;
+  scheduleHideWhenExpired?: boolean;
+  scheduleMoveToCategoryId?: string | null;
+  /** Si false, al salir de la ventana queda vencida hasta reactivar. */
+  scheduleRepeatNextEvent?: boolean;
+  /** One-shot: ya venció al menos una vez sin repeat. */
+  scheduleConsumed?: boolean;
 };
+
+export type DrinkScheduleState = {
+  inWindow: boolean;
+  /** false = no mostrar en caja. */
+  visible: boolean;
+  /** true = gris + confirmación al agregar. */
+  gray: boolean;
+  effectiveCategoryId: string | null;
+};
+
+function parseHHMM(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+/** ¿`now` está dentro de [from, until)? Soporta cruce de medianoche. */
+export function isWithinScheduleWindow(
+  from: string | null | undefined,
+  until: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  const a = parseHHMM(from);
+  const b = parseHHMM(until);
+  if (a === null || b === null) return true;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (a === b) return true;
+  if (a < b) return mins >= a && mins < b;
+  return mins >= a || mins < b;
+}
+
+export function evaluateDrinkSchedule(drink: Drink, now: Date = new Date()): DrinkScheduleState {
+  const categoryId = drink.categoryId ?? null;
+  if (!drink.scheduleEnabled) {
+    return { inWindow: true, visible: true, gray: false, effectiveCategoryId: categoryId };
+  }
+
+  const inWindow = isWithinScheduleWindow(drink.scheduleFrom, drink.scheduleUntil, now);
+  const stickyExpired = Boolean(drink.scheduleConsumed) && !drink.scheduleRepeatNextEvent;
+  const expired = stickyExpired || !inWindow;
+
+  if (!expired) {
+    return { inWindow: true, visible: true, gray: false, effectiveCategoryId: categoryId };
+  }
+
+  if (drink.scheduleHideWhenExpired) {
+    return {
+      inWindow: false,
+      visible: false,
+      gray: false,
+      effectiveCategoryId: drink.scheduleMoveToCategoryId || categoryId,
+    };
+  }
+
+  return {
+    inWindow: false,
+    visible: true,
+    gray: true,
+    effectiveCategoryId: drink.scheduleMoveToCategoryId || categoryId,
+  };
+}
 
 export type OrderItem = {
   drinkId: number;
@@ -182,6 +259,8 @@ export type CreateOrderResult = Order & {
   ticketData?: string;
   /** Contenido estructurado del mismo ticket (para el transporte Bluetooth). */
   ticketContent?: TicketContent;
+  /** true = ghost mode: no persistió en registros. */
+  ghost?: boolean;
 };
 
 export function computeTotals(orders: Order[]): EventTotals {

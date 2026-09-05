@@ -115,8 +115,10 @@ describe("MercadoPagoProvisioningService", () => {
       upsert: vi.fn().mockImplementation(async (s) => makeSeller(s)),
       findByUserId: vi.fn().mockResolvedValue(makeSeller()),
       findActive: vi.fn().mockResolvedValue(makeSeller()),
+      findGhost: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
       wipeAllTokens: vi.fn().mockResolvedValue([]),
+      wipeGhostTokens: vi.fn().mockResolvedValue([]),
       backfillEncryption: vi.fn().mockResolvedValue({ migrated: 0 }),
     };
 

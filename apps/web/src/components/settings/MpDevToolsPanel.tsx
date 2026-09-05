@@ -6,7 +6,11 @@ import {
   ChevronDown,
   CircleHelp,
   ClipboardCopy,
+  Eye,
+  EyeOff,
+  Link2,
   Loader2,
+  LogOut,
   RefreshCw,
   Terminal,
   Wifi,
@@ -21,6 +25,7 @@ import {
   type MpWebhookEventRow,
   type PosnetDeviceStatus,
 } from "@/services/mercadopago.service";
+import { systemService } from "@/services/system.service";
 
 import { MP_HEALTH_CHECK_LABELS as CHECK_LABELS, MP_HEALTH_CHECK_ORDER as CHECK_ORDER } from "./mpHealthChecks";
 
@@ -91,6 +96,9 @@ export default function MpDevToolsPanel() {
 
   const [health, setHealth] = useState<MpHealth | null>(null);
   const [seller, setSeller] = useState<MpSellerStatus | null>(null);
+  const [ghostSeller, setGhostSeller] = useState<MpSellerStatus | null>(null);
+  const [ghostMode, setGhostMode] = useState(false);
+  const [ghostBusy, setGhostBusy] = useState(false);
   const [webhookAvailable, setWebhookAvailable] = useState(true);
   const [webhookSecretConfigured, setWebhookSecretConfigured] = useState<boolean | null>(null);
   const [events, setEvents] = useState<MpWebhookEventRow[]>([]);
@@ -105,14 +113,18 @@ export default function MpDevToolsPanel() {
     setLoading(true);
     setError(null);
     try {
-      const [h, s, wh, ord] = await Promise.all([
+      const [h, s, wh, ord, ghost, gm] = await Promise.all([
         mercadopagoService.getMpHealth(refreshHealth),
         mercadopagoService.getSellerStatus(),
         mercadopagoService.listWebhookEvents(PAGE_SIZE),
         mercadopagoService.listRecentOrders(PAGE_SIZE),
+        mercadopagoService.getGhostSellerStatus().catch(() => null),
+        systemService.getGhostMode().catch(() => ({ enabled: false })),
       ]);
       setHealth(h);
       setSeller(s);
+      setGhostSeller(ghost);
+      setGhostMode(gm.enabled);
       setWebhookAvailable(wh.available);
       setWebhookSecretConfigured(wh.webhookSecretConfigured);
       setEvents(wh.events);
@@ -126,6 +138,49 @@ export default function MpDevToolsPanel() {
       setLoading(false);
     }
   }, []);
+
+  const toggleGhostMode = useCallback(async () => {
+    setGhostBusy(true);
+    setError(null);
+    try {
+      const next = !ghostMode;
+      const res = await systemService.setGhostMode(next);
+      setGhostMode(res.enabled);
+    } catch {
+      setError("No se pudo cambiar ghost mode.");
+    } finally {
+      setGhostBusy(false);
+    }
+  }, [ghostMode]);
+
+  const linkGhost = useCallback(async () => {
+    setGhostBusy(true);
+    setError(null);
+    try {
+      const { url } = await mercadopagoService.getOAuthUrl(undefined, "ghost");
+      window.location.href = url;
+    } catch {
+      setError("No se pudo iniciar la vinculación ghost.");
+      setGhostBusy(false);
+    }
+  }, []);
+
+  const unlinkGhost = useCallback(async () => {
+    setGhostBusy(true);
+    setError(null);
+    try {
+      await mercadopagoService.unlinkGhostSeller();
+      setGhostSeller(await mercadopagoService.getGhostSellerStatus());
+      if (ghostMode) {
+        const res = await systemService.setGhostMode(false);
+        setGhostMode(res.enabled);
+      }
+    } catch {
+      setError("No se pudo desvincular el ghost.");
+    } finally {
+      setGhostBusy(false);
+    }
+  }, [ghostMode]);
 
   const loadMoreOrders = useCallback(async () => {
     const next = Math.min(ordersLimit + PAGE_SIZE, MAX_ROWS);
@@ -245,6 +300,64 @@ export default function MpDevToolsPanel() {
               {error}
             </p>
           )}
+
+          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]/50 p-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+                  {ghostMode ? <Eye size={14} aria-hidden /> : <EyeOff size={14} aria-hidden />}
+                  Ghost tickets
+                </p>
+                <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 leading-snug">
+                  Entorno de pruebas: los cobros no quedan en historial/auditoría. QR usa la cuenta
+                  ghost. Posnet deshabilitado.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={ghostMode}
+                disabled={ghostBusy || (!ghostSeller?.linked && !ghostMode)}
+                onClick={() => void toggleGhostMode()}
+                className={`shrink-0 h-8 px-3 rounded-full text-[12px] font-semibold cursor-pointer disabled:opacity-40 ${
+                  ghostMode
+                    ? "bg-[var(--accent-primary)] text-[var(--accent-text)]"
+                    : "border border-[var(--border-strong)] text-[var(--text-secondary)]"
+                }`}
+              >
+                {ghostBusy ? <Loader2 size={12} className="animate-spin" /> : ghostMode ? "ON" : "OFF"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-[12px]">
+              <span className="text-[var(--text-secondary)]">
+                MP ghost:{" "}
+                {ghostSeller?.linked
+                  ? ghostSeller.displayName || ghostSeller.nickname || ghostSeller.userId
+                  : "sin vincular"}
+              </span>
+              {ghostSeller?.linked ? (
+                <button
+                  type="button"
+                  onClick={() => void unlinkGhost()}
+                  disabled={ghostBusy}
+                  className="inline-flex items-center gap-1 text-[var(--danger-base)] cursor-pointer disabled:opacity-50"
+                >
+                  <LogOut size={12} aria-hidden />
+                  Desvincular
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void linkGhost()}
+                  disabled={ghostBusy}
+                  className="inline-flex items-center gap-1 font-semibold text-[var(--accent-primary)] cursor-pointer disabled:opacity-50"
+                >
+                  <Link2 size={12} aria-hidden />
+                  Vincular MP ghost
+                </button>
+              )}
+            </div>
+          </div>
 
           {loading && !loadedOnce ? (
             <p className="flex items-center gap-2 text-[12px] text-[var(--text-tertiary)]" role="status">

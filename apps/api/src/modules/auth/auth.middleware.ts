@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { Role } from "@cocktrail/shared";
 import { COOKIE_NAME, verifySession, type Session } from "./session.js";
 import { Unauthorized, Forbidden } from "../../shared/errors/http-errors.js";
+import { isSuperadminUsername } from "./superadmin.js";
 
 // Extiende el tipo Request de Express para incluir la sesión
 declare global {
@@ -47,4 +48,21 @@ export function requireRole(...roles: Role[]) {
     }
     next();
   };
+}
+
+/** Admin con username superadmin. Usar después de authMiddleware. */
+export function requireSuperadmin(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  if (!req.session) {
+    next(new Unauthorized());
+    return;
+  }
+  if (req.session.role !== "admin" || !isSuperadminUsername(req.session.username)) {
+    next(new Forbidden("Solo el superadmin puede hacer esto."));
+    return;
+  }
+  next();
 }

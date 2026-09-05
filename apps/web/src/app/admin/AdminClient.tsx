@@ -11,6 +11,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Power,
+  ShoppingBag,
+  Printer,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
@@ -20,21 +23,28 @@ import OpenNightModal from "@/components/admin/OpenNightModal";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { useTheme } from "@/components/ThemeProvider";
 import { AppTopbar } from "@/components/shared/AppTopbar";
+import { PrinterTopbarButton } from "@/components/shared/PrinterTopbarButton";
 import { NightActionCard } from "@/components/shared/NightActionCard";
 import { LogoutNavRail } from "@/components/shared/LogoutNavRail";
 import { HelpCenterProvider } from "@/components/help/HelpCenterProvider";
 
 import { computeTotals, withLiveMpFees } from "@cocktrail/shared";
 import { useEventState } from "@/hooks/useEventState";
+import { usePrinterStatus } from "@/hooks/usePrinterStatus";
+import { usePosnetStatus } from "@/hooks/usePosnetStatus";
+import { hasNativeBleBridge } from "@/lib/printing/transports/native-ble-s1";
 
 import { eventsService } from "@/services/events.service";
 import { authService } from "@/services/auth.service";
+import { drinksService } from "@/services/drinks.service";
+import { drinkCategoriesService } from "@/services/drink-categories.service";
 
 import CartaSection from "@/components/settings/CartaSection";
 import PagosSection from "@/components/settings/PagosSection";
 import PdvSection from "@/components/settings/PdvSection";
 import UsuariosSection from "@/components/settings/UsuariosSection";
 import SistemaSection from "@/components/settings/SistemaSection";
+import VentaSection from "@/components/caja/VentaSection";
 
 import DashboardSection from "@/components/admin/DashboardSection";
 import { MpFallbackBanner } from "@/components/admin/MpFallbackBanner";
@@ -45,6 +55,8 @@ import { useAdminAnalytics } from "@/hooks/useAdminAnalytics";
 import { formatHm } from "@/lib/utils";
 
 import type {
+  Drink,
+  DrinkCategory,
   EventSummary,
   EventTotals,
   NightEvent,
@@ -52,11 +64,13 @@ import type {
   Role,
 } from "@cocktrail/shared";
 
+const PRINTER_PROMPT_SEEN_KEY = "cocktrail:printer-prompt-seen";
+
 type Props = {
   initialEvent: NightEvent | null;
   initialOrders: Order[];
   initialTotals?: EventTotals | null;
-  currentUser: { role: Role; username: string };
+  currentUser: { role: Role; username: string; isSuperadmin?: boolean };
 };
 
 const EMPTY_TOTALS: EventTotals = {
@@ -117,6 +131,47 @@ export default function AdminClient({
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
 
+  const [ventaDrinks, setVentaDrinks] = useState<Drink[]>([]);
+  const [ventaCategories, setVentaCategories] = useState<DrinkCategory[]>([]);
+  const [ventaCartaLoaded, setVentaCartaLoaded] = useState(false);
+  const [printerPromptOpen, setPrinterPromptOpen] = useState(false);
+  const [pairingPrinter, setPairingPrinter] = useState(false);
+  const [autoPairSeconds, setAutoPairSeconds] = useState(3);
+
+  const {
+    printerStatus,
+    testPrint,
+    printerTestMessage,
+    reprintTicket,
+    printTicket,
+    pairPrinterDevice,
+    connectPrinter,
+    reconnecting,
+    printerPaired,
+    printError,
+    reprinting,
+  } = usePrinterStatus();
+  const { posnetHealth } = usePosnetStatus();
+  const ventaPrinter = useMemo(
+    () => ({ reprintTicket, printTicket, printError, reprinting }),
+    [reprintTicket, printTicket, printError, reprinting],
+  );
+
+  const loadVentaCarta = async () => {
+    const [drinks, categories] = await Promise.all([
+      drinksService.list(),
+      drinkCategoriesService.list(),
+    ]);
+    setVentaDrinks(drinks);
+    setVentaCategories(categories);
+    setVentaCartaLoaded(true);
+  };
+
+  useEffect(() => {
+    if (activeTab !== "venta" || ventaCartaLoaded) return;
+    loadVentaCarta().catch(() => {});
+  }, [activeTab, ventaCartaLoaded]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsFirstLoad(false);
@@ -131,6 +186,64 @@ export default function AdminClient({
       setHistoryLoaded(false);
     },
   });
+
+  const isVentaTab = activeTab === "venta";
+  const isNightOpenForVenta = event?.status === "activo";
+
+  // Mismo onboarding de impresora que caja (noche abierta + sin vincular).
+  useEffect(() => {
+    if (!isNightOpenForVenta) {
+      setPrinterPromptOpen(false);
+      return;
+    }
+    if (printerStatus === null) return;
+    if (printerPaired || printerStatus.connected) {
+      setPrinterPromptOpen(false);
+      return;
+    }
+    try {
+      if (localStorage.getItem(PRINTER_PROMPT_SEEN_KEY)) return;
+    } catch {
+      /* private mode */
+    }
+    setPrinterPromptOpen(true);
+  }, [isNightOpenForVenta, printerStatus, printerPaired]);
+
+  function dismissPrinterPrompt() {
+    setPrinterPromptOpen(false);
+    try {
+      localStorage.setItem(PRINTER_PROMPT_SEEN_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+  }
+
+  function handlePairPrinterFromPrompt() {
+    const pairing = pairPrinterDevice();
+    setPairingPrinter(true);
+    void pairing.finally(() => setPairingPrinter(false));
+  }
+
+  useEffect(() => {
+    if (!printerPromptOpen || pairingPrinter || !hasNativeBleBridge()) return;
+    setAutoPairSeconds(3);
+    const countdown = window.setInterval(() => {
+      setAutoPairSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1_000);
+    const startPairing = window.setTimeout(() => {
+      setPairingPrinter(true);
+      void pairPrinterDevice().finally(() => setPairingPrinter(false));
+    }, 3_000);
+    return () => {
+      window.clearInterval(countdown);
+      window.clearTimeout(startPairing);
+    };
+  }, [printerPromptOpen, pairingPrinter, pairPrinterDevice]);
+
+  const activeNightOrders = useMemo(() => {
+    if (!event) return orders;
+    return orders.filter((o) => o.createdAt >= event.startedAt);
+  }, [orders, event]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -264,6 +377,8 @@ export default function AdminClient({
     switch (activeTab) {
       case "monitoreo":
         return ["Administración", "Dashboard"];
+      case "venta":
+        return ["Administración", "Nueva Venta"];
       case "historial":
         return ["Administración", "Historial de Noches"];
       case "logs":
@@ -288,6 +403,7 @@ export default function AdminClient({
 
   const menuItems: NavItem[] = [
     { id: "monitoreo", label: "Dashboard", icon: LayoutDashboard },
+    { id: "venta", label: "Nueva Venta", icon: ShoppingBag },
     { id: "historial", label: "Historial de Noches", icon: History },
     {
       id: "logs",
@@ -498,6 +614,73 @@ export default function AdminClient({
           />
         )}
 
+        {printerPromptOpen && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+            <div
+              role="dialog"
+              aria-labelledby="admin-printer-prompt-title"
+              className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[24px] p-6 shadow-card animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="w-14 h-14 rounded-2xl bg-amber-soft border border-amber-line text-amber flex items-center justify-center shrink-0">
+                  <Printer size={26} strokeWidth={2.2} />
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissPrinterPrompt}
+                  className="p-2 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] cursor-pointer"
+                  aria-label="Cerrar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div>
+                <h2
+                  id="admin-printer-prompt-title"
+                  className="text-xl font-black text-[var(--text-primary)] tracking-tight"
+                >
+                  No hay impresora
+                </h2>
+                <p className="mt-2 text-sm text-[var(--text-secondary)] leading-relaxed">
+                  Los tickets no se van a imprimir hasta que vincules una. Podés hacerlo ahora o más
+                  tarde desde el botón del topbar.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pairingPrinter) return;
+                    handlePairPrinterFromPrompt();
+                  }}
+                  disabled={pairingPrinter}
+                  className="w-full h-12 rounded-xl bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98] transition-all"
+                >
+                  <Printer size={16} />
+                  {pairingPrinter ? "Vinculando…" : "Vincular impresora"}
+                </button>
+                {!pairingPrinter && hasNativeBleBridge() && (
+                  <p className="text-xs text-[var(--text-secondary)] text-center">
+                    Buscaremos una impresora automáticamente en {autoPairSeconds} s.
+                  </p>
+                )}
+                {printerTestMessage && (
+                  <p className="text-xs text-[var(--danger-base)] text-center leading-snug">
+                    {printerTestMessage}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={dismissPrinterPrompt}
+                  className="w-full h-11 rounded-xl border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] font-semibold text-sm cursor-pointer transition-colors"
+                >
+                  Ahora no
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {renderSidebar(false)}
 
         {mobileMenuOpen && (
@@ -509,21 +692,53 @@ export default function AdminClient({
           </div>
         )}
 
-        {/* Scroll único: topbar separado visualmente + contenido; no sticky */}
-        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto bosko-scroll">
-          <div className="flex flex-col gap-3 md:gap-4 p-3 md:p-0 min-h-full">
-            <header className="h-14 md:h-16 px-4 md:px-5 shrink-0 print:hidden flex items-center bg-[var(--bg-panel)] md:rounded-[20px] shadow-card">
+        {/* Scroll único: topbar separado visualmente + contenido; no sticky.
+            En Nueva Venta el panel llena alto como en caja (sin padding interno). */}
+        <div
+          className={`flex-1 min-w-0 min-h-0 flex flex-col ${
+            isVentaTab ? "overflow-hidden" : "overflow-y-auto bosko-scroll"
+          }`}
+        >
+          <div
+            className={`flex flex-col gap-3 md:gap-4 p-3 md:p-0 ${
+              isVentaTab ? "min-h-0 flex-1" : "min-h-full"
+            }`}
+          >
+            <header className="h-14 md:h-16 px-4 md:px-5 shrink-0 print:hidden flex items-center gap-3 bg-[var(--bg-panel)] md:rounded-[20px] shadow-card">
               <AppTopbar
                 breadcrumbs={breadcrumbs}
                 username={currentUser.username}
                 role={currentUser.role}
                 onMenuClick={() => setMobileMenuOpen(true)}
+                trailing={
+                  <PrinterTopbarButton
+                    printerStatus={printerStatus}
+                    printerPaired={printerPaired}
+                    reconnecting={reconnecting}
+                    printerTestMessage={printerTestMessage}
+                    onTestPrint={() => void testPrint()}
+                    onConnect={() => void connectPrinter()}
+                    onPair={() => void pairPrinterDevice()}
+                  />
+                }
               />
+              {isVentaTab && event?.status === "activo" && event.keyword && (
+                <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-[var(--accent-surface)] border border-[var(--accent-line)] rounded-full text-[11px] font-mono font-semibold text-[var(--accent-text)] select-all shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] animate-pulse" />
+                  Clave: {event.keyword}
+                </div>
+              )}
             </header>
 
-            <div className="flex-1 bg-[var(--bg-panel)] md:rounded-[24px] shadow-card p-5 md:p-6">
-              <MpFallbackBanner />
-              {event?.isTest && <TestNightBanner />}
+            <div
+              className={
+                isVentaTab
+                  ? "flex-1 min-h-0 overflow-hidden bg-[var(--bg-panel)] md:rounded-[24px] shadow-card"
+                  : "flex-1 bg-[var(--bg-panel)] md:rounded-[24px] shadow-card p-5 md:p-6"
+              }
+            >
+              {!isVentaTab && <MpFallbackBanner />}
+              {!isVentaTab && event?.isTest && <TestNightBanner />}
 
               {activeTab === "monitoreo" && (
                 <DashboardSection
@@ -538,6 +753,34 @@ export default function AdminClient({
                   onGoToPagos={() => setActiveTab("pdv")}
                 />
               )}
+
+              {isVentaTab &&
+                (!event || event.status === "cerrado" ? (
+                  <div className="h-full flex flex-col items-center justify-center p-6 text-center select-none animate-in fade-in duration-300">
+                    <div className="w-20 h-20 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-card flex items-center justify-center text-[var(--text-tertiary)] mb-6">
+                      <Power size={36} className="text-[var(--text-secondary)]" />
+                    </div>
+                    <h2 className="text-[28px] md:text-[32px] font-bold text-[var(--text-primary)] tracking-tight mb-2">
+                      Caja Cerrada
+                    </h2>
+                    <p className="text-[var(--text-secondary)] text-sm max-w-sm leading-relaxed">
+                      No hay ninguna noche activa en el sistema. Para empezar a cobrar, es necesario
+                      iniciar una nueva jornada.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="h-full flex overflow-hidden min-h-0 w-full">
+                    <VentaSection
+                      drinks={ventaDrinks}
+                      categories={ventaCategories}
+                      orders={activeNightOrders}
+                      printer={ventaPrinter}
+                      onReloadCarta={loadVentaCarta}
+                      isTestNight={event.isTest === true}
+                      hasLinkedDevice={posnetHealth?.hasLinkedDevice ?? null}
+                    />
+                  </div>
+                ))}
 
               {activeTab === "historial" && (
                 <HistorialSection

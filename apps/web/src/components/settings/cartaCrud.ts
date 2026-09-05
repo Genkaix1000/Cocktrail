@@ -2,7 +2,6 @@ import { loadCols, saveCols } from "@/lib/crudCols";
 
 export type CartaColId =
   | "id"
-  | "icon"
   | "name"
   | "category"
   | "price"
@@ -17,7 +16,6 @@ export const CARTA_COLS_REQUIRED: CartaColId[] = ["name", "actions"];
 
 export const CARTA_COLS_DEFAULT: CartaColId[] = [
   "id",
-  "icon",
   "name",
   "category",
   "price",
@@ -28,7 +26,6 @@ export const CARTA_COLS_DEFAULT: CartaColId[] = [
 
 export const CARTA_COL_LABELS: Record<CartaColId, string> = {
   id: "ID",
-  icon: "Ícono",
   name: "Nombre",
   category: "Categoría",
   price: "Precio",
@@ -40,7 +37,6 @@ export const CARTA_COL_LABELS: Record<CartaColId, string> = {
 /** Columnas que el ⚙ puede prender/apagar. */
 export const CARTA_COLS_TOGGLEABLE: CartaColId[] = [
   "id",
-  "icon",
   "category",
   "price",
   "status",
@@ -49,7 +45,6 @@ export const CARTA_COLS_TOGGLEABLE: CartaColId[] = [
 
 const ALL: CartaColId[] = [
   "id",
-  "icon",
   "name",
   "category",
   "price",
@@ -67,10 +62,9 @@ export function saveCartaCols(cols: CartaColId[]) {
 }
 
 export function cartaGridTemplate(cols: CartaColId[]): string {
-  // Solo Nombre absorbe el sobrante. Ícono con aire propio (no pegado al nombre).
+  // Solo Nombre absorbe el sobrante.
   const sizes: Record<CartaColId, string> = {
     id: "56px",
-    icon: "64px",
     name: "minmax(140px, 1fr)",
     category: "140px",
     price: "104px",

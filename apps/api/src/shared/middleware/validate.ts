@@ -104,12 +104,18 @@ export const CreateDrinkSchema = z.object({
   vibe: z.string().max(50, "Vibe demasiado largo").trim().default(""),
   flavors: z.array(z.string().max(30)).max(10, "Máximo 10 sabores").default([]),
   iconName: z.string().max(50).default("glass-water"),
-  image: z.string().max(500).optional(),
+  image: z.string().max(800).optional(),
   trending: z.boolean().default(false),
   promo: z.boolean().default(false),
   available: z.boolean().default(true),
   categoryId: z.string().max(80).nullable().optional(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
+  scheduleEnabled: z.boolean().optional(),
+  scheduleFrom: z.string().regex(/^\d{1,2}:\d{2}$/).nullable().optional(),
+  scheduleUntil: z.string().regex(/^\d{1,2}:\d{2}$/).nullable().optional(),
+  scheduleHideWhenExpired: z.boolean().optional(),
+  scheduleMoveToCategoryId: z.string().max(80).nullable().optional(),
+  scheduleRepeatNextEvent: z.boolean().optional(),
 });
 
 // 8. Esquema para actualizar un trago (todos los campos opcionales)
@@ -120,12 +126,18 @@ export const UpdateDrinkSchema = z.object({
   vibe: z.string().max(50, "Vibe demasiado largo").trim().optional(),
   flavors: z.array(z.string().max(30)).max(10, "Máximo 10 sabores").optional(),
   iconName: z.string().max(50).optional(),
-  image: z.string().max(500).optional(),
+  image: z.string().max(800).optional(),
   trending: z.boolean().optional(),
   promo: z.boolean().optional(),
   available: z.boolean().optional(),
   categoryId: z.string().max(80).nullable().optional(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
+  scheduleEnabled: z.boolean().optional(),
+  scheduleFrom: z.string().regex(/^\d{1,2}:\d{2}$/).nullable().optional(),
+  scheduleUntil: z.string().regex(/^\d{1,2}:\d{2}$/).nullable().optional(),
+  scheduleHideWhenExpired: z.boolean().optional(),
+  scheduleMoveToCategoryId: z.string().max(80).nullable().optional(),
+  scheduleRepeatNextEvent: z.boolean().optional(),
 });
 
 // 9. Esquema para crear un usuario de staff

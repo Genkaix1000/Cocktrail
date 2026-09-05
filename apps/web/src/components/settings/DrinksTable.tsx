@@ -5,14 +5,12 @@ import {
   ChevronUp,
   Eye,
   EyeOff,
-  GlassWater,
   Trash2,
 } from "lucide-react";
 import type { Drink } from "@cocktrail/shared";
 import { ConfirmRail } from "@/components/shared/ConfirmRail";
 import ColumnPicker from "@/components/shared/ColumnPicker";
 import { gridMinWidth } from "@/lib/crudCols";
-import { ICONS_LIST } from "./cartaConstants";
 import {
   CARTA_COL_LABELS,
   CARTA_COLS_TOGGLEABLE,
@@ -293,22 +291,6 @@ export default function DrinksTable({
           }`}
         >
           {d.id}
-        </div>
-      );
-    }
-    if (col === "icon") {
-      const DrinkIcon = ICONS_LIST.find((i) => i.id === d.iconName)?.icon || GlassWater;
-      return (
-        <div key={col} className="flex items-center justify-start pl-3 pr-1 py-2.5">
-          <div
-            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-              isConfirming
-                ? "bg-[var(--danger-base)]/15 text-[var(--danger-base)]"
-                : "bg-[var(--accent-surface)] text-[var(--accent-text)]"
-            }`}
-          >
-            <DrinkIcon size={15} />
-          </div>
         </div>
       );
     }

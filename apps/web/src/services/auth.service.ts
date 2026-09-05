@@ -12,6 +12,7 @@ type MeResponse = {
     historial: boolean;
     metricas: boolean;
   };
+  isSuperadmin?: boolean;
 } | null;
 
 export const authService = {

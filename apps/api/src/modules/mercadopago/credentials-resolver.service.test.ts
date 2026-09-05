@@ -36,6 +36,7 @@ describe("CredentialsResolverService", () => {
   let sellersRepo: {
     findByUserId: ReturnType<typeof vi.fn>;
     findActive: ReturnType<typeof vi.fn>;
+    findGhost: ReturnType<typeof vi.fn>;
   };
   let refreshTokenIfNeeded: ReturnType<typeof vi.fn>;
   let resolver: CredentialsResolverService;
@@ -47,6 +48,7 @@ describe("CredentialsResolverService", () => {
     sellersRepo = {
       findByUserId: vi.fn().mockResolvedValue(null),
       findActive: vi.fn().mockResolvedValue(null),
+      findGhost: vi.fn().mockResolvedValue(null),
     };
     refreshTokenIfNeeded = vi.fn().mockImplementation(async (s: Seller) => s.accessToken);
 
@@ -230,5 +232,21 @@ describe("CredentialsResolverService", () => {
       await expect(resolver.resolve({ allowGlobalFallback: true })).rejects.toThrow(/desconocido/);
       expect(markMpFallbackDegraded).not.toHaveBeenCalled();
     });
+  });
+
+  it("useGhost resuelve el seller ghost y no toca findActive", async () => {
+    sellersRepo.findGhost.mockResolvedValue(
+      makeSeller({ userId: "ghost-1", accessToken: "AT-ghost", status: "ghost" }),
+    );
+
+    const token = await resolver.resolve({ useGhost: true });
+
+    expect(token).toBe("AT-ghost");
+    expect(sellersRepo.findGhost).toHaveBeenCalledTimes(1);
+    expect(sellersRepo.findActive).not.toHaveBeenCalled();
+  });
+
+  it("useGhost sin seller ghost lanza accionable", async () => {
+    await expect(resolver.resolve({ useGhost: true })).rejects.toThrow(/ghost vinculada/);
   });
 });

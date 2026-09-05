@@ -6,7 +6,7 @@ import {
   encryptToken,
 } from "./mp-token-cipher.js";
 
-export type SellerStatus = "active" | "expired";
+export type SellerStatus = "active" | "expired" | "ghost";
 
 /**
  * Vendedor (Bosko) con sus tokens OAuth. Vive en la base LOCAL con los tokens
@@ -99,9 +99,13 @@ export interface MercadoPagoSellersRepository {
   findByUserId(userId: string): Promise<Seller | null>;
   /** El único seller activo (single-seller). Lanza si el invariante está roto (2 activos). */
   findActive(): Promise<Seller | null>;
+  /** Seller OAuth paralelo para ghost mode. Lanza si hay más de uno. */
+  findGhost(): Promise<Seller | null>;
   update(userId: string, patch: SellerUpdate): Promise<Seller>;
-  /** Wipe de tokens + expired en TODAS las filas (desvincular). Devuelve los user_id afectados. */
+  /** Wipe de tokens + expired en filas que NO son ghost (desvincular primary). */
   wipeAllTokens(): Promise<string[]>;
+  /** Wipe solo del seller ghost. */
+  wipeGhostTokens(): Promise<string[]>;
   /** Boot: cifra filas legacy en claro y re-cifra lo abierto con _PREVIOUS. */
   backfillEncryption(): Promise<{ migrated: number }>;
 }
@@ -183,6 +187,28 @@ export class SupabaseMercadoPagoSellersRepository implements MercadoPagoSellersR
     return rows[0] ? mapRow(rows[0]) : null;
   }
 
+  async findGhost(): Promise<Seller | null> {
+    const { data, error } = await supabase
+      .from("mercadopago_sellers")
+      .select(SELECT_COLS)
+      .eq("status", "ghost")
+      .limit(2);
+
+    if (error) {
+      console.error("[SupabaseMercadoPagoSellersRepository] Error finding ghost seller:", error);
+      throw error;
+    }
+
+    const rows = (data ?? []) as SellerRow[];
+    if (rows.length > 1) {
+      throw new Error(
+        `Invariante ghost-seller roto: hay ${rows.length} sellers ghost ` +
+          `(${rows.map((r) => r.user_id).join(", ")}). Desvinculá el ghost desde DevTools.`,
+      );
+    }
+    return rows[0] ? mapRow(rows[0]) : null;
+  }
+
   async update(userId: string, patch: SellerUpdate): Promise<Seller> {
     // updated_at se actualiza manualmente (no hay trigger en la DB).
     const row: Record<string, unknown> = {
@@ -216,8 +242,7 @@ export class SupabaseMercadoPagoSellersRepository implements MercadoPagoSellersR
   }
 
   async wipeAllTokens(): Promise<string[]> {
-    // Todas las filas (no solo las activas): una fila expired legacy puede
-    // conservar tokens en claro y el wipe debe eliminarlos también (D9).
+    // Primary unlink: no toca el seller ghost (OAuth de pruebas en paralelo).
     const { data, error } = await supabase
       .from("mercadopago_sellers")
       .update({
@@ -229,11 +254,34 @@ export class SupabaseMercadoPagoSellersRepository implements MercadoPagoSellersR
         status: "expired",
         updated_at: new Date().toISOString(),
       })
-      .neq("user_id", "")
+      .neq("status", "ghost")
       .select("user_id");
 
     if (error) {
       console.error("[SupabaseMercadoPagoSellersRepository] Error wiping sellers:", error);
+      throw error;
+    }
+
+    return ((data ?? []) as { user_id: string }[]).map((r) => r.user_id);
+  }
+
+  async wipeGhostTokens(): Promise<string[]> {
+    const { data, error } = await supabase
+      .from("mercadopago_sellers")
+      .update({
+        access_token: null,
+        refresh_token: null,
+        access_token_enc: null,
+        refresh_token_enc: null,
+        key_version: null,
+        status: "expired",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("status", "ghost")
+      .select("user_id");
+
+    if (error) {
+      console.error("[SupabaseMercadoPagoSellersRepository] Error wiping ghost seller:", error);
       throw error;
     }
 

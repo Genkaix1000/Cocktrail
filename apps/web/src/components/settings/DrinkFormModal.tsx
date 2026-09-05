@@ -1,9 +1,10 @@
 "use client";
 
-import { createElement, useMemo, useState } from "react";
-import { GlassWater, RefreshCw, Search, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Images, RefreshCw, X } from "lucide-react";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
-import { ICONS_LIST } from "./cartaConstants";
+import DrinkCard from "@/components/shared/DrinkCard";
+import DrinkImageLibrary from "./DrinkImageLibrary";
 
 export type DrinkForm = Omit<Drink, "id"> & { id?: number };
 
@@ -39,7 +40,7 @@ export default function DrinkFormModal({
 }: Props) {
   const [imageUrlInput, setImageUrlInput] = useState(editDrink.image || "");
   const [imgPreview, setImgPreview] = useState(editDrink.image || "");
-  const [iconSearch, setIconSearch] = useState("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -52,19 +53,16 @@ export default function DrinkFormModal({
   }, [editDrink.categoryId, sortedCategories]);
 
   const flags = flagsForCategory(editDrink.categoryId);
-  const isFeatured = flags.promo || flags.trending;
+  const cardVariant = flags.promo ? "promo" : flags.trending ? "trending" : "regular";
 
-  const filteredIcons = useMemo(() => {
-    if (!iconSearch.trim()) return ICONS_LIST;
-    const q = iconSearch.toLowerCase();
-    return ICONS_LIST.filter(
-      (i) => i.label.toLowerCase().includes(q) || i.id.toLowerCase().includes(q),
-    );
-  }, [iconSearch]);
+  function applyImage(url: string) {
+    setImageUrlInput(url);
+    setImgPreview(url);
+    onChange({ image: url });
+  }
 
   function handleReloadImage() {
-    setImgPreview(imageUrlInput);
-    onChange({ image: imageUrlInput });
+    applyImage(imageUrlInput);
   }
 
   function handleCategoryChange(categoryId: string | null) {
@@ -98,7 +96,7 @@ export default function DrinkFormModal({
             value={editDrink.name}
             onChange={(e) => onChange({ name: e.target.value })}
             className={inputCls}
-            placeholder="Fernet con Coca"
+            placeholder="PROMO 2 Vodka con Speed"
           />
         </div>
 
@@ -177,116 +175,122 @@ export default function DrinkFormModal({
             >
               <RefreshCw size={14} />
             </button>
+            <button
+              type="button"
+              onClick={() => setLibraryOpen(true)}
+              className="w-10 h-10 border border-[var(--border-strong)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer bg-[var(--bg-panel)] shrink-0"
+              title="Biblioteca de imágenes"
+              aria-label="Biblioteca de imágenes"
+            >
+              <Images size={14} />
+            </button>
           </div>
         </div>
 
-        <div>
-          <label className="text-[13px] font-semibold text-[var(--text-primary)] block mb-1.5">Icono</label>
-          <div className="space-y-2 border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-3 rounded-xl">
-            <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
-              <input
-                type="text"
-                value={iconSearch}
-                onChange={(e) => setIconSearch(e.target.value)}
-                placeholder="Buscar icono..."
-                className="w-full h-9 pl-8 pr-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:border-[var(--accent-primary)]"
-              />
+        <div className="pt-1 border-t border-[var(--border-subtle)] space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="text-[13px] font-semibold text-[var(--text-primary)] block">Vigencia horaria</span>
+              <span className="text-[11px] text-[var(--text-tertiary)]">
+                Fuera de horario: gris + aviso (salvo que ocultes).
+              </span>
             </div>
-
-            <div className="grid grid-cols-3 gap-1.5 max-h-[120px] overflow-y-auto pr-0.5 no-scrollbar">
-              {filteredIcons.map((i) => {
-                const Icon = i.icon;
-                const isSelected = editDrink.iconName === i.id;
-                return (
-                  <button
-                    key={i.id}
-                    type="button"
-                    onClick={() => onChange({ iconName: i.id })}
-                    title={i.label}
-                    className={`h-10 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer border ${
-                      isSelected
-                        ? "bg-[var(--accent-surface)] border-[var(--accent-primary)] text-[var(--accent-text)]"
-                        : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    <Icon size={15} />
-                    <span className="text-[8px] mt-1 font-medium truncate max-w-[52px] leading-tight select-none">
-                      {i.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(editDrink.scheduleEnabled)}
+              onClick={() =>
+                onChange({
+                  scheduleEnabled: !editDrink.scheduleEnabled,
+                  scheduleFrom: editDrink.scheduleFrom || "22:00",
+                  scheduleUntil: editDrink.scheduleUntil || "03:00",
+                })
+              }
+              className={`shrink-0 h-8 px-3 rounded-full text-[12px] font-semibold cursor-pointer ${
+                editDrink.scheduleEnabled
+                  ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                  : "border border-[var(--border-strong)] text-[var(--text-secondary)]"
+              }`}
+            >
+              {editDrink.scheduleEnabled ? "ON" : "OFF"}
+            </button>
           </div>
+
+          {editDrink.scheduleEnabled && (
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[12px] text-[var(--text-secondary)] block mb-1">Desde</label>
+                  <input
+                    type="time"
+                    value={editDrink.scheduleFrom || "22:00"}
+                    onChange={(e) => onChange({ scheduleFrom: e.target.value || null })}
+                    className={inputCls}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[12px] text-[var(--text-secondary)] block mb-1">Hasta</label>
+                  <input
+                    type="time"
+                    value={editDrink.scheduleUntil || "03:00"}
+                    onChange={(e) => onChange({ scheduleUntil: e.target.value || null })}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-[13px] text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editDrink.scheduleHideWhenExpired)}
+                  onChange={(e) => onChange({ scheduleHideWhenExpired: e.target.checked })}
+                />
+                Ocultar de la lista al vencer
+              </label>
+
+              <div>
+                <label className="text-[12px] text-[var(--text-secondary)] block mb-1">
+                  Mover a categoría al vencer (opcional)
+                </label>
+                <select
+                  value={editDrink.scheduleMoveToCategoryId ?? ""}
+                  onChange={(e) => onChange({ scheduleMoveToCategoryId: e.target.value || null })}
+                  className={inputCls}
+                >
+                  <option value="">Mantener categoría</option>
+                  {sortedCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 text-[13px] text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editDrink.scheduleRepeatNextEvent)}
+                  onChange={(e) => onChange({ scheduleRepeatNextEvent: e.target.checked })}
+                />
+                Repetir en el siguiente evento / cada noche
+              </label>
+            </div>
+          )}
         </div>
 
         <div className="pt-1 border-t border-[var(--border-subtle)]">
           <span className="text-[13px] font-semibold text-[var(--text-primary)] block mb-2">Vista previa</span>
-          <div className="bg-[var(--bg-panel)] p-4 rounded-xl border border-[var(--border-subtle)] flex justify-center">
-            {!isFeatured ? (
-              <div className="w-full max-w-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-3 flex items-center justify-between pointer-events-none shadow-card">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center bg-[var(--accent-surface)] text-[var(--accent-text)] overflow-hidden">
-                    {imgPreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={imgPreview} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      createElement(ICONS_LIST.find((i) => i.id === editDrink.iconName)?.icon || GlassWater, {
-                        size: 20,
-                      })
-                    )}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-semibold text-[14px] text-[var(--text-primary)] leading-tight truncate">
-                      {editDrink.name || "Nombre del trago"}
-                    </span>
-                    {categoryLabel && (
-                      <span className="text-[11px] text-[var(--text-tertiary)] truncate">{categoryLabel}</span>
-                    )}
-                    <span className="text-[13px] font-semibold text-[var(--accent-text)] mt-0.5">
-                      ${(editDrink.price || 0).toLocaleString("es-AR")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="w-full max-w-sm relative flex flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden min-h-[140px] p-4 justify-between pointer-events-none">
-                {imgPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={imgPreview} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
-                ) : (
-                  <div className="absolute inset-0 bg-[var(--bg-panel)] z-0 flex items-center justify-center opacity-50">
-                    {createElement(ICONS_LIST.find((i) => i.id === editDrink.iconName)?.icon || GlassWater, {
-                      size: 48,
-                      className: "text-[var(--text-tertiary)]",
-                    })}
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-app)]/95 via-[var(--bg-app)]/40 to-transparent z-10" />
-                <div className="relative z-20">
-                  <span
-                    className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                      flags.promo
-                        ? "text-[var(--amber-base)] bg-[var(--amber-soft)]"
-                        : "text-[var(--accent-text)] bg-[var(--accent-surface)]"
-                    }`}
-                  >
-                    {categoryLabel ?? (flags.promo ? "Promos" : "Tendencias")}
-                  </span>
-                </div>
-                <div className="relative z-20 flex justify-between items-end mt-4">
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <span className="font-semibold text-[15px] leading-tight text-[var(--text-primary)] mb-0.5 truncate">
-                      {editDrink.name || "Nombre del trago"}
-                    </span>
-                    <span className="text-[13px] font-semibold text-[var(--accent-text)]">
-                      ${(editDrink.price || 0).toLocaleString("es-AR")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="bg-[var(--bg-panel)] p-4 rounded-xl border border-[var(--border-subtle)]">
+            <div className="pointer-events-none max-w-sm mx-auto">
+              <DrinkCard
+                name={editDrink.name || "Nombre del trago"}
+                price={editDrink.price || 0}
+                vibe={categoryLabel ?? editDrink.vibe}
+                icon={editDrink.iconName}
+                image={imgPreview || undefined}
+                variant={cardVariant}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -308,6 +312,13 @@ export default function DrinkFormModal({
           {saving ? "Guardando..." : editDrink.id ? "Guardar" : "Crear"}
         </button>
       </div>
+
+      <DrinkImageLibrary
+        open={libraryOpen}
+        selectedUrl={imgPreview}
+        onClose={() => setLibraryOpen(false)}
+        onSelect={applyImage}
+      />
     </div>
   );
 }

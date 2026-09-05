@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.unsplash.com",
       },
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
     ],
   },
   async rewrites() {
@@ -52,8 +57,8 @@ const nextConfig: NextConfig = {
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' data: blob: https://images.unsplash.com https://api.qrserver.com https://www.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com",
-          "connect-src 'self' wss: https://challenges.cloudflare.com",
+          "img-src 'self' data: blob: https://images.unsplash.com https://api.qrserver.com https://www.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com https://*.supabase.co",
+          "connect-src 'self' wss: https://challenges.cloudflare.com https://*.supabase.co",
           "frame-src https://challenges.cloudflare.com",
         ].join("; "),
       },

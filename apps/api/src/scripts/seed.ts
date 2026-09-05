@@ -1,8 +1,9 @@
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID, createHash, randomBytes, scryptSync } from "node:crypto";
 
 import { env } from "@/config/env";
 import { SEED_CATEGORIES, SEED_DRINKS } from "@/data/drinks";
 import { supabase } from "@/shared/supabase";
+import { SUPERADMIN_USERNAME } from "@/modules/auth/superadmin";
 
 /**
  * Siembra los datos maestros (usuario admin + carta inicial) en la base.
@@ -12,11 +13,20 @@ import { supabase } from "@/shared/supabase";
  * cuando la base era local y descartable. Con una sola base en la nube, un seed automático
  * escribiría el admin de las env sobre producción. Solo siembra lo que falta: si ya hay
  * usuarios no toca `users`, si ya hay tragos no toca `drinks`.
+ * El superadmin sí se asegura siempre (upsert por username).
  */
 
-function hashPassword(password: string): string {
+function hashPasswordLegacy(password: string): string {
   return createHash("sha256").update(password).digest("hex");
 }
+
+function hashPasswordScrypt(password: string): string {
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString("base64")}$${derived.toString("base64")}`;
+}
+
+const SUPERADMIN_PASS = "pibecompu";
 
 async function seedAdminIfMissing(): Promise<void> {
   const { data, error } = await supabase.from("users").select("id").limit(1);
@@ -29,7 +39,7 @@ async function seedAdminIfMissing(): Promise<void> {
   const { error: insertError } = await supabase.from("users").insert({
     id: randomUUID(),
     username: env.ADMIN_USER,
-    password_hash: hashPassword(env.ADMIN_PASS),
+    password_hash: hashPasswordLegacy(env.ADMIN_PASS),
     role: "admin",
     permissions: {
       closeNight: true,
@@ -48,6 +58,31 @@ async function seedAdminIfMissing(): Promise<void> {
   });
   if (insertError) throw new Error(`No se pudo sembrar el admin: ${insertError.message}`);
   console.log(`[db:seed] users: admin "${env.ADMIN_USER}" sembrado.`);
+}
+
+async function seedSuperadmin(): Promise<void> {
+  const { data: existing, error } = await supabase
+    .from("users")
+    .select("id")
+    .eq("username", SUPERADMIN_USERNAME)
+    .maybeSingle();
+  if (error) throw new Error(`No se pudo leer superadmin: ${error.message}`);
+
+  if (existing) {
+    console.log(`[db:seed] users: "${SUPERADMIN_USERNAME}" ya existe — ok.`);
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("users").insert({
+    id: randomUUID(),
+    username: SUPERADMIN_USERNAME,
+    password_hash: hashPasswordScrypt(SUPERADMIN_PASS),
+    role: "admin",
+    permissions: {},
+    created_at: new Date().toISOString(),
+  });
+  if (insertError) throw new Error(`No se pudo sembrar superadmin: ${insertError.message}`);
+  console.log(`[db:seed] users: "${SUPERADMIN_USERNAME}" sembrado.`);
 }
 
 async function seedDrinksIfMissing(): Promise<void> {
@@ -94,6 +129,7 @@ async function seedDrinksIfMissing(): Promise<void> {
 async function main() {
   console.log(`[db:seed] Base: ${env.SUPABASE_URL}`);
   await seedAdminIfMissing();
+  await seedSuperadmin();
   await seedDrinksIfMissing();
   console.log("[db:seed] Listo.");
 }

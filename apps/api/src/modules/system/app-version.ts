@@ -51,7 +51,7 @@ export function buildAppVersionInfo(input: {
   serverStartedAt: number;
   migrations: { state: string; pending: string[]; appliedNow: string[] };
 }): AppVersionInfo {
-  const version = process.env.APP_VERSION?.trim() || "0.1.0";
+  const version = process.env.APP_VERSION?.trim() || "0.1.1";
   const channel = process.env.APP_CHANNEL?.trim() || "beta";
   const commit =
     process.env.KOYEB_GIT_SHA?.trim() ||

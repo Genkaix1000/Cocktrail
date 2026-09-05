@@ -40,7 +40,7 @@ export function createOrdersController(
       const createdBy = req.session?.username || "Caja";
 
       const order = await service.createOrder({ items, paymentMethod, payment, idempotencyKey, isGift, isSplit, payments }, createdBy);
-      if (!isTestNight()) {
+      if (!isTestNight() && !order.ghost) {
         await logAction(
           "order.created",
           `Venta realizada - Ticket #${order.displayNumber} - $${order.total.toLocaleString("es-AR")}`,

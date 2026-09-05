@@ -116,25 +116,31 @@ export default function SistemaSection() {
     }
   }
 
+  // Filtrar de las novedades cualquier mención a ghost mode o superadmin
+  const safeHighlights = (version?.releaseNotes?.highlights ?? []).filter((h) => {
+    const lower = h.toLowerCase();
+    return !lower.includes("ghost") && !lower.includes("superadmin");
+  });
+
   return (
-    <div data-tour="sistema-section" className="max-w-5xl flex flex-col gap-8">
+    <div data-tour="sistema-section" className="w-full min-w-0 flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight text-[var(--text-primary)] leading-tight select-none">
             Sistema
           </h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
-            App de caja, versión y datos del deploy
+            App de caja, versión del producto y configuración del backend
           </p>
         </div>
         <SectionHelpButton category="sistema" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch w-full">
         {/* App de caja — fondo sobrio, mismo idioma que la night card */}
         <div
           data-tour="pwa-install"
-          className="relative overflow-hidden rounded-2xl p-5 text-white flex flex-col shadow-card"
+          className="relative overflow-hidden rounded-2xl p-5 md:p-6 text-white flex flex-col justify-between shadow-card border border-white/10"
           style={{
             background: "linear-gradient(160deg, #16321F 0%, #131719 55%, #1A1D21 100%)",
           }}
@@ -149,172 +155,206 @@ export default function SistemaSection() {
             aria-hidden
           />
 
-          <div className="relative flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center border border-white/20 bg-white/10 shrink-0">
-              <Smartphone size={17} strokeWidth={1.8} />
+          <div>
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center border border-white/20 bg-white/10 shrink-0">
+                <Smartphone size={18} strokeWidth={2} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[16px] font-semibold">Instalar app de caja</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Tablet POS
+                  </span>
+                </div>
+                <p className="text-[12px] text-white/60 mt-0.5">Para la tablet que cobra e imprime</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-[15px] font-semibold">Instalar app de caja</h3>
-              <p className="text-[12px] text-white/55">Para la tablet que cobra e imprime</p>
-            </div>
+
+            <p className="relative text-[13px] text-white/70 leading-relaxed mt-4">
+              Se instala desde Chrome, abre a pantalla completa y usa el mismo Bluetooth que la
+              web. Se actualiza sola cuando publiquemos una nueva versión.
+            </p>
           </div>
 
-          <p className="relative text-[13px] text-white/70 leading-relaxed mt-4">
-            Se instala desde Chrome, abre a pantalla completa y usa el mismo Bluetooth que la
-            web. Se actualiza sola cuando publiquemos una nueva versión.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => void installApp()}
-            disabled={!installPrompt || installing || installed}
-            className="relative mt-4 h-10 w-full rounded-full bg-white text-[#16321F] hover:brightness-95 flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <Smartphone size={15} strokeWidth={2} />
-            {installed ? "App instalada" : installing ? "Abriendo instalador…" : "Instalar app"}
-          </button>
-
-          {!installed && !installPrompt && (
-            <p className="relative mt-3 text-[12px] text-white/60 leading-relaxed">
-              Abrí esta página en Chrome Android y elegí ⋮ → Instalar app. Si ya la instalaste,
-              abrila desde el escritorio de la tablet.
-            </p>
-          )}
-        </div>
-
-        {/* Versión / deploy */}
-        <div
-          data-tour="sistema-version"
-          className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 flex flex-col shadow-card"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent-primary)] shrink-0">
-                <Server size={16} strokeWidth={1.8} aria-hidden />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Versión</h3>
-                <p className="text-[12px] text-[var(--text-tertiary)]">
-                  Build que está corriendo este servidor
-                </p>
-              </div>
-            </div>
+          <div className="relative mt-6 pt-4 border-t border-white/10 flex flex-col gap-2.5">
             <button
               type="button"
-              onClick={() => void loadVersion()}
-              disabled={loadingVersion}
-              aria-label="Actualizar versión"
-              className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+              onClick={() => void installApp()}
+              disabled={!installPrompt || installing || installed}
+              className="h-10 w-full rounded-xl bg-white text-[#16321F] hover:bg-emerald-50 flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
             >
-              <RefreshCw size={14} className={loadingVersion ? "animate-spin" : ""} />
+              <Smartphone size={15} strokeWidth={2} />
+              {installed ? "App instalada" : installing ? "Abriendo instalador…" : "Instalar app"}
             </button>
+
+            {!installed && !installPrompt && (
+              <p className="text-[11.5px] text-white/50 leading-relaxed text-center">
+                Abrí esta página en Chrome Android y elegí <strong className="text-white/70">⋮ → Instalar app</strong>.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Versión / deploy con badges colapsables */}
+        <div
+          data-tour="sistema-version"
+          className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 md:p-6 flex flex-col justify-between shadow-card"
+        >
+          <div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent-primary)] shrink-0">
+                  <Server size={18} strokeWidth={2} aria-hidden />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-[16px] font-semibold text-[var(--text-primary)]">Versión</h3>
+                  <p className="text-[12px] text-[var(--text-tertiary)] mt-0.5">
+                    Build que está corriendo este servidor
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadVersion()}
+                disabled={loadingVersion}
+                aria-label="Actualizar versión"
+                className="p-2 rounded-xl text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)] cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw size={15} className={loadingVersion ? "animate-spin" : ""} />
+              </button>
+            </div>
+
+            {versionError && (
+              <p className="mt-4 text-[12px] text-[var(--danger-base)] bg-[var(--danger-soft)] p-2.5 rounded-xl border border-[var(--danger-line)]" role="alert">
+                {versionError}
+              </p>
+            )}
+
+            {loadingVersion && !version ? (
+              <p className="mt-6 text-[12px] text-[var(--text-tertiary)]">Cargando…</p>
+            ) : version ? (
+              <>
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center h-8 px-3 rounded-xl bg-[var(--accent-surface)] text-[var(--accent-text)] border border-[var(--accent-line)] text-[13px] font-bold tabular">
+                    v{version.version}
+                  </span>
+                  <span className="inline-flex items-center h-8 px-3 rounded-xl bg-[var(--amber-soft)] text-[var(--amber-base)] border border-[var(--amber-line)] text-[11.5px] font-semibold uppercase tracking-wider">
+                    {version.channel}
+                  </span>
+                  <span className="inline-flex items-center h-8 px-3 rounded-xl bg-[var(--bg-panel)] text-[var(--text-secondary)] border border-[var(--border-subtle)] text-[12px] font-medium">
+                    {version.label}
+                  </span>
+                </div>
+
+                {/* Novedades sin mención a ghost mode */}
+                {safeHighlights.length > 0 && (
+                  <div className="mt-4 pt-3.5 border-t border-[var(--border-subtle)]">
+                    <div className="flex items-baseline justify-between gap-2 mb-2">
+                      <h4 className="text-[12.5px] font-semibold text-[var(--text-primary)]">
+                        Novedades de esta versión
+                      </h4>
+                      {version.releaseNotes?.date && (
+                        <span className="text-[11px] text-[var(--text-tertiary)] tabular shrink-0 font-mono">
+                          {version.releaseNotes.date}
+                        </span>
+                      )}
+                    </div>
+                    <ul className="space-y-1.5">
+                      {safeHighlights.map((item) => (
+                        <li
+                          key={item}
+                          className="flex gap-2 text-[12px] text-[var(--text-secondary)] leading-snug"
+                        >
+                          <span
+                            className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] shrink-0"
+                            aria-hidden
+                          />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : null}
           </div>
 
-          {versionError && (
-            <p className="mt-4 text-[12px] text-[var(--danger-base)]" role="alert">
-              {versionError}
-            </p>
+          {/* Detalles colapsables de entorno / deploy */}
+          {version && (
+            <div className="mt-5 pt-3 border-t border-[var(--border-subtle)]">
+              <details className="group">
+                <summary className="text-[12.5px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer list-none flex items-center justify-between py-1 select-none">
+                  <span className="group-open:hidden">Ver detalles de entorno y despliegue</span>
+                  <span className="hidden group-open:inline">Ocultar detalles de despliegue</span>
+                  <span className="text-[var(--text-tertiary)] text-[11px] font-mono group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <dl className="mt-3 divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)] pt-1">
+                  <VersionRow label="Entorno" value={version.environment} />
+                  <VersionRow label="Hosting" value={providerLabel(version.deploy.provider)} />
+                  {version.deploy.service && (
+                    <VersionRow label="Servicio" value={version.deploy.service} />
+                  )}
+                  {version.deploy.branch && (
+                    <VersionRow label="Rama" value={version.deploy.branch} />
+                  )}
+                  {version.deploy.commitShort && (
+                    <VersionRow label="Commit" value={version.deploy.commitShort} />
+                  )}
+                  <VersionRow label="Uptime" value={formatUptime(version.runtime.uptimeSec)} />
+                  <VersionRow label="Node" value={version.runtime.node} />
+                  <VersionRow
+                    label="Migraciones"
+                    value={
+                      version.migrations.pendingCount > 0
+                        ? `${version.migrations.state} · ${version.migrations.pendingCount} pend.`
+                        : version.migrations.state
+                    }
+                  />
+                  {version.deploy.externalUrl && (
+                    <div className="flex items-baseline justify-between gap-3 py-1.5">
+                      <dt className="text-[12px] text-[var(--text-tertiary)] shrink-0">URL pública</dt>
+                      <dd className="text-[12px] font-mono text-[var(--text-primary)] text-right truncate min-w-0">
+                        {version.deploy.externalUrl}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </details>
+            </div>
           )}
-
-          {loadingVersion && !version ? (
-            <p className="mt-6 text-[12px] text-[var(--text-tertiary)]">Cargando…</p>
-          ) : version ? (
-            <>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center h-8 px-3 rounded-full bg-[var(--accent-surface)] text-[var(--accent-text)] border border-[var(--accent-line)] text-[13px] font-semibold tabular">
-                  v{version.version}
-                </span>
-                <span className="inline-flex items-center h-8 px-3 rounded-full bg-[var(--amber-soft)] text-[var(--amber-base)] border border-[var(--amber-line)] text-[12px] font-semibold uppercase tracking-wide">
-                  {version.channel}
-                </span>
-              </div>
-
-              <dl className="mt-4 divide-y divide-[var(--border-subtle)]">
-                <VersionRow label="Etiqueta" value={version.label} />
-                <VersionRow label="Entorno" value={version.environment} />
-                <VersionRow label="Hosting" value={providerLabel(version.deploy.provider)} />
-                {version.deploy.service && (
-                  <VersionRow label="Servicio" value={version.deploy.service} />
-                )}
-                {version.deploy.branch && (
-                  <VersionRow label="Rama" value={version.deploy.branch} />
-                )}
-                {version.deploy.commitShort && (
-                  <VersionRow label="Commit" value={version.deploy.commitShort} />
-                )}
-                <VersionRow label="Uptime" value={formatUptime(version.runtime.uptimeSec)} />
-                <VersionRow label="Node" value={version.runtime.node} />
-                <VersionRow
-                  label="Migraciones"
-                  value={
-                    version.migrations.pendingCount > 0
-                      ? `${version.migrations.state} · ${version.migrations.pendingCount} pend.`
-                      : version.migrations.state
-                  }
-                />
-              </dl>
-
-              {version.deploy.externalUrl && (
-                <p className="mt-3 text-[11px] text-[var(--text-tertiary)] flex items-center gap-1.5 truncate">
-                  <GitBranch size={11} className="shrink-0" aria-hidden />
-                  <span className="truncate">{version.deploy.externalUrl}</span>
-                </p>
-              )}
-
-              {version.releaseNotes && version.releaseNotes.highlights.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                  <div className="flex items-baseline justify-between gap-2 mb-2">
-                    <h4 className="text-[12px] font-semibold text-[var(--text-primary)]">
-                      Novedades de esta versión
-                    </h4>
-                    {version.releaseNotes.date && (
-                      <span className="text-[11px] text-[var(--text-tertiary)] tabular shrink-0">
-                        {version.releaseNotes.date}
-                      </span>
-                    )}
-                  </div>
-                  <ul className="space-y-1.5">
-                    {version.releaseNotes.highlights.map((item) => (
-                      <li
-                        key={item}
-                        className="flex gap-2 text-[12px] text-[var(--text-secondary)] leading-snug"
-                      >
-                        <span
-                          className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] shrink-0"
-                          aria-hidden
-                        />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </>
-          ) : null}
         </div>
       </div>
 
+      {/* Servidor full-width */}
       <div
         data-tour="sistema-servidor"
-        className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-card"
+        className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 md:p-6 shadow-card"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent-primary)] shrink-0">
-            <Wifi size={16} strokeWidth={1.8} aria-hidden />
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent-primary)] shrink-0">
+            <Wifi size={18} strokeWidth={2} aria-hidden />
           </div>
           <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Servidor</h3>
-            <p className="text-[12px] text-[var(--text-tertiary)] truncate">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[16px] font-semibold text-[var(--text-primary)]">Servidor</h3>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--success-soft)] text-[var(--success-base)]">
+                En línea
+              </span>
+            </div>
+            <p className="text-[12px] text-[var(--text-tertiary)] truncate mt-0.5">
               Conectado a {serverOrigin || "…"}
               {inApkShell ? " · app Android" : ""}
             </p>
           </div>
         </div>
-        <p className="mt-3 text-[13px] text-[var(--text-secondary)] leading-relaxed">
+
+        <p className="mt-3.5 text-[13px] text-[var(--text-secondary)] leading-relaxed">
           Elegí a qué backend apunta la caja: dominio, Render directo, o PC en la WiFi (solo app
           Android).
         </p>
-        <div className="mt-4 flex flex-col gap-2">
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             type="button"
             onClick={() => {
@@ -324,9 +364,9 @@ export default function SistemaSection() {
                 window.location.href = "https://miboliche.online";
               }
             }}
-            className="h-10 px-4 rounded-full bg-[var(--accent-primary)] text-white hover:brightness-95 flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
+            className="h-11 px-4 rounded-xl bg-[var(--accent-primary)] text-[var(--text-on-accent)] hover:brightness-95 flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98] transition-all shadow-sm"
           >
-            <Cloud size={14} strokeWidth={2} aria-hidden />
+            <Cloud size={15} strokeWidth={2} aria-hidden />
             Usar nube (miboliche.online)
           </button>
           <button
@@ -339,10 +379,10 @@ export default function SistemaSection() {
                 window.location.href = RENDER_CAJA_URL;
               }
             }}
-            className="h-10 px-4 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
+            className="h-11 px-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98] transition-all"
             title={RENDER_CAJA_URL}
           >
-            <Server size={14} strokeWidth={2} aria-hidden />
+            <Server size={15} strokeWidth={2} aria-hidden />
             Usar Render (bosko-7xsy)
           </button>
           <button
@@ -356,9 +396,9 @@ export default function SistemaSection() {
                 );
               }
             }}
-            className="h-10 px-4 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98]"
+            className="h-11 px-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] flex items-center justify-center gap-2 text-[13px] font-semibold cursor-pointer active:scale-[0.98] transition-all"
           >
-            <Wifi size={14} strokeWidth={2} aria-hidden />
+            <Wifi size={15} strokeWidth={2} aria-hidden />
             Buscar en WiFi local
           </button>
         </div>

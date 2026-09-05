@@ -25,6 +25,13 @@ type DrinkRow = {
   available: boolean;
   category_id: string | null;
   sort_order: number | null;
+  schedule_enabled?: boolean | null;
+  schedule_from?: string | null;
+  schedule_until?: string | null;
+  schedule_hide_when_expired?: boolean | null;
+  schedule_move_to_category_id?: string | null;
+  schedule_repeat_next_event?: boolean | null;
+  schedule_consumed?: boolean | null;
 };
 
 function mapRowToDrink(row: DrinkRow): Drink {
@@ -42,6 +49,13 @@ function mapRowToDrink(row: DrinkRow): Drink {
     available: row.available,
     categoryId: row.category_id,
     sortOrder: row.sort_order ?? 0,
+    scheduleEnabled: Boolean(row.schedule_enabled),
+    scheduleFrom: row.schedule_from ?? null,
+    scheduleUntil: row.schedule_until ?? null,
+    scheduleHideWhenExpired: Boolean(row.schedule_hide_when_expired),
+    scheduleMoveToCategoryId: row.schedule_move_to_category_id ?? null,
+    scheduleRepeatNextEvent: Boolean(row.schedule_repeat_next_event),
+    scheduleConsumed: Boolean(row.schedule_consumed),
   };
 }
 
@@ -60,6 +74,13 @@ function toInsertPayload(drink: Drink) {
     available: drink.available,
     category_id: drink.categoryId ?? null,
     sort_order: drink.sortOrder ?? 0,
+    schedule_enabled: Boolean(drink.scheduleEnabled),
+    schedule_from: drink.scheduleFrom ?? null,
+    schedule_until: drink.scheduleUntil ?? null,
+    schedule_hide_when_expired: Boolean(drink.scheduleHideWhenExpired),
+    schedule_move_to_category_id: drink.scheduleMoveToCategoryId ?? null,
+    schedule_repeat_next_event: Boolean(drink.scheduleRepeatNextEvent),
+    schedule_consumed: Boolean(drink.scheduleConsumed),
   };
 }
 
@@ -119,6 +140,19 @@ export class SupabaseDrinksRepository implements DrinksRepository {
     if (partial.available !== undefined) updates.available = partial.available;
     if (partial.categoryId !== undefined) updates.category_id = partial.categoryId || null;
     if (partial.sortOrder !== undefined) updates.sort_order = partial.sortOrder ?? 0;
+    if (partial.scheduleEnabled !== undefined) updates.schedule_enabled = partial.scheduleEnabled;
+    if (partial.scheduleFrom !== undefined) updates.schedule_from = partial.scheduleFrom || null;
+    if (partial.scheduleUntil !== undefined) updates.schedule_until = partial.scheduleUntil || null;
+    if (partial.scheduleHideWhenExpired !== undefined) {
+      updates.schedule_hide_when_expired = partial.scheduleHideWhenExpired;
+    }
+    if (partial.scheduleMoveToCategoryId !== undefined) {
+      updates.schedule_move_to_category_id = partial.scheduleMoveToCategoryId || null;
+    }
+    if (partial.scheduleRepeatNextEvent !== undefined) {
+      updates.schedule_repeat_next_event = partial.scheduleRepeatNextEvent;
+    }
+    if (partial.scheduleConsumed !== undefined) updates.schedule_consumed = partial.scheduleConsumed;
 
     const { data, error } = await supabase
       .from("drinks")

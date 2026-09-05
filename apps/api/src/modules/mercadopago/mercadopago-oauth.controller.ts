@@ -1,7 +1,8 @@
 import { Router } from "express";
 import type { MercadoPagoOAuthService } from "./mercadopago-oauth.service.js";
 import { resolveOAuthRedirectUrl } from "./mercadopago-oauth.service.js";
-import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
+import { authMiddleware, requireRole, requireSuperadmin } from "../auth/auth.middleware.js";
+import { isSuperadminUsername } from "../auth/superadmin.js";
 import { env } from "../../config/env.js";
 
 /**
@@ -21,7 +22,14 @@ export function createMercadoPagoOAuthController(service: MercadoPagoOAuthServic
       const fromOrigin =
         typeof req.headers.origin === "string" ? req.headers.origin : null;
       const redirectUrl = resolveOAuthRedirectUrl(fromQuery ?? fromOrigin ?? env.FRONTEND_URL);
-      const result = await service.generateAuthUrl(barId, redirectUrl);
+      const purpose = req.query.purpose === "ghost" ? "ghost" : "primary";
+      if (purpose === "ghost") {
+        if (!req.session || !isSuperadminUsername(req.session.username)) {
+          res.status(403).json({ error: "Solo el superadmin puede vincular MP ghost." });
+          return;
+        }
+      }
+      const result = await service.generateAuthUrl(barId, redirectUrl, purpose);
       res.json(result);
     } catch (err) {
       next(err);
@@ -38,6 +46,20 @@ export function createMercadoPagoOAuthController(service: MercadoPagoOAuthServic
     }
   });
 
+  // GET /api/mercadopago/oauth/ghost-seller — estado del seller ghost (superadmin).
+  router.get(
+    "/oauth/ghost-seller",
+    authMiddleware,
+    requireSuperadmin,
+    async (_req, res, next) => {
+      try {
+        res.json(await service.getGhostSellerStatus());
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   // DELETE /api/mercadopago/oauth/seller — desvincular (wipe) (admin).
   router.delete("/oauth/seller", authMiddleware, requireRole("admin"), async (_req, res, next) => {
     try {
@@ -46,6 +68,20 @@ export function createMercadoPagoOAuthController(service: MercadoPagoOAuthServic
       next(err);
     }
   });
+
+  // DELETE /api/mercadopago/oauth/ghost-seller — desvincular solo ghost (superadmin).
+  router.delete(
+    "/oauth/ghost-seller",
+    authMiddleware,
+    requireSuperadmin,
+    async (_req, res, next) => {
+      try {
+        res.json(await service.unlinkGhostSeller());
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   return router;
 }

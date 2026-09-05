@@ -43,7 +43,7 @@ function setEnv(key: (typeof ENV_KEYS)[number], value: string | undefined) {
 }
 
 describe("buildAppVersionInfo", () => {
-  it("arma label beta 0.1.0 y detecta Koyeb por env", () => {
+  it("arma label beta 0.1.1 y detecta Koyeb por env", () => {
     setEnv("APP_VERSION", undefined);
     setEnv("APP_CHANNEL", undefined);
     setEnv("NODE_ENV", "production");
@@ -62,9 +62,9 @@ describe("buildAppVersionInfo", () => {
       },
     });
 
-    expect(info.version).toBe("0.1.0");
+    expect(info.version).toBe("0.1.1");
     expect(info.channel).toBe("beta");
-    expect(info.label).toBe("0.1.0-beta");
+    expect(info.label).toBe("0.1.1-beta");
     expect(info.deploy.provider).toBe("koyeb");
     expect(info.deploy.service).toBe("bosko");
     expect(info.deploy.commitShort).toBe("abcdef0");
@@ -73,7 +73,7 @@ describe("buildAppVersionInfo", () => {
     expect(info.runtime.uptimeSec).toBeGreaterThanOrEqual(65);
     expect(info.migrations.lastApplied).toBe("20260101000000_init.sql");
     if (info.releaseNotes) {
-      expect(info.releaseNotes.version).toBe("0.1.0");
+      expect(info.releaseNotes.version).toBe("0.1.1");
       expect(info.releaseNotes.highlights.length).toBeGreaterThan(0);
     }
   });

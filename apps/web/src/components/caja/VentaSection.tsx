@@ -26,6 +26,7 @@ import {
   Gift,
   GitFork,
   RotateCw,
+  Eye,
 } from "lucide-react";
 import { createElement, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -35,6 +36,7 @@ import { ApiError } from "@/services/api-client";
 import { mercadopagoService } from "@/services/mercadopago.service";
 import { useCheckout } from "@/hooks/useCheckout";
 import type { TicketContent } from "@cocktrail/shared";
+import { evaluateDrinkSchedule } from "@cocktrail/shared";
 import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
@@ -43,6 +45,7 @@ import Toast from "@/components/shared/Toast";
 import { formatHm, plural } from "@/lib/utils";
 import type { Drink, DrinkCategory, Order } from "@cocktrail/shared";
 import { qrDisplaySrc } from "@/lib/qr-display";
+import { systemService } from "@/services/system.service";
 
 type Props = {
   drinks: Drink[];
@@ -327,6 +330,28 @@ export default function VentaSection({
   const [dynamicTrendsActive, setDynamicTrendsActive] = useState(false);
   const [isReloadingCarta, setIsReloadingCarta] = useState(false);
   const [search, setSearch] = useState("");
+  const [ghostMode, setGhostMode] = useState(false);
+  const [splitPrint, setSplitPrint] = useState(false);
+  /** Cada papel: drinkId → qty asignada. */
+  const [printPapers, setPrintPapers] = useState<Record<number, number>[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      systemService
+        .getGhostMode()
+        .then((r) => {
+          if (!cancelled) setGhostMode(r.enabled);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const id = window.setInterval(tick, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   const handleReloadCarta = async () => {
     if (!onReloadCarta || isReloadingCarta) return;
@@ -359,6 +384,22 @@ export default function VentaSection({
     [categories],
   );
 
+  const scheduleById = useMemo(() => {
+    const now = new Date();
+    return Object.fromEntries(drinks.map((d) => [d.id, evaluateDrinkSchedule(d, now)]));
+  }, [drinks]);
+
+  /** Carta de caja: oculta vencidos-hide y usa categoría efectiva. */
+  const shelfDrinks = useMemo(() => {
+    return drinks
+      .filter((d) => scheduleById[d.id]?.visible !== false)
+      .map((d) => {
+        const s = scheduleById[d.id];
+        if (!s || s.effectiveCategoryId === (d.categoryId ?? null)) return d;
+        return { ...d, categoryId: s.effectiveCategoryId };
+      });
+  }, [drinks, scheduleById]);
+
   // Un trago pertenece a UN solo grupo: su categoría. Jerarquía = sortOrder
   // (1 = arriba). Sin categoría al final.
   const groupOf = useCallback(
@@ -376,7 +417,7 @@ export default function VentaSection({
   );
 
   const sortedDrinks = useMemo(() => {
-    const list = [...drinks];
+    const list = [...shelfDrinks];
     if (sortBy === "categoria") {
       return list.sort((a, b) => {
         const cmpGroup = groupOf(a).order - groupOf(b).order;
@@ -404,7 +445,7 @@ export default function VentaSection({
       return list.sort((a, b) => a.name.localeCompare(b.name));
     }
     return list.sort((a, b) => a.price - b.price);
-  }, [drinks, sortBy, groupOf, dynamicTrendsActive, salesMap]);
+  }, [shelfDrinks, sortBy, groupOf, dynamicTrendsActive, salesMap]);
 
   const filteredDrinks = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -442,7 +483,17 @@ export default function VentaSection({
   // Tras un cobro no hace falta el toast de "se quitó del pedido".
   const clearCartSilent = useCallback(() => setCart({}), []);
 
-  const addToCart = useCallback((id: number) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 })), []);
+  const addToCart = useCallback((id: number) => {
+    const sched = scheduleById[id];
+    if (sched?.gray) {
+      const drink = drinks.find((d) => d.id === id);
+      const ok = window.confirm(
+        `"${drink?.name ?? "Esta promo"}" está fuera de horario. ¿Agregar igual?`,
+      );
+      if (!ok) return;
+    }
+    setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+  }, [scheduleById, drinks]);
   const removeFromCart = useCallback((id: number) => setCart((prev) => {
     const next = { ...prev };
     if (next[id] > 1) next[id] -= 1;
@@ -481,6 +532,38 @@ export default function VentaSection({
   }, 0), [cart, drinks]);
 
   const totalItems = useMemo(() => Object.values(cart).reduce((s, q) => s + q, 0), [cart]);
+
+  const printGroups = useMemo(() => {
+    if (!splitPrint || printPapers.length < 2) return null;
+    const groups = printPapers
+      .map((paper) => ({
+        items: Object.entries(paper)
+          .map(([id, qty]) => ({ drinkId: Number(id), qty }))
+          .filter((i) => i.qty > 0),
+      }))
+      .filter((g) => g.items.length > 0);
+    return groups.length >= 2 ? groups : null;
+  }, [splitPrint, printPapers]);
+
+  const printSplitOk = useMemo(() => {
+    if (!splitPrint) return true;
+    if (!printGroups || printGroups.length < 2) return false;
+    const assigned: Record<number, number> = {};
+    for (const g of printGroups) {
+      for (const it of g.items) assigned[it.drinkId] = (assigned[it.drinkId] || 0) + it.qty;
+    }
+    for (const [idStr, qty] of Object.entries(cart)) {
+      if ((assigned[Number(idStr)] || 0) !== qty) return false;
+    }
+    return Object.keys(assigned).every((id) => cart[Number(id)]);
+  }, [splitPrint, printGroups, cart]);
+
+  function enableSplitPrint() {
+    setSplitPrint(true);
+    setPrintPapers([
+      Object.fromEntries(Object.entries(cart).map(([id, qty]) => [Number(id), qty])),
+    ]);
+  }
 
   const {
     isCheckoutOpen,
@@ -525,11 +608,11 @@ export default function VentaSection({
     totalItems,
     clearCart: clearCartSilent,
     printTicket: printer.printTicket,
+    printGroups,
     isTestNight,
   });
 
   const qrSrc = qrDisplaySrc(qrImage);
-
   const { reprintTicket, printError, reprinting } = printer;
 
   // Banner de ventas cobradas sin registrar (A11): estados locales de la UI —
@@ -559,6 +642,8 @@ export default function VentaSection({
 
   function openCheckout() {
     setIsCartOpen(false);
+    setSplitPrint(false);
+    setPrintPapers([]);
     handleOpenCheckout();
   }
 
@@ -887,7 +972,7 @@ export default function VentaSection({
                       {section.drinks.map((d, idx) => (
                           <div
                             key={d.id}
-                            className="drink-card-anim"
+                            className={`drink-card-anim ${scheduleById[d.id]?.gray ? "opacity-50 grayscale" : ""}`}
                             style={{ animationDelay: `${idx * 40}ms` }}
                             data-tour={sIdx === 0 && idx === 0 ? "primer-producto" : undefined}
                           >
@@ -908,7 +993,7 @@ export default function VentaSection({
                         return (
                           <div
                             key={d.id}
-                            className="drink-card-anim"
+                            className={`drink-card-anim ${scheduleById[d.id]?.gray ? "opacity-50 grayscale" : ""}`}
                             style={{ animationDelay: `${idx * 40}ms` }}
                             data-tour={sIdx === 0 && idx === 0 ? "primer-producto" : undefined}
                           >
@@ -1503,11 +1588,100 @@ export default function VentaSection({
                       <div className="flex items-center gap-1.5 justify-center">
                         <span className="text-3xl font-black text-accent tracking-tight">${totalPrice.toLocaleString("es-AR")}</span>
                       </div>
+                      {ghostMode && (
+                        <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-500/90">
+                          <Eye size={12} aria-hidden />
+                          Pruebas · sin registro
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="w-full text-left space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-ink-400">Impresión</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSplitPrint(false);
+                            setPrintPapers([]);
+                          }}
+                          className={`h-10 rounded-xl text-[12px] font-bold cursor-pointer ${
+                            !splitPrint
+                              ? "bg-accent/15 border border-accent/40 text-accent"
+                              : "bg-ink-950 border border-ink-800 text-ink-300"
+                          }`}
+                        >
+                          Normal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => enableSplitPrint()}
+                          className={`h-10 rounded-xl text-[12px] font-bold cursor-pointer ${
+                            splitPrint
+                              ? "bg-accent/15 border border-accent/40 text-accent"
+                              : "bg-ink-950 border border-ink-800 text-ink-300"
+                          }`}
+                        >
+                          Dividir papeles
+                        </button>
+                      </div>
+                      {splitPrint && (
+                        <div className="space-y-2 rounded-xl border border-ink-800 bg-ink-950/50 p-3">
+                          {printPapers.map((paper, pIdx) => (
+                            <div key={pIdx} className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-ink-300">Papel {pIdx + 1}</span>
+                                {printPapers.length > 1 && (
+                                  <button
+                                    type="button"
+                                    className="text-[10px] text-danger cursor-pointer"
+                                    onClick={() =>
+                                      setPrintPapers((prev) => prev.filter((_, i) => i !== pIdx))
+                                    }
+                                  >
+                                    Quitar
+                                  </button>
+                                )}
+                              </div>
+                              {cartEntries.map(({ drink, qty }) => (
+                                <div key={drink.id} className="flex items-center justify-between gap-2 text-[12px]">
+                                  <span className="truncate text-ink-200">{drink.name}</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={qty}
+                                    value={paper[drink.id] || 0}
+                                    onChange={(e) => {
+                                      const n = Math.max(0, Math.min(qty, Number(e.target.value) || 0));
+                                      setPrintPapers((prev) =>
+                                        prev.map((p, i) => (i === pIdx ? { ...p, [drink.id]: n } : p)),
+                                      );
+                                    }}
+                                    className="w-14 h-8 rounded-lg bg-ink-900 border border-ink-750 text-center text-ink-50"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setPrintPapers((prev) => [...prev, {}])}
+                            className="w-full h-8 rounded-lg border border-dashed border-ink-700 text-[11px] font-bold text-ink-300 cursor-pointer"
+                          >
+                            + Papel
+                          </button>
+                          {!printSplitOk && (
+                            <p className="text-[11px] text-amber">
+                              Asigná todas las unidades (suma = carrito) en al menos 2 papeles.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 w-full mt-2">
                       <button
-                        disabled={submitting}
+                        disabled={submitting || !printSplitOk}
                         onClick={() => setPaymentMethod("efectivo")}
                         className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                       >
@@ -1517,9 +1691,9 @@ export default function VentaSection({
                         <span className="font-bold text-xs text-ink-50">Efectivo</span>
                       </button>
 
-                      {mpDisabledReason === null && hasLinkedDevice !== false && (
+                      {mpDisabledReason === null && hasLinkedDevice !== false && !ghostMode && (
                         <button
-                          disabled={submitting}
+                          disabled={submitting || !printSplitOk}
                           onClick={() => startPosnetPayment("debito")}
                           className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                         >
@@ -1532,7 +1706,7 @@ export default function VentaSection({
 
                       {mpDisabledReason === null && (
                         <button
-                          disabled={submitting}
+                          disabled={submitting || !printSplitOk}
                           onClick={() => startQrPayment()}
                           className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                         >
@@ -1544,7 +1718,7 @@ export default function VentaSection({
                       )}
 
                       <button
-                        disabled={submitting}
+                        disabled={submitting || !printSplitOk}
                         onClick={() => setPaymentMethod("cortesia")}
                         className="h-28 rounded-2xl bg-ink-950 border border-ink-800 flex flex-col items-center justify-center gap-2 active:scale-95 transition-all hover:bg-ink-900 hover:border-ink-750 cursor-pointer disabled:opacity-50"
                       >

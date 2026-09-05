@@ -219,6 +219,7 @@ describe("MercadoPagoOrdersService", () => {
       expect(credentialsResolver.resolve).toHaveBeenCalledWith({
         barId: "bar-uuid-1",
         allowGlobalFallback: true,
+        useGhost: false,
       });
       expect(mpOrdersRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({

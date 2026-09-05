@@ -25,6 +25,7 @@ import ComisionesPlazosPanel from "@/components/settings/ComisionesPlazosPanel";
 import MpHealthPanel from "@/components/settings/MpHealthPanel";
 import MpDevToolsPanel from "@/components/settings/MpDevToolsPanel";
 import { SectionHelpButton } from "@/components/help/SectionHelpButton";
+import { authService } from "@/services/auth.service";
 
 function formatRelative(iso: string | null): string | null {
   if (!iso) return null;
@@ -44,8 +45,10 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
   const [linkedNotice, setLinkedNotice] = useState(false);
+  const [ghostLinkedNotice, setGhostLinkedNotice] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<MpSellerStatus | null>(null);
   const [sandbox, setSandbox] = useState(false);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
 
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
@@ -84,6 +87,7 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
   useEffect(() => {
     refreshSellerStatus();
     configService.get().then(c => setSandbox(c.mercadoPago.sandbox)).catch(() => {});
+    authService.getMe().then((me) => setIsSuperadmin(Boolean(me?.isSuperadmin))).catch(() => {});
     loadData().finally(() => setLoading(false));
   }, [refreshSellerStatus, loadData]);
 
@@ -102,17 +106,21 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const linked = params.get("linked");
-    if (!linked) return;
+    const ghostLinked = params.get("ghostLinked");
+    if (!linked && !ghostLinked) return;
 
-    if (linked === "true") {
+    if (ghostLinked === "true") {
+      setGhostLinkedNotice(true);
+    } else if (linked === "true") {
       setLinkedNotice(true);
       refreshSellerStatus();
-    } else {
+    } else if (linked) {
       const message = params.get("message");
       setError(message ? `No se pudo vincular Mercado Pago: ${message}` : "No se pudo vincular Mercado Pago.");
     }
 
     params.delete("linked");
+    params.delete("ghostLinked");
     params.delete("message");
     params.delete("barId");
     const qs = params.toString();
@@ -493,8 +501,8 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
       {/* 4. PDVs / Posnets */}
       {children}
 
-      {/* Diagnóstico avanzado al final — no compite con el flujo de vinculación */}
-      <MpDevToolsPanel />
+      {/* Diagnóstico avanzado — solo superadmin */}
+      {isSuperadmin && <MpDevToolsPanel />}
 
       <ComisionesPlazosPanel
         open={comisionesOpen}
@@ -540,6 +548,11 @@ export default function PagosSection({ children }: { children?: ReactNode }) {
       {linkedNotice && (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
           <Toast variant="success" message="Cuenta de Mercado Pago vinculada" duration={3000} onClose={() => setLinkedNotice(false)} />
+        </div>
+      )}
+      {ghostLinkedNotice && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-xs">
+          <Toast variant="success" message="Cuenta MP ghost vinculada" duration={3000} onClose={() => setGhostLinkedNotice(false)} />
         </div>
       )}
       {error && (

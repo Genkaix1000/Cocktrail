@@ -50,7 +50,7 @@ describe("DrinkFormModal", () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText("Fernet con Coca"), "G");
+    await user.type(screen.getByPlaceholderText("PROMO 2 Vodka con Speed"), "G");
     expect(onChange).toHaveBeenCalledWith({ name: "G" });
     expect(screen.queryByPlaceholderText("ej. PROMO AMIGOS, FIESTA TOTAL")).not.toBeInTheDocument();
   });

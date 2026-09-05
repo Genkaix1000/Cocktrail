@@ -83,7 +83,8 @@ serve(async (req: Request) => {
       throw new Error("State inválido o expirado. Reiniciá la vinculación.")
     }
 
-    const { code_verifier, bar_id, redirect_url } = oauthData[0]
+    const { code_verifier, bar_id, redirect_url, purpose } = oauthData[0]
+    const isGhost = purpose === "ghost"
     siteUrl = resolveSiteUrl(redirect_url)
 
     const mpRedirectUri = Deno.env.get("MP_REDIRECT_URI")
@@ -142,40 +143,82 @@ serve(async (req: Request) => {
       ? await encryptToken(tokenData.refresh_token, tokenSecret)
       : null
 
-    // Single-seller: expirar cualquier OTRO seller activo antes del upsert.
-    const { error: expireError } = await supabaseAdmin
-      .from("mercadopago_sellers")
-      .update({ status: "expired", updated_at: nowIso })
-      .eq("status", "active")
-      .neq("user_id", sellerUserId)
+    if (isGhost) {
+      // No tocar el seller active. Expirar otros ghost antes del upsert.
+      const { data: activeSeller } = await supabaseAdmin
+        .from("mercadopago_sellers")
+        .select("user_id")
+        .eq("status", "active")
+        .maybeSingle()
 
-    if (expireError) throw expireError
+      if (activeSeller?.user_id === sellerUserId) {
+        throw new Error(
+          "No podés vincular como ghost la misma cuenta MP que ya es la del local.",
+        )
+      }
 
-    const { error: dbError } = await supabaseAdmin
-      .from("mercadopago_sellers")
-      .upsert(
-        {
-          user_id: sellerUserId,
-          access_token: null,
-          refresh_token: null,
-          access_token_enc: accessTokenEnc,
-          refresh_token_enc: refreshTokenEnc,
-          key_version: MP_TOKEN_KEY_VERSION,
-          expires_at: expiresAt,
-          status: "active",
-          updated_at: nowIso,
-        },
-        { onConflict: "user_id" },
-      )
+      const { error: expireGhostError } = await supabaseAdmin
+        .from("mercadopago_sellers")
+        .update({ status: "expired", updated_at: nowIso })
+        .eq("status", "ghost")
+        .neq("user_id", sellerUserId)
 
-    if (dbError) throw dbError
+      if (expireGhostError) throw expireGhostError
 
-    if (bar_id) {
-      const byCode = !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bar_id)
-      await supabaseAdmin
-        .from("bars")
-        .update({ seller_user_id: sellerUserId })
-        .eq(byCode ? "code" : "id", bar_id)
+      const { error: dbError } = await supabaseAdmin
+        .from("mercadopago_sellers")
+        .upsert(
+          {
+            user_id: sellerUserId,
+            access_token: null,
+            refresh_token: null,
+            access_token_enc: accessTokenEnc,
+            refresh_token_enc: refreshTokenEnc,
+            key_version: MP_TOKEN_KEY_VERSION,
+            expires_at: expiresAt,
+            status: "ghost",
+            updated_at: nowIso,
+          },
+          { onConflict: "user_id" },
+        )
+
+      if (dbError) throw dbError
+    } else {
+      // Single-seller active: expirar otros active (no tocar ghost).
+      const { error: expireError } = await supabaseAdmin
+        .from("mercadopago_sellers")
+        .update({ status: "expired", updated_at: nowIso })
+        .eq("status", "active")
+        .neq("user_id", sellerUserId)
+
+      if (expireError) throw expireError
+
+      const { error: dbError } = await supabaseAdmin
+        .from("mercadopago_sellers")
+        .upsert(
+          {
+            user_id: sellerUserId,
+            access_token: null,
+            refresh_token: null,
+            access_token_enc: accessTokenEnc,
+            refresh_token_enc: refreshTokenEnc,
+            key_version: MP_TOKEN_KEY_VERSION,
+            expires_at: expiresAt,
+            status: "active",
+            updated_at: nowIso,
+          },
+          { onConflict: "user_id" },
+        )
+
+      if (dbError) throw dbError
+
+      if (bar_id) {
+        const byCode = !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bar_id)
+        await supabaseAdmin
+          .from("bars")
+          .update({ seller_user_id: sellerUserId })
+          .eq(byCode ? "code" : "id", bar_id)
+      }
     }
 
     const userResponse = await fetch(
@@ -195,11 +238,13 @@ serve(async (req: Request) => {
         .eq("user_id", sellerUserId)
     }
 
-    const params = new URLSearchParams({ linked: "true" })
+    const params = new URLSearchParams(
+      isGhost ? { ghostLinked: "true" } : { linked: "true" },
+    )
     if (bar_id) params.set("barId", bar_id)
 
     console.log(
-      `[mp-auth-callback] Seller vinculado: ${sellerUserId}` +
+      `[mp-auth-callback] Seller vinculado (${isGhost ? "ghost" : "active"}): ${sellerUserId}` +
         (bar_id ? ` bar=${bar_id}` : ""),
     )
 

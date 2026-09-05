@@ -123,6 +123,27 @@ export class PrinterService {
     };
   }
 
+  /** Un cobro, N papeles: mismos encabezados/clave, ítems distintos por papel. */
+  renderSplitPayloads(
+    order: Order,
+    nightEvent: NightEvent,
+    groups: { items: { qty: number; name: string }[] }[],
+  ): { ticketData: string; ticketContent: TicketContent }[] {
+    const base = this.buildTicketContent(order, nightEvent);
+    return groups
+      .filter((g) => g.items.some((i) => i.qty > 0))
+      .map((g) => {
+        const ticketContent: TicketContent = {
+          ...base,
+          items: g.items.filter((i) => i.qty > 0),
+        };
+        return {
+          ticketData: this.buildTicketBytes(ticketContent).toString("base64"),
+          ticketContent,
+        };
+      });
+  }
+
   renderTest(): string {
     return this.buildTicketBytes(this.buildTestContent()).toString("base64");
   }

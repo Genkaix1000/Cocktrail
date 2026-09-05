@@ -9,6 +9,7 @@ import { generalLimiter } from "./shared/middleware/rate-limit.js";
 import { createAuthController } from "./modules/auth/auth.controller.js";
 import { setSessionVersion, getSessionVersion } from "./modules/auth/session.js";
 import { createDrinksController } from "./modules/drinks/drinks.controller.js";
+import { createDrinkImagesController } from "./modules/drinks/drink-images.controller.js";
 import { createDrinkCategoriesController } from "./modules/drinks/categories.controller.js";
 import { createOrdersController } from "./modules/orders/orders.controller.js";
 import { createEventsController } from "./modules/events/events.controller.js";
@@ -29,6 +30,7 @@ import { createPrinterController } from "./modules/printer/printer.controller.js
 // Services & Repositories
 import { SupabaseDrinksRepository } from "./modules/drinks/drinks.repository.js";
 import { DrinksService } from "./modules/drinks/drinks.service.js";
+import { DrinkImagesService } from "./modules/drinks/drink-images.service.js";
 import { SupabaseDrinkCategoriesRepository } from "./modules/drinks/categories.repository.js";
 import { DrinkCategoriesService } from "./modules/drinks/categories.service.js";
 import { SupabaseOrdersRepository } from "./modules/orders/orders.repository.js";
@@ -69,6 +71,7 @@ import { SupabaseBarSessionsRepository } from "./modules/bar-sessions/bar-sessio
 import { PrinterService } from "./modules/printer/printer.service.js";
 import { emit } from "./shared/sse/sse-manager.js";
 import { SystemService } from "./modules/system/system.service.js";
+import { SupabaseSystemFlagsRepository } from "./modules/system/system-flags.repository.js";
 import { supabase } from "./shared/supabase.js";
 
 // Middleware
@@ -106,6 +109,7 @@ const ticketsRepo = new TestAwareTicketsRepository(
 );
 
 const drinksService = new DrinksService(drinksRepo);
+const drinkImagesService = new DrinkImagesService();
 const drinkCategoriesService = new DrinkCategoriesService(drinkCategoriesRepo);
 const usersService = new UsersService(usersRepo);
 
@@ -154,6 +158,12 @@ const mpProvisioningService = new MercadoPagoProvisioningService(
   mpCajasDevicesRepo,
 );
 
+const systemFlagsRepo = new SupabaseSystemFlagsRepository();
+const systemService = new SystemService(
+  new PgMigrationsRepository(env.DATABASE_URL),
+  systemFlagsRepo,
+);
+
 // Fase 4 — Orders QR estático. `getActiveEvent` liga cada cobro a la noche
 // abierta (mismo patrón que OrdersService).
 const mpOrdersRepo = new SupabaseMpOrdersRepository();
@@ -164,6 +174,7 @@ const mpOrdersService = new MercadoPagoOrdersService(
   mpCajasRepo,
   mpOrdersRepo,
   async () => eventsService.getCurrentEvent(),
+  () => systemService.isGhostMode(),
 );
 
 // gestion-posnets bloque G — salud de la vinculación (4 chequeos + F1 +
@@ -199,6 +210,7 @@ const pointPaymentsService = new PointPaymentsService(
   async () => eventsService.getCurrentEvent(),
   resolvePosnet,
   emit,
+  () => systemService.isGhostMode(),
 );
 
 // Adaptador del puerto de verificación de pago declarado en modules/orders —
@@ -229,6 +241,7 @@ const ordersService = new OrdersService({
   renderTicketPayload: async (order, nightEvent) => printerService.renderTicketPayload(order, nightEvent),
   verifyPayment,
   isPaymentSchemaReady,
+  isGhostMode: () => systemService.isGhostMode(),
 });
 
 const ticketsService = new TicketsService(
@@ -245,8 +258,6 @@ const mpWebhooksService = new MercadoPagoWebhooksService(
   mpWebhookEventsRepo,
   emit,
 );
-
-const systemService = new SystemService(new PgMigrationsRepository(env.DATABASE_URL));
 
 // ── Express App ──
 
@@ -310,7 +321,11 @@ app.use(cors({
 // 3. Limitador de solicitudes general (Rate Limiter)
 app.use(generalLimiter);
 
-app.use(express.json({ limit: "16kb" }));
+app.use((req, res, next) => {
+  // Upload WebP base64 de carta: ~512² cabe holgado en 2mb; el resto sigue chico.
+  const limit = req.path.startsWith("/api/drink-images") ? "2mb" : "16kb";
+  return express.json({ limit })(req, res, next);
+});
 app.use(cookieParser());
 
 // Health check
@@ -336,6 +351,7 @@ app.use(
   }),
 );
 app.use("/api/drinks", createDrinksController(drinksService));
+app.use("/api/drink-images", createDrinkImagesController(drinkImagesService));
 app.use("/api/drink-categories", createDrinkCategoriesController(drinkCategoriesService));
 app.use("/api/orders", createOrdersController(ordersService, () => testNightContext.isTestNight()));
 app.use("/api/events", createSSEController());

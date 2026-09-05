@@ -69,6 +69,17 @@ export const systemService = {
     return apiFetch<AppVersionInfo>("/api/system/version");
   },
 
+  getGhostMode() {
+    return apiFetch<{ enabled: boolean }>("/api/system/ghost-mode");
+  },
+
+  setGhostMode(enabled: boolean) {
+    return apiFetch<{ enabled: boolean }>("/api/system/ghost-mode", {
+      method: "PUT",
+      body: { enabled },
+    });
+  },
+
   /** Acepta drift legítimo (checksum disco → registrado). Admin only. */
   acceptMigrationDrift() {
     return apiFetch<{ updated: number; versions: string[] }>(

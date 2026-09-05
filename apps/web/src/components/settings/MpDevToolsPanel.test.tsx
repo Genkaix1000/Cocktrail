@@ -6,15 +6,27 @@ vi.mock("@/services/mercadopago.service", () => ({
   mercadopagoService: {
     getMpHealth: vi.fn(),
     getSellerStatus: vi.fn(),
+    getGhostSellerStatus: vi.fn(),
     listWebhookEvents: vi.fn(),
     listRecentOrders: vi.fn(),
     getDeviceStatus: vi.fn(),
+    getOAuthUrl: vi.fn(),
+    unlinkGhostSeller: vi.fn(),
+  },
+}));
+
+vi.mock("@/services/system.service", () => ({
+  systemService: {
+    getGhostMode: vi.fn().mockResolvedValue({ enabled: false }),
+    setGhostMode: vi.fn(),
   },
 }));
 
 import { mercadopagoService, type MpRecentOrderRow } from "@/services/mercadopago.service";
+import { systemService } from "@/services/system.service";
 
 const mocked = vi.mocked(mercadopagoService);
+const mockedSystem = vi.mocked(systemService);
 
 const HEALTH = {
   checks: {
@@ -51,6 +63,19 @@ beforeEach(() => {
     webhookSecretConfigured: true,
   });
   mocked.listRecentOrders.mockResolvedValue({ orders: [] });
+  mocked.getGhostSellerStatus.mockResolvedValue({
+    linked: false,
+    status: null,
+    nickname: null,
+    email: null,
+    linkedAt: null,
+    displayName: null,
+    userId: null,
+    expiresAt: null,
+    hasAccessToken: false,
+    hasRefreshToken: false,
+  });
+  mockedSystem.getGhostMode.mockResolvedValue({ enabled: false });
 });
 
 describe("MpDevToolsPanel", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { CircleHelp, Menu, Moon, Sun, User, Shield, Banknote } from "lucide-react";
+import type { ReactNode } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import { useHelpSafe } from "@/components/help/HelpCenterProvider";
 import type { Role } from "@cocktrail/shared";
@@ -10,6 +11,8 @@ type Props = {
   username?: string;
   role?: Role | string;
   onMenuClick?: () => void;
+  /** Acciones extra a la izquierda de ayuda/tema (ej. impresora en admin POS). */
+  trailing?: ReactNode;
 };
 
 function RoleIcon({ role }: { role?: string }) {
@@ -19,7 +22,7 @@ function RoleIcon({ role }: { role?: string }) {
 }
 
 /** Topbar Bosko autónoma: enrutado + toggle día/noche + usuario. */
-export function AppTopbar({ breadcrumbs, username, role, onMenuClick }: Props) {
+export function AppTopbar({ breadcrumbs, username, role, onMenuClick, trailing }: Props) {
   const { isDark, toggleDark } = useTheme();
   const help = useHelpSafe();
   const displayName = username?.trim() || "—";
@@ -66,6 +69,7 @@ export function AppTopbar({ breadcrumbs, username, role, onMenuClick }: Props) {
       </div>
 
       <div className="flex items-center gap-2.5 shrink-0">
+        {trailing}
         {help && (
           <button
             type="button"

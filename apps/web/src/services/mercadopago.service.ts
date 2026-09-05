@@ -53,7 +53,7 @@ export type PosnetDeviceStatus = {
 
 export type MpSellerStatus = {
   linked: boolean;
-  status: "active" | "expired" | null;
+  status: "active" | "expired" | "ghost" | null;
   nickname: string | null;
   email: string | null;
   linkedAt: string | null;
@@ -163,9 +163,10 @@ export type QrOrderStatusResponse = {
 
 export const mercadopagoService = {
   /** Fase 1 — pide al backend la URL de autorización OAuth (PKCE) para vincular la cuenta MP. */
-  getOAuthUrl(barId?: string) {
+  getOAuthUrl(barId?: string, purpose: "primary" | "ghost" = "primary") {
     const params = new URLSearchParams();
     if (barId) params.set("barId", barId);
+    if (purpose === "ghost") params.set("purpose", "ghost");
     // F1: origen explícito — los GET same-origin a veces no mandan header Origin,
     // y sin esto la EF cae al fallback NEXT_PUBLIC_SITE_URL (Render).
     if (typeof window !== "undefined" && window.location?.origin) {
@@ -181,6 +182,10 @@ export const mercadopagoService = {
     return apiFetch<MpSellerStatus>(`/api/mercadopago/seller-status${qs}`);
   },
 
+  getGhostSellerStatus() {
+    return apiFetch<MpSellerStatus>("/api/mercadopago/oauth/ghost-seller");
+  },
+
   /**
    * D9 — desvincula la cuenta MP (wipe de tokens local + Cloud). `cloudCleaned: false`
    * significa que el seller local se limpió pero Cloud no se pudo limpiar (sin conexión):
@@ -188,6 +193,12 @@ export const mercadopagoService = {
    */
   unlinkSeller() {
     return apiFetch<{ ok: boolean; cloudCleaned: boolean }>("/api/mercadopago/oauth/seller", {
+      method: "DELETE",
+    });
+  },
+
+  unlinkGhostSeller() {
+    return apiFetch<{ ok: true }>("/api/mercadopago/oauth/ghost-seller", {
       method: "DELETE",
     });
   },

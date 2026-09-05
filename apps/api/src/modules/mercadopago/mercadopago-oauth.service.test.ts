@@ -24,8 +24,10 @@ function makeSellersRepo() {
     upsert: vi.fn().mockImplementation(async (s) => s),
     findByUserId: vi.fn(),
     findActive: vi.fn().mockResolvedValue(null),
+    findGhost: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockImplementation(async (userId, patch) => ({ userId, ...patch })),
     wipeAllTokens: vi.fn().mockResolvedValue([]),
+    wipeGhostTokens: vi.fn().mockResolvedValue([]),
     backfillEncryption: vi.fn().mockResolvedValue({ migrated: 0 }),
   };
 }
@@ -271,6 +273,19 @@ describe("MercadoPagoOAuthService", () => {
       expect(sellersRepo.update).toHaveBeenCalledWith(
         "seller-1",
         expect.objectContaining({ accessToken: "AT-new", refreshToken: "RT-new", status: "active" }),
+      );
+    });
+
+    it("al refrescar un seller ghost preserva status=ghost", async () => {
+      mockFetchOnce({ ok: true, body: { access_token: "AT-new", refresh_token: "RT-new", expires_in: 15552000 } });
+      const s = makeSeller({
+        status: "ghost",
+        expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+      });
+      await service.refreshTokenIfNeeded(s);
+      expect(sellersRepo.update).toHaveBeenCalledWith(
+        "seller-1",
+        expect.objectContaining({ status: "ghost" }),
       );
     });
 

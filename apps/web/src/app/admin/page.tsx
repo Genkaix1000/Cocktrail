@@ -11,6 +11,7 @@ import type { EventTotals, NightEvent, Order, Role } from "@cocktrail/shared";
 type CurrentUser = {
   role: Role;
   username: string;
+  isSuperadmin?: boolean;
 };
 
 export default function AdminPage() {
@@ -45,7 +46,7 @@ export default function AdminPage() {
           return;
         }
 
-        setCurrentUser({ role: user.role, username: user.username });
+        setCurrentUser({ role: user.role, username: user.username, isSuperadmin: user.isSuperadmin });
 
         eventsService
           .getState()

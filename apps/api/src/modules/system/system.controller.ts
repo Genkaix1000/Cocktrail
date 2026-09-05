@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authMiddleware, requireRole } from "../auth/auth.middleware.js";
+import { authMiddleware, requireRole, requireSuperadmin } from "../auth/auth.middleware.js";
 import type { SystemService } from "./system.service.js";
 import { getLatestLogs } from "../audit-logs/audit-logs.service.js";
 
@@ -29,6 +29,26 @@ export function createSystemController(systemService: SystemService): Router {
   // GET /api/system/version — staff. Versión de app + deploy (sin I/O).
   router.get("/version", authMiddleware, requireRole("admin", "caja"), (_req, res) => {
     res.json(systemService.getVersion());
+  });
+
+  // GET /api/system/ghost-mode — cualquier staff (caja necesita el hint / Posnet off).
+  router.get("/ghost-mode", authMiddleware, requireRole("admin", "caja"), async (_req, res, next) => {
+    try {
+      res.json(await systemService.getGhostMode());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PUT /api/system/ghost-mode — solo superadmin.
+  router.put("/ghost-mode", authMiddleware, requireSuperadmin, async (req, res, next) => {
+    try {
+      const enabled = Boolean(req.body?.enabled);
+      const username = req.session?.username ?? "superadmin";
+      res.json(await systemService.setGhostMode(enabled, username));
+    } catch (err) {
+      next(err);
+    }
   });
 
   // POST /api/system/migrations/accept-drift — admin. Pisa checksums al disco actual.

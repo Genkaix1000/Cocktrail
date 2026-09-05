@@ -9,19 +9,21 @@ export type CredentialContext = {
   deviceId?: string;
   barId?: string;
   allowGlobalFallback?: boolean;
+  /** Cobro en ghost mode: usa el seller OAuth paralelo (no el active del local). */
+  useGhost?: boolean;
 };
 
 /**
- * Resuelve el access_token del único vendedor vinculado (single-seller),
- * refrescándolo proactivamente si está por vencer.
+ * Resuelve el access_token del vendedor vinculado, refrescándolo proactivamente
+ * si está por vencer.
  *
- * Modelo operativo de Cocktrail: un solo comercio (Bosko) recibe todo el
- * dinero — no hay multi-seller.
+ * Modelo operativo: un seller `active` (comercio) + opcional seller `ghost`
+ * (pruebas). Con `useGhost` se resuelve el ghost; sin él, el active.
  *
  * Estrategia F1: un fallo del nivel 2 degrada al fallback de env SOLO si el
  * preflight verificó que el MP_ACCESS_TOKEN es de la MISMA cuenta que el
  * seller vinculado — degradar hacia otra cuenta mandaría la plata a otro
- * lado (R21/R22), y eso es peor que no cobrar.
+ * lado (R21/R22), y eso es peor que no cobrar. El camino ghost NO degrada.
  */
 export class CredentialsResolverService {
   constructor(
@@ -36,6 +38,29 @@ export class CredentialsResolverService {
     // Sus fallos NO degradan: quien pide un seller puntual quiere ESE seller.
     if (context.sellerUserId) {
       seller = await this.sellersRepo.findByUserId(context.sellerUserId);
+    }
+
+    // 1b. Ghost mode (cobros de prueba): seller paralelo, sin fallback env.
+    if (!seller && context.useGhost) {
+      seller = await this.sellersRepo.findGhost();
+      if (!seller) {
+        throw new Error(
+          "Ghost mode activo pero no hay cuenta MP ghost vinculada. " +
+            "Vinculala desde Herramientas de desarrollador.",
+        );
+      }
+      if (seller.status !== "ghost") {
+        throw new Error(
+          `La cuenta ghost de Mercado Pago (${seller.userId}) no está disponible.`,
+        );
+      }
+      if (!seller.refreshToken) {
+        throw new Error(
+          `La cuenta ghost (${seller.userId}) no tiene refresh_token — ` +
+            "volvé a vincularla desde DevTools.",
+        );
+      }
+      return this.oauthService.refreshTokenIfNeeded(seller);
     }
 
     // 2. Seller activo por defecto (único vendedor vinculado vía OAuth).

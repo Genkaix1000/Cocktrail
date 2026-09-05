@@ -32,7 +32,7 @@ type MpTokenResponse = {
 /** Estado de vinculación para la UI (`GET /seller-status`). */
 export type SellerStatusResult = {
   linked: boolean;
-  status: "active" | "expired" | null;
+  status: "active" | "expired" | "ghost" | null;
   nickname: string | null;
   email: string | null;
   linkedAt: string | null;
@@ -105,6 +105,7 @@ export class MercadoPagoOAuthService {
   async generateAuthUrl(
     barId: string | null,
     redirectUrl: string | null = null,
+    purpose: "primary" | "ghost" = "primary",
   ): Promise<{ url: string }> {
     const { appId, redirectUri } = this.assertConfigured();
 
@@ -118,6 +119,7 @@ export class MercadoPagoOAuthService {
       codeVerifier,
       barId,
       redirectUrl: safeRedirect,
+      purpose,
       expiresAt: new Date(Date.now() + STATE_TTL_MS),
     });
 
@@ -141,7 +143,15 @@ export class MercadoPagoOAuthService {
    */
   async getSellerStatus(_barId: string | null): Promise<SellerStatusResult> {
     const seller = await this.sellersRepo.findActive();
+    return this.toSellerStatusResult(seller);
+  }
 
+  async getGhostSellerStatus(): Promise<SellerStatusResult> {
+    const seller = await this.sellersRepo.findGhost();
+    return this.toSellerStatusResult(seller);
+  }
+
+  private toSellerStatusResult(seller: Seller | null): SellerStatusResult {
     if (!seller) {
       return {
         linked: false,
@@ -233,7 +243,8 @@ export class MercadoPagoOAuthService {
       accessToken: response.access_token,
       refreshToken: response.refresh_token ?? seller.refreshToken,
       expiresAt: new Date(Date.now() + (response.expires_in ?? 0) * 1000),
-      status: "active",
+      // Preservar ghost: si forzamos active rompemos el índice one_active.
+      status: seller.status === "ghost" ? "ghost" : "active",
     });
 
     return response.access_token;
@@ -242,6 +253,7 @@ export class MercadoPagoOAuthService {
   /**
    * Desvincular (D9/A18): wipe de tokens + status expired — NUNCA DELETE, la
    * FK mercadopago_cajas.seller_user_id lo impide. Limpia bars.seller_user_id.
+   * No toca el seller ghost.
    */
   async unlinkSeller(): Promise<{ ok: true; cloudCleaned: boolean }> {
     const wiped = await this.sellersRepo.wipeAllTokens();
@@ -268,6 +280,14 @@ export class MercadoPagoOAuthService {
     }
 
     return { ok: true, cloudCleaned };
+  }
+
+  async unlinkGhostSeller(): Promise<{ ok: true }> {
+    const wiped = await this.sellersRepo.wipeGhostTokens();
+    if (wiped.length > 0) {
+      console.log(`[MercadoPagoOAuthService] Ghost seller desvinculado: ${wiped.join(", ")}`);
+    }
+    return { ok: true };
   }
 
   /** Helper para el controller: valida que barId venga como string no vacío. */

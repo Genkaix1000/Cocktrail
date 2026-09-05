@@ -18,6 +18,7 @@ import {
   type PosIntentVerdict,
 } from "@/services/mercadopago.service";
 import { ordersService } from "@/services/orders.service";
+import { printerService } from "@/services/printer.service";
 import type { Drink, Order, PaymentMethod, TicketContent } from "@cocktrail/shared";
 
 type CartEntry = { drink: Drink; qty: number };
@@ -89,6 +90,11 @@ type UseCheckoutArgs = {
   clearCart: () => void;
   /** Imprime el ticket de la venta en la impresora del device. Opcional en tests. */
   printTicket?: (order: { ticketData?: string; ticketContent?: TicketContent }) => Promise<void>;
+  /**
+   * Si hay más de un papel, tras crear la orden se piden N tickets al API
+   * (`/printer/splits`) en vez del ticket único.
+   */
+  printGroups?: { items: { drinkId: number; qty: number }[] }[] | null;
   /** Noche de prueba: inhabilita los cobros por Mercado Pago (C1). */
   isTestNight?: boolean;
 };
@@ -106,6 +112,7 @@ export function useCheckout({
   totalItems,
   clearCart,
   printTicket,
+  printGroups = null,
   isTestNight = false,
 }: UseCheckoutArgs) {
   /** Motivo por el que los métodos de MP están inhabilitados, o `null` si están disponibles. */
@@ -259,9 +266,16 @@ export function useCheckout({
       resetPaymentAttempt();
       setLatestOrder(order);
       clearCart();
-      if (order.ticketData && printTicket) {
+      if (printTicket) {
         try {
-          await printTicket(order);
+          if (printGroups && printGroups.length > 1) {
+            const { tickets } = await printerService.splits(order.id, printGroups);
+            for (const t of tickets) {
+              await printTicket({ ticketData: t.ticketData, ticketContent: t.ticketContent });
+            }
+          } else if (order.ticketData) {
+            await printTicket(order);
+          }
         } catch {
           // La venta ya quedó; reprint desde la UI de éxito.
         }
@@ -273,7 +287,7 @@ export function useCheckout({
       isSubmittingRef.current = false;
       setSubmitting(false);
     }
-  }, [cart, canConfirmCash, clearCart, paymentMethod, printTicket, resetPaymentAttempt, submitting, totalItems]);
+  }, [cart, canConfirmCash, clearCart, paymentMethod, printGroups, printTicket, resetPaymentAttempt, submitting, totalItems]);
 
   const buildPendingSale = useCallback(
     (method: "qr" | "debito", mpRef: string, idempotencyKey?: string): PendingSale => ({
@@ -317,9 +331,16 @@ export function useCheckout({
           setPosnetErrorMessage(null);
           setQrImage(null);
         }
-        if (order.ticketData && printTicket) {
+        if (printTicket) {
           try {
-            await printTicket(order);
+            if (printGroups && printGroups.length > 1) {
+              const { tickets } = await printerService.splits(order.id, printGroups);
+              for (const t of tickets) {
+                await printTicket({ ticketData: t.ticketData, ticketContent: t.ticketContent });
+              }
+            } else if (order.ticketData) {
+              await printTicket(order);
+            }
           } catch {
             // reprint desde la UI
           }
@@ -362,7 +383,7 @@ export function useCheckout({
         return false;
       }
     },
-    [clearCart, printTicket],
+    [clearCart, printGroups, printTicket],
   );
 
   /** Reintenta desde el banner el registro de una venta cobrada sin registrar. */

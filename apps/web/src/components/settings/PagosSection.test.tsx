@@ -9,11 +9,31 @@ vi.mock("@/components/ThemeProvider", () => ({
   useTheme: vi.fn(),
 }));
 
+vi.mock("@/services/auth.service", () => ({
+  authService: {
+    getMe: vi.fn().mockResolvedValue({
+      role: "admin",
+      username: "superadmin",
+      isSuperadmin: true,
+      permissions: { closeNight: true, cancelarTickets: true, historial: true, metricas: true },
+    }),
+  },
+}));
+
+vi.mock("@/services/system.service", () => ({
+  systemService: {
+    getGhostMode: vi.fn().mockResolvedValue({ enabled: false }),
+    setGhostMode: vi.fn(),
+  },
+}));
+
 vi.mock("@/services/mercadopago.service", () => ({
   mercadopagoService: {
     getOAuthUrl: vi.fn(),
     getSellerStatus: vi.fn(),
+    getGhostSellerStatus: vi.fn().mockResolvedValue({ linked: false }),
     unlinkSeller: vi.fn(),
+    unlinkGhostSeller: vi.fn(),
     getMpHealth: vi.fn(),
     listWebhookEvents: vi.fn(),
     listRecentOrders: vi.fn(),

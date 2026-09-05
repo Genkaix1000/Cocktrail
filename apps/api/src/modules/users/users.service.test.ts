@@ -27,18 +27,25 @@ function makeDbUser(overrides?: Partial<StaffUser>): StaffUser {
 }
 
 describe("UsersService.listUsers", () => {
-  it("incluye los 2 usuarios de sistema (admin/caja)", async () => {
+  it("incluye los usuarios de sistema (admin/superadmin/caja)", async () => {
     const service = new UsersService(makeRepo());
     const users = await service.listUsers();
     const usernames = users.map((u) => u.username);
-    expect(usernames).toEqual(expect.arrayContaining(["admin", "caja"]));
+    expect(usernames).toEqual(expect.arrayContaining(["admin", "superadmin", "caja"]));
   });
 
   it("filtra usuarios de la DB cuyo username choca con uno de sistema (evita duplicados)", async () => {
-    const repo = makeRepo({ list: vi.fn().mockResolvedValue([{ id: "db-1", username: "admin", role: "admin", createdAt: 1 }]) });
+    const repo = makeRepo({
+      list: vi.fn().mockResolvedValue([
+        { id: "db-1", username: "admin", role: "admin", createdAt: 1 },
+        { id: "db-2", username: "superadmin", role: "admin", createdAt: 1 },
+      ]),
+    });
     const service = new UsersService(repo);
     const users = await service.listUsers();
     expect(users.filter((u) => u.username === "admin")).toHaveLength(1);
+    expect(users.filter((u) => u.username === "superadmin")).toHaveLength(1);
+    expect(users.find((u) => u.username === "superadmin")?.id).toBe("system-superadmin");
   });
 
   it("incluye usuarios reales de la DB que no chocan con nombres de sistema", async () => {
@@ -58,9 +65,12 @@ describe("UsersService.createUser", () => {
     service = new UsersService(repo);
   });
 
-  it("rechaza un nombre reservado (admin/caja)", async () => {
+  it("rechaza un nombre reservado (admin/caja/superadmin)", async () => {
     await expect(
       service.createUser({ username: "admin", password: "x", role: "caja" }),
+    ).rejects.toThrow(/reservado/);
+    await expect(
+      service.createUser({ username: "superadmin", password: "x", role: "admin" }),
     ).rejects.toThrow(/reservado/);
   });
 

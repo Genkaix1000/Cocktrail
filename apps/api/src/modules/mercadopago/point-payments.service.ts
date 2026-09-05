@@ -90,11 +90,19 @@ export class PointPaymentsService {
     // getActiveEvent: esta clase solo necesita resolver, no toda la clase.
     private readonly resolvePosnet: (barId: string | undefined) => Promise<ResolvedPosnet>,
     private readonly emit?: EmitFn,
+    private readonly isGhostMode: () => Promise<boolean> = async () => false,
   ) {}
 
   async createIntent(input: CreatePointIntentInput): Promise<CreatePointIntentResult> {
     if (typeof input.amount !== "number" || !Number.isFinite(input.amount) || input.amount <= 0) {
       throw new BadRequest("amount es requerido y debe ser un número positivo.");
+    }
+
+    if (await this.isGhostMode()) {
+      throw new Conflict(
+        "Ghost mode activo: el Posnet no está disponible. Usá QR, efectivo o cortesía.",
+        "GHOST_POSNET_DISABLED",
+      );
     }
 
     // El Posnet se resuelve PRIMERO y server-side (caja → device activo, env

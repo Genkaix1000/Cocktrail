@@ -1,4 +1,5 @@
 import type { Drink } from "@cocktrail/shared";
+import { isWithinScheduleWindow } from "@cocktrail/shared";
 import type { DrinksRepository } from "./drinks.repository.js";
 import { BadRequest, NotFound } from "../../shared/errors/http-errors.js";
 
@@ -6,7 +7,18 @@ export class DrinksService {
   constructor(private repo: DrinksRepository) {}
 
   async listDrinks(): Promise<Drink[]> {
-    return this.repo.list();
+    const drinks = await this.repo.list();
+    const now = new Date();
+    for (const d of drinks) {
+      if (!d.scheduleEnabled || d.scheduleRepeatNextEvent || d.scheduleConsumed) continue;
+      if (!isWithinScheduleWindow(d.scheduleFrom, d.scheduleUntil, now)) {
+        d.scheduleConsumed = true;
+        void this.repo.update(d.id, { scheduleConsumed: true }).catch((err) => {
+          console.error("[DrinksService] scheduleConsumed:", err);
+        });
+      }
+    }
+    return drinks;
   }
 
   async getDrink(id: number): Promise<Drink | undefined> {
@@ -36,6 +48,13 @@ export class DrinksService {
       available: input.available ?? true,
       categoryId: input.categoryId ?? null,
       sortOrder: input.sortOrder ?? 0,
+      scheduleEnabled: Boolean(input.scheduleEnabled),
+      scheduleFrom: input.scheduleFrom ?? null,
+      scheduleUntil: input.scheduleUntil ?? null,
+      scheduleHideWhenExpired: Boolean(input.scheduleHideWhenExpired),
+      scheduleMoveToCategoryId: input.scheduleMoveToCategoryId ?? null,
+      scheduleRepeatNextEvent: Boolean(input.scheduleRepeatNextEvent),
+      scheduleConsumed: false,
     };
 
     return this.repo.create(drink);
@@ -47,7 +66,6 @@ export class DrinksService {
       throw new NotFound(`Trago con id ${id} no encontrado`);
     }
 
-    // Validar campos si se proporcionan
     if (partial.name !== undefined && partial.name.trim().length === 0) {
       throw new BadRequest("El nombre del trago no puede estar vacío");
     }
@@ -55,7 +73,12 @@ export class DrinksService {
       throw new BadRequest("El precio debe ser un número positivo");
     }
 
-    const updated = await this.repo.update(id, partial);
+    const patch = { ...partial };
+    if (patch.scheduleEnabled === true) {
+      patch.scheduleConsumed = false;
+    }
+
+    const updated = await this.repo.update(id, patch);
     if (!updated) {
       throw new NotFound(`Trago con id ${id} no encontrado`);
     }

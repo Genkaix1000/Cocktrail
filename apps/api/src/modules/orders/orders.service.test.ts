@@ -435,3 +435,33 @@ describe("OrdersService.markDelivered", () => {
     );
   });
 });
+
+describe("OrdersService.createOrder ghost mode", () => {
+  it("no persiste order/ticket ni emite SSE cuando ghost está ON", async () => {
+    const ordersRepo = makeOrdersRepo();
+    const emit = vi.fn();
+    const incrementOrderCounter = vi.fn().mockResolvedValue(7);
+    const saveTicket = vi.fn();
+    const service = makeService({
+      ordersRepo,
+      emit,
+      incrementOrderCounter,
+      saveTicket,
+      isGhostMode: async () => true,
+      generateTicketCodeString: () => "GHOSTCODE",
+      renderTicketPayload: async () => ({ ticketData: "b64", ticketContent: TICKET_CONTENT }),
+    });
+
+    const result = await service.createOrder(
+      { items: [{ drinkId: 1, qty: 1 }], paymentMethod: "efectivo" },
+      "caja1",
+    );
+
+    expect(result.ghost).toBe(true);
+    expect(result.ticketData).toBe("b64");
+    expect(ordersRepo.create).not.toHaveBeenCalled();
+    expect(saveTicket).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+    expect(incrementOrderCounter).not.toHaveBeenCalled();
+  });
+});

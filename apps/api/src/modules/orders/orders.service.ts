@@ -37,6 +37,8 @@ export type OrdersServiceDeps = {
    * INSERT con un error incomprensible.
    */
   isPaymentSchemaReady?: () => boolean;
+  /** Ghost mode global: cobro efímero sin persistir en registros. */
+  isGhostMode?: () => Promise<boolean>;
 };
 
 export class OrdersService {
@@ -121,7 +123,10 @@ export class OrdersService {
       }
     }
 
-    const displayNumber = await this.deps.incrementOrderCounter(event.id);
+    const ghostMode = this.deps.isGhostMode ? await this.deps.isGhostMode() : false;
+    const displayNumber = ghostMode
+      ? Math.floor(Math.random() * 9000) + 1000
+      : await this.deps.incrementOrderCounter(event.id);
 
     const order: Order = {
       id: randomUUID(),
@@ -151,6 +156,21 @@ export class OrdersService {
 
     if (this.deps.generateTicketCodeString) {
       order.ticketCode = this.deps.generateTicketCodeString(order.id);
+    }
+
+    // Ghost: ticket efímero — imprime, no persiste orders/tickets/audit/SSE.
+    if (ghostMode) {
+      let ticketData: string | undefined;
+      let ticketContent: TicketContent | undefined;
+      if (this.deps.renderTicketPayload && esVentaDeCaja && (verdict.result === "no_aplica" || verdict.result === "confirmado")) {
+        try {
+          ({ ticketData, ticketContent } = await this.deps.renderTicketPayload(order, event));
+        } catch {
+          ticketData = undefined;
+          ticketContent = undefined;
+        }
+      }
+      return { ...order, printed: false, ticketData, ticketContent, ghost: true };
     }
 
     try {

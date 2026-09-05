@@ -24,7 +24,7 @@ export const STAFF_COL_LABELS: Record<StaffColId, string> = {
 
 export const STAFF_COLS_TOGGLEABLE: StaffColId[] = ["role", "type", "created"];
 
-export const SYSTEM_USERNAMES = ["admin", "caja"];
+export const SYSTEM_USERNAMES = ["admin", "caja", "superadmin"];
 
 export function isSystemUser(username: string) {
   return SYSTEM_USERNAMES.includes(username.toLowerCase());

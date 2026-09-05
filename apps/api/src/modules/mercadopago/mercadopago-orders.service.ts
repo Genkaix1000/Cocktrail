@@ -95,7 +95,17 @@ export class MercadoPagoOrdersService {
     private readonly cajasRepo: MercadoPagoCajasRepository,
     private readonly mpOrdersRepo: MpOrdersRepository,
     private readonly getActiveEvent: () => Promise<NightEvent | null>,
+    private readonly isGhostMode: () => Promise<boolean> = async () => false,
   ) {}
+
+  private async resolveChargeToken(barId?: string | null): Promise<string> {
+    const useGhost = await this.isGhostMode();
+    return this.credentialsResolver.resolve({
+      barId: barId ?? undefined,
+      allowGlobalFallback: !useGhost,
+      useGhost,
+    });
+  }
 
   async createQrOrder(input: CreateQrOrderInput): Promise<CreateQrOrderResult> {
     if (typeof input.amount !== "number" || !Number.isFinite(input.amount) || input.amount <= 0) {
@@ -133,10 +143,7 @@ export class MercadoPagoOrdersService {
       );
     }
 
-    const token = await this.credentialsResolver.resolve({
-      barId: bar.id,
-      allowGlobalFallback: true,
-    });
+    const token = await this.resolveChargeToken(bar.id);
 
     const amountStr = input.amount.toFixed(2);
     const externalRef = this.buildExternalRef(idempotencyKey);
@@ -257,19 +264,13 @@ export class MercadoPagoOrdersService {
         order.paymentId &&
         (order.feeStatus === "pending" || order.feeStatus === "none")
       ) {
-        const token = await this.credentialsResolver.resolve({
-          barId: order.barId ?? undefined,
-          allowGlobalFallback: true,
-        });
+        const token = await this.resolveChargeToken(order.barId);
         return this.enrichFees(order, token);
       }
       return order;
     }
 
-    const token = await this.credentialsResolver.resolve({
-      barId: order.barId ?? undefined,
-      allowGlobalFallback: true,
-    });
+    const token = await this.resolveChargeToken(order.barId);
 
     const mpOrder = await this.mpRequest<MpOrderResponse>(
       token,
@@ -294,10 +295,7 @@ export class MercadoPagoOrdersService {
     let updated = 0;
     let unavailable = 0;
     for (const row of rows) {
-      const token = await this.credentialsResolver.resolve({
-        barId: row.barId ?? undefined,
-        allowGlobalFallback: true,
-      });
+      const token = await this.resolveChargeToken(row.barId);
       const before = row.feeStatus;
       const after = await this.enrichFees(row, token);
       if (after.feeStatus === "ready" && before !== "ready") updated += 1;
@@ -399,10 +397,7 @@ export class MercadoPagoOrdersService {
     const order = await this.mpOrdersRepo.findByMpId(orderIdMp.trim());
     if (!order) return null;
 
-    const token = await this.credentialsResolver.resolve({
-      barId: order.barId ?? undefined,
-      allowGlobalFallback: true,
-    });
+    const token = await this.resolveChargeToken(order.barId);
 
     const mpOrder = await this.mpRequest<MpOrderResponse>(
       token,
@@ -439,10 +434,7 @@ export class MercadoPagoOrdersService {
       );
     }
 
-    const token = await this.credentialsResolver.resolve({
-      barId: order.barId ?? undefined,
-      allowGlobalFallback: true,
-    });
+    const token = await this.resolveChargeToken(order.barId);
 
     await this.mpRequest<MpOrderResponse>(
       token,

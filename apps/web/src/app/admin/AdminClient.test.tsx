@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import AdminClient from "./AdminClient";
@@ -49,9 +49,66 @@ vi.mock("@/services/auth.service", () => ({
   },
 }));
 
-// AdminClient monta varias secciones "pesadas" (fetch propio en cada una);
-// se stubean para testear solo el gating de esta feature, no su contenido
-// interno (cada una tiene o debería tener sus propios tests).
+const { usePrinterStatusMock } = vi.hoisted(() => ({
+  usePrinterStatusMock: vi.fn(),
+}));
+
+vi.mock("@/hooks/usePrinterStatus", () => ({
+  usePrinterStatus: () => usePrinterStatusMock(),
+}));
+
+vi.mock("@/hooks/usePosnetStatus", () => ({
+  usePosnetStatus: () => ({
+    posnetHealth: null,
+    posnetLevel: "unknown",
+    posnetMessage: null,
+  }),
+}));
+
+function connectedPrinterMock() {
+  return {
+    printerStatus: { connected: true, message: "ok" },
+    testPrint: vi.fn(),
+    printerTestMessage: null,
+    reprintTicket: vi.fn(),
+    printTicket: vi.fn(),
+    pairPrinterDevice: vi.fn(async () => undefined),
+    connectPrinter: vi.fn(async () => undefined),
+    reconnecting: false,
+    printerPaired: true,
+    printError: null,
+    reprinting: false,
+  };
+}
+
+function disconnectedPrinterMock() {
+  return {
+    printerStatus: { connected: false, message: "sin impresora" },
+    testPrint: vi.fn(),
+    printerTestMessage: null,
+    reprintTicket: vi.fn(),
+    printTicket: vi.fn(),
+    pairPrinterDevice: vi.fn(async () => undefined),
+    connectPrinter: vi.fn(async () => undefined),
+    reconnecting: false,
+    printerPaired: false,
+    printError: null,
+    reprinting: false,
+  };
+}
+
+vi.mock("@/services/drinks.service", () => ({
+  drinksService: { list: vi.fn().mockResolvedValue([]) },
+}));
+
+vi.mock("@/services/drink-categories.service", () => ({
+  drinkCategoriesService: { list: vi.fn().mockResolvedValue([]) },
+}));
+
+vi.mock("@/components/caja/VentaSection", () => ({
+  default: () => <div>VentaSection</div>,
+}));
+
 vi.mock("@/components/settings/CartaSection", () => ({ default: () => <div>CartaSection</div> }));
 vi.mock("@/components/settings/PagosSection", () => ({ default: () => <div>PagosSection</div> }));
 vi.mock("@/components/settings/UsuariosSection", () => ({ default: () => <div>UsuariosSection</div> }));
@@ -89,6 +146,9 @@ function makeNightEvent(overrides: Partial<NightEvent> = {}): NightEvent {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, "", "/admin");
+  localStorage.removeItem("cocktrail:printer-prompt-seen");
+  usePrinterStatusMock.mockReturnValue(connectedPrinterMock());
   mockedAuthService.logout.mockResolvedValue({ ok: true });
   mockedEventsService.getHistory.mockResolvedValue([]);
   mockedEventsService.getPublicConfig.mockResolvedValue({} as never);
@@ -100,6 +160,7 @@ describe("AdminClient", () => {
 
     expect(await screen.findByText("DashboardSection")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Abrir noche/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Probar impresora/i })).toBeInTheDocument();
   });
 
   it("muestra el botón Abrir noche (no Clave de la noche/Cerrar noche) cuando no hay noche activa", async () => {
@@ -120,6 +181,40 @@ describe("AdminClient", () => {
     expect(screen.queryByRole("button", { name: /Abrir noche/i })).not.toBeInTheDocument();
   });
 
+  it("Nueva Venta con noche cerrada muestra Caja Cerrada", async () => {
+    const user = userEvent.setup();
+    usePrinterStatusMock.mockReturnValue(disconnectedPrinterMock());
+    renderAdmin();
+    await screen.findByText("DashboardSection");
+    await user.click(screen.getByRole("button", { name: /Nueva Venta/i }));
+    expect(await screen.findByText("Caja Cerrada")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Vincular impresora/i })).toBeInTheDocument();
+  });
+
+  it("Nueva Venta con noche abierta monta el POS", async () => {
+    const user = userEvent.setup();
+    renderAdmin({ initialEvent: makeNightEvent() });
+    await screen.findByText("DashboardSection");
+    await user.click(screen.getByRole("button", { name: /Nueva Venta/i }));
+    expect(await screen.findByText("VentaSection")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Probar impresora/i })).toBeInTheDocument();
+    expect(screen.getByText(/Clave: TEQUILA/i)).toBeInTheDocument();
+  });
+
+  it("con noche abierta y sin impresora muestra el prompt de vincular", async () => {
+    usePrinterStatusMock.mockReturnValue(disconnectedPrinterMock());
+    renderAdmin({ initialEvent: makeNightEvent() });
+    expect(
+      await screen.findByRole("dialog", { name: /No hay impresora/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("dialog", { name: /No hay impresora/i })).getByRole(
+        "button",
+        { name: /Vincular impresora/i },
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("al abrir una noche desde el botón del sidebar, el panel pasa a mostrar Clave de la noche/Cerrar noche", async () => {
     const user = userEvent.setup();
     const opened = makeNightEvent({ keyword: "MEDIANOCHE" });
@@ -133,8 +228,6 @@ describe("AdminClient", () => {
     const input = await screen.findByPlaceholderText("ej. TEQUILA");
     await user.type(input, "MEDIANOCHE");
 
-    // Mientras el modal está abierto hay dos botones "Abrir noche": el del
-    // sidebar (sigue detrás, event todavía null) y el submit del modal.
     const submitButton = screen
       .getAllByRole("button", { name: /Abrir noche/i })
       .find((b) => b.getAttribute("type") === "submit")!;

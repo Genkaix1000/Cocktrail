@@ -12,6 +12,10 @@ import {
 } from "../mercadopago/mp-fallback-preflight.js";
 import { Conflict } from "../../shared/errors/http-errors.js";
 import { buildAppVersionInfo, type AppVersionInfo } from "./app-version.js";
+import {
+  GHOST_MODE_FLAG,
+  type SystemFlagsRepository,
+} from "./system-flags.repository.js";
 
 const serverStartedAt = Date.now();
 
@@ -34,6 +38,7 @@ export class SystemService {
   constructor(
     /** Solo para accept-drift — conexión directa a Postgres (mismo que el runner). */
     private migrationsRepo?: PgMigrationsRepository,
+    private flagsRepo?: SystemFlagsRepository,
   ) {}
 
   /**
@@ -92,5 +97,22 @@ export class SystemService {
   /** F1.c — re-evaluación on-demand del preflight (nunca lanza). */
   async refreshMpFallback(): Promise<MpFallbackStatus> {
     return runMpFallbackPreflight();
+  }
+
+  async isGhostMode(): Promise<boolean> {
+    if (!this.flagsRepo) return false;
+    return this.flagsRepo.get(GHOST_MODE_FLAG);
+  }
+
+  async getGhostMode(): Promise<{ enabled: boolean }> {
+    return { enabled: await this.isGhostMode() };
+  }
+
+  async setGhostMode(enabled: boolean, updatedBy: string): Promise<{ enabled: boolean }> {
+    if (!this.flagsRepo) {
+      throw new Conflict("Flags de sistema no disponibles.");
+    }
+    const row = await this.flagsRepo.set(GHOST_MODE_FLAG, enabled, updatedBy);
+    return { enabled: row.value };
   }
 }

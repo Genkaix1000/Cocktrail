@@ -47,6 +47,12 @@ const makeEmptyForm = (): DrinkForm => ({
   available: true,
   categoryId: null,
   sortOrder: 0,
+  scheduleEnabled: false,
+  scheduleFrom: "22:00",
+  scheduleUntil: "03:00",
+  scheduleHideWhenExpired: false,
+  scheduleMoveToCategoryId: null,
+  scheduleRepeatNextEvent: false,
 });
 
 type ViewFilter = "all" | "in" | "out";
@@ -228,7 +234,6 @@ export default function CartaSection() {
       const next = prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col];
       const order: CartaColId[] = [
         "id",
-        "icon",
         "name",
         "category",
         "price",

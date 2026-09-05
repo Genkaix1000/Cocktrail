@@ -7,6 +7,8 @@ export type NewOAuthState = {
   barId: string | null;
   /** Origen del frontend que inició el OAuth (F1 multi-entorno). */
   redirectUrl?: string | null;
+  /** primary = cuenta del local; ghost = cuenta de pruebas en paralelo. */
+  purpose?: "primary" | "ghost";
   expiresAt: Date;
 };
 
@@ -15,6 +17,7 @@ export type ConsumedOAuthState = {
   codeVerifier: string;
   barId: string | null;
   redirectUrl: string | null;
+  purpose: "primary" | "ghost";
 };
 
 export interface OAuthStatesRepository {
@@ -30,6 +33,7 @@ export class SupabaseOAuthStatesRepository implements OAuthStatesRepository {
       code_verifier: state.codeVerifier,
       bar_id: state.barId,
       redirect_url: state.redirectUrl ?? null,
+      purpose: state.purpose ?? "primary",
       expires_at: state.expiresAt.toISOString(),
     });
 
@@ -51,10 +55,12 @@ export class SupabaseOAuthStatesRepository implements OAuthStatesRepository {
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return null;
 
+    const purpose = row.purpose === "ghost" ? "ghost" : "primary";
     return {
       codeVerifier: row.code_verifier,
       barId: row.bar_id ?? null,
       redirectUrl: row.redirect_url ?? null,
+      purpose,
     };
   }
 }

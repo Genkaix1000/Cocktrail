@@ -6,6 +6,7 @@ import { validate, LoginSchema } from "../../shared/middleware/validate.js";
 import { loginLimiter } from "../../shared/middleware/rate-limit.js";
 import type { UsersRepository } from "../users/users.repository.js";
 import type { Role } from "@cocktrail/shared";
+import { isSuperadminUsername } from "./superadmin.js";
 
 /** Marcador público para que la app Android distinga este server de cualquier HTTP en :3000. */
 export const SERVER_FINGERPRINT = { app: "cocktrail" as const };
@@ -140,6 +141,7 @@ export function createAuthController(
       role: session.role,
       username: session.username,
       permissions,
+      isSuperadmin: isSuperadminUsername(session.username),
     });
   });
 

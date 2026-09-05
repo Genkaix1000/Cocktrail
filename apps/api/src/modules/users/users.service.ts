@@ -16,6 +16,12 @@ const SYSTEM_USERS: SafeUser[] = [
     createdAt: 1782229602710,
   },
   {
+    id: "system-superadmin",
+    username: "superadmin",
+    role: "admin",
+    createdAt: 1782229602710,
+  },
+  {
     id: "system-caja",
     username: "caja",
     role: "caja",
@@ -23,7 +29,7 @@ const SYSTEM_USERS: SafeUser[] = [
   },
 ];
 
-const RESERVED_NAMES = ["admin", "caja"];
+const RESERVED_NAMES = ["admin", "caja", "superadmin"];
 
 export class UsersService {
   constructor(private repo: UsersRepository) {}
