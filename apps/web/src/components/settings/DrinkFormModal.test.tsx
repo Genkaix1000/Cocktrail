@@ -50,7 +50,7 @@ describe("DrinkFormModal", () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText("PROMO 2 Vodka con Speed"), "G");
+    await user.type(screen.getByPlaceholderText("Fernet con Coca"), "G");
     expect(onChange).toHaveBeenCalledWith({ name: "G" });
     expect(screen.queryByPlaceholderText("ej. PROMO AMIGOS, FIESTA TOTAL")).not.toBeInTheDocument();
   });
@@ -114,4 +114,60 @@ describe("DrinkFormModal", () => {
 
     expect(onChange).toHaveBeenCalledWith({ image: "/nueva.webp" });
   });
+
+  it("abre el selector de hora (WheelTimePicker) al clickear en 'Desde' y actualiza el horario", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(
+      <DrinkFormModal
+        editDrink={makeForm({ scheduleEnabled: true, scheduleFrom: "22:00", scheduleUntil: "03:00" })}
+        categories={categories}
+        saving={false}
+        onChange={onChange}
+        onCancel={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    // Debe mostrar los botones interactivos 'Desde' y 'Hasta'
+    const btnDesde = screen.getByRole("button", { name: /Ajustar hora desde/i });
+    expect(btnDesde).toBeInTheDocument();
+    expect(screen.getByText("22:00")).toBeInTheDocument();
+    expect(screen.getByText("03:00")).toBeInTheDocument();
+
+    // Click en Desde para abrir el picker
+    await user.click(btnDesde);
+    expect(screen.getByText("Ajustar hora desde")).toBeInTheDocument();
+
+    // En la lista de horas, seleccionar '11' (que con PM será 23:00)
+    const hourBtn = screen.getByRole("button", { name: "Hora 11" });
+    await user.click(hourBtn);
+
+    expect(onChange).toHaveBeenCalledWith({ scheduleFrom: "23:00" });
+  });
+
+  it("renderiza la tarjeta de vista previa fiel a Nueva Venta con badge de Trend", () => {
+    render(
+      <DrinkFormModal
+        editDrink={makeForm({
+          name: "Vodka con Speed",
+          price: 15,
+          categoryId: "tendencias",
+          trending: true,
+        })}
+        categories={categories}
+        saving={false}
+        onChange={vi.fn()}
+        onCancel={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Vista previa")).toBeInTheDocument();
+    expect(screen.getByText("Vodka con Speed")).toBeInTheDocument();
+    expect(screen.getByText("$15")).toBeInTheDocument();
+    expect(screen.getByText("Trend")).toBeInTheDocument();
+  });
 });
+
