@@ -90,6 +90,8 @@ export default function CajaPage() {
       if (activeBarIdRef.current !== barId) return;
       if (usernameRef.current && ejectedUser !== usernameRef.current) return;
 
+      // Evita auto-join inmediato a la misma caja tras un kick.
+      autoJoinedRef.current = barId;
       setActiveSession(null);
       setActiveBarContext(null);
       setLoadedBarId(null);
@@ -245,9 +247,12 @@ export default function CajaPage() {
   }, [loading, activeSession, joiningBarId, boxes, handleJoin]);
 
   async function handleLogout() {
-    await authService.logout();
-    router.push("/login");
-    router.refresh();
+    try {
+      await authService.logout();
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
   }
 
   // Debe vivir arriba de los early returns: Rules of Hooks.

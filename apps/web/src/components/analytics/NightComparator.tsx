@@ -7,7 +7,7 @@ import {
   FileText,
   User,
   Banknote,
-  Globe,
+  QrCode,
   Ticket,
   Clock,
   Wine,
@@ -58,8 +58,8 @@ function buildRows(a: UnifiedNightDay, b: UnifiedNightDay): ComparisonRow[] {
   const totalB = displayRevenue(b.totals);
   const ticketsA = a.orderCounter;
   const ticketsB = b.orderCounter;
-  const webSalesA = a.totals.webTotal;
-  const webSalesB = b.totals.webTotal;
+  const qrSalesA = a.totals.qrTotal;
+  const qrSalesB = b.totals.qrTotal;
   const efA = a.totals.efectivoTotal;
   const efB = b.totals.efectivoTotal;
   const topA = a.totals.drinksSold[0];
@@ -92,13 +92,13 @@ function buildRows(a: UnifiedNightDay, b: UnifiedNightDay): ComparisonRow[] {
       delta: computeDeltaPct(ticketsA, ticketsB),
     },
     {
-      label: "Ventas Web",
-      valueA: formatMoney(webSalesA),
-      valueB: formatMoney(webSalesB),
-      rawA: webSalesA,
-      rawB: webSalesB,
+      label: "QR",
+      valueA: formatMoney(qrSalesA),
+      valueB: formatMoney(qrSalesB),
+      rawA: qrSalesA,
+      rawB: qrSalesB,
       winMode: "higher",
-      delta: computeDeltaPct(webSalesA, webSalesB),
+      delta: computeDeltaPct(qrSalesA, qrSalesB),
     },
     {
       label: "Efectivo",
@@ -321,10 +321,10 @@ function NightDetailView({
       accent: true,
     },
     {
-      icon: Globe,
-      label: "Web",
-      value: `$${night.totals.webTotal.toLocaleString("es-AR")}`,
-      sub: `${night.totals.webCount}`,
+      icon: QrCode,
+      label: "QR",
+      value: `$${night.totals.qrTotal.toLocaleString("es-AR")}`,
+      sub: `${night.totals.qrCount}`,
     },
     {
       icon: Banknote,
@@ -469,10 +469,10 @@ function NightDetailView({
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
-                    Web
+                    QR
                   </span>
                   <span className="text-[var(--text-secondary)] tabular">
-                    ${session.totals.webTotal.toLocaleString("es-AR")} ({session.totals.webCount})
+                    ${session.totals.qrTotal.toLocaleString("es-AR")} ({session.totals.qrCount})
                   </span>
                 </div>
                 <div className="flex flex-col gap-0.5">

@@ -116,8 +116,10 @@ describe("useEventState", () => {
     expect(result.current.orders[0].status).toBe("entregado");
   });
 
-  it("event.opened setea el evento y dispara refetch", async () => {
-    const { result } = renderHook(() => useEventState());
+  it("event.opened limpia orders viejos, setea el evento y dispara refetch", async () => {
+    const { result } = renderHook(() =>
+      useEventState({ initial: { orders: [makeOrder({ id: "viejo" })] } }),
+    );
     const es = FakeEventSource.instances.at(-1)!;
     const newEvent = makeNightEvent({ keyword: "RON" });
 
@@ -135,13 +137,19 @@ describe("useEventState", () => {
 
     act(() => es.emit("event.opened", { event: newEvent }));
 
+    expect(result.current.orders).toEqual([]);
     await waitFor(() => expect(result.current.event).toEqual(newEvent));
     await waitFor(() => expect(result.current.orders.map((o) => o.id)).toEqual(["refetched"]));
   });
 
-  it("event.closed setea summary, dispara refetch, y llama onEventClosed", () => {
+  it("event.closed setea summary, limpia event, dispara refetch, y llama onEventClosed", () => {
     const onEventClosed = vi.fn();
-    const { result } = renderHook(() => useEventState({ onEventClosed }));
+    const { result } = renderHook(() =>
+      useEventState({
+        onEventClosed,
+        initial: { event: makeNightEvent() },
+      }),
+    );
     const es = FakeEventSource.instances.at(-1)!;
     const summary = makeSummary();
 
@@ -149,6 +157,7 @@ describe("useEventState", () => {
     act(() => es.emit("event.closed", { summary }));
 
     expect(result.current.summary).toEqual(summary);
+    expect(result.current.event).toBeNull();
     expect(mockedEventsService.getState).toHaveBeenCalledTimes(1);
     expect(onEventClosed).toHaveBeenCalledWith(summary);
   });

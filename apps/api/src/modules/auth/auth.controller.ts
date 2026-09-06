@@ -108,7 +108,14 @@ export function createAuthController(
       const session = verifySession(req.cookies?.[COOKIE_NAME]);
       if (session && options.onLogout) {
         try {
-          await options.onLogout(session);
+          // leave no puede colgar el clear de cookie: si la DB tarda, el
+          // client timeout deja la cookie viva y /login rebota a /caja.
+          await Promise.race([
+            options.onLogout(session),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("leave timeout")), 2_000);
+            }),
+          ]);
         } catch (error) {
           // Cerrar la cookie siempre. El TTL de bar_sessions libera cualquier
           // ocupación que no haya podido borrarse en este intento.

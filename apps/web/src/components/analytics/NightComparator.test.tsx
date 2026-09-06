@@ -15,12 +15,12 @@ function makeSession(overrides: Partial<EventSummary> = {}): EventSummary {
     orderCounter: 10,
     orders: [],
     totals: {
-      webTotal: 40000,
-      webCount: 4,
+      webTotal: 0,
+      webCount: 0,
       efectivoTotal: 60000,
       efectivoCount: 6,
-      qrTotal: 0,
-      qrCount: 0,
+      qrTotal: 40000,
+      qrCount: 4,
       debitoTotal: 0,
       debitoCount: 0,
       drinksSold: [{ drinkId: 1, name: "Fernet con Coca", qty: 5, subtotal: 25000 }],
@@ -58,9 +58,11 @@ describe("NightComparator", () => {
     expect(screen.getByText("Ver Auditoría de Tickets")).toBeInTheDocument();
   });
 
-  it("muestra Tickets Emitidos, Top Trago y Duración en el detalle de una noche", () => {
+  it("muestra Tickets Emitidos, QR, Top Trago y Duración en el detalle de una noche", () => {
     render(<NightComparator nights={[makeNight()]} isBosko={false} onRedirectToLogs={noop} />);
     expect(screen.getByText("Tickets Emitidos")).toBeInTheDocument();
+    expect(screen.getByText("QR")).toBeInTheDocument();
+    expect(screen.getByText("$40.000")).toBeInTheDocument();
     expect(screen.getByText("Top Trago")).toBeInTheDocument();
     expect(screen.getByText("Fernet con Coca (×5)")).toBeInTheDocument();
     expect(screen.getByText("Duración")).toBeInTheDocument();

@@ -146,14 +146,17 @@ export default function CajaClient({ drinks, categories, currentUser, onReloadCa
   }, [printerPromptOpen, pairingPrinter, pairPrinterDevice]);
 
   const activeNightOrders = useMemo(() => {
-    if (!event) return orders;
+    if (!event) return [];
     return orders.filter((o) => o.createdAt >= event.startedAt);
   }, [orders, event]);
 
   async function handleLogout() {
-    await authService.logout();
-    router.push("/login");
-    router.refresh();
+    try {
+      await authService.logout();
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
   }
 
   async function handleCloseConfirm(password: string) {

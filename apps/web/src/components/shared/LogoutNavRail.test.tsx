@@ -58,4 +58,34 @@ describe("LogoutNavRail", () => {
     await user.click(screen.getByRole("button", { name: "afuera" }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it("mientras pending muestra Cerrando y no re-dispara onConfirm", async () => {
+    const user = userEvent.setup();
+    let resolveConfirm!: () => void;
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        }),
+    );
+    render(
+      <LogoutNavRail
+        confirm
+        onAsk={vi.fn()}
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Confirmar cierre de sesión" }));
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(screen.getByText("Cerrando…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar cierre de sesión" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Confirmar cierre de sesión" }));
+    expect(onConfirm).toHaveBeenCalledOnce();
+
+    resolveConfirm();
+    await screen.findByText("¿Cerrar sesión?");
+  });
 });

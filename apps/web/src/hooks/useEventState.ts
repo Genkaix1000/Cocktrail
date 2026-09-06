@@ -71,10 +71,14 @@ export function useEventState(options?: Options) {
       },
       "event.opened": ({ event: newEvent }) => {
         setEvent(newEvent);
+        setOrders([]);
+        setServerTotals(null);
+        setSummary(null);
         refetch();
       },
       "event.closed": ({ summary: closedSummary }) => {
         setSummary(closedSummary);
+        setEvent(null);
         refetch();
         onEventClosed?.(closedSummary);
       },

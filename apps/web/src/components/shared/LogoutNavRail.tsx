@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Check, LogOut, X } from "lucide-react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Check, Loader2, LogOut, X } from "lucide-react";
 
 type Props = {
   collapsed?: boolean;
   confirm: boolean;
   onAsk: () => void;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 };
 
 const slide =
@@ -28,9 +28,14 @@ export function LogoutNavRail({
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const focusRef = useRef<HTMLButtonElement>(null);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (!confirm) return;
+    if (!confirm) setPending(false);
+  }, [confirm]);
+
+  useEffect(() => {
+    if (!confirm || pending) return;
     focusRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
@@ -44,7 +49,18 @@ export function LogoutNavRail({
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [confirm, onCancel]);
+  }, [confirm, pending, onCancel]);
+
+  async function handleConfirm(e: MouseEvent) {
+    e.stopPropagation();
+    if (pending) return;
+    setPending(true);
+    try {
+      await onConfirm();
+    } finally {
+      setPending(false);
+    }
+  }
 
   if (collapsed) {
     return (
@@ -58,7 +74,8 @@ export function LogoutNavRail({
           aria-label="Cerrar sesión"
           aria-expanded={confirm}
           onClick={onAsk}
-          className={`${slide} justify-center text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer bg-transparent ${
+          disabled={pending}
+          className={`${slide} justify-center text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer bg-transparent disabled:opacity-50 ${
             confirm
               ? "-translate-x-full opacity-0 pointer-events-none"
               : "translate-x-0 opacity-100"
@@ -79,13 +96,11 @@ export function LogoutNavRail({
             type="button"
             title="Confirmar"
             aria-label="Confirmar cierre de sesión"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfirm();
-            }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer hover:brightness-110 active:scale-95 transition-all"
+            disabled={pending}
+            onClick={(e) => void handleConfirm(e)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer hover:brightness-110 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-wait"
           >
-            <Check size={14} />
+            {pending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           </button>
         </div>
       </div>
@@ -102,7 +117,8 @@ export function LogoutNavRail({
         aria-expanded={confirm}
         aria-label="Cerrar sesión"
         onClick={onAsk}
-        className={`${slide} gap-2.5 pl-4 pr-3 text-left text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer bg-transparent ${
+        disabled={pending}
+        className={`${slide} gap-2.5 pl-4 pr-3 text-left text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer bg-transparent disabled:opacity-50 ${
           confirm
             ? "-translate-x-full opacity-0 pointer-events-none"
             : "translate-x-0 opacity-100"
@@ -120,7 +136,7 @@ export function LogoutNavRail({
         }`}
       >
         <span className="text-[12px] font-semibold text-[var(--danger-base)] truncate">
-          ¿Cerrar sesión?
+          {pending ? "Cerrando…" : "¿Cerrar sesión?"}
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -128,11 +144,12 @@ export function LogoutNavRail({
             type="button"
             title="Cancelar"
             aria-label="Cancelar cierre de sesión"
+            disabled={pending}
             onClick={(e) => {
               e.stopPropagation();
               onCancel();
             }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <X size={12} />
           </button>
@@ -140,13 +157,11 @@ export function LogoutNavRail({
             type="button"
             title="Confirmar"
             aria-label="Confirmar cierre de sesión"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfirm();
-            }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer hover:brightness-110 active:scale-95 transition-all"
+            disabled={pending}
+            onClick={(e) => void handleConfirm(e)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--danger-base)] text-white cursor-pointer hover:brightness-110 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-wait"
           >
-            <Check size={12} />
+            {pending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
           </button>
         </div>
       </div>

@@ -241,7 +241,7 @@ export default function AdminClient({
   }, [printerPromptOpen, pairingPrinter, pairPrinterDevice]);
 
   const activeNightOrders = useMemo(() => {
-    if (!event) return orders;
+    if (!event) return [];
     return orders.filter((o) => o.createdAt >= event.startedAt);
   }, [orders, event]);
 
@@ -361,9 +361,12 @@ export default function AdminClient({
   }
 
   async function logout() {
-    await authService.logout();
-    router.push("/login");
-    router.refresh();
+    try {
+      await authService.logout();
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
   }
 
   const analytics = useAdminAnalytics(
