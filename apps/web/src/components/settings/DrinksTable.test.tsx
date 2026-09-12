@@ -26,7 +26,6 @@ const emptyFilters: ColumnFilters = {
   name: "",
   priceMin: "",
   priceMax: "",
-  status: "all",
   tags: "all",
   promo: "all",
   trending: "all",
@@ -88,7 +87,7 @@ describe("DrinksTable", () => {
       />,
     );
 
-    expect(screen.getByText("En carta")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Prioridad 1/i)).toBeInTheDocument();
 
     await user.click(screen.getByTitle("Ocultar de la carta"));
     expect(onToggleAvailable).toHaveBeenCalled();

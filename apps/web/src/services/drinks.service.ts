@@ -17,4 +17,11 @@ export const drinksService = {
   delete(id: number) {
     return apiFetch<{ ok: true }>(`/api/drinks/${id}`, { method: "DELETE" });
   },
+
+  reorder(categoryId: string | null, ids: number[]) {
+    return apiFetch<Drink[]>("/api/drinks/reorder", {
+      method: "POST",
+      body: { categoryId, ids },
+    });
+  },
 };

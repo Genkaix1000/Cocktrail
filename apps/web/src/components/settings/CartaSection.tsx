@@ -29,7 +29,6 @@ const EMPTY_COL_FILTERS: ColumnFilters = {
   name: "",
   priceMin: "",
   priceMax: "",
-  status: "all",
   tags: "all",
   promo: "all",
   trending: "all",
@@ -196,8 +195,6 @@ export default function CartaSection() {
       const max = cf.priceMax === "" ? null : Number(cf.priceMax);
       if (min != null && !Number.isNaN(min)) list = list.filter((d) => d.price >= min);
       if (max != null && !Number.isNaN(max)) list = list.filter((d) => d.price <= max);
-      if (cf.status === "in") list = list.filter((d) => d.available);
-      if (cf.status === "out") list = list.filter((d) => !d.available);
       if (cf.tags === "promo") list = list.filter((d) => d.promo);
       if (cf.tags === "trending") list = list.filter((d) => d.trending);
       if (cf.tags === "any") list = list.filter((d) => d.promo || d.trending);
@@ -240,11 +237,11 @@ export default function CartaSection() {
     setVisibleCols((prev) => {
       const next = prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col];
       const order: CartaColId[] = [
+        "order",
         "id",
         "name",
         "category",
         "price",
-        "status",
         "tags",
         "actions",
       ];
@@ -382,6 +379,31 @@ export default function CartaSection() {
       setSavingCategory(false);
     }
   }, []);
+
+  const handleReorderDrinks = useCallback(
+    async (categoryId: string | null, ids: number[]) => {
+      setDrinks((prev) => {
+        const idOrder = new Map<number, number>();
+        ids.forEach((id, idx) => idOrder.set(id, idx + 1));
+        return prev.map((d) => {
+          if (idOrder.has(d.id)) {
+            return { ...d, sortOrder: idOrder.get(d.id)! };
+          }
+          return d;
+        });
+      });
+
+      try {
+        await drinksService.reorder(categoryId, ids);
+      } catch (err) {
+        console.error("Error reordering drinks:", err);
+        setError("No se pudo guardar el orden de los productos.");
+        const fresh = await drinksService.list().catch(() => null);
+        if (fresh) setDrinks(fresh);
+      }
+    },
+    [],
+  );
 
   const commitDeleteCategory = useCallback(async (category: DrinkCategory) => {
     try {
@@ -552,26 +574,28 @@ export default function CartaSection() {
 
           <div data-tour="carta-table">
             <DrinksTable
-            drinks={sortedAndFiltered}
-            categoryNames={categoryNames}
-            loadError={loadError}
-            hasActiveSearch={Boolean(search.trim())}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            selectedDrinkId={editDrink?.id}
-            confirmingDeleteId={confirmingDeleteId}
-            visibleCols={visibleCols}
-            filtersOpen={filtersOpen}
-            columnFilters={columnFilters}
-            onSort={handleSort}
-            onRetry={loadDrinks}
-            onSelectDrink={openEdit}
-            onToggleAvailable={toggleAvailable}
-            onAskDelete={(d) => setConfirmingDeleteId(d.id)}
-            onCancelDelete={() => setConfirmingDeleteId(null)}
-            onConfirmDelete={handleConfirmDelete}
-            onToggleCol={toggleCol}
+              drinks={sortedAndFiltered}
+              categories={categories}
+              categoryNames={categoryNames}
+              loadError={loadError}
+              hasActiveSearch={Boolean(search.trim())}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              selectedDrinkId={editDrink?.id}
+              confirmingDeleteId={confirmingDeleteId}
+              visibleCols={visibleCols}
+              filtersOpen={filtersOpen}
+              columnFilters={columnFilters}
+              onSort={handleSort}
+              onRetry={loadDrinks}
+              onSelectDrink={openEdit}
+              onToggleAvailable={toggleAvailable}
+              onAskDelete={(d) => setConfirmingDeleteId(d.id)}
+              onCancelDelete={() => setConfirmingDeleteId(null)}
+              onConfirmDelete={handleConfirmDelete}
+              onToggleCol={toggleCol}
               onColumnFiltersChange={(patch) => setColumnFilters((prev) => ({ ...prev, ...patch }))}
+              onReorderDrinks={handleReorderDrinks}
             />
           </div>
         </div>

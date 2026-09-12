@@ -106,3 +106,24 @@ describe("DrinksService.deleteDrink", () => {
     expect(repo.delete).toHaveBeenCalledWith(1);
   });
 });
+
+describe("DrinksService.reorderDrinks", () => {
+  it("asigna sortOrder 1..N según el orden de ids y emite carta.updated", async () => {
+    const emit = vi.fn();
+    const repo = makeRepo({
+      list: vi.fn().mockResolvedValue([
+        { id: 10, categoryId: "vodka", sortOrder: 1 },
+        { id: 20, categoryId: "vodka", sortOrder: 2 },
+        { id: 30, categoryId: "vodka", sortOrder: 3 },
+      ]),
+      update: vi.fn().mockResolvedValue({ id: 10 }),
+    });
+    const service = new DrinksService(repo, emit);
+    await service.reorderDrinks("vodka", [30, 10, 20]);
+
+    expect(repo.update).toHaveBeenCalledWith(30, { sortOrder: 1 });
+    expect(repo.update).toHaveBeenCalledWith(10, { sortOrder: 2 });
+    expect(repo.update).toHaveBeenCalledWith(20, { sortOrder: 3 });
+    expect(emit).toHaveBeenCalledWith({ type: "carta.updated" });
+  });
+});

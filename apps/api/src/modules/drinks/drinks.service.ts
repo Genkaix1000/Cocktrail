@@ -100,4 +100,18 @@ export class DrinksService {
     await this.repo.delete(id);
     this.emit?.({ type: "carta.updated" });
   }
+
+  async reorderDrinks(categoryId: string | null, ids: number[]): Promise<Drink[]> {
+    for (let i = 0; i < ids.length; i++) {
+      await this.repo.update(ids[i], { sortOrder: i + 1 });
+    }
+    const all = await this.repo.list();
+    const group = all.filter((d) => (categoryId ? d.categoryId === categoryId : !d.categoryId));
+    const rest = group.filter((d) => !ids.includes(d.id));
+    for (let i = 0; i < rest.length; i++) {
+      await this.repo.update(rest[i].id, { sortOrder: ids.length + i + 1 });
+    }
+    this.emit?.({ type: "carta.updated" });
+    return this.repo.list();
+  }
 }

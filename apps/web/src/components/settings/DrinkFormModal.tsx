@@ -323,7 +323,7 @@ export default function DrinkFormModal({
                   <span className="text-[12px] font-medium text-[var(--text-primary)] truncate">
                     {imgPreview.startsWith("http")
                       ? imgPreview.includes("supabase.co")
-                        ? "Imagen en la nube (Supabase)"
+                        ? "Imagen en la nube"
                         : "Imagen externa"
                       : imgPreview.split("/").pop() || "Imagen asignada"}
                   </span>

@@ -1,35 +1,35 @@
 import { loadCols, saveCols } from "@/lib/crudCols";
 
 export type CartaColId =
+  | "order"
   | "id"
   | "name"
   | "category"
   | "price"
-  | "status"
   | "tags"
   | "actions";
 
-export const CARTA_COLS_STORAGE_KEY = "crud:carta:cols:v3";
+export const CARTA_COLS_STORAGE_KEY = "crud:carta:cols:v4";
 
 /** Siempre visibles; no aparecen en el ⚙ como apagables. */
-export const CARTA_COLS_REQUIRED: CartaColId[] = ["name", "actions"];
+export const CARTA_COLS_REQUIRED: CartaColId[] = ["order", "name", "actions"];
 
 export const CARTA_COLS_DEFAULT: CartaColId[] = [
+  "order",
   "id",
   "name",
   "category",
   "price",
-  "status",
   "tags",
   "actions",
 ];
 
 export const CARTA_COL_LABELS: Record<CartaColId, string> = {
+  order: "Puesto",
   id: "ID",
   name: "Nombre",
   category: "Categoría",
   price: "Precio",
-  status: "Estado",
   tags: "Badge",
   actions: "Acciones",
 };
@@ -39,16 +39,15 @@ export const CARTA_COLS_TOGGLEABLE: CartaColId[] = [
   "id",
   "category",
   "price",
-  "status",
   "tags",
 ];
 
 const ALL: CartaColId[] = [
+  "order",
   "id",
   "name",
   "category",
   "price",
-  "status",
   "tags",
   "actions",
 ];
@@ -64,13 +63,13 @@ export function saveCartaCols(cols: CartaColId[]) {
 export function cartaGridTemplate(cols: CartaColId[]): string {
   // Solo Nombre absorbe el sobrante.
   const sizes: Record<CartaColId, string> = {
+    order: "56px",
     id: "56px",
     name: "minmax(140px, 1fr)",
     category: "140px",
     price: "104px",
-    status: "116px",
     tags: "168px",
     actions: "104px",
   };
-  return cols.map((c) => sizes[c]).join(" ");
+  return cols.map((c) => sizes[c] || "100px").join(" ");
 }

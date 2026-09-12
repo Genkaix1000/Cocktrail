@@ -58,6 +58,32 @@ export function createDrinksController(
     },
   );
 
+  // POST /api/drinks/reorder — solo admin
+  router.post(
+    "/reorder",
+    authMiddleware,
+    requireRole("admin"),
+    async (req, res, next) => {
+      try {
+        const { categoryId, ids } = req.body ?? {};
+        if (!Array.isArray(ids)) {
+          res.status(400).json({ error: "ids debe ser un array de números" });
+          return;
+        }
+        const numericIds = ids.map(Number).filter((n) => !Number.isNaN(n));
+        const drinks = await service.reorderDrinks(categoryId ? String(categoryId) : null, numericIds);
+        await logAction(
+          "drink.reordered",
+          `Reordenados ${numericIds.length} productos en categoría ${categoryId || "sin-categoría"}`,
+          req.session?.username || "admin"
+        );
+        res.json(drinks);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   // PATCH /api/drinks/:id — solo admin
   router.patch(
     "/:id",
