@@ -41,8 +41,10 @@ import { useCajaShortcuts } from "@/hooks/useCajaShortcuts";
 import { useProductGridNav } from "@/hooks/useProductGridNav";
 import { useGridColumns } from "@/hooks/useGridColumns";
 import Toast from "@/components/shared/Toast";
+import SplitPrintModal from "@/components/caja/SplitPrintModal";
 
 import { formatHm, plural } from "@/lib/utils";
+import { nonemptyPapers, splitConfigOk, type PrintPaper } from "@/lib/split-print";
 import type { Drink, DrinkCategory, Order } from "@cocktrail/shared";
 import { qrDisplaySrc } from "@/lib/qr-display";
 import { systemService } from "@/services/system.service";
@@ -332,8 +334,9 @@ export default function VentaSection({
   const [search, setSearch] = useState("");
   const [ghostMode, setGhostMode] = useState(false);
   const [splitPrint, setSplitPrint] = useState(false);
-  /** Cada papel: drinkId → qty asignada. */
-  const [printPapers, setPrintPapers] = useState<Record<number, number>[]>([]);
+  /** Cada papel: drinkId → qty asignada (config aceptada del popup). */
+  const [printPapers, setPrintPapers] = useState<PrintPaper[]>([]);
+  const [splitModalOpen, setSplitModalOpen] = useState(false);
   /** Re-evalúa vigencia horaria de promos sin esperar reload/SSE. */
   const [scheduleNow, setScheduleNow] = useState(() => new Date());
 
@@ -540,8 +543,8 @@ export default function VentaSection({
   const totalItems = useMemo(() => Object.values(cart).reduce((s, q) => s + q, 0), [cart]);
 
   const printGroups = useMemo(() => {
-    if (!splitPrint || printPapers.length < 2) return null;
-    const groups = printPapers
+    if (!splitPrint) return null;
+    const groups = nonemptyPapers(printPapers)
       .map((paper) => ({
         items: Object.entries(paper)
           .map(([id, qty]) => ({ drinkId: Number(id), qty }))
@@ -553,22 +556,18 @@ export default function VentaSection({
 
   const printSplitOk = useMemo(() => {
     if (!splitPrint) return true;
-    if (!printGroups || printGroups.length < 2) return false;
-    const assigned: Record<number, number> = {};
-    for (const g of printGroups) {
-      for (const it of g.items) assigned[it.drinkId] = (assigned[it.drinkId] || 0) + it.qty;
-    }
-    for (const [idStr, qty] of Object.entries(cart)) {
-      if ((assigned[Number(idStr)] || 0) !== qty) return false;
-    }
-    return Object.keys(assigned).every((id) => cart[Number(id)]);
-  }, [splitPrint, printGroups, cart]);
+    return splitConfigOk(cart, printPapers);
+  }, [splitPrint, printPapers, cart]);
 
-  function enableSplitPrint() {
+  function clearSplitPrint() {
+    setSplitPrint(false);
+    setPrintPapers([]);
+  }
+
+  function acceptSplitPrint(papers: PrintPaper[]) {
+    setPrintPapers(papers);
     setSplitPrint(true);
-    setPrintPapers([
-      Object.fromEntries(Object.entries(cart).map(([id, qty]) => [Number(id), qty])),
-    ]);
+    setSplitModalOpen(false);
   }
 
   const {
@@ -648,8 +647,7 @@ export default function VentaSection({
 
   function openCheckout() {
     setIsCartOpen(false);
-    setSplitPrint(false);
-    setPrintPapers([]);
+    clearSplitPrint();
     handleOpenCheckout();
   }
 
@@ -1607,10 +1605,7 @@ export default function VentaSection({
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            setSplitPrint(false);
-                            setPrintPapers([]);
-                          }}
+                          onClick={clearSplitPrint}
                           className={`h-10 rounded-xl text-[12px] font-bold cursor-pointer ${
                             !splitPrint
                               ? "bg-accent/15 border border-accent/40 text-accent"
@@ -1621,7 +1616,7 @@ export default function VentaSection({
                         </button>
                         <button
                           type="button"
-                          onClick={() => enableSplitPrint()}
+                          onClick={() => setSplitModalOpen(true)}
                           className={`h-10 rounded-xl text-[12px] font-bold cursor-pointer ${
                             splitPrint
                               ? "bg-accent/15 border border-accent/40 text-accent"
@@ -1631,57 +1626,33 @@ export default function VentaSection({
                           Dividir papeles
                         </button>
                       </div>
-                      {splitPrint && (
-                        <div className="space-y-2 rounded-xl border border-ink-800 bg-ink-950/50 p-3">
-                          {printPapers.map((paper, pIdx) => (
-                            <div key={pIdx} className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold text-ink-300">Papel {pIdx + 1}</span>
-                                {printPapers.length > 1 && (
-                                  <button
-                                    type="button"
-                                    className="text-[10px] text-danger cursor-pointer"
-                                    onClick={() =>
-                                      setPrintPapers((prev) => prev.filter((_, i) => i !== pIdx))
-                                    }
-                                  >
-                                    Quitar
-                                  </button>
-                                )}
-                              </div>
-                              {cartEntries.map(({ drink, qty }) => (
-                                <div key={drink.id} className="flex items-center justify-between gap-2 text-[12px]">
-                                  <span className="truncate text-ink-200">{drink.name}</span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={qty}
-                                    value={paper[drink.id] || 0}
-                                    onChange={(e) => {
-                                      const n = Math.max(0, Math.min(qty, Number(e.target.value) || 0));
-                                      setPrintPapers((prev) =>
-                                        prev.map((p, i) => (i === pIdx ? { ...p, [drink.id]: n } : p)),
-                                      );
-                                    }}
-                                    className="w-14 h-8 rounded-lg bg-ink-900 border border-ink-750 text-center text-ink-50"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => setPrintPapers((prev) => [...prev, {}])}
-                            className="w-full h-8 rounded-lg border border-dashed border-ink-700 text-[11px] font-bold text-ink-300 cursor-pointer"
-                          >
-                            + Papel
-                          </button>
-                          {!printSplitOk && (
-                            <p className="text-[11px] text-amber">
-                              Asigná todas las unidades (suma = carrito) en al menos 2 papeles.
-                            </p>
-                          )}
+                      {splitPrint && printGroups && (
+                        <div className="flex items-center justify-between gap-2 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2">
+                          <span className="text-[12px] font-bold text-accent">
+                            {printGroups.length} papeles
+                          </span>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSplitModalOpen(true)}
+                              className="text-[11px] font-bold text-ink-200 cursor-pointer bg-transparent border-none"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={clearSplitPrint}
+                              className="text-[11px] font-bold text-ink-400 cursor-pointer bg-transparent border-none"
+                            >
+                              Quitar
+                            </button>
+                          </div>
                         </div>
+                      )}
+                      {splitPrint && !printSplitOk && (
+                        <p className="text-[11px] text-amber">
+                          La división ya no coincide con el carrito. Editá o volvé a Normal.
+                        </p>
                       )}
                     </div>
 
@@ -2331,6 +2302,16 @@ export default function VentaSection({
             )}
           </div>
         </div>
+      )}
+
+      {splitModalOpen && (
+        <SplitPrintModal
+          cart={cart}
+          drinks={drinks}
+          initialPapers={splitPrint ? printPapers : undefined}
+          onAccept={acceptSplitPrint}
+          onClose={() => setSplitModalOpen(false)}
+        />
       )}
 
       {/* Undo Delete Toast (Top Center para no tapar Numpad ni cobro) */}
