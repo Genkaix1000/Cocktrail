@@ -127,8 +127,10 @@ describe("noche de prueba — camino de venta completo", () => {
     expect(venta.displayNumber).toBe(1);
     expect(venta.total).toBe(10000);
     expect(venta.ticketData).toBeTruthy();
-    // B4: el ticket de prueba se distingue a simple vista.
-    expect(venta.ticketContent?.brand).toContain("PRUEBA");
+    // Noche de prueba: aviso donde iría la clave + tragos tachados (sin brand).
+    expect(venta.ticketContent?.brand).toBeUndefined();
+    expect(venta.ticketContent?.keywordText).toBe("TICKET NO VALIDO");
+    expect(venta.ticketContent?.items.every((i) => i.strike)).toBe(true);
 
     // El ticket vive en memoria y se puede canjear.
     const ticket = await ticketsService.getTicketByOrderId(venta.id);

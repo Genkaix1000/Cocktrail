@@ -329,6 +329,46 @@ describe("HistorialSection", () => {
       expect(eventsService.deleteNight).not.toHaveBeenCalled();
     });
 
+    it("al desmontar con delete pendiente confirma el DELETE (no lo abandona)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const night = makeNight({ id: "evt-42" });
+      mockPreview("evt-42");
+      const onNightDeleted = vi.fn();
+      vi.mocked(eventsService.deleteNight).mockResolvedValue({
+        ...makePreview({ eventId: "evt-42" }),
+        borrado: {
+          orders: 12,
+          tickets: 12,
+          cashSales: 0,
+          mpOrders: 0,
+          webhooksNeutralizados: 0,
+          mpOrdersDesligados: 0,
+        },
+        operator: "manuel",
+      });
+
+      const { unmount } = render(
+        <HistorialSection
+          {...makeProps({ historyEvents: [night], role: "admin", onNightDeleted })}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Eliminar la noche del/i }));
+      await act(async () => {});
+
+      const hold = screen.getByRole("button", { name: /Borrar la noche\. Mantené/i });
+      fireEvent.pointerDown(hold);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOLD_CONFIRM_MS + 100);
+      });
+      expect(eventsService.deleteNight).not.toHaveBeenCalled();
+
+      unmount();
+      await act(async () => {});
+
+      expect(eventsService.deleteNight).toHaveBeenCalledWith("evt-42", "2026-08-07");
+      expect(onNightDeleted).toHaveBeenCalled();
+    });
+
     it("si el detalle falla, el hold queda deshabilitado", async () => {
       const user = userEvent.setup();
       const night = makeNight({ id: "evt-42" });

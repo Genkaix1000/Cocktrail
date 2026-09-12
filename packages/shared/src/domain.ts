@@ -234,12 +234,12 @@ export type NewOrderInput = {
 export type TicketContent = {
   /** Fecha de la noche, arriba del todo (ej: "NOCHE VIE 07/08/2026"). */
   nightDateText?: string;
-  /** Solo el ticket de prueba lo usa; el de venta no lleva marca. */
+  /** Solo el ticket de auto-prueba de impresora; el de venta no lleva marca. */
   brand?: string;
   saleText?: string;
   /** Fecha/hora ya formateada es-AR (solo el ticket de prueba). */
   dateText?: string;
-  items: { qty: number; name: string }[];
+  items: { qty: number; name: string; /** Noche de prueba: tachar el trago en papel. */ strike?: boolean }[];
   keywordText?: string;
 };
 

@@ -97,6 +97,8 @@ export default function HistorialSection({
     fechaAr: string;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
+  const onNightDeletedRef = useRef(onNightDeleted);
+  onNightDeletedRef.current = onNightDeleted;
 
   useEffect(() => {
     if (!deleteNight) return;
@@ -119,12 +121,18 @@ export default function HistorialSection({
     };
   }, [deleteNight]);
 
+  // Salir de Historial cierra el toast de Deshacer: hay que CONFIRMAR el
+  // DELETE, no abandonarlo (si no, la noche sigue en DB y en el dashboard).
   useEffect(() => {
     return () => {
       const pending = pendingDeleteRef.current;
       if (!pending) return;
       clearTimeout(pending.timer);
       pendingDeleteRef.current = null;
+      void eventsService
+        .deleteNight(pending.id, pending.fechaAr)
+        .then(() => onNightDeletedRef.current())
+        .catch(() => {});
     };
   }, []);
 

@@ -64,15 +64,19 @@ export class PrinterService {
 
   /** Único lugar que sabe QUÉ dice un ticket; los transportes deciden CÓMO se ve. */
   buildTicketContent(order: Order, nightEvent: NightEvent): TicketContent {
+    const isTest = Boolean(nightEvent?.isTest);
     return {
       nightDateText: "NOCHE " + formatearFecha(nightEvent.startedAt).toUpperCase(),
-      // Sin marca, fecha de venta, ni código de retiro: el ticket es solo para
-      // que el barman vea qué servir. Noche de prueba: la leyenda va en `brand`,
-      // centrada y en doble tamaño, para que el papel no se confunda con un
-      // comprobante real (B4).
-      ...(nightEvent?.isTest ? { brand: "*** PRUEBA - SIN VALOR ***" } : {}),
-      items: order.items.map((item) => ({ qty: item.qty, name: item.name })),
-      keywordText: `Clave: ${nightEvent.keyword ?? "(sin clave)"}`,
+      // Sin marca ni código de retiro: el ticket es para que el barman vea qué
+      // servir. Noche de prueba: aviso donde iría la clave + tragos tachados.
+      items: order.items.map((item) => ({
+        qty: item.qty,
+        name: item.name,
+        ...(isTest ? { strike: true } : {}),
+      })),
+      keywordText: isTest
+        ? "TICKET NO VALIDO"
+        : `Clave: ${nightEvent.keyword ?? "(sin clave)"}`,
     };
   }
 
@@ -103,7 +107,14 @@ export class PrinterService {
     }
 
     for (const item of content.items) {
-      parts.push(DOUBLE_ON, toCP437(`${item.qty}x ${item.name}\n`), DOUBLE_OFF);
+      const label = `${item.qty}x ${item.name}`;
+      parts.push(DOUBLE_ON, toCP437(label));
+      if (item.strike) {
+        // CR sin LF: vuelve al inicio de la línea y pisa con guiones (tachado
+        // aproximado en ESC/POS texto; el raster BLE dibuja la raya de verdad).
+        parts.push(Buffer.from([0x0d]), toCP437("-".repeat(Math.min(label.length, 32))));
+      }
+      parts.push(toCP437("\n"), DOUBLE_OFF);
     }
 
     if (content.keywordText) {
@@ -130,12 +141,15 @@ export class PrinterService {
     groups: { items: { qty: number; name: string }[] }[],
   ): { ticketData: string; ticketContent: TicketContent }[] {
     const base = this.buildTicketContent(order, nightEvent);
+    const strike = base.items.some((i) => i.strike);
     return groups
       .filter((g) => g.items.some((i) => i.qty > 0))
       .map((g) => {
         const ticketContent: TicketContent = {
           ...base,
-          items: g.items.filter((i) => i.qty > 0),
+          items: g.items
+            .filter((i) => i.qty > 0)
+            .map((i) => ({ ...i, ...(strike ? { strike: true } : {}) })),
         };
         return {
           ticketData: this.buildTicketBytes(ticketContent).toString("base64"),

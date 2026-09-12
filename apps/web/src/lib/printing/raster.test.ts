@@ -117,6 +117,23 @@ describe("buildTicketLines", () => {
     const texts = lines.map((l) => (l.kind === "text" ? l.text : "---"));
     expect(texts).toEqual(["--- TICKET DE PRUEBA ---", "07/08/2026 23:45"]);
   });
+
+  it("ítems con strike propagan strike a las líneas de texto", () => {
+    const lines = buildTicketLines(
+      {
+        nightDateText: "NOCHE SAB 12/09/2026",
+        items: [{ qty: 1, name: "Fernet", strike: true }],
+        keywordText: "TICKET NO VALIDO",
+      },
+      measure,
+    );
+    const item = lines.find((l) => l.kind === "text" && l.text.includes("Fernet"));
+    expect(item?.kind === "text" && item.strike).toBe(true);
+    expect(lines[lines.length - 1]).toMatchObject({
+      kind: "text",
+      text: "TICKET NO VALIDO",
+    });
+  });
 });
 
 describe("computeTicketHeight", () => {

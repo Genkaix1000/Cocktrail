@@ -42,6 +42,8 @@ export type TicketLine =
       center: boolean;
       /** Doble pasada con 1px de corrimiento: trazo más grueso, imprime más negro. */
       thick: boolean;
+      /** Raya horizontal a media altura (noche de prueba). */
+      strike?: boolean;
       gapAfter: number;
     };
 
@@ -84,7 +86,13 @@ export function buildTicketLines(
   const text = (
     t: string,
     px: number,
-    opts: { bold?: boolean; center?: boolean; thick?: boolean; gapAfter?: number } = {},
+    opts: {
+      bold?: boolean;
+      center?: boolean;
+      thick?: boolean;
+      strike?: boolean;
+      gapAfter?: number;
+    } = {},
   ) =>
     lines.push({
       kind: "text",
@@ -93,6 +101,7 @@ export function buildTicketLines(
       bold: !!opts.bold,
       center: !!opts.center,
       thick: !!opts.thick,
+      ...(opts.strike ? { strike: true } : {}),
       gapAfter: opts.gapAfter ?? L.GAP_DEFAULT,
     });
 
@@ -109,7 +118,12 @@ export function buildTicketLines(
       measure(t, L.ITEM_PX, true),
     );
     for (const piece of pieces) {
-      text(piece, L.ITEM_PX, { bold: true, thick: true, gapAfter: L.GAP_ITEM });
+      text(piece, L.ITEM_PX, {
+        bold: true,
+        thick: true,
+        gapAfter: L.GAP_ITEM,
+        ...(item.strike ? { strike: true } : {}),
+      });
     }
   }
 
@@ -195,14 +209,17 @@ export function renderTicketBitmap(content: TicketContent): TicketBitmap {
       continue;
     }
     ctx.font = font(line.px, line.bold);
-    const x = line.center
-      ? (L.WIDTH - ctx.measureText(line.text).width) / 2
-      : L.PADDING;
+    const textW = ctx.measureText(line.text).width;
+    const x = line.center ? (L.WIDTH - textW) / 2 : L.PADDING;
     ctx.fillText(line.text, x, y);
     if (line.thick) {
       // Doble pasada con 1px de corrimiento: trazo más grueso -> más negro en papel.
       ctx.fillText(line.text, x + 1, y);
       ctx.fillText(line.text, x, y + 1);
+    }
+    if (line.strike) {
+      const midY = y + Math.round(line.px * 0.55);
+      ctx.fillRect(x, midY, textW, 3);
     }
     y += line.px + line.gapAfter;
   }
