@@ -2,9 +2,13 @@ import type { Drink } from "@cocktrail/shared";
 import { isWithinScheduleWindow } from "@cocktrail/shared";
 import type { DrinksRepository } from "./drinks.repository.js";
 import { BadRequest, NotFound } from "../../shared/errors/http-errors.js";
+import type { EmitFn } from "../../shared/sse/sse-manager.js";
 
 export class DrinksService {
-  constructor(private repo: DrinksRepository) {}
+  constructor(
+    private repo: DrinksRepository,
+    private emit?: EmitFn,
+  ) {}
 
   async listDrinks(): Promise<Drink[]> {
     const drinks = await this.repo.list();
@@ -57,7 +61,9 @@ export class DrinksService {
       scheduleConsumed: false,
     };
 
-    return this.repo.create(drink);
+    const created = await this.repo.create(drink);
+    this.emit?.({ type: "carta.updated" });
+    return created;
   }
 
   async updateDrink(id: number, partial: Partial<Omit<Drink, "id">>): Promise<Drink> {
@@ -82,6 +88,7 @@ export class DrinksService {
     if (!updated) {
       throw new NotFound(`Trago con id ${id} no encontrado`);
     }
+    this.emit?.({ type: "carta.updated" });
     return updated;
   }
 
@@ -91,5 +98,6 @@ export class DrinksService {
       throw new NotFound(`Trago con id ${id} no encontrado`);
     }
     await this.repo.delete(id);
+    this.emit?.({ type: "carta.updated" });
   }
 }

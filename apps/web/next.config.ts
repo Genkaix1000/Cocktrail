@@ -46,6 +46,20 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/admin/historial",
+        destination: "/admin?tab=historial",
+        permanent: true,
+      },
+      {
+        source: "/admin/productos",
+        destination: "/admin?tab=carta",
+        permanent: true,
+      },
+    ];
+  },
   // Las cabeceras de seguridad las ponía solo Express, pero las páginas las
   // sirve Next: sin esto, /login y /caja viajan sin ninguna.
   async headers() {

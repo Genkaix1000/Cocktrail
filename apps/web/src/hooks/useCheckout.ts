@@ -269,7 +269,11 @@ export function useCheckout({
       if (printTicket) {
         try {
           if (printGroups && printGroups.length > 1) {
-            const { tickets } = await printerService.splits(order.id, printGroups);
+            const { tickets } = await printerService.splits(
+              order.id,
+              printGroups,
+              order.ghost ? order : undefined,
+            );
             for (const t of tickets) {
               await printTicket({ ticketData: t.ticketData, ticketContent: t.ticketContent });
             }
@@ -334,7 +338,11 @@ export function useCheckout({
         if (printTicket) {
           try {
             if (printGroups && printGroups.length > 1) {
-              const { tickets } = await printerService.splits(order.id, printGroups);
+              const { tickets } = await printerService.splits(
+                order.id,
+                printGroups,
+                order.ghost ? order : undefined,
+              );
               for (const t of tickets) {
                 await printTicket({ ticketData: t.ticketData, ticketContent: t.ticketContent });
               }

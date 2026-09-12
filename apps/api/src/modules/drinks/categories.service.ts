@@ -1,6 +1,7 @@
 import type { DrinkCategory } from "@cocktrail/shared";
 import type { DrinkCategoriesRepository } from "./categories.repository.js";
 import { BadRequest, NotFound } from "../../shared/errors/http-errors.js";
+import type { EmitFn } from "../../shared/sse/sse-manager.js";
 
 function slugify(name: string): string {
   return name
@@ -14,7 +15,10 @@ function slugify(name: string): string {
 }
 
 export class DrinkCategoriesService {
-  constructor(private repo: DrinkCategoriesRepository) {}
+  constructor(
+    private repo: DrinkCategoriesRepository,
+    private emit?: EmitFn,
+  ) {}
 
   list(): Promise<DrinkCategory[]> {
     return this.repo.list();
@@ -36,7 +40,9 @@ export class DrinkCategoriesService {
         ? Math.floor(input.sortOrder)
         : (await this.repo.list()).reduce((max, c) => Math.max(max, c.sortOrder), 0) + 1;
 
-    return this.repo.create({ id, name, sortOrder, isSystem: false });
+    const created = await this.repo.create({ id, name, sortOrder, isSystem: false });
+    this.emit?.({ type: "carta.updated" });
+    return created;
   }
 
   async update(
@@ -61,6 +67,7 @@ export class DrinkCategoriesService {
 
     const updated = await this.repo.update(id, patch);
     if (!updated) throw new NotFound(`Categoría ${id} no encontrada`);
+    this.emit?.({ type: "carta.updated" });
     return updated;
   }
 
@@ -70,6 +77,7 @@ export class DrinkCategoriesService {
     // ON DELETE SET NULL en drinks.category_id → los tragos quedan sin categoría.
     const ok = await this.repo.delete(id);
     if (!ok) throw new BadRequest("No se pudo eliminar la categoría");
+    this.emit?.({ type: "carta.updated" });
   }
 
   /** Reasigna sortOrder 1..N según el orden de `ids`. */
@@ -88,6 +96,7 @@ export class DrinkCategoriesService {
     for (let i = 0; i < rest.length; i++) {
       await this.repo.update(rest[i].id, { sortOrder: ids.length + i + 1 });
     }
+    this.emit?.({ type: "carta.updated" });
     return this.repo.list();
   }
 }

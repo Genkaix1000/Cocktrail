@@ -108,9 +108,9 @@ const ticketsRepo = new TestAwareTicketsRepository(
   testNightStore,
 );
 
-const drinksService = new DrinksService(drinksRepo);
+const drinksService = new DrinksService(drinksRepo, emit);
 const drinkImagesService = new DrinkImagesService();
-const drinkCategoriesService = new DrinkCategoriesService(drinkCategoriesRepo);
+const drinkCategoriesService = new DrinkCategoriesService(drinkCategoriesRepo, emit);
 const usersService = new UsersService(usersRepo);
 
 const eventsService = new EventsService(eventsRepo, ordersRepo, drinksRepo, emit, configRepo, testNight);

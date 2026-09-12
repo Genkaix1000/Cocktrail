@@ -1,5 +1,5 @@
 import { apiFetch } from "./api-client";
-import type { PrintPayload, TicketContent } from "@cocktrail/shared";
+import type { CreateOrderResult, PrintPayload, TicketContent } from "@cocktrail/shared";
 
 export type { PrintPayload };
 
@@ -17,10 +17,15 @@ export const printerService = {
     return apiFetch<PrintPayload>(`/api/printer/reprint/${orderId}`, { method: "POST" });
   },
 
-  splits(orderId: string, groups: { items: { drinkId: number; qty: number }[] }[]) {
+  /** `order` solo para ghost: el server no tiene la fila y usa el snapshot. */
+  splits(
+    orderId: string,
+    groups: { items: { drinkId: number; qty: number }[] }[],
+    order?: CreateOrderResult,
+  ) {
     return apiFetch<{ tickets: PrintSplitTicket[] }>(`/api/printer/splits/${orderId}`, {
       method: "POST",
-      body: { groups },
+      body: { groups, ...(order?.ghost ? { order } : {}) },
     });
   },
 };

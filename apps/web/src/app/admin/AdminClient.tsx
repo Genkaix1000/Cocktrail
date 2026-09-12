@@ -16,7 +16,8 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { useSSE } from "@/lib/useSSE";
 
 import CloseNightModal from "@/components/shared/CloseNightModal";
 import OpenNightModal from "@/components/admin/OpenNightModal";
@@ -157,20 +158,30 @@ export default function AdminClient({
     [reprintTicket, printTicket, printError, reprinting],
   );
 
-  const loadVentaCarta = async () => {
-    const [drinks, categories] = await Promise.all([
-      drinksService.list(),
-      drinkCategoriesService.list(),
-    ]);
-    setVentaDrinks(drinks);
-    setVentaCategories(categories);
-    setVentaCartaLoaded(true);
-  };
+  const loadVentaCarta = useCallback(async () => {
+    try {
+      const [drinks, categories] = await Promise.all([
+        drinksService.list(),
+        drinkCategoriesService.list(),
+      ]);
+      setVentaDrinks(drinks);
+      setVentaCategories(categories);
+      setVentaCartaLoaded(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useSSE({
+    "carta.updated": () => {
+      void loadVentaCarta();
+    },
+  });
 
   useEffect(() => {
-    if (activeTab !== "venta" || ventaCartaLoaded) return;
+    if (activeTab !== "venta") return;
     loadVentaCarta().catch(() => {});
-  }, [activeTab, ventaCartaLoaded]);
+  }, [activeTab, loadVentaCarta]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

@@ -6,6 +6,7 @@ import { drinksService } from "@/services/drinks.service";
 import { drinkCategoriesService } from "@/services/drink-categories.service";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
 import Toast from "@/components/shared/Toast";
+import { useSSE } from "@/lib/useSSE";
 import { SectionHelpButton } from "@/components/help/SectionHelpButton";
 import DrinksTable, {
   type ColumnFilters,
@@ -156,6 +157,12 @@ export default function CartaSection() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadDrinks();
   }, [loadDrinks]);
+
+  useSSE({
+    "carta.updated": () => {
+      void loadDrinks();
+    },
+  });
 
   const setFiltersOpenSafe = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
     setFiltersOpen((prev) => {
@@ -524,7 +531,7 @@ export default function CartaSection() {
               className="h-10 px-4 rounded-full bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--text-on-accent)] text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98]"
             >
               <Plus size={14} strokeWidth={2.5} />
-              Nuevo trago
+              Nuevo producto
             </button>
 
             <button
@@ -570,26 +577,46 @@ export default function CartaSection() {
         </div>
 
         {sidePanel === "drink" && editDrink && (
-          <DrinkFormModal
-            editDrink={editDrink}
-            categories={categories}
-            saving={saving}
-            onChange={(patch) => setEditDrink((prev) => ({ ...(prev ?? makeEmptyForm()), ...patch } as DrinkForm))}
-            onCancel={closeSidePanel}
-            onSave={handleSave}
-          />
+          <>
+            {/* Backdrop en mobile */}
+            <div
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden animate-in fade-in duration-200"
+              onClick={closeSidePanel}
+            />
+            {/* Drawer en mobile deslizante desde la derecha; estático en desktop */}
+            <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[480px] p-3 md:p-4 flex flex-col justify-start overflow-y-auto bosko-scroll lg:static lg:inset-auto lg:z-auto lg:p-0 lg:w-[480px] lg:max-w-none lg:overflow-visible">
+              <DrinkFormModal
+                editDrink={editDrink}
+                categories={categories}
+                saving={saving}
+                onChange={(patch) => setEditDrink((prev) => ({ ...(prev ?? makeEmptyForm()), ...patch } as DrinkForm))}
+                onCancel={closeSidePanel}
+                onSave={handleSave}
+              />
+            </div>
+          </>
         )}
 
         {sidePanel === "categories" && (
-          <CategoriesEditorModal
-            categories={categories}
-            saving={savingCategory}
-            onChange={setCategories}
-            onCreate={handleCreateCategory}
-            onReorder={handleReorderCategories}
-            onDelete={handleDeleteCategory}
-            onClose={closeSidePanel}
-          />
+          <>
+            {/* Backdrop en mobile */}
+            <div
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden animate-in fade-in duration-200"
+              onClick={closeSidePanel}
+            />
+            {/* Drawer en mobile deslizante desde la derecha; estático en desktop */}
+            <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[520px] p-3 md:p-4 flex flex-col justify-start overflow-y-auto bosko-scroll lg:static lg:inset-auto lg:z-auto lg:p-0 lg:w-[520px] lg:max-w-none lg:overflow-visible">
+              <CategoriesEditorModal
+                categories={categories}
+                saving={savingCategory}
+                onChange={setCategories}
+                onCreate={handleCreateCategory}
+                onReorder={handleReorderCategories}
+                onDelete={handleDeleteCategory}
+                onClose={closeSidePanel}
+              />
+            </div>
+          </>
         )}
       </div>
 

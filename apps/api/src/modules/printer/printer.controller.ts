@@ -42,10 +42,24 @@ export function createPrinterController(
     }
   });
 
-  /** Un cobro, N papeles. Body: { groups: [{ items: [{ drinkId, qty }] }] } */
+  /** Un cobro, N papeles. Body: { groups: [{ items: [{ drinkId, qty }] }], order? }.
+   * `order` es el snapshot efímero de ghost mode (no hay fila en DB). */
   router.post("/splits/:orderId", authMiddleware, requireRole("admin", "caja"), async (req, res, next) => {
     try {
-      const order = await ordersRepo.findById(req.params.orderId as string);
+      const orderId = req.params.orderId as string;
+      let order = await ordersRepo.findById(orderId);
+      if (!order) {
+        const snap = req.body?.order;
+        if (
+          snap &&
+          typeof snap === "object" &&
+          snap.id === orderId &&
+          Array.isArray(snap.items) &&
+          snap.ghost === true
+        ) {
+          order = snap;
+        }
+      }
       if (!order) throw new NotFound("Pedido no encontrado.");
       if (order.paymentStatus === "pendiente_de_cobro") {
         throw new Conflict("Este pedido todavía no está cobrado.");

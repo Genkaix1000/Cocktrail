@@ -51,6 +51,7 @@ export default function CajaPage() {
   const usernameRef = useRef(currentUser?.username ?? null);
   const loadOptionsRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
   const autoJoinedRef = useRef<string | null>(null);
+  const loadCartaRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     activeBarIdRef.current = activeBarId;
@@ -84,6 +85,9 @@ export default function CajaPage() {
 
   // useSSE captura handlers en el mount: refs evitan stale-state.
   useSSE({
+    "carta.updated": () => {
+      void loadCartaRef.current();
+    },
     "bar-session.expired": ({ barId, ejectedUser, ejectedBy }) => {
       void loadOptionsRef.current(true);
 
@@ -155,6 +159,24 @@ export default function CajaPage() {
       window.clearTimeout(retryTimer);
     };
   }, [applyOptions, router]);
+
+  const loadCarta = useCallback(async () => {
+    try {
+      const [drinksData, categoriesData] = await Promise.all([
+        drinksService.list(),
+        drinkCategoriesService.list(),
+      ]);
+      setDrinks(drinksData);
+      setCategories(categoriesData);
+      setError(null);
+    } catch (err) {
+      console.error("Error refreshing carta:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCartaRef.current = loadCarta;
+  }, [loadCarta]);
 
   useEffect(() => {
     if (!activeBarId) return;

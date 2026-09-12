@@ -43,7 +43,8 @@ export type DomainEvent =
       };
       action?: string;
       isPartialRefund?: boolean;
-    };
+    }
+  | { type: "carta.updated" };
 
 /** Firma inyectable de `emit`, para pasar por constructor en vez de importar el singleton. */
 export type EmitFn = (event: DomainEvent) => void;

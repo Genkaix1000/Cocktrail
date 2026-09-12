@@ -1,7 +1,7 @@
 "use client";
 
 import { createElement, useEffect, useMemo, useState } from "react";
-import { ArrowRight, ChevronDown, Flame, Images, RefreshCw, Sparkles, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ExternalLink, Flame, Images, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import type { Drink, DrinkCategory } from "@cocktrail/shared";
 import { drinkIcon } from "@/lib/icons";
 import DrinkImageLibrary from "./DrinkImageLibrary";
@@ -184,6 +184,7 @@ export default function DrinkFormModal({
   const [imgPreview, setImgPreview] = useState(editDrink.image || "");
   const [imageBroken, setImageBroken] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [manualUrlMode, setManualUrlMode] = useState(false);
   const [openPicker, setOpenPicker] = useState<"from" | "until" | null>(null);
 
   const sortedCategories = useMemo(
@@ -219,7 +220,7 @@ export default function DrinkFormModal({
     >
       <div className="flex justify-between items-center pb-3 border-b border-[var(--border-subtle)]">
         <h2 className="text-[18px] font-semibold text-[var(--text-primary)] tracking-tight">
-          {editDrink.id ? "Editar trago" : "Nuevo trago"}
+          {editDrink.id ? "Editar producto" : "Nuevo producto"}
         </h2>
         <button
           type="button"
@@ -292,42 +293,117 @@ export default function DrinkFormModal({
         </div>
 
         <div>
-          <label className="text-[13px] font-semibold text-[var(--text-primary)] block mb-1.5">
-            Imagen del trago
-          </label>
-          <div className="flex gap-2 items-center">
-            <input
-              type="text"
-              value={imageUrlInput}
-              onChange={(e) => setImageUrlInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleReloadImage();
-                }
-              }}
-              className={`${inputCls} flex-1 text-xs`}
-              placeholder="/drinks/andes.jpg o URL"
-            />
-            <button
-              type="button"
-              onClick={handleReloadImage}
-              className="w-10 h-10 border border-[var(--border-strong)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer bg-[var(--bg-panel)] shrink-0"
-              title="Cargar preview de imagen"
-              aria-label="Cargar preview de imagen"
-            >
-              <RefreshCw size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setLibraryOpen(true)}
-              className="w-10 h-10 border border-[var(--border-strong)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer bg-[var(--bg-panel)] shrink-0"
-              title="Biblioteca de imágenes"
-              aria-label="Biblioteca de imágenes"
-            >
-              <Images size={14} />
-            </button>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[13px] font-semibold text-[var(--text-primary)]">
+              Imagen del producto
+            </label>
+            {imgPreview && (
+              <button
+                type="button"
+                onClick={() => setManualUrlMode(!manualUrlMode)}
+                className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline cursor-pointer"
+              >
+                {manualUrlMode ? "Ocultar URL" : "Ingresar URL"}
+              </button>
+            )}
           </div>
+
+          {imgPreview && !manualUrlMode ? (
+            <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-lg overflow-hidden border border-[var(--border-subtle)] bg-ink-950 shrink-0">
+                  <img
+                    src={imgPreview}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={() => setImageBroken(true)}
+                  />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[12px] font-medium text-[var(--text-primary)] truncate">
+                    {imgPreview.startsWith("http")
+                      ? imgPreview.includes("supabase.co")
+                        ? "Imagen en la nube (Supabase)"
+                        : "Imagen externa"
+                      : imgPreview.split("/").pop() || "Imagen asignada"}
+                  </span>
+                  <a
+                    href={imgPreview}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-[var(--accent-primary)] hover:underline w-fit"
+                  >
+                    <span>Abrir enlace</span>
+                    <ExternalLink size={11} />
+                  </a>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
+                  className="h-8 px-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-app)] text-[11px] font-semibold text-[var(--text-primary)] transition-colors cursor-pointer"
+                >
+                  Cambiar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyImage("")}
+                  className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--danger-base)] hover:bg-[var(--danger-soft)] transition-colors cursor-pointer"
+                  title="Quitar imagen"
+                  aria-label="Quitar imagen"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={imageUrlInput}
+                  onChange={(e) => setImageUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleReloadImage();
+                    }
+                  }}
+                  className={`${inputCls} flex-1 text-xs`}
+                  placeholder="/drinks/andes.jpg o URL"
+                />
+                <button
+                  type="button"
+                  onClick={handleReloadImage}
+                  className="w-10 h-10 border border-[var(--border-strong)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer bg-[var(--bg-panel)] shrink-0"
+                  title="Cargar preview de imagen"
+                  aria-label="Cargar preview de imagen"
+                >
+                  <RefreshCw size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
+                  className="w-10 h-10 border border-[var(--border-strong)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer bg-[var(--bg-panel)] shrink-0"
+                  title="Biblioteca de imágenes"
+                  aria-label="Biblioteca de imágenes"
+                >
+                  <Images size={14} />
+                </button>
+              </div>
+              {!imgPreview && (
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
+                  className="w-full h-9 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-panel)] text-[12px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Images size={14} />
+                  Elegir de biblioteca o galería
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="pt-1 border-t border-[var(--border-subtle)] space-y-3">
@@ -524,7 +600,7 @@ export default function DrinkFormModal({
 
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="font-bold text-[14px] text-white truncate leading-snug">
-                    {editDrink.name || "Nombre del trago"}
+                    {editDrink.name || "Nombre del producto"}
                   </span>
                   <span className="text-[15px] font-black text-green tabular">
                     ${(editDrink.price || 0).toLocaleString("es-AR")}

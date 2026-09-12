@@ -334,6 +334,8 @@ export default function VentaSection({
   const [splitPrint, setSplitPrint] = useState(false);
   /** Cada papel: drinkId → qty asignada. */
   const [printPapers, setPrintPapers] = useState<Record<number, number>[]>([]);
+  /** Re-evalúa vigencia horaria de promos sin esperar reload/SSE. */
+  const [scheduleNow, setScheduleNow] = useState(() => new Date());
 
   useEffect(() => {
     let cancelled = false;
@@ -351,6 +353,11 @@ export default function VentaSection({
       cancelled = true;
       window.clearInterval(id);
     };
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setScheduleNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
   }, []);
 
   const handleReloadCarta = async () => {
@@ -385,9 +392,8 @@ export default function VentaSection({
   );
 
   const scheduleById = useMemo(() => {
-    const now = new Date();
-    return Object.fromEntries(drinks.map((d) => [d.id, evaluateDrinkSchedule(d, now)]));
-  }, [drinks]);
+    return Object.fromEntries(drinks.map((d) => [d.id, evaluateDrinkSchedule(d, scheduleNow)]));
+  }, [drinks, scheduleNow]);
 
   /** Carta de caja: oculta vencidos-hide y usa categoría efectiva. */
   const shelfDrinks = useMemo(() => {

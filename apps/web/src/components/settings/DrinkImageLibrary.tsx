@@ -70,6 +70,16 @@ export default function DrinkImageLibrary({ open, selectedUrl, onClose, onSelect
     return items.filter((i) => i.label.toLowerCase().includes(q) || i.url.toLowerCase().includes(q));
   }, [items, query]);
 
+  const cleanupCropImage = useCallback((img: HTMLImageElement | null) => {
+    if (img?.src && img.src.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(img.src);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
   async function finishUpload(webpDataUrl: string) {
     setBusy(true);
     setError(null);
@@ -82,23 +92,29 @@ export default function DrinkImageLibrary({ open, selectedUrl, onClose, onSelect
       setError("No se pudo subir la imagen.");
     } finally {
       setBusy(false);
-      setCropImage(null);
+      setCropImage((prev) => {
+        cleanupCropImage(prev);
+        return null;
+      });
     }
   }
 
   async function handleFile(file: File | null) {
     if (!file) return;
     setError(null);
+    let img: HTMLImageElement | null = null;
     try {
-      const img = await loadImageFromFile(file);
+      img = await loadImageFromFile(file);
       if (needsCropTool(img.naturalWidth, img.naturalHeight)) {
         setCropImage(img);
         return;
       }
       setBusy(true);
       const dataUrl = await cropImageToWebpDataUrl(img, centeredSquareCrop(img.naturalWidth, img.naturalHeight));
+      cleanupCropImage(img);
       await finishUpload(dataUrl);
     } catch {
+      if (img) cleanupCropImage(img);
       setError("No se pudo procesar la imagen.");
       setBusy(false);
     }
@@ -230,7 +246,12 @@ export default function DrinkImageLibrary({ open, selectedUrl, onClose, onSelect
       {cropImage && (
         <DrinkImageCropModal
           image={cropImage}
-          onCancel={() => setCropImage(null)}
+          onCancel={() => {
+            setCropImage((prev) => {
+              cleanupCropImage(prev);
+              return null;
+            });
+          }}
           onConfirm={(dataUrl) => void finishUpload(dataUrl)}
         />
       )}

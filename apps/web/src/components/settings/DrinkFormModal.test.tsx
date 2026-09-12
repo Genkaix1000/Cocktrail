@@ -78,7 +78,7 @@ describe("DrinkFormModal", () => {
     });
   });
 
-  it("deshabilita Guardar/Crear sin nombre o precio, y muestra 'Editar Trago' cuando ya tiene id", () => {
+  it("deshabilita Guardar/Crear sin nombre o precio, y muestra 'Editar Producto' cuando ya tiene id", () => {
     render(
       <DrinkFormModal
         editDrink={makeForm({ id: 1, name: "Fernet", price: 2500 })}
@@ -90,7 +90,7 @@ describe("DrinkFormModal", () => {
       />,
     );
 
-    expect(screen.getByText("Editar trago")).toBeInTheDocument();
+    expect(screen.getByText("Editar producto")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
   });
 

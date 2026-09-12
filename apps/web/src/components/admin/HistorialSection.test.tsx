@@ -127,6 +127,7 @@ function mockPreview(id = "evt-1") {
 }
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.useRealTimers();
 });
 

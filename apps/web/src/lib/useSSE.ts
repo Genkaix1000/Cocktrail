@@ -36,6 +36,7 @@ export type DomainEventHandlers = Partial<{
     ejectedUser: string;
     ejectedBy: string;
   }) => void;
+  "carta.updated": () => void;
 }>;
 
 type Options = {
@@ -55,6 +56,7 @@ export function useSSE(handlers: DomainEventHandlers, options?: Options): void {
   const { onOpen } = options ?? {};
 
   useEffect(() => {
+    if (typeof EventSource === "undefined") return;
     const es = new EventSource(`${API_URL}/api/events`, { withCredentials: true });
 
     const subscriptions: Array<{

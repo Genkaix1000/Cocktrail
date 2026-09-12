@@ -43,7 +43,6 @@ export function loadImageFromFile(file: File): Promise<HTMLImageElement> {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      URL.revokeObjectURL(url);
       resolve(img);
     };
     img.onerror = () => {

@@ -76,7 +76,7 @@ describe("CartaSection", () => {
 
     await screen.findByText("No hay tragos registrados");
 
-    await user.click(screen.getByRole("button", { name: /Nuevo trago/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo producto/i }));
 
     await user.type(screen.getByPlaceholderText("Fernet con Coca"), "Campari Spritz");
     await user.type(screen.getByPlaceholderText("5500"), "4800");
@@ -211,7 +211,7 @@ describe("CartaSection", () => {
     render(<CartaSection />);
     await screen.findByText("No hay tragos registrados");
 
-    await user.click(screen.getByRole("button", { name: /Nuevo trago/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo producto/i }));
     await user.type(screen.getByPlaceholderText("Fernet con Coca"), "Campari Spritz");
     await user.type(screen.getByPlaceholderText("5500"), "4800");
     await user.click(screen.getByRole("button", { name: "Crear" }));

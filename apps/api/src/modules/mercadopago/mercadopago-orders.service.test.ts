@@ -130,7 +130,7 @@ describe("MercadoPagoOrdersService", () => {
       deleteById: vi.fn(),
     };
 
-    mpOrdersRepo = {
+      mpOrdersRepo = {
       create: vi.fn().mockImplementation(async (input) =>
         makeMpOrder({
           orderIdMp: input.orderIdMp,
@@ -145,6 +145,7 @@ describe("MercadoPagoOrdersService", () => {
           eventId: input.eventId ?? null,
           qrData: input.qrData ?? null,
           expiresAt: input.expiresAt ?? null,
+          rawState: input.rawState ?? null,
         }),
       ),
       findByMpId: vi.fn(),
@@ -244,6 +245,36 @@ describe("MercadoPagoOrdersService", () => {
       });
       expect(body.external_reference).toMatch(/^COCKTRAIL-/);
       expect(body.external_reference.length).toBeLessThanOrEqual(64);
+    });
+
+    it("con ghost mode ON marca rawState=ghost y usa seller ghost", async () => {
+      const isGhostMode = vi.fn().mockResolvedValue(true);
+      service = new MercadoPagoOrdersService(
+        credentialsResolver,
+        barsRepo,
+        cajasRepo,
+        mpOrdersRepo,
+        getActiveEvent as () => Promise<NightEvent | null>,
+        isGhostMode,
+      );
+      const emv = "00020101021243650016com.mercadolibre020130636ghost";
+      mockFetchOk({
+        id: "ORD01GHOST",
+        status: "created",
+        transactions: { payments: [{ id: "PAY01TXN", amount: "100.00" }] },
+        type_response: { qr_data: emv },
+      });
+
+      await service.createQrOrder({ amount: 100, barId: "BARRA-01" });
+
+      expect(credentialsResolver.resolve).toHaveBeenCalledWith({
+        barId: "bar-uuid-1",
+        allowGlobalFallback: false,
+        useGhost: true,
+      });
+      expect(mpOrdersRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ rawState: "ghost", orderIdMp: "ORD01GHOST" }),
+      );
     });
 
     it("409 si MP no devuelve type_response.qr_data", async () => {
@@ -497,6 +528,55 @@ describe("MercadoPagoOrdersService", () => {
     it("404 si la order no existe localmente", async () => {
       vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(null);
       await expect(service.getOrderStatus("ORD-MISSING")).rejects.toBeInstanceOf(NotFound);
+    });
+
+    it("con ghost mode ON, órdenes primary usan seller primary (no el ghost)", async () => {
+      const isGhostMode = vi.fn().mockResolvedValue(true);
+      service = new MercadoPagoOrdersService(
+        credentialsResolver,
+        barsRepo,
+        cajasRepo,
+        mpOrdersRepo,
+        getActiveEvent as () => Promise<NightEvent | null>,
+        isGhostMode,
+      );
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(
+        makeMpOrder({ status: "created", rawState: null }),
+      );
+      mockFetchOk({ id: "ORD01ABC", status: "created", transactions: { payments: [] } });
+
+      await service.getOrderStatus("ORD01ABC");
+
+      expect(credentialsResolver.resolve).toHaveBeenCalledWith({
+        barId: "bar-uuid-1",
+        allowGlobalFallback: true,
+        useGhost: false,
+      });
+      expect(isGhostMode).not.toHaveBeenCalled();
+    });
+
+    it("órdenes con rawState=ghost usan seller ghost aunque el flag global esté OFF", async () => {
+      const isGhostMode = vi.fn().mockResolvedValue(false);
+      service = new MercadoPagoOrdersService(
+        credentialsResolver,
+        barsRepo,
+        cajasRepo,
+        mpOrdersRepo,
+        getActiveEvent as () => Promise<NightEvent | null>,
+        isGhostMode,
+      );
+      vi.mocked(mpOrdersRepo.findByMpId).mockResolvedValue(
+        makeMpOrder({ status: "created", rawState: "ghost" }),
+      );
+      mockFetchOk({ id: "ORD01ABC", status: "created", transactions: { payments: [] } });
+
+      await service.getOrderStatus("ORD01ABC");
+
+      expect(credentialsResolver.resolve).toHaveBeenCalledWith({
+        barId: "bar-uuid-1",
+        allowGlobalFallback: false,
+        useGhost: true,
+      });
     });
 
     it("failed es terminal: devuelve directo sin consultar a MP", async () => {
